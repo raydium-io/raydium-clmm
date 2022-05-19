@@ -1,0 +1,26 @@
+anchor_version = "0.24.2"
+
+[features]
+seeds = false
+
+[programs.localnet]
+cyclos_core = "7sSUSz5fEcX6CNrbu3Z3JRdTGqPQdxJYTwKYP8NF95Pp"
+
+[programs.devnet]
+cyclos_core = "7sSUSz5fEcX6CNrbu3Z3JRdTGqPQdxJYTwKYP8NF95Pp"
+
+[programs.mainnet]
+cyclos_core = "7sSUSz5fEcX6CNrbu3Z3JRdTGqPQdxJYTwKYP8NF95Pp"
+
+[registry]
+url = "https://github.com/raydium-io/raydium-amm-v3"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+
+[test]
+startup_wait = 20000
