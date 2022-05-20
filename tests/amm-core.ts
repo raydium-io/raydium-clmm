@@ -19,7 +19,7 @@ import * as chai from 'chai'
 import chaiAsPromised from 'chai-as-promised'
 chai.use(chaiAsPromised)
 
-import { CyclosCore } from '../target/types/cyclos_core'
+import { AmmCore } from '../target/types/amm_core'
 import {
   MaxU64,
   MAX_SQRT_RATIO,
@@ -36,14 +36,14 @@ const { metadata: { Metadata } } = metaplex.programs
 
 const { PublicKey, Keypair, SystemProgram } = anchor.web3
 
-describe('cyclos-core', async () => {
+describe('amm-core', async () => {
   console.log('in describe')
 
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.Provider.env());
   console.log('provider set')
 
-  const coreProgram = anchor.workspace.CyclosCore as Program<CyclosCore>
+  const coreProgram = anchor.workspace.AmmCore as Program<AmmCore>
   console.log('program created')
   const { connection, wallet } = anchor.getProvider()
   const owner = anchor.getProvider().wallet.publicKey

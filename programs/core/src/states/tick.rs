@@ -1,6 +1,5 @@
 ///! Contains functions for managing tick processes and relevant calculations
 ///!
-use crate::error::ErrorCode;
 use crate::libraries::{liquidity_math, tick_math};
 use anchor_lang::prelude::*;
 

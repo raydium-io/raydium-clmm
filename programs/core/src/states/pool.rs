@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    program::CyclosCore,
+    program::AmmCore,
     states::{
         oracle::{self, OBSERVATION_SEED},
         position::POSITION_SEED,
@@ -106,7 +106,7 @@ impl PoolState {
             &index.to_be_bytes(),
             &[bump],
         ];
-        assert!(*key == Pubkey::create_program_address(&seeds, &CyclosCore::id()).unwrap());
+        assert!(*key == Pubkey::create_program_address(&seeds, &AmmCore::id()).unwrap());
         Ok(())
     }
 
@@ -130,7 +130,7 @@ impl PoolState {
                     &tick.to_be_bytes(),
                     &[bump],
                 ],
-                &CyclosCore::id(),
+                &AmmCore::id(),
             )
             .unwrap(),
         );
@@ -157,7 +157,7 @@ impl PoolState {
                     &word_pos.to_be_bytes(),
                     &[bump],
                 ],
-                &CyclosCore::id(),
+                &AmmCore::id(),
             )
             .unwrap(),
         );
@@ -193,7 +193,7 @@ impl PoolState {
                     &tick_upper.to_be_bytes(),
                     &[bump],
                 ],
-                &CyclosCore::id(),
+                &AmmCore::id(),
             )
             .unwrap(),
         );
