@@ -4,9 +4,8 @@ use anchor_lang::prelude::*;
 ///
 /// PDA of `[POSITION_SEED, mint_address]`
 ///
-#[account(zero_copy)]
+#[account]
 #[derive(Default)]
-#[repr(packed)]
 pub struct TokenizedPositionState {
     /// Bump to identify PDA
     pub bump: u8,

@@ -2,12 +2,12 @@ use crate::states::*;
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
-pub struct SetFeeProtocol<'info> {
+pub struct SetProtocolFee<'info> {
     /// Valid protocol owner
-    #[account(address = factory_state.load()?.owner)]
+    #[account(address = factory_state.owner)]
     pub owner: Signer<'info>,
 
     /// Factory state stores the protocol owner address
     #[account(mut)]
-    pub factory_state: AccountLoader<'info, FactoryState>,
+    pub factory_state: Account<'info, FactoryState>,
 }

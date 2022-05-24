@@ -1,10 +1,11 @@
 import fetch from 'node-fetch'
 import * as anchor from '@project-serum/anchor'
 import { BN, Program, web3 } from '@project-serum/anchor'
-import { CyclosCore, FACTORY_ADDRESS, Pool, Position, POSITION_SEED, TICK_SEED, u32ToSeed } from '@cykura/sdk'
+import { FACTORY_ADDRESS, Pool, Position, POSITION_SEED, TICK_SEED, u32ToSeed } from '@cykura/sdk'
 import { Token, TOKEN_PROGRAM_ID } from '@solana/spl-token'
 import { Token as UniToken } from '@cykura/sdk-core'
 import JSBI from 'jsbi'
+import { AmmCore } from '../target/types/amm_core';
 
 const factoryState = 'DBsMwKfeoUHhxMi9x6wd2AsT12UwUCssjNbUzu1aKgqj'
 const Q32 = new BN(2).shln(31)
@@ -13,9 +14,9 @@ export async function main() {
   const keypair = new web3.Keypair()
   const wallet = new anchor.Wallet(keypair)
   const connection = new web3.Connection('https://api.mainnet-beta.solana.com')
-  const provider = new anchor.Provider(connection, wallet, {})
+  const provider = new anchor.AnchorProvider(connection, wallet, {})
   anchor.setProvider(provider)
-  const cyclosCore = anchor.workspace.CyclosCore as Program<CyclosCore>
+  const ammCore = anchor.workspace.AmmCore as Program<AmmCore>
 
   // get NFTs from indexer
   const response = await fetch('https://api.covalenthq.com/v1/1399811149/address/EwnJEKATSWtVVZX8sJbbcGPFMjXQw5paPYRvtd2GieoL/balances_v2/?key=ckey_888bd64636064665b65354aa956&nft=true')
@@ -32,10 +33,10 @@ export async function main() {
         mint.toBuffer()
       ], FACTORY_ADDRESS)
 
-      const { poolId, liquidity, tickLower, tickUpper, tokensOwed0, tokensOwed1, feeGrowthInside0LastX32, feeGrowthInside1LastX32 } = await cyclosCore.account.tokenizedPositionState.fetch(tokenizedPositionState)
+      const { poolId, liquidity, tickLower, tickUpper, tokensOwed0, tokensOwed1, feeGrowthInside0LastX32, feeGrowthInside1LastX32 } = await ammCore.account.tokenizedPositionState.fetch(tokenizedPositionState)
 
       // pool details for the position
-      const { token0, token1, fee, sqrtPriceX32, tick, feeGrowthGlobal0X32, feeGrowthGlobal1X32 } = await cyclosCore.account.poolState.fetch(poolId)
+      const { token0, token1, fee, sqrtPriceX32, tick, feeGrowthGlobal0X32, feeGrowthGlobal1X32 } = await ammCore.account.poolState.fetch(poolId)
       console.log(`Pool details: token0 ${token0}, token1 ${token1}, fee tier ${fee / 10000}%`)
 
       // Read token decimal places
@@ -82,9 +83,9 @@ export async function main() {
       )
 
       const { feeGrowthOutside0X32: feeGrowthOutside0X32Lower, feeGrowthOutside1X32: feeGrowthOutside1X32Lower } =
-        await cyclosCore.account.tickState.fetch(tickLowerState)
+        await ammCore.account.tickState.fetch(tickLowerState)
       const { feeGrowthOutside0X32: feeGrowthOutside0X32Upper, feeGrowthOutside1X32: feeGrowthOutside1X32Upper } =
-        await cyclosCore.account.tickState.fetch(tickUpperState)
+        await ammCore.account.tickState.fetch(tickUpperState)
 
       const [feeGrowthBelow0X32, feeGrowthBelow1X32] =
         pool.tickCurrent >= tickLower

@@ -10,23 +10,23 @@ pub struct InitBitmapAccount<'info> {
     pub signer: Signer<'info>,
 
     /// Create a new bitmap account for this pool
-    pub pool_state: AccountLoader<'info, PoolState>,
+    pub pool_state: Account<'info, PoolState>,
 
     /// The bitmap account to be initialized
     #[account(
         init,
         seeds = [
             BITMAP_SEED.as_bytes(),
-            pool_state.load()?.token_0.as_ref(),
-            pool_state.load()?.token_1.as_ref(),
-            &pool_state.load()?.fee.to_be_bytes(),
+            pool_state.token_0.as_ref(),
+            pool_state.token_1.as_ref(),
+            &pool_state.fee.to_be_bytes(),
             &word_pos.to_be_bytes()
         ],
         bump,
         payer = signer,
         space = 8 + size_of::<TickBitmapState>()
     )]
-    pub bitmap_state: AccountLoader<'info, TickBitmapState>,
+    pub bitmap_state: Account<'info, TickBitmapState>,
 
     /// Program to initialize the tick account
     pub system_program: Program<'info, System>,

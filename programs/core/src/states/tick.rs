@@ -4,15 +4,14 @@ use crate::libraries::{liquidity_math, tick_math};
 use anchor_lang::prelude::*;
 
 /// Seed to derive account address and signature
-pub const TICK_SEED: &str = "t";
+pub const TICK_SEED: &str = "tick";
 
 /// Account storing info for a price tick
 ///
 /// PDA of `[TICK_SEED, token_0, token_1, fee, tick]`
 ///
-#[account(zero_copy)]
+#[account]
 #[derive(Default, Debug)]
-#[repr(packed)]
 pub struct TickState {
     /// Bump to identify PDA
     pub bump: u8,

@@ -13,7 +13,7 @@ pub struct AddMetaplexMetadata<'info> {
     pub payer: Signer<'info>,
 
     /// Authority of the NFT mint
-    pub factory_state: AccountLoader<'info, FactoryState>,
+    pub factory_state: Account<'info, FactoryState>,
 
     /// Mint address for the tokenized position
     #[account(mut)]
@@ -22,9 +22,9 @@ pub struct AddMetaplexMetadata<'info> {
     /// Position state of the tokenized position
     #[account(
         seeds = [POSITION_SEED.as_bytes(), nft_mint.key().as_ref()],
-        bump = tokenized_position_state.load()?.bump
+        bump = tokenized_position_state.bump
     )]
-    pub tokenized_position_state: AccountLoader<'info, TokenizedPositionState>,
+    pub tokenized_position_state: Account<'info, TokenizedPositionState>,
 
     /// To store metaplex metadata
     /// CHECK: Safety check performed inside function body
@@ -47,7 +47,7 @@ pub struct AddMetaplexMetadata<'info> {
 }
 
 pub fn add_metaplex_metadata(ctx: Context<AddMetaplexMetadata>) -> Result<()> {
-    let seeds = [&[ctx.accounts.factory_state.load()?.bump] as &[u8]];
+    let seeds = [&[ctx.accounts.factory_state.bump] as &[u8]];
     let create_metadata_ix = create_metadata_accounts(
         ctx.accounts.metadata_program.key(),
         ctx.accounts.metadata_account.key(),

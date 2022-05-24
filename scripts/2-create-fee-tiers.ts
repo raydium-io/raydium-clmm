@@ -5,7 +5,7 @@ import * as chai from 'chai'
 import chaiAsPromised from 'chai-as-promised'
 import { FEE_SEED, u32ToSeed } from '@cykura/sdk'
 chai.use(chaiAsPromised)
-import { CyclosCore } from '../target/types/cyclos_core'
+import { AmmCore } from '../target/types/amm_core';
 import keypairFile from './keypair.json';
 
 (async () => {
@@ -14,10 +14,10 @@ import keypairFile from './keypair.json';
     const wallet = new anchor.Wallet(keypair)
     const owner = wallet.publicKey
     const connection = new web3.Connection('http://127.0.0.1:8899')
-    const provider = new anchor.Provider(connection, wallet, {})
+    const provider = new anchor.AnchorProvider(connection, wallet, {})
     anchor.setProvider(provider)
 
-    const coreProgram = anchor.workspace.CyclosCore as Program<CyclosCore>
+    const coreProgram = anchor.workspace.AmmCore as Program<AmmCore>
 
     const [factoryState, factoryStateBump] = await web3.PublicKey.findProgramAddress([], coreProgram.programId)
 

@@ -14,71 +14,75 @@ pub struct CollectFromTokenized<'info> {
 
     /// The token account for the tokenized position
     #[account(
-        constraint = nft_account.mint == tokenized_position_state.load()?.mint
+        constraint = nft_account.mint == tokenized_position_state.mint
     )]
     pub nft_account: Box<Account<'info, TokenAccount>>,
 
     /// The program account of the NFT for which tokens are being collected
     #[account(mut)]
-    pub tokenized_position_state: AccountLoader<'info, TokenizedPositionState>,
+    pub tokenized_position_state: Box<Account<'info, TokenizedPositionState>>,
 
     /// The program account acting as the core liquidity custodian for token holder
-    pub factory_state: AccountLoader<'info, FactoryState>,
+    pub factory_state: Box<Account<'info, FactoryState>>,
 
     /// The program account for the liquidity pool from which fees are collected
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub pool_state: UncheckedAccount<'info>,
+    pub pool_state: Box<Account<'info, PoolState>>,
 
     /// The program account to access the core program position state
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub core_position_state: UncheckedAccount<'info>,
+    pub core_position_state: Box<Account<'info, PositionState>>,
 
     /// The program account for the position's lower tick
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub tick_lower_state: UncheckedAccount<'info>,
+    pub tick_lower_state: Box<Account<'info, TickState>>,
 
     /// The program account for the position's upper tick
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub tick_upper_state: UncheckedAccount<'info>,
+    pub tick_upper_state: Box<Account<'info, TickState>>,
 
     /// The bitmap program account for the init state of the lower tick
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub bitmap_lower_state: UncheckedAccount<'info>,
+    pub bitmap_lower_state: Box<Account<'info, TickBitmapState>>,
 
     /// Stores init state for the upper tick
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub bitmap_upper_state: UncheckedAccount<'info>,
+    pub bitmap_upper_state: Box<Account<'info, TickBitmapState>>,
 
     /// The latest observation state
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub last_observation_state: UncheckedAccount<'info>,
+    pub last_observation_state: Box<Account<'info, ObservationState>>,
 
     /// The pool's token account for token_0
     /// CHECK: Account validation is performed by the token program
     #[account(mut)]
-    pub vault_0: Box<Account<'info, TokenAccount>>,
+    pub vault_0: Account<'info, TokenAccount>,
 
     /// The pool's token account for token_1
     /// CHECK: Account validation is performed by the token program
     #[account(mut)]
-    pub vault_1: Box<Account<'info, TokenAccount>>,
+    pub vault_1: Account<'info, TokenAccount>,
 
     /// The destination token account for the collected amount_0
-    /// CHECK: Account validation is performed by the token program
-    #[account(mut)]
-    pub recipient_wallet_0: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        token::mint = vault_0.mint
+    )]
+    pub recipient_wallet_0: Account<'info, TokenAccount>,
 
     /// The destination token account for the collected amount_1
-    /// CHECK: Account validation is performed by the token program
-    #[account(mut)]
-    pub recipient_wallet_1: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        token::mint = vault_1.mint
+    )]
+    pub recipient_wallet_1: Account<'info, TokenAccount>,
 
     /// The core program where liquidity is burned
     pub core_program: Program<'info, AmmCore>,
@@ -94,13 +98,9 @@ pub fn collect_from_tokenized<'a, 'b, 'c, 'info>(
 ) -> Result<()> {
     assert!(amount_0_max > 0 || amount_1_max > 0);
 
-    let mut tokenized_position = ctx.accounts.tokenized_position_state.load_mut()?;
+    let tokenized_position = ctx.accounts.tokenized_position_state.as_mut();
     let mut tokens_owed_0 = tokenized_position.tokens_owed_0;
     let mut tokens_owed_1 = tokenized_position.tokens_owed_1;
-
-    let position_state = AccountLoader::<PositionState>::try_from(
-        &ctx.accounts.core_position_state.to_account_info(),
-    )?;
 
     // trigger an update of the position fees owed and fee growth snapshots if it has any liquidity
     if tokenized_position.liquidity > 0 {
@@ -113,7 +113,7 @@ pub fn collect_from_tokenized<'a, 'b, 'c, 'info>(
             tick_upper_state: ctx.accounts.tick_upper_state.clone(),
             bitmap_lower_state: ctx.accounts.bitmap_lower_state.clone(),
             bitmap_upper_state: ctx.accounts.bitmap_upper_state.clone(),
-            position_state,
+            position_state: ctx.accounts.core_position_state.clone(),
             last_observation_state: ctx.accounts.last_observation_state.clone(),
         };
         burn(
@@ -126,7 +126,7 @@ pub fn collect_from_tokenized<'a, 'b, 'c, 'info>(
             0,
         )?;
 
-        let core_position = *burn_accounts.position_state.load()?.deref();
+        let core_position = burn_accounts.position_state.deref();
 
         tokens_owed_0 += (core_position.fee_growth_inside_0_last_x32
             - tokenized_position.fee_growth_inside_0_last_x32)

@@ -14,21 +14,26 @@ use super::{oracle::ObservationState, tick::TickState};
 
 /// Seed to derive account address and signature
 pub const POOL_SEED: &str = "pool";
+pub const POOL_VAULT_SEED: &str = "pool_vault";
 
 /// The pool state
 ///
-/// PDA of `[POOL_SEED, token_0, token_1, fee]`
+/// PDA of `[POOL_SEED, market, token_0, token_1, fee]`
 ///
-#[account(zero_copy)]
+#[account]
 #[derive(Default)]
-#[repr(packed)]
 pub struct PoolState {
     /// Bump to identify PDA
     pub bump: u8,
-
+    // Serum market id
+    pub market: Pubkey,
     /// Token pair of the pool, where token_0 address < token_1 address
     pub token_0: Pubkey,
     pub token_1: Pubkey,
+
+    /// Token pair vault
+    pub token_vault_0: Pubkey,
+    pub token_vault_1: Pubkey,
 
     /// Fee amount for swaps, denominated in hundredths of a bip (i.e. 1e-6)
     pub fee: u32,
@@ -79,7 +84,7 @@ impl PoolState {
     /// # Arguments
     /// * `self` - A pool account
     ///
-    pub fn next_observation_index(self) -> u16 {
+    pub fn next_observation_index(&self) -> u16 {
         (self.observation_index + 1) % self.observation_cardinality_next
     }
 
@@ -92,7 +97,7 @@ impl PoolState {
     /// * `bump` - The PDA bump for the address
     /// * `next` - Whether to validate the current observation account or the next account
     ///
-    pub fn validate_observation_address(self, key: &Pubkey, bump: u8, next: bool) -> Result<()> {
+    pub fn validate_observation_address(&self, key: &Pubkey, bump: u8, next: bool) -> Result<()> {
         let index = if next {
             self.next_observation_index()
         } else {
@@ -119,7 +124,7 @@ impl PoolState {
     /// * `bump` - The PDA bump for the address
     /// * `tick` - The tick from which the address should be derived
     ///
-    pub fn validate_tick_address(self, key: &Pubkey, bump: u8, tick: i32) -> Result<()> {
+    pub fn validate_tick_address(&self, key: &Pubkey, bump: u8, tick: i32) -> Result<()> {
         assert!(
             *key == Pubkey::create_program_address(
                 &[
@@ -146,7 +151,7 @@ impl PoolState {
     /// * `bump` - The PDA bump for the address
     /// * `tick` - The tick from which the address should be derived
     ///
-    pub fn validate_bitmap_address(self, key: &Pubkey, bump: u8, word_pos: i16) -> Result<()> {
+    pub fn validate_bitmap_address(&self, key: &Pubkey, bump: u8, word_pos: i16) -> Result<()> {
         assert!(
             *key == Pubkey::create_program_address(
                 &[
@@ -174,7 +179,7 @@ impl PoolState {
     /// * `tick` - The tick from which the address should be derived
     ///
     pub fn validate_position_address(
-        self,
+        &self,
         key: &Pubkey,
         bump: u8,
         position_owner: &Pubkey,
@@ -213,7 +218,7 @@ impl PoolState {
     /// * `latest_observation` - The latest oracle observation. The latest condition must be externally checked.
     ///
     pub fn snapshot_cumulatives_inside(
-        self,
+        &self,
         lower: &TickState,
         upper: &TickState,
         latest_observation: &ObservationState,
@@ -298,6 +303,12 @@ pub struct PoolCreatedAndInitialized {
 
     /// The initial tick of the pool, i.e. log base 1.0001 of the starting price of the pool
     pub tick: i32,
+    /// Serum market
+    pub market: Pubkey,
+    /// Vault of token_0
+    pub vault_0: Pubkey,
+    /// Vault of token_1
+    pub vault_1: Pubkey,
 }
 
 /// Emitted when the collected protocol fees are withdrawn by the factory owner

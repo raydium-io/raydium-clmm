@@ -3,6 +3,7 @@ pub mod error;
 pub mod instructions;
 pub mod libraries;
 pub mod states;
+pub mod util;
 
 use crate::access_control::*;
 use crate::error::ErrorCode;
@@ -11,7 +12,7 @@ use anchor_lang::prelude::*;
 use instructions::*;
 use states::*;
 
-declare_id!("7sSUSz5fEcX6CNrbu3Z3JRdTGqPQdxJYTwKYP8NF95Pp");
+declare_id!("9rB72iQX6NS7jPNHzGpKapgtJZUWUaT2mPSRjgwAwPWt");
 
 #[program]
 pub mod amm_core {
@@ -20,6 +21,7 @@ pub mod amm_core {
 
     // ---------------------------------------------------------------------
     // Factory instructions
+
     // The Factory facilitates creation of pools and control over the protocol fees
 
     /// Initialize the factory state and set the protocol owner
@@ -44,8 +46,8 @@ pub mod amm_core {
         instructions::set_owner(ctx)
     }
 
-    /// Enables a fee amount with the given tick_spacing
-    /// Fee amounts may never be removed once enabled
+    /// Create a fee account with the given tick_spacing
+    /// Fee account may never be removed once created
     ///
     /// # Arguments
     ///
@@ -55,12 +57,12 @@ pub mod amm_core {
     /// * `tick_spacing` - The spacing between ticks to be enforced for all pools created
     /// with the given fee amount
     ///
-    pub fn enable_fee_amount(
-        ctx: Context<EnableFeeAmount>,
+    pub fn create_fee_account(
+        ctx: Context<CreateFeeAccount>,
         fee: u32,
         tick_spacing: u16,
     ) -> Result<()> {
-        instructions::enable_fee_amount(ctx, fee, tick_spacing)
+        instructions::create_fee_account(ctx, fee, tick_spacing)
     }
 
     // ---------------------------------------------------------------------
@@ -79,11 +81,8 @@ pub mod amm_core {
     /// * `observation_state_bump` - Bump to validate Observation State address
     /// * `sqrt_price_x32` - the initial sqrt price (amount_token_1 / amount_token_0) of the pool as a Q32.32
     ///
-    pub fn create_and_init_pool(
-        ctx: Context<CreateAndInitPool>,
-        sqrt_price_x32: u64,
-    ) -> Result<()> {
-        instructions::create_and_init_pool(ctx, sqrt_price_x32)
+    pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x32: u64) -> Result<()> {
+        instructions::create_pool(ctx, sqrt_price_x32)
     }
 
     // ---------------------------------------------------------------------
@@ -101,12 +100,11 @@ pub mod amm_core {
     /// * `observation_account_bumps` - Vector of bumps to initialize the observation state PDAs
     ///
     pub fn increase_observation_cardinality_next<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info,IncreaseObservationCardinalityNextCtx<'info>>,
+        ctx: Context<'a, 'b, 'c, 'info, IncreaseObservationCardinalityNextCtx<'info>>,
         observation_account_bumps: Vec<u8>,
     ) -> Result<()> {
         instructions::increase_observation_cardinality_next(ctx, observation_account_bumps)
     }
-
 
     // ---------------------------------------------------------------------
     // Pool owner instructions
@@ -122,13 +120,13 @@ pub mod amm_core {
     /// Holds the Factory State account where protocol fee will be saved.
     /// * `fee_protocol` - new protocol fee for all pools
     ///
-    pub fn set_fee_protocol(ctx: Context<SetFeeProtocol>, fee_protocol: u8) -> Result<()> {
+    pub fn set_protocol_fee(ctx: Context<SetProtocolFee>, fee_protocol: u8) -> Result<()> {
         assert!(fee_protocol >= 2 && fee_protocol <= 10);
-        let mut factory_state = ctx.accounts.factory_state.load_mut()?;
+        let factory_state = &mut ctx.accounts.factory_state;
         let fee_protocol_old = factory_state.fee_protocol;
         factory_state.fee_protocol = fee_protocol;
 
-        emit!(SetFeeProtocolEvent {
+        emit!(SetProtocolFeeEvent {
             fee_protocol_old,
             fee_protocol
         });
@@ -146,12 +144,12 @@ pub mod amm_core {
     /// * `amount_0_requested` - The maximum amount of token_0 to send, can be 0 to collect fees in only token_1
     /// * `amount_1_requested` - The maximum amount of token_1 to send, can be 0 to collect fees in only token_0
     ///
-    pub fn collect_protocol(
-        ctx: Context<CollectProtocol>,
+    pub fn collect_protocol_fee(
+        ctx: Context<CollectProtocolFee>,
         amount_0_requested: u64,
         amount_1_requested: u64,
     ) -> Result<()> {
-        instructions::collect_protocol(ctx, amount_0_requested, amount_1_requested)
+        instructions::collect_protocol_fee(ctx, amount_0_requested, amount_1_requested)
     }
     /// ---------------------------------------------------------------------
     /// Account init instructions
@@ -169,21 +167,11 @@ pub mod amm_core {
     /// * `tick` - The tick for which the account is created
     ///
     pub fn init_tick_account(ctx: Context<InitTickAccount>, tick: i32) -> Result<()> {
-        let pool_state = ctx.accounts.pool_state.load()?;
+        let pool_state = &mut ctx.accounts.pool_state;
         check_tick(tick, pool_state.tick_spacing)?;
-        let mut tick_state = ctx.accounts.tick_state.load_init()?;
+        let tick_state = &mut ctx.accounts.tick_state;
         tick_state.bump = *ctx.bumps.get("tick_state").unwrap();
         tick_state.tick = tick;
-        Ok(())
-    }
-
-    /// Reclaims lamports from a cleared tick account
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - Holds tick and recipient accounts with validation and closure code
-    ///
-    pub fn close_tick_account(_ctx: Context<CloseTickAccount>) -> Result<()> {
         Ok(())
     }
 
@@ -198,13 +186,14 @@ pub mod amm_core {
     /// most significant 16 bits.
     ///
     pub fn init_bitmap_account(ctx: Context<InitBitmapAccount>, word_pos: i16) -> Result<()> {
-        let pool_state = ctx.accounts.pool_state.load()?;
-        let max_word_pos = ((tick_math::MAX_TICK / pool_state.tick_spacing as i32) >> 8) as i16;
-        let min_word_pos = ((tick_math::MIN_TICK / pool_state.tick_spacing as i32) >> 8) as i16;
+        let max_word_pos =
+            ((tick_math::MAX_TICK / ctx.accounts.pool_state.tick_spacing as i32) >> 8) as i16;
+        let min_word_pos =
+            ((tick_math::MIN_TICK / ctx.accounts.pool_state.tick_spacing as i32) >> 8) as i16;
         require!(word_pos >= min_word_pos, ErrorCode::TLM);
         require!(word_pos <= max_word_pos, ErrorCode::TUM);
 
-        let mut bitmap_account = ctx.accounts.bitmap_state.load_init()?;
+        let bitmap_account = &mut ctx.accounts.bitmap_state;
         bitmap_account.bump = *ctx.bumps.get("bitmap_state").unwrap();
         bitmap_account.word_pos = word_pos;
         Ok(())
@@ -220,7 +209,7 @@ pub mod amm_core {
     /// the account is derived using most significant 16 bits of the tick
     ///
     pub fn init_position_account(ctx: Context<InitPositionAccount>) -> Result<()> {
-        let mut position_account = ctx.accounts.position_state.load_init()?;
+        let position_account = &mut ctx.accounts.position_state;
         position_account.bump = *ctx.bumps.get("position_state").unwrap();
         Ok(())
     }
@@ -228,35 +217,39 @@ pub mod amm_core {
     // ---------------------------------------------------------------------
     // Position instructions
 
-    /// Adds liquidity for the given pool/recipient/tickLower/tickUpper position
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - Holds the recipient's address and program accounts for
-    /// pool, position and ticks.
-    /// * `amount` - The amount of liquidity to mint
-    ///
-    pub fn mint<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, MintContext<'info>>,
-        amount: u64,
-    ) -> Result<()> {
-        instructions::mint(ctx, amount)
-    }
-    /// Burn liquidity from the sender and account tokens owed for the liquidity to the position.
-    /// Can be used to trigger a recalculation of fees owed to a position by calling with an amount of 0 (poke).
-    /// Fees must be collected separately via a call to #collect
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - Holds position and other validated accounts need to burn liquidity
-    /// * `amount` - Amount of liquidity to be burned
-    ///
-    pub fn burn<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, BurnContext<'info>>,
-        amount: u64,
-    ) -> Result<()> {
-        instructions::burn(ctx, amount)
-    }
+    // /// Low-level interface, not supported currently
+    // /// Adds liquidity for the given pool/recipient/tickLower/tickUpper position
+    // ///
+    // /// # Arguments
+    // ///
+    // /// * `ctx` - Holds the recipient's address and program accounts for
+    // /// pool, position and ticks.
+    // /// * `amount` - The amount of liquidity to mint
+    // ///
+    // pub fn mint<'a, 'b, 'c, 'info>(
+    //     ctx: Context<'a, 'b, 'c, 'info, MintContext<'info>>,
+    //     amount: u64,
+    // ) -> Result<()> {
+    //     instructions::mint(ctx, amount)
+    // }
+
+    // /// Low-level interface, not supported currently
+    // /// Burn liquidity from the sender and account tokens owed for the liquidity to the position.
+    // /// Can be used to trigger a recalculation of fees owed to a position by calling with an amount of 0 (poke).
+    // /// Fees must be collected separately via a call to #collect
+    // ///
+    // /// # Arguments
+    // ///
+    // /// * `ctx` - Holds position and other validated accounts need to burn liquidity
+    // /// * `amount` - Amount of liquidity to be burned
+    // ///
+    // pub fn burn<'a, 'b, 'c, 'info>(
+    //     ctx: Context<'a, 'b, 'c, 'info, BurnContext<'info>>,
+    //     amount: u64,
+    // ) -> Result<()> {
+    //     instructions::burn(ctx, amount)
+    // }
+
     /// Collects tokens owed to a position.
     ///
     /// Does not recompute fees earned, which must be done either via mint or burn of any amount of liquidity.
@@ -279,29 +272,31 @@ pub mod amm_core {
     // ---------------------------------------------------------------------
     // 4. Swap instructions
 
-    /// Swap token_0 for token_1, or token_1 for token_0
-    ///
-    /// Outstanding tokens must be paid in #swap_callback
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - Accounts required for the swap. Remaining accounts should contain each bitmap leading to
-    /// the end tick, and each tick being flipped
-    /// account leading to the destination tick
-    /// * `deadline` - The time by which the transaction must be included to effect the change
-    /// * `amount_specified` - The amount of the swap, which implicitly configures the swap as exact input (positive),
-    /// or exact output (negative)
-    /// * `sqrt_price_limit` - The Q32.32 sqrt price √P limit. If zero for one, the price cannot
-    /// be less than this value after the swap.  If one for zero, the price cannot be greater than
-    /// this value after the swap.
-    ///
-    pub fn swap(
-        ctx: Context<SwapContext>,
-        amount_specified: i64,
-        sqrt_price_limit_x32: u64,
-    ) -> Result<()> {
-        instructions::swap(ctx, amount_specified, sqrt_price_limit_x32)
-    }
+    // /// Low-level interface, not supported currently
+    // /// Swap token_0 for token_1, or token_1 for token_0
+    // ///
+    // /// Outstanding tokens must be paid in #swap_callback
+    // ///
+    // /// # Arguments
+    // ///
+    // /// * `ctx` - Accounts required for the swap. Remaining accounts should contain each bitmap leading to
+    // /// the end tick, and each tick being flipped
+    // /// account leading to the destination tick
+    // /// * `deadline` - The time by which the transaction must be included to effect the change
+    // /// * `amount_specified` - The amount of the swap, which implicitly configures the swap as exact input (positive),
+    // /// or exact output (negative)
+    // /// * `sqrt_price_limit` - The Q32.32 sqrt price √P limit. If zero for one, the price cannot
+    // /// be less than this value after the swap.  If one for zero, the price cannot be greater than
+    // /// this value after the swap.
+    // ///
+    // pub fn swap(
+    //     ctx: Context<SwapContext>,
+    //     amount_specified: i64,
+    //     sqrt_price_limit_x32: u64,
+    // ) -> Result<()> {
+    //     instructions::swap(ctx, amount_specified, sqrt_price_limit_x32)
+    // }
+
     // /// Component function for flash swaps
     // ///
     // /// Donate given liquidity to in-range positions then make callback
@@ -338,15 +333,15 @@ pub mod amm_core {
     /// * `deadline` - The time by which the transaction must be included to effect the change
     ///
     #[access_control(check_deadline(deadline))]
-    pub fn mint_tokenized_position<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, MintTokenizedPosition<'info>>,
+    pub fn create_tokenized_position<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, CreateTokenizedPosition<'info>>,
         amount_0_desired: u64,
         amount_1_desired: u64,
         amount_0_min: u64,
         amount_1_min: u64,
         deadline: i64,
     ) -> Result<()> {
-        instructions::mint_tokenized_position(
+        instructions::create_tokenized_position(
             ctx,
             amount_0_desired,
             amount_1_desired,

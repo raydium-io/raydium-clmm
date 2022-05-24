@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 #[derive(Accounts)]
 pub struct SetOwner<'info> {
     /// Current protocol owner
-    #[account(address = factory_state.load()?.owner)]
+    #[account(address = factory_state.owner)]
     pub owner: Signer<'info>,
 
     /// Address to be designated as new protocol owner
@@ -13,11 +13,11 @@ pub struct SetOwner<'info> {
 
     /// Factory state stores the protocol owner address
     #[account(mut)]
-    pub factory_state: AccountLoader<'info, FactoryState>,
+    pub factory_state: Account<'info, FactoryState>,
 }
 
 pub fn set_owner(ctx: Context<SetOwner>) -> Result<()> {
-    let mut factory_state = ctx.accounts.factory_state.load_mut()?;
+    let factory_state = &mut ctx.accounts.factory_state;
     factory_state.owner = ctx.accounts.new_owner.key();
 
     emit!(OwnerChanged {

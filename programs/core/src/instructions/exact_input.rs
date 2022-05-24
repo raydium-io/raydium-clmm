@@ -1,6 +1,6 @@
 use super::{exact_input_internal, SwapContext};
 use crate::error::ErrorCode;
-use crate::program::AmmCore;
+use crate::states::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
 
@@ -11,15 +11,12 @@ pub struct ExactInput<'info> {
 
     /// The factory state to read protocol fees
     /// CHECK: Safety check performed inside function body
-    pub factory_state: UncheckedAccount<'info>,
+    pub factory_state: Box<Account<'info, FactoryState>>,
 
     /// The token account that pays input tokens for the swap
     /// CHECK: Account validation is performed by the token program
     #[account(mut)]
-    pub input_token_account: UncheckedAccount<'info>,
-
-    /// The core program where swap is performed
-    pub core_program: Program<'info, AmmCore>,
+    pub input_token_account: Account<'info, TokenAccount>,
 
     /// SPL program for token transfers
     pub token_program: Program<'info, Token>,
@@ -37,16 +34,16 @@ pub fn exact_input<'a, 'b, 'c, 'info>(
     let mut amount_in_internal = amount_in;
     let mut input_token_account = ctx.accounts.input_token_account.clone();
     for i in 0..additional_accounts_per_pool.len() {
-        let pool_state = UncheckedAccount::try_from(remaining_accounts.next().unwrap().clone());
-        let output_token_account =
-            UncheckedAccount::try_from(remaining_accounts.next().unwrap().clone());
-        let input_vault = Box::new(Account::<TokenAccount>::try_from(
+        let pool_state = Box::new(Account::<PoolState>::try_from(
             remaining_accounts.next().unwrap(),
         )?);
-        let output_vault = Box::new(Account::<TokenAccount>::try_from(
+        let mut output_token_account =
+            Account::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
+        let input_vault = Account::<TokenAccount>::try_from(remaining_accounts.next().unwrap())?;
+        let output_vault = Account::<TokenAccount>::try_from(remaining_accounts.next().unwrap())?;
+        let last_observation_state = Box::new(Account::<ObservationState>::try_from(
             remaining_accounts.next().unwrap(),
         )?);
-
         amount_in_internal = exact_input_internal(
             &mut SwapContext {
                 signer: ctx.accounts.signer.clone(),
@@ -56,19 +53,14 @@ pub fn exact_input<'a, 'b, 'c, 'info>(
                 output_token_account: output_token_account.clone(),
                 input_vault,
                 output_vault,
-                last_observation_state: UncheckedAccount::try_from(
-                    remaining_accounts.next().unwrap().clone(),
-                ),
+                last_observation_state,
                 token_program: ctx.accounts.token_program.clone(),
-                callback_handler: UncheckedAccount::try_from(
-                    ctx.accounts.core_program.to_account_info(),
-                ),
             },
             remaining_accounts.as_slice(),
             amount_in_internal,
             0,
         )?;
-
+        output_token_account.reload()?;
         if i < additional_accounts_per_pool.len() - 1 {
             // reach accounts needed for the next swap
             for _j in 0..additional_accounts_per_pool[i] {

@@ -9,9 +9,8 @@ pub const FEE_SEED: &str = "fee";
 ///
 /// PDA of `[FEE_SEED, fee]`
 ///
-#[account(zero_copy)]
+#[account]
 #[derive(Default, Debug)]
-#[repr(packed)]
 pub struct FeeState {
     /// Bump to identify PDA
     pub bump: u8,

@@ -10,7 +10,7 @@ use anchor_lang::prelude::*;
 use std::ops::BitXor;
 
 /// Seed to derive account address and signature
-pub const BITMAP_SEED: &str = "b";
+pub const BITMAP_SEED: &str = "tick_bitmap";
 
 /// Stores info for a single bitmap word.
 /// Each word represents 256 packed tick initialized boolean values.
@@ -19,9 +19,8 @@ pub const BITMAP_SEED: &str = "b";
 ///
 /// PDA of `[BITMAP_SEED, token_0, token_1, fee, word_pos]`
 ///
-#[account(zero_copy)]
-#[derive(Default)]
-#[repr(packed)]
+#[account]
+#[derive(Default, Copy)]
 pub struct TickBitmapState {
     /// Bump to identify PDA
     pub bump: u8,

@@ -94,4 +94,11 @@ pub enum ErrorCode {
     // Swap router
     #[msg("Too little received")]
     TooLittleReceived,
+
+    #[msg("Pool state locked")]
+    PoolStateLocked,
+    #[msg("Swap special amount can not be zero")]
+    InvaildSwapAmountSpecified,
+    #[msg("Tick index of lower must be smaller than upper")]
+    InvaildTickIndex,
 }

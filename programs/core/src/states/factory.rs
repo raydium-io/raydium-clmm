@@ -10,9 +10,8 @@ use anchor_lang::prelude::*;
 ///
 /// PDA of `[]`
 ///
-#[account(zero_copy)]
+#[account]
 #[derive(Default)]
-#[repr(packed)]
 pub struct FactoryState {
     /// Bump to identify PDA
     pub bump: u8,
@@ -38,7 +37,7 @@ pub struct OwnerChanged {
 
 /// Emitted when the protocol fee is changed for a pool
 #[event]
-pub struct SetFeeProtocolEvent {
+pub struct SetProtocolFeeEvent {
     /// The previous value of the protocol fee
     pub fee_protocol_old: u8,
 

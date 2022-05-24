@@ -5,7 +5,7 @@ import * as anchor from '@project-serum/anchor'
 import { Keypair, Transaction, SystemProgram, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { Program, web3 } from '@project-serum/anchor'
 import keypairFile from './keypair.json'
-import { CyclosCore } from '../target/types/cyclos_core';
+import { AmmCore } from '../target/types/amm_core';
 import { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { FEE_SEED, OBSERVATION_SEED, POOL_SEED, u16ToSeed, u32ToSeed } from '@cykura/sdk';
 
@@ -23,9 +23,9 @@ async function main() {
   const wallet = new anchor.Wallet(keypair)
   const owner = wallet.publicKey
   const connection = new web3.Connection('http://127.0.0.1:8899')
-  const provider = new anchor.Provider(connection, wallet, {})
+  const provider = new anchor.AnchorProvider(connection, wallet, {})
   anchor.setProvider(provider)
-  const coreProgram = anchor.workspace.CyclosCore as Program<CyclosCore>
+  const coreProgram = anchor.workspace.AmmCore as Program<AmmCore>
 
   const fee = 500
   const [poolAState, poolAStateBump] = await web3.PublicKey.findProgramAddress(
@@ -69,7 +69,7 @@ async function main() {
     true
   )
 
-  const tx = coreProgram.transaction.createAndInitPool(new anchor.BN(4294967296), {
+  const tx = coreProgram.rpc.createPool(new anchor.BN(4294967296), {
     accounts: {
       poolCreator: owner,
       token0: usdtMint,
@@ -82,7 +82,6 @@ async function main() {
       systemProgram: SystemProgram.programId,
       rent: web3.SYSVAR_RENT_PUBKEY,
       tokenProgram: TOKEN_PROGRAM_ID,
-      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID
     }
   })
 

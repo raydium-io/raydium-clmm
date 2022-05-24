@@ -1,9 +1,8 @@
 use crate::error::ErrorCode;
 use crate::libraries::{liquidity_math, sqrt_price_math, tick_math};
 use crate::states::*;
+use crate::util::*;
 use anchor_lang::prelude::*;
-use anchor_spl::associated_token::get_associated_token_address;
-use anchor_spl::token;
 use anchor_spl::token::{Token, TokenAccount};
 use std::ops::{Deref, DerefMut};
 
@@ -13,21 +12,31 @@ pub struct MintContext<'info> {
     pub minter: Signer<'info>,
 
     /// The token account spending token_0 to mint the position
-    /// CHECK: Safety check performed inside function body
-    #[account(mut)]
-    pub token_account_0: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        token::mint = vault_0.mint
+    )]
+    pub token_account_0: Box<Account<'info, TokenAccount>>,
 
     /// The token account spending token_1 to mint the position
-    /// CHECK: Safety check performed inside function body
-    #[account(mut)]
-    pub token_account_1: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        token::mint = vault_1.mint
+    )]
+    pub token_account_1: Box<Account<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_0
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = vault_0.key() == pool_state.token_vault_0
+    )]
     pub vault_0: Box<Account<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_1
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = vault_1.key() == pool_state.token_vault_1
+    )]
     pub vault_1: Box<Account<'info, TokenAccount>>,
 
     /// Liquidity is minted on behalf of recipient
@@ -36,196 +45,135 @@ pub struct MintContext<'info> {
 
     /// Mint liquidity for this pool
     #[account(mut)]
-    pub pool_state: AccountLoader<'info, PoolState>,
+    pub pool_state: Box<Account<'info, PoolState>>,
 
     /// The lower tick boundary of the position
     #[account(mut)]
-    pub tick_lower_state: AccountLoader<'info, TickState>,
+    pub tick_lower_state: Box<Account<'info, TickState>>,
 
     /// The upper tick boundary of the position
     #[account(mut)]
-    pub tick_upper_state: AccountLoader<'info, TickState>,
+    pub tick_upper_state: Box<Account<'info, TickState>>,
 
     /// The bitmap storing initialization state of the lower tick
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub bitmap_lower_state: UncheckedAccount<'info>,
+    pub bitmap_lower_state: Box<Account<'info, TickBitmapState>>,
 
     /// The bitmap storing initialization state of the upper tick
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub bitmap_upper_state: UncheckedAccount<'info>,
+    pub bitmap_upper_state: Box<Account<'info, TickBitmapState>>,
 
     /// The position into which liquidity is minted
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub position_state: UncheckedAccount<'info>,
+    pub position_state: Box<Account<'info, PositionState>>,
 
     /// The program account for the most recent oracle observation, at index = pool.observation_index
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub last_observation_state: UncheckedAccount<'info>,
+    pub last_observation_state: Box<Account<'info, ObservationState>>,
 
     /// The SPL program to perform token transfers
     pub token_program: Program<'info, Token>,
-
-    /// Program which receives mint_callback
-    /// CHECK: Allow arbitrary callback handlers
-    pub callback_handler: UncheckedAccount<'info>,
 }
 
 pub fn mint<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, MintContext<'info>>,
     amount: u64,
 ) -> Result<()> {
-    let mut pool = ctx.accounts.pool_state.load_mut()?;
+    let pool_state_info = ctx.accounts.pool_state.to_account_info();
+    let pool_state = &mut ctx.accounts.pool_state;
 
-    assert!(
-        ctx.accounts.vault_0.key()
-            == get_associated_token_address(&ctx.accounts.pool_state.key(), &pool.token_0)
-    );
-    assert!(
-        ctx.accounts.vault_1.key()
-            == get_associated_token_address(&ctx.accounts.pool_state.key(), &pool.token_1)
-    );
-    let tick_lower = *ctx.accounts.tick_lower_state.load()?.deref();
-    pool.validate_tick_address(
+    assert!(ctx.accounts.vault_0.key() == pool_state.token_vault_0);
+    assert!(ctx.accounts.vault_1.key() == pool_state.token_vault_1);
+    pool_state.validate_tick_address(
         &ctx.accounts.tick_lower_state.key(),
-        tick_lower.bump,
-        tick_lower.tick,
+        ctx.accounts.tick_lower_state.bump,
+        ctx.accounts.tick_lower_state.tick,
     )?;
-
-    let tick_upper = *ctx.accounts.tick_upper_state.load()?.deref();
-    pool.validate_tick_address(
+    pool_state.validate_tick_address(
         &ctx.accounts.tick_upper_state.key(),
-        tick_upper.bump,
-        tick_upper.tick,
+        ctx.accounts.tick_upper_state.bump,
+        ctx.accounts.tick_upper_state.tick,
     )?;
-
-    let bitmap_lower_state = AccountLoader::<TickBitmapState>::try_from(
-        &ctx.accounts.bitmap_lower_state.to_account_info(),
-    )?;
-    pool.validate_bitmap_address(
+    pool_state.validate_bitmap_address(
         &ctx.accounts.bitmap_lower_state.key(),
-        bitmap_lower_state.load()?.bump,
-        tick_bitmap::position(tick_lower.tick / pool.tick_spacing as i32).word_pos,
+        ctx.accounts.bitmap_lower_state.bump,
+        tick_bitmap::position(ctx.accounts.tick_lower_state.tick / pool_state.tick_spacing as i32)
+            .word_pos,
     )?;
-    let bitmap_upper_state = AccountLoader::<TickBitmapState>::try_from(
-        &ctx.accounts.bitmap_upper_state.to_account_info(),
-    )?;
-    pool.validate_bitmap_address(
+    pool_state.validate_bitmap_address(
         &ctx.accounts.bitmap_upper_state.key(),
-        bitmap_upper_state.load()?.bump,
-        tick_bitmap::position(tick_upper.tick / pool.tick_spacing as i32).word_pos,
+        ctx.accounts.bitmap_upper_state.bump,
+        tick_bitmap::position(ctx.accounts.tick_upper_state.tick / pool_state.tick_spacing as i32)
+            .word_pos,
     )?;
 
-    let position_state =
-        AccountLoader::<PositionState>::try_from(&ctx.accounts.position_state.to_account_info())?;
-    pool.validate_position_address(
+    pool_state.validate_position_address(
         &ctx.accounts.position_state.key(),
-        position_state.load()?.bump,
+        ctx.accounts.position_state.bump,
         &ctx.accounts.recipient.key(),
-        tick_lower.tick,
-        tick_upper.tick,
+        ctx.accounts.tick_lower_state.tick,
+        ctx.accounts.tick_upper_state.tick,
     )?;
-
-    let last_observation_state = AccountLoader::<ObservationState>::try_from(
-        &ctx.accounts.last_observation_state.to_account_info(),
-    )?;
-    pool.validate_observation_address(
-        &last_observation_state.key(),
-        last_observation_state.load()?.bump,
+    pool_state.validate_observation_address(
+        &ctx.accounts.last_observation_state.key(),
+        ctx.accounts.last_observation_state.bump,
         false,
     )?;
 
-    require!(pool.unlocked, ErrorCode::LOK);
-    pool.unlocked = false;
+    require!(pool_state.unlocked, ErrorCode::LOK);
+    pool_state.unlocked = false;
 
     assert!(amount > 0);
 
     let (amount_0_int, amount_1_int) = _modify_position(
         i64::try_from(amount).unwrap(),
-        pool.deref_mut(),
-        &position_state,
-        &ctx.accounts.tick_lower_state,
-        &ctx.accounts.tick_upper_state,
-        &bitmap_lower_state,
-        &bitmap_upper_state,
-        &last_observation_state,
+        pool_state,
+        ctx.accounts.position_state.as_mut(),
+        ctx.accounts.tick_lower_state.as_mut(),
+        ctx.accounts.tick_upper_state.as_mut(),
+        ctx.accounts.bitmap_lower_state.as_mut(),
+        ctx.accounts.bitmap_upper_state.as_mut(),
+        ctx.accounts.last_observation_state.as_mut(),
         ctx.remaining_accounts,
     )?;
 
     let amount_0 = amount_0_int as u64;
     let amount_1 = amount_1_int as u64;
 
-    let balance_0_before = if amount_0 > 0 {
-        ctx.accounts.vault_0.amount
-    } else {
-        0
-    };
-    let balance_1_before = if amount_1 > 0 {
-        ctx.accounts.vault_1.amount
-    } else {
-        0
-    };
-
-    drop(pool);
-
     if amount_0 > 0 {
-        token::transfer(
-            CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
-                token::Transfer {
-                    from: ctx.accounts.token_account_0.to_account_info(),
-                    to: ctx.accounts.vault_0.to_account_info(),
-                    authority: ctx.accounts.minter.to_account_info(),
-                },
-            ),
+        transfer_from_user_to_pool_vault(
+            &ctx.accounts.minter,
+            &ctx.accounts.token_account_0,
+            &ctx.accounts.vault_0,
+            &ctx.accounts.token_program,
             amount_0,
         )?;
     }
     if amount_1 > 0 {
-        token::transfer(
-            CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
-                token::Transfer {
-                    from: ctx.accounts.token_account_1.to_account_info(),
-                    to: ctx.accounts.vault_1.to_account_info(),
-                    authority: ctx.accounts.minter.to_account_info(),
-                },
-            ),
+        transfer_from_user_to_pool_vault(
+            &ctx.accounts.minter,
+            &ctx.accounts.token_account_1,
+            &ctx.accounts.vault_1,
+            &ctx.accounts.token_program,
             amount_1,
         )?;
     }
-
-    ctx.accounts.vault_0.reload()?;
-    ctx.accounts.vault_1.reload()?;
-
-    if amount_0 > 0 {
-        require!(
-            balance_0_before + amount_0 <= ctx.accounts.vault_0.amount,
-            ErrorCode::M0
-        );
-    }
-    if amount_1 > 0 {
-        require!(
-            balance_1_before + amount_1 <= ctx.accounts.vault_1.amount,
-            ErrorCode::M1
-        );
-    }
-
     emit!(MintEvent {
-        pool_state: ctx.accounts.pool_state.key(),
+        pool_state: pool_state_info.key(),
         sender: ctx.accounts.minter.key(),
         owner: ctx.accounts.recipient.key(),
-        tick_lower: tick_lower.tick,
-        tick_upper: tick_upper.tick,
+        tick_lower: ctx.accounts.tick_lower_state.tick,
+        tick_upper: ctx.accounts.tick_upper_state.tick,
         amount,
         amount_0,
         amount_1
     });
 
-    ctx.accounts.pool_state.load_mut()?.unlocked = true;
+    pool_state.unlocked = true;
     Ok(())
 }
 
@@ -251,23 +199,21 @@ pub fn mint<'a, 'b, 'c, 'info>(
 ///
 pub fn _modify_position<'info>(
     liquidity_delta: i64,
-    pool_state: &mut PoolState,
-    position_state: &AccountLoader<'info, PositionState>,
-    tick_lower_state: &AccountLoader<'info, TickState>,
-    tick_upper_state: &AccountLoader<'info, TickState>,
-    bitmap_lower: &AccountLoader<'info, TickBitmapState>,
-    bitmap_upper: &AccountLoader<'info, TickBitmapState>,
-    last_observation_state: &AccountLoader<'info, ObservationState>,
+    pool_state: &mut Account<'info, PoolState>,
+    position_state: &mut Account<'info, PositionState>,
+    tick_lower_state: &mut Account<'info, TickState>,
+    tick_upper_state: &mut Account<'info, TickState>,
+    bitmap_lower: &mut Account<'info, TickBitmapState>,
+    bitmap_upper: &mut Account<'info, TickBitmapState>,
+    last_observation_state: &mut Account<'info, ObservationState>,
     remaining_accounts: &[AccountInfo<'info>],
 ) -> Result<(i64, i64)> {
-    crate::check_ticks(tick_lower_state.load()?.tick, tick_upper_state.load()?.tick)?;
-
-    let latest_observation = last_observation_state.load()?;
+    crate::check_ticks(tick_lower_state.tick, tick_upper_state.tick)?;
 
     _update_position(
         liquidity_delta,
-        pool_state.deref(),
-        latest_observation.deref(),
+        pool_state,
+        last_observation_state,
         position_state,
         tick_lower_state,
         tick_upper_state,
@@ -278,8 +224,8 @@ pub fn _modify_position<'info>(
     let mut amount_0 = 0;
     let mut amount_1 = 0;
 
-    let tick_lower = tick_lower_state.load()?.tick;
-    let tick_upper = tick_upper_state.load()?.tick;
+    let tick_lower = tick_lower_state.tick;
+    let tick_upper = tick_upper_state.tick;
 
     if liquidity_delta != 0 {
         if pool_state.tick < tick_lower {
@@ -295,23 +241,22 @@ pub fn _modify_position<'info>(
             // write oracle observation
             let timestamp = oracle::_block_timestamp();
             let partition_current_timestamp = timestamp / 14;
-            let partition_last_timestamp = latest_observation.block_timestamp / 14;
-            drop(latest_observation);
+            let partition_last_timestamp = last_observation_state.block_timestamp / 14;
 
-            let next_observation_state;
-            let mut new_observation = if partition_current_timestamp > partition_last_timestamp {
+            let mut next_observation_state;
+            let new_observation = if partition_current_timestamp > partition_last_timestamp {
                 next_observation_state =
-                    AccountLoader::<ObservationState>::try_from(&remaining_accounts[0])?;
-                let next_observation = next_observation_state.load_mut()?;
+                    Account::<ObservationState>::try_from(&remaining_accounts[0])?;
+                // let next_observation = next_observation_state.deref_mut();
                 pool_state.validate_observation_address(
                     &next_observation_state.key(),
-                    next_observation.bump,
+                    next_observation_state.bump,
                     true,
                 )?;
 
-                next_observation
+                next_observation_state.deref_mut()
             } else {
-                last_observation_state.load_mut()?
+                last_observation_state.deref_mut()
             };
 
             pool_state.observation_cardinality_next = new_observation.update(
@@ -368,16 +313,16 @@ pub fn _modify_position<'info>(
 ///
 pub fn _update_position<'info>(
     liquidity_delta: i64,
-    pool_state: &PoolState,
-    last_observation_state: &ObservationState,
-    position_state: &AccountLoader<'info, PositionState>,
-    tick_lower_state: &AccountLoader<'info, TickState>,
-    tick_upper_state: &AccountLoader<'info, TickState>,
-    bitmap_lower: &AccountLoader<'info, TickBitmapState>,
-    bitmap_upper: &AccountLoader<'info, TickBitmapState>,
+    pool_state: &mut Account<'info, PoolState>,
+    last_observation_state: &mut Account<ObservationState>,
+    position_state: &mut Account<'info, PositionState>,
+    tick_lower_state: &mut Account<'info, TickState>,
+    tick_upper_state: &mut Account<'info, TickState>,
+    bitmap_lower: &mut Account<'info, TickBitmapState>,
+    bitmap_upper: &mut Account<'info, TickBitmapState>,
 ) -> Result<()> {
-    let mut tick_lower = tick_lower_state.load_mut()?;
-    let mut tick_upper = tick_upper_state.load_mut()?;
+    let tick_lower = tick_lower_state.deref_mut();
+    let tick_upper = tick_upper_state.deref_mut();
 
     let mut flipped_lower = false;
     let mut flipped_upper = false;
@@ -417,14 +362,14 @@ pub fn _update_position<'info>(
 
         if flipped_lower {
             let bit_pos = ((tick_lower.tick / pool_state.tick_spacing as i32) % 256) as u8; // rightmost 8 bits
-            bitmap_lower.load_mut()?.flip_bit(bit_pos);
+            bitmap_lower.flip_bit(bit_pos);
         }
         if flipped_upper {
             let bit_pos = ((tick_upper.tick / pool_state.tick_spacing as i32) % 256) as u8;
             if bitmap_lower.key() == bitmap_upper.key() {
-                bitmap_lower.load_mut()?.flip_bit(bit_pos);
+                bitmap_lower.flip_bit(bit_pos);
             } else {
-                bitmap_upper.load_mut()?.flip_bit(bit_pos);
+                bitmap_upper.flip_bit(bit_pos);
             }
         }
     }
@@ -436,7 +381,7 @@ pub fn _update_position<'info>(
         pool_state.fee_growth_global_0_x32,
         pool_state.fee_growth_global_1_x32,
     );
-    position_state.load_mut()?.update(
+    position_state.update(
         liquidity_delta,
         fee_growth_inside_0_x32,
         fee_growth_inside_1_x32,

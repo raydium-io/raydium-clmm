@@ -1,6 +1,6 @@
 use crate::states::*;
 use anchor_lang::prelude::*;
-use std::mem::size_of;
+use std::{mem::size_of, ops::DerefMut};
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -16,14 +16,14 @@ pub struct Initialize<'info> {
         payer = owner,
         space = 8 + size_of::<FactoryState>()
     )]
-    pub factory_state: AccountLoader<'info, FactoryState>,
+    pub factory_state: Account<'info, FactoryState>,
 
     /// To create a new program account
     pub system_program: Program<'info, System>,
 }
 
 pub fn init_factory(ctx: Context<Initialize>) -> Result<()> {
-    let mut factory_state = ctx.accounts.factory_state.load_init()?;
+    let factory_state = ctx.accounts.factory_state.deref_mut();
     factory_state.bump = *ctx.bumps.get("factory_state").unwrap();
     factory_state.owner = ctx.accounts.owner.key();
     factory_state.fee_protocol = 3; // 1/3 = 33.33%

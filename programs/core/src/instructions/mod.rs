@@ -4,8 +4,8 @@ pub use init_factory::*;
 pub mod set_owner;
 pub use set_owner::*;
 
-pub mod enable_fee_amount;
-pub use enable_fee_amount::*;
+pub mod create_fee_account;
+pub use create_fee_account::*;
 
 pub mod create_pool;
 pub use create_pool::*;
@@ -13,17 +13,14 @@ pub use create_pool::*;
 pub mod increase_observation;
 pub use increase_observation::*;
 
-pub mod set_fee_protocol;
-pub use set_fee_protocol::*;
+pub mod set_protocol_fee;
+pub use set_protocol_fee::*;
 
-pub mod collect_protocol;
-pub use collect_protocol::*;
+pub mod collect_protocol_fee;
+pub use collect_protocol_fee::*;
 
 pub mod init_tick_account;
 pub use init_tick_account::*;
-
-pub mod close_tick_account;
-pub use close_tick_account::*;
 
 pub mod init_bitmap_account;
 pub use init_bitmap_account::*;
@@ -43,8 +40,8 @@ pub use collect::*;
 pub mod swap;
 pub use swap::*;
 
-pub mod mint_tokenized_position;
-pub use mint_tokenized_position::*;
+pub mod create_tokenized_position;
+pub use create_tokenized_position::*;
 
 pub mod add_metaplex_metadata;
 pub use add_metaplex_metadata::*;
@@ -63,6 +60,3 @@ pub use exact_input_single::*;
 
 pub mod exact_input;
 pub use exact_input::*;
-
-pub mod exact_input_internal;
-pub use exact_input_internal::*;

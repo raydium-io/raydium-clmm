@@ -1,12 +1,13 @@
 use crate::error::ErrorCode;
 use crate::libraries::{fixed_point_32, full_math::MulDiv, liquidity_math, swap_math, tick_math};
 use crate::states::*;
+use crate::util::*;
 use anchor_lang::prelude::*;
-use anchor_spl::associated_token::get_associated_token_address;
-use anchor_spl::token;
 use anchor_spl::token::{Token, TokenAccount};
+use std::iter::Iterator;
+use std::ops::DerefMut;
 use std::ops::Neg;
-use std::ops::{Deref, DerefMut};
+use std::slice::Iter;
 
 #[derive(Accounts)]
 pub struct SwapContext<'info> {
@@ -16,41 +17,37 @@ pub struct SwapContext<'info> {
     /// The user token account for input token
     /// CHECK: Account validation is performed by the token program
     #[account(mut)]
-    pub input_token_account: UncheckedAccount<'info>,
+    pub input_token_account: Account<'info, TokenAccount>,
 
     /// The user token account for output token
     /// CHECK: Account validation is performed by the token program
     #[account(mut)]
-    pub output_token_account: UncheckedAccount<'info>,
+    pub output_token_account: Account<'info, TokenAccount>,
 
     /// The vault token account for input token
     #[account(mut)]
-    pub input_vault: Box<Account<'info, TokenAccount>>,
+    pub input_vault: Account<'info, TokenAccount>,
 
     /// The vault token account for output token
     #[account(mut)]
-    pub output_vault: Box<Account<'info, TokenAccount>>,
+    pub output_vault: Account<'info, TokenAccount>,
 
     /// SPL program for token transfers
     pub token_program: Program<'info, Token>,
 
     /// The factory state to read protocol fees
     /// CHECK: Safety check performed inside function body
-    pub factory_state: UncheckedAccount<'info>,
+    pub factory_state: Box<Account<'info, FactoryState>>,
 
     /// The program account of the pool in which the swap will be performed
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub pool_state: UncheckedAccount<'info>,
+    pub pool_state: Box<Account<'info, PoolState>>,
 
     /// The program account for the most recent oracle observation
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub last_observation_state: UncheckedAccount<'info>,
-
-    /// Program which receives swap_callback
-    /// CHECK: Allow arbitrary callback handlers
-    pub callback_handler: UncheckedAccount<'info>,
+    pub last_observation_state: Box<Account<'info, ObservationState>>,
 }
 
 pub struct SwapCache {
@@ -110,65 +107,54 @@ pub fn swap(
     amount_specified: i64,
     sqrt_price_limit_x32: u64,
 ) -> Result<()> {
-    require!(amount_specified != 0, ErrorCode::AS);
+    require!(amount_specified != 0, ErrorCode::InvaildSwapAmountSpecified);
 
-    let factory_state =
-        AccountLoader::<FactoryState>::try_from(&ctx.accounts.factory_state.to_account_info())?;
+    let factory_state = ctx.accounts.factory_state.as_ref();
+    let pool_state = ctx.accounts.pool_state.as_mut();
 
-    let pool_loader =
-        AccountLoader::<PoolState>::try_from(&ctx.accounts.pool_state.to_account_info())?;
-    let mut pool = pool_loader.load_mut()?;
+    let zero_for_one = ctx.accounts.input_vault.mint == pool_state.token_0;
 
-    let input_token_account = Account::<TokenAccount>::try_from(&ctx.accounts.input_token_account)?;
-    let output_token_account =
-        Account::<TokenAccount>::try_from(&ctx.accounts.output_token_account)?;
-
-    let zero_for_one = ctx.accounts.input_vault.mint == pool.token_0;
-
-    let (token_account_0, token_account_1, mut vault_0, mut vault_1) = if zero_for_one {
+    let (token_account_0, token_account_1, vault_0, vault_1) = if zero_for_one {
         (
-            input_token_account,
-            output_token_account,
+            ctx.accounts.input_token_account.clone(),
+            ctx.accounts.output_token_account.clone(),
             ctx.accounts.input_vault.clone(),
             ctx.accounts.output_vault.clone(),
         )
     } else {
         (
-            output_token_account,
-            input_token_account,
+            ctx.accounts.output_token_account.clone(),
+            ctx.accounts.input_token_account.clone(),
             ctx.accounts.output_vault.clone(),
             ctx.accounts.input_vault.clone(),
         )
     };
-    assert!(vault_0.key() == get_associated_token_address(&pool_loader.key(), &pool.token_0));
-    assert!(vault_1.key() == get_associated_token_address(&pool_loader.key(), &pool.token_1));
+    assert!(vault_0.key() == pool_state.token_vault_0);
+    assert!(vault_1.key() == pool_state.token_vault_1);
 
-    let last_observation_state = AccountLoader::<ObservationState>::try_from(
-        &ctx.accounts.last_observation_state.to_account_info(),
-    )?;
-    pool.validate_observation_address(
+    pool_state.validate_observation_address(
         &ctx.accounts.last_observation_state.key(),
-        last_observation_state.load()?.bump,
+        ctx.accounts.last_observation_state.bump,
         false,
     )?;
 
-    require!(pool.unlocked, ErrorCode::LOK);
+    require!(pool_state.unlocked, ErrorCode::PoolStateLocked);
     require!(
         if zero_for_one {
-            sqrt_price_limit_x32 < pool.sqrt_price_x32
+            sqrt_price_limit_x32 < pool_state.sqrt_price_x32
                 && sqrt_price_limit_x32 > tick_math::MIN_SQRT_RATIO
         } else {
-            sqrt_price_limit_x32 > pool.sqrt_price_x32
+            sqrt_price_limit_x32 > pool_state.sqrt_price_x32
                 && sqrt_price_limit_x32 < tick_math::MAX_SQRT_RATIO
         },
         ErrorCode::SPL
     );
 
-    pool.unlocked = false;
-    let mut cache = SwapCache {
-        liquidity_start: pool.liquidity,
+    pool_state.unlocked = false;
+    let swap_cache = &mut SwapCache {
+        liquidity_start: pool_state.liquidity,
         block_timestamp: oracle::_block_timestamp(),
-        fee_protocol: factory_state.load()?.fee_protocol,
+        fee_protocol: factory_state.fee_protocol,
         seconds_per_liquidity_cumulative_x32: 0,
         tick_cumulative: 0,
         computed_latest_observation: false,
@@ -179,19 +165,19 @@ pub fn swap(
     let mut state = SwapState {
         amount_specified_remaining: amount_specified,
         amount_calculated: 0,
-        sqrt_price_x32: pool.sqrt_price_x32,
-        tick: pool.tick,
+        sqrt_price_x32: pool_state.sqrt_price_x32,
+        tick: pool_state.tick,
         fee_growth_global_x32: if zero_for_one {
-            pool.fee_growth_global_0_x32
+            pool_state.fee_growth_global_0_x32
         } else {
-            pool.fee_growth_global_1_x32
+            pool_state.fee_growth_global_1_x32
         },
         protocol_fee: 0,
-        liquidity: cache.liquidity_start,
+        liquidity: swap_cache.liquidity_start,
     };
 
-    let latest_observation = last_observation_state.load_mut()?;
-    let mut remaining_accounts = ctx.remaining_accounts.iter();
+    let latest_observation = ctx.accounts.last_observation_state.as_mut();
+    let remaining_accounts_iter = &mut ctx.remaining_accounts.iter();
 
     // cache for the current bitmap account. Cache is cleared on bitmap transitions
     let mut bitmap_cache: Option<TickBitmapState> = None;
@@ -199,77 +185,19 @@ pub fn swap(
     // continue swapping as long as we haven't used the entire input/output and haven't
     // reached the price limit
     while state.amount_specified_remaining != 0 && state.sqrt_price_x32 != sqrt_price_limit_x32 {
+        let (tick_next, initialized, curr_bitmap) = get_next_tick(
+            remaining_accounts_iter,
+            pool_state,
+            bitmap_cache,
+            state.tick,
+            zero_for_one,
+        )?;
+        bitmap_cache = curr_bitmap;
+
         let mut step = StepComputations::default();
         step.sqrt_price_start_x32 = state.sqrt_price_x32;
-
-        let mut compressed = state.tick / pool.tick_spacing as i32;
-
-        // state.tick is the starting tick for the transition
-        if state.tick < 0 && state.tick % pool.tick_spacing as i32 != 0 {
-            compressed -= 1; // round towards negative infinity
-        }
-        // The current tick is not considered in greater than or equal to (lte = false, i.e one for zero) case
-        if !zero_for_one {
-            compressed += 1;
-        }
-
-        let Position { word_pos, bit_pos } = tick_bitmap::position(compressed);
-
-        // load the next bitmap account if cache is empty (first loop instance), or if we have
-        // crossed out of this bitmap
-        if bitmap_cache.is_none() || bitmap_cache.unwrap().word_pos != word_pos {
-            let bitmap_account = remaining_accounts.next().unwrap();
-            msg!("check bitmap {}", word_pos);
-            // ensure this is a valid PDA, even if account is not initialized
-            assert!(
-                bitmap_account.key()
-                    == Pubkey::find_program_address(
-                        &[
-                            BITMAP_SEED.as_bytes(),
-                            pool.token_0.as_ref(),
-                            pool.token_1.as_ref(),
-                            &pool.fee.to_be_bytes(),
-                            &word_pos.to_be_bytes(),
-                        ],
-                        &crate::id()
-                    )
-                    .0
-            );
-
-            // read from bitmap if account is initialized, else use default values for next initialized bit
-            if let Ok(bitmap_loader) = AccountLoader::<TickBitmapState>::try_from(bitmap_account) {
-                let bitmap_state = bitmap_loader.load()?;
-                bitmap_cache = Some(*bitmap_state.deref());
-            } else {
-                // clear cache if the bitmap account was uninitialized. This way default uninitialized
-                // values will be returned for the next bit
-                msg!("cache cleared");
-                bitmap_cache = None;
-            }
-        }
-
-        // what if bitmap_cache is not updated since next account is not initialized?
-        // default values for the next initialized bit if the bitmap account is not initialized
-        let next_initialized_bit = if let Some(bitmap) = bitmap_cache {
-            bitmap.next_initialized_bit(bit_pos, zero_for_one)
-        } else {
-            NextBit {
-                next: if zero_for_one { 0 } else { 255 },
-                initialized: false,
-            }
-        };
-
-        step.tick_next = (((word_pos as i32) << 8) + next_initialized_bit.next as i32)
-            * pool.tick_spacing as i32; // convert relative to absolute
-        step.initialized = next_initialized_bit.initialized;
-
-        // ensure that we do not overshoot the min/max tick, as the tick bitmap is not aware of these bounds
-        if step.tick_next < tick_math::MIN_TICK {
-            step.tick_next = tick_math::MIN_TICK;
-        } else if step.tick_next > tick_math::MAX_TICK {
-            step.tick_next = tick_math::MAX_TICK;
-        }
-
+        step.tick_next = tick_next;
+        step.initialized = initialized;
         step.sqrt_price_next_x32 = tick_math::get_sqrt_ratio_at_tick(step.tick_next)?;
 
         let target_price = if (zero_for_one && step.sqrt_price_next_x32 < sqrt_price_limit_x32)
@@ -284,13 +212,14 @@ pub fn swap(
             target_price,
             state.liquidity,
             state.amount_specified_remaining,
-            pool.fee,
+            pool_state.fee,
         );
         state.sqrt_price_x32 = swap_step.sqrt_ratio_next_x32;
         step.amount_in = swap_step.amount_in;
         step.amount_out = swap_step.amount_out;
         step.fee_amount = swap_step.fee_amount;
 
+        // update the amount of input and output token
         if exact_input {
             state.amount_specified_remaining -=
                 i64::try_from(step.amount_in + step.fee_amount).unwrap();
@@ -307,8 +236,8 @@ pub fn swap(
         }
 
         // if the protocol fee is on, calculate how much is owed, decrement fee_amount, and increment protocol_fee
-        if cache.fee_protocol > 0 {
-            let delta = step.fee_amount / cache.fee_protocol as u64;
+        if swap_cache.fee_protocol > 0 {
+            let delta = step.fee_amount / swap_cache.fee_protocol as u64;
             step.fee_amount -= delta;
             state.protocol_fee += delta;
         }
@@ -323,112 +252,84 @@ pub fn swap(
 
         // shift tick if we reached the next price
         if state.sqrt_price_x32 == step.sqrt_price_next_x32 {
-            // if the tick is initialized, run the tick transition
-            if step.initialized {
-                // check for the placeholder value for the oracle observation, which we replace with the
-                // actual value the first time the swap crosses an initialized tick
-                if !cache.computed_latest_observation {
-                    let new_observation = latest_observation.observe_latest(
-                        cache.block_timestamp,
-                        pool.tick,
-                        pool.liquidity,
-                    );
-                    cache.tick_cumulative = new_observation.0;
-                    cache.seconds_per_liquidity_cumulative_x32 = new_observation.1;
-                    cache.computed_latest_observation = true;
-                }
-
-                msg!("loading tick {}", step.tick_next);
-                let tick_loader =
-                    AccountLoader::<TickState>::try_from(remaining_accounts.next().unwrap())?;
-                let mut tick_state = tick_loader.load_mut()?;
-                pool.validate_tick_address(&tick_loader.key(), tick_state.bump, step.tick_next)?;
-                let mut liquidity_net = tick_state.deref_mut().cross(
-                    if zero_for_one {
-                        state.fee_growth_global_x32
-                    } else {
-                        pool.fee_growth_global_0_x32
-                    },
-                    if zero_for_one {
-                        pool.fee_growth_global_1_x32
-                    } else {
-                        state.fee_growth_global_x32
-                    },
-                    cache.seconds_per_liquidity_cumulative_x32,
-                    cache.tick_cumulative,
-                    cache.block_timestamp,
-                );
-
-                // if we're moving leftward, we interpret liquidity_net as the opposite sign
-                // safe because liquidity_net cannot be i64::MIN
-                if zero_for_one {
-                    liquidity_net = liquidity_net.neg();
-                }
-
-                state.liquidity = liquidity_math::add_delta(state.liquidity, liquidity_net)?;
-            }
-
-            state.tick = if zero_for_one {
-                step.tick_next - 1
+            // get the latest global fee
+            let fee_growth_global_0_x32 = if zero_for_one {
+                state.fee_growth_global_x32
             } else {
-                step.tick_next
+                pool_state.fee_growth_global_0_x32
             };
+            let fee_growth_global_1_x32 = if zero_for_one {
+                pool_state.fee_growth_global_1_x32
+            } else {
+                state.fee_growth_global_x32
+            };
+
+            let (tick_next, delta_liquidity) = update_state_cross_tick(
+                remaining_accounts_iter,
+                &pool_state,
+                swap_cache,
+                latest_observation,
+                fee_growth_global_0_x32,
+                fee_growth_global_1_x32,
+                step.tick_next,
+                step.initialized,
+                zero_for_one,
+            )?;
+            state.tick = tick_next;
+            state.liquidity = liquidity_math::add_delta(state.liquidity, delta_liquidity)?;
         } else if state.sqrt_price_x32 != step.sqrt_price_start_x32 {
             // recompute unless we're on a lower tick boundary (i.e. already transitioned ticks), and haven't moved
             state.tick = tick_math::get_tick_at_sqrt_ratio(state.sqrt_price_x32)?;
         }
     }
-    let partition_current_timestamp = cache.block_timestamp / 14;
+    let partition_current_timestamp = swap_cache.block_timestamp / 14;
     let partition_last_timestamp = latest_observation.block_timestamp / 14;
-    drop(latest_observation);
+    // drop(latest_observation);
 
     // update tick and write an oracle entry if the tick changes
-    if state.tick != pool.tick {
+    if state.tick != pool_state.tick {
         // use the next observation account and update pool observation index if block time falls
         // in another partition
-        let next_observation_state;
-        let mut next_observation = if partition_current_timestamp > partition_last_timestamp {
+        let mut next_observation_state;
+        let new_observation = if partition_current_timestamp > partition_last_timestamp {
             next_observation_state =
-                AccountLoader::<ObservationState>::try_from(&remaining_accounts.next().unwrap())?;
-            let next_observation = next_observation_state.load_mut()?;
-
-            pool.validate_observation_address(
+                Account::<ObservationState>::try_from(remaining_accounts_iter.next().unwrap())?;
+            pool_state.validate_observation_address(
                 &next_observation_state.key(),
-                next_observation.bump,
+                next_observation_state.bump,
                 true,
             )?;
-
-            next_observation
+            next_observation_state.deref_mut()
         } else {
-            last_observation_state.load_mut()?
+            latest_observation
         };
-        pool.tick = state.tick;
-        pool.observation_cardinality_next = next_observation.update(
-            cache.block_timestamp,
-            pool.tick,
-            cache.liquidity_start,
-            pool.observation_cardinality,
-            pool.observation_cardinality_next,
+        pool_state.tick = state.tick;
+        pool_state.observation_cardinality_next = new_observation.update(
+            swap_cache.block_timestamp,
+            pool_state.tick,
+            swap_cache.liquidity_start,
+            pool_state.observation_cardinality,
+            pool_state.observation_cardinality_next,
         );
     }
-    pool.sqrt_price_x32 = state.sqrt_price_x32;
+    pool_state.sqrt_price_x32 = state.sqrt_price_x32;
 
     // update liquidity if it changed
-    if cache.liquidity_start != state.liquidity {
-        pool.liquidity = state.liquidity;
+    if swap_cache.liquidity_start != state.liquidity {
+        pool_state.liquidity = state.liquidity;
     }
 
     // update fee growth global and, if necessary, protocol fees
     // overflow is acceptable, protocol has to withdraw before it hit u64::MAX fees
     if zero_for_one {
-        pool.fee_growth_global_0_x32 = state.fee_growth_global_x32;
+        pool_state.fee_growth_global_0_x32 = state.fee_growth_global_x32;
         if state.protocol_fee > 0 {
-            pool.protocol_fees_token_0 += state.protocol_fee;
+            pool_state.protocol_fees_token_0 += state.protocol_fee;
         }
     } else {
-        pool.fee_growth_global_1_x32 = state.fee_growth_global_x32;
+        pool_state.fee_growth_global_1_x32 = state.fee_growth_global_x32;
         if state.protocol_fee > 0 {
-            pool.protocol_fees_token_1 += state.protocol_fee;
+            pool_state.protocol_fees_token_1 += state.protocol_fee;
         }
     }
 
@@ -444,109 +345,50 @@ pub fn swap(
         )
     };
 
-    // do the transfers and collect payment
-    let pool_state_seeds = [
-        &POOL_SEED.as_bytes(),
-        &pool.token_0.to_bytes() as &[u8],
-        &pool.token_1.to_bytes() as &[u8],
-        &pool.fee.to_be_bytes(),
-        &[pool.bump],
-    ];
-    drop(pool);
-
-    msg!("vault balances {} {}", vault_0.amount, vault_1.amount);
-
     if zero_for_one {
         // x -> y，transfer y token from pool vault to user.
         if amount_1 < 0 {
-            msg!("paying {}", amount_1.neg());
-            token::transfer(
-                CpiContext::new_with_signer(
-                    ctx.accounts.token_program.to_account_info().clone(),
-                    token::Transfer {
-                        from: vault_1.to_account_info().clone(),
-                        to: token_account_1.to_account_info().clone(),
-                        authority: ctx.accounts.pool_state.to_account_info().clone(),
-                    },
-                    &[&pool_state_seeds[..]],
-                ),
+            transfer_from_pool_vault_to_user(
+                pool_state,
+                &vault_1,
+                &token_account_1,
+                &ctx.accounts.token_program,
                 amount_1.neg() as u64,
             )?;
         }
-        let balance_0_before = vault_0.amount;
         //  x -> y, deposit x token from user to pool vault.
         if amount_0 > 0 {
-            msg!(
-                "amount to pay {}, delta 0 {}, delta 1 {}",
-                amount_0 as u64,
-                amount_0,
-                amount_1
-            );
-            token::transfer(
-                CpiContext::new(
-                    ctx.accounts.token_program.to_account_info(),
-                    token::Transfer {
-                        from: token_account_0.to_account_info(),
-                        to: vault_0.to_account_info(),
-                        authority: ctx.accounts.signer.to_account_info(),
-                    },
-                ),
+            transfer_from_user_to_pool_vault(
+                &ctx.accounts.signer,
+                &token_account_0,
+                &vault_0,
+                &ctx.accounts.token_program,
                 amount_0 as u64,
             )?;
         }
-
-        vault_0.reload()?;
-        require!(
-            balance_0_before.checked_add(amount_0 as u64).unwrap() <= vault_0.amount,
-            ErrorCode::IIA
-        );
     } else {
         if amount_0 < 0 {
-            msg!("paying {}", amount_0.neg());
-            token::transfer(
-                CpiContext::new_with_signer(
-                    ctx.accounts.token_program.to_account_info().clone(),
-                    token::Transfer {
-                        from: vault_0.to_account_info().clone(),
-                        to: token_account_0.to_account_info().clone(),
-                        authority: ctx.accounts.pool_state.to_account_info().clone(),
-                    },
-                    &[&pool_state_seeds[..]],
-                ),
+            transfer_from_pool_vault_to_user(
+                pool_state,
+                &vault_0,
+                &token_account_0,
+                &ctx.accounts.token_program,
                 amount_0.neg() as u64,
             )?;
         }
-        let balance_1_before = vault_1.amount;
-
         if amount_1 > 0 {
-            msg!(
-                "amount to pay {}, delta 0 {}, delta 1 {}",
-                amount_1 as u64,
-                amount_0,
-                amount_1
-            );
-            token::transfer(
-                CpiContext::new(
-                    ctx.accounts.token_program.to_account_info(),
-                    token::Transfer {
-                        from: token_account_1.to_account_info(),
-                        to: vault_1.to_account_info(),
-                        authority: ctx.accounts.signer.to_account_info(),
-                    },
-                ),
+            transfer_from_user_to_pool_vault(
+                &ctx.accounts.signer,
+                &token_account_1,
+                &vault_1,
+                &ctx.accounts.token_program,
                 amount_1 as u64,
             )?;
         }
-
-        vault_1.reload()?;
-        require!(
-            balance_1_before.checked_add(amount_1 as u64).unwrap() <= vault_1.amount,
-            ErrorCode::IIA
-        );
     }
 
     emit!(SwapEvent {
-        pool_state: pool_loader.key(),
+        pool_state: pool_state.key(),
         sender: ctx.accounts.signer.key(),
         token_account_0: token_account_0.key(),
         token_account_1: token_account_1.key(),
@@ -556,7 +398,134 @@ pub fn swap(
         liquidity: state.liquidity,
         tick: state.tick
     });
-    pool_loader.load_mut()?.unlocked = true;
+    pool_state.unlocked = true;
 
     Ok(())
+}
+
+fn get_next_tick<'info>(
+    remaining_accounts_iter: &mut Iter<AccountInfo<'info>>,
+    pool_state: &PoolState,
+    bitmap_cache: Option<TickBitmapState>,
+    curr_tick: i32,
+    zero_for_one: bool,
+) -> Result<(i32, bool, Option<TickBitmapState>)> {
+    let mut compressed = curr_tick / pool_state.tick_spacing as i32;
+    // state.tick is the starting tick for the transition
+    if curr_tick < 0 && curr_tick % pool_state.tick_spacing as i32 != 0 {
+        compressed -= 1; // round towards negative infinity
+    }
+    // The current tick is not considered in greater than or equal to (lte = false, i.e one for zero) case
+    if !zero_for_one {
+        compressed += 1;
+    }
+
+    let Position { word_pos, bit_pos } = tick_bitmap::position(compressed);
+
+    // load the next bitmap account if cache is empty (first loop instance), or if we have
+    // crossed out of this bitmap
+    let mut curr_bitmap: Option<TickBitmapState> = bitmap_cache;
+    if curr_bitmap.is_none() || curr_bitmap.as_ref().unwrap().word_pos != word_pos {
+        let bitmap_account = remaining_accounts_iter.next().unwrap();
+        msg!("check bitmap {}", word_pos);
+        // ensure this is a valid PDA, even if account is not initialized
+        assert!(
+            bitmap_account.key()
+                == Pubkey::find_program_address(
+                    &[
+                        BITMAP_SEED.as_bytes(),
+                        pool_state.token_0.as_ref(),
+                        pool_state.token_1.as_ref(),
+                        &pool_state.fee.to_be_bytes(),
+                        &word_pos.to_be_bytes(),
+                    ],
+                    &crate::id()
+                )
+                .0
+        );
+
+        if let Ok(bitmap_state) = Account::<TickBitmapState>::try_from(bitmap_account) {
+            curr_bitmap = Some(*bitmap_state.as_ref());
+        } else {
+            // clear cache if the bitmap account was uninitialized. This way default uninitialized
+            // values will be returned for the next bit
+            msg!("cache cleared");
+            curr_bitmap = None;
+        }
+    }
+
+    // what if bitmap_cache is not updated since next account is not initialized?
+    // default values for the next initialized bit if the bitmap account is not initialized
+    let next_initialized_bit = if let Some(bitmap) = curr_bitmap {
+        bitmap.next_initialized_bit(bit_pos, zero_for_one)
+    } else {
+        NextBit {
+            next: if zero_for_one { 0 } else { 255 },
+            initialized: false,
+        }
+    };
+
+    let mut tick_next = (((word_pos as i32) << 8) + next_initialized_bit.next as i32)
+        * pool_state.tick_spacing as i32; // convert relative to absolute
+
+    // ensure that we do not overshoot the min/max tick, as the tick bitmap is not aware of these bounds
+    // TODO update initialized flag?
+    if tick_next < tick_math::MIN_TICK {
+        tick_next = tick_math::MIN_TICK;
+    } else if tick_next > tick_math::MAX_TICK {
+        tick_next = tick_math::MAX_TICK;
+    }
+    Ok((tick_next, next_initialized_bit.initialized, curr_bitmap))
+}
+
+/// Update observation, liquidity
+fn update_state_cross_tick<'info>(
+    remaining_accounts_iter: &mut Iter<AccountInfo<'info>>,
+    pool_state: &PoolState,
+    swap_cache: &mut SwapCache,
+    latest_observation: &mut Account<ObservationState>,
+    fee_growth_global_0_x32: u64,
+    fee_growth_global_1_x32: u64,
+    tick: i32,
+    tick_initialized: bool,
+    zero_for_one: bool,
+) -> Result<(i32, i64)> {
+    let mut delta_liquidity: i64 = 0;
+    // if the tick is initialized, run the tick transition
+    if tick_initialized {
+        // check for the placeholder value for the oracle observation, which we replace with the
+        // actual value the first time the swap crosses an initialized tick
+        if !swap_cache.computed_latest_observation {
+            let new_observation = latest_observation.observe_latest(
+                swap_cache.block_timestamp,
+                pool_state.tick,
+                pool_state.liquidity,
+            );
+            swap_cache.tick_cumulative = new_observation.0;
+            swap_cache.seconds_per_liquidity_cumulative_x32 = new_observation.1;
+            swap_cache.computed_latest_observation = true;
+        }
+
+        msg!("loading tick {}", tick);
+        let tick_state =
+            &mut Account::<TickState>::try_from(remaining_accounts_iter.next().unwrap())?;
+        pool_state.validate_tick_address(&tick_state.key(), tick_state.bump, tick)?;
+        let mut liquidity_net = tick_state.cross(
+            fee_growth_global_0_x32,
+            fee_growth_global_1_x32,
+            swap_cache.seconds_per_liquidity_cumulative_x32,
+            swap_cache.tick_cumulative,
+            swap_cache.block_timestamp,
+        );
+
+        // if we're moving leftward, we interpret liquidity_net as the opposite sign
+        // safe because liquidity_net cannot be i64::MIN
+        if zero_for_one {
+            liquidity_net = liquidity_net.neg();
+        }
+        delta_liquidity = liquidity_net;
+    }
+
+    let tick_next = if zero_for_one { tick - 1 } else { tick };
+    Ok((tick_next, delta_liquidity))
 }

@@ -14,51 +14,51 @@ pub struct DecreaseLiquidity<'info> {
 
     /// The token account for the tokenized position
     #[account(
-        constraint = nft_account.mint == tokenized_position_state.load()?.mint
+        constraint = nft_account.mint == tokenized_position_state.mint
     )]
     pub nft_account: Box<Account<'info, TokenAccount>>,
 
     /// Decrease liquidity for this position
     #[account(mut)]
-    pub tokenized_position_state: AccountLoader<'info, TokenizedPositionState>,
+    pub tokenized_position_state: Account<'info, TokenizedPositionState>,
 
     /// The program account acting as the core liquidity custodian for token holder
-    pub factory_state: AccountLoader<'info, FactoryState>,
+    pub factory_state: Account<'info, FactoryState>,
 
     /// Burn liquidity for this pool
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub pool_state: UncheckedAccount<'info>,
+    pub pool_state: Box<Account<'info, PoolState>>,
 
     /// Core program account to store position data
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub core_position_state: UncheckedAccount<'info>,
+    pub core_position_state: Box<Account<'info, PositionState>>,
 
     /// Account to store data for the position's lower tick
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub tick_lower_state: UncheckedAccount<'info>,
+    pub tick_lower_state: Box<Account<'info, TickState>>,
 
     /// Account to store data for the position's upper tick
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub tick_upper_state: UncheckedAccount<'info>,
+    pub tick_upper_state: Box<Account<'info, TickState>>,
 
     /// Stores init state for the lower tick
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub bitmap_lower_state: UncheckedAccount<'info>,
+    pub bitmap_lower_state: Box<Account<'info, TickBitmapState>>,
 
     /// Stores init state for the upper tick
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub bitmap_upper_state: UncheckedAccount<'info>,
+    pub bitmap_upper_state: Box<Account<'info, TickBitmapState>>,
 
     /// The latest observation state
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub last_observation_state: UncheckedAccount<'info>,
+    pub last_observation_state: Box<Account<'info, ObservationState>>,
 
     /// The core program where liquidity is burned
     pub core_program: Program<'info, AmmCore>,
@@ -73,11 +73,8 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
 ) -> Result<()> {
     assert!(liquidity > 0);
 
-    let position_state = AccountLoader::<PositionState>::try_from(
-        &ctx.accounts.core_position_state.to_account_info(),
-    )?;
-    let tokens_owed_0_before = position_state.load()?.tokens_owed_0;
-    let tokens_owed_1_before = position_state.load()?.tokens_owed_1;
+    let tokens_owed_0_before = ctx.accounts.core_position_state.tokens_owed_0;
+    let tokens_owed_1_before = ctx.accounts.core_position_state.tokens_owed_1;
 
     let mut core_position_owner = ctx.accounts.factory_state.to_account_info();
     core_position_owner.is_signer = true;
@@ -88,7 +85,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         tick_upper_state: ctx.accounts.tick_upper_state.clone(),
         bitmap_lower_state: ctx.accounts.bitmap_lower_state.clone(),
         bitmap_upper_state: ctx.accounts.bitmap_upper_state.clone(),
-        position_state,
+        position_state: ctx.accounts.core_position_state.clone(),
         last_observation_state: ctx.accounts.last_observation_state.clone(),
     };
     burn(
@@ -100,7 +97,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         ),
         liquidity,
     )?;
-    let updated_core_position = accounts.position_state.load()?;
+    let updated_core_position = accounts.position_state;
     let amount_0 = updated_core_position.tokens_owed_0 - tokens_owed_0_before;
     let amount_1 = updated_core_position.tokens_owed_1 - tokens_owed_1_before;
     require!(
@@ -112,7 +109,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     let fee_growth_inside_0_last_x32 = updated_core_position.fee_growth_inside_0_last_x32;
     let fee_growth_inside_1_last_x32 = updated_core_position.fee_growth_inside_1_last_x32;
 
-    let mut tokenized_position = ctx.accounts.tokenized_position_state.load_mut()?;
+    let tokenized_position = &mut ctx.accounts.tokenized_position_state;
     tokenized_position.tokens_owed_0 += amount_0
         + (fee_growth_inside_0_last_x32 - tokenized_position.fee_growth_inside_0_last_x32)
             .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)

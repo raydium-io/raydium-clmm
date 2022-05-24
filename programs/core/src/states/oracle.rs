@@ -21,9 +21,8 @@ pub const OBSERVATION_SEED: &str = "observation";
 ///
 /// PDA of `[OBSERVATION_SEED, token_0, token_1, fee, index]`
 ///
-#[account(zero_copy)]
-#[derive(Default)]
-#[repr(packed)]
+#[account]
+#[derive(Default, Copy)]
 pub struct ObservationState {
     /// Bump to identify PDA
     pub bump: u8,
@@ -117,7 +116,7 @@ impl ObservationState {
     pub fn observe_latest(self, time: u32, tick: i32, liquidity: u64) -> (i64, u64) {
         let mut last = self;
         if self.block_timestamp != time {
-            last = self.transform(time, tick, liquidity)
+            last = self.transform(time, tick, liquidity);
         }
         (
             last.tick_cumulative,

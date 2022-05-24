@@ -1,7 +1,6 @@
 use super::{mint, MintContext};
 use crate::error::ErrorCode;
 use crate::libraries::{liquidity_amounts, tick_math};
-use crate::program::AmmCore;
 use crate::states::*;
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
@@ -11,7 +10,7 @@ use std::collections::BTreeMap;
 use std::mem::size_of;
 
 #[derive(Accounts)]
-pub struct MintTokenizedPosition<'info> {
+pub struct CreateTokenizedPosition<'info> {
     /// Pays to mint the position
     #[account(mut)]
     pub minter: Signer<'info>,
@@ -22,7 +21,7 @@ pub struct MintTokenizedPosition<'info> {
 
     /// The program account acting as the core liquidity custodian for token holder, and as
     /// mint authority of the position NFT
-    pub factory_state: AccountLoader<'info, FactoryState>,
+    pub factory_state: Box<Account<'info, FactoryState>>,
 
     /// Unique token mint address
     #[account(
@@ -43,34 +42,28 @@ pub struct MintTokenizedPosition<'info> {
     pub nft_account: Box<Account<'info, TokenAccount>>,
 
     /// Mint liquidity for this pool
-    /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub pool_state: UncheckedAccount<'info>,
+    pub pool_state: Box<Account<'info, PoolState>>,
 
     /// Core program account to store position data
-    /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub core_position_state: UncheckedAccount<'info>,
+    pub core_position_state: Box<Account<'info, PositionState>>,
 
     /// Account to store data for the position's lower tick
-    /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub tick_lower_state: UncheckedAccount<'info>,
+    pub tick_lower_state: Box<Account<'info, TickState>>,
 
     /// Account to store data for the position's upper tick
-    /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub tick_upper_state: UncheckedAccount<'info>,
+    pub tick_upper_state: Box<Account<'info, TickState>>,
 
     /// Account to mark the lower tick as initialized
-    /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub bitmap_lower_state: UncheckedAccount<'info>, // remove
+    pub bitmap_lower_state: Box<Account<'info, TickBitmapState>>, // remove
 
     /// Account to mark the upper tick as initialized
-    /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub bitmap_upper_state: UncheckedAccount<'info>, // remove
+    pub bitmap_upper_state: Box<Account<'info, TickBitmapState>>, // remove
 
     /// Metadata for the tokenized position
     #[account(
@@ -80,36 +73,43 @@ pub struct MintTokenizedPosition<'info> {
         payer = minter,
         space = 8 + size_of::<TokenizedPositionState>()
     )]
-    pub tokenized_position_state: AccountLoader<'info, TokenizedPositionState>,
+    pub tokenized_position_state: Box<Account<'info, TokenizedPositionState>>,
 
     /// The token account spending token_0 to mint the position
-    /// CHECK: Account validation is performed by the token program
-    #[account(mut)]
-    pub token_account_0: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        token::mint = vault_0.mint
+    )]
+    pub token_account_0: Box<Account<'info, TokenAccount>>,
 
     /// The token account spending token_1 to mint the position
-    /// CHECK: Account validation is performed by the token program
-    #[account(mut)]
-    pub token_account_1: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        token::mint = vault_1.mint
+    )]
+    pub token_account_1: Box<Account<'info, TokenAccount>>,
 
-    /// The token account owned by core to hold pool tokens for token_0
-    #[account(mut)]
+    /// The address that holds pool tokens for token_0
+    #[account(
+        mut,
+        constraint = vault_0.key() == pool_state.token_vault_0
+    )]
     pub vault_0: Box<Account<'info, TokenAccount>>,
 
-    /// The token account owned by core to hold pool tokens for token_1
-    #[account(mut)]
+    /// The address that holds pool tokens for token_1
+    #[account(
+        mut,
+        constraint = vault_1.key() == pool_state.token_vault_1
+    )]
     pub vault_1: Box<Account<'info, TokenAccount>>,
 
     /// The latest observation state
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub last_observation_state: UncheckedAccount<'info>,
+    pub last_observation_state: Box<Account<'info, ObservationState>>,
 
     /// Sysvar for token mint and ATA creation
     pub rent: Sysvar<'info, Rent>,
-
-    /// The core program where liquidity is minted
-    pub core_program: Program<'info, AmmCore>,
 
     /// Program to create the position manager state account
     pub system_program: Program<'info, System>,
@@ -121,8 +121,8 @@ pub struct MintTokenizedPosition<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
-pub fn mint_tokenized_position<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, MintTokenizedPosition<'info>>,
+pub fn create_tokenized_position<'a, 'b, 'c, 'info>(
+    ctx: Context<'a, 'b, 'c, 'info, CreateTokenizedPosition<'info>>,
     amount_0_desired: u64,
     amount_1_desired: u64,
     amount_0_min: u64,
@@ -130,35 +130,29 @@ pub fn mint_tokenized_position<'a, 'b, 'c, 'info>(
     deadline: i64,
 ) -> Result<()> {
     // Validate addresses manually, as constraint checks are not applied to internal calls
-    let pool_state =
-        AccountLoader::<PoolState>::try_from(&ctx.accounts.pool_state.to_account_info())?;
-    let tick_lower_state =
-        AccountLoader::<TickState>::try_from(&ctx.accounts.tick_lower_state.to_account_info())?;
-    let tick_lower = tick_lower_state.load()?.tick;
-    let tick_upper_state =
-        AccountLoader::<TickState>::try_from(&ctx.accounts.tick_upper_state.to_account_info())?;
-    let tick_upper = tick_upper_state.load()?.tick;
+    // let pool_state =ctx.accounts.pool_state.as_mut();
+    let tick_lower = ctx.accounts.tick_lower_state.tick;
+    let tick_upper = ctx.accounts.tick_upper_state.tick;
 
-    let mut accs = MintContext {
+    let mut accounts = MintContext {
         minter: ctx.accounts.minter.clone(),
         token_account_0: ctx.accounts.token_account_0.clone(),
         token_account_1: ctx.accounts.token_account_1.clone(),
         vault_0: ctx.accounts.vault_0.clone(),
         vault_1: ctx.accounts.vault_1.clone(),
         recipient: UncheckedAccount::try_from(ctx.accounts.factory_state.to_account_info()),
-        pool_state,
-        tick_lower_state,
-        tick_upper_state,
+        pool_state: ctx.accounts.pool_state.clone(),
+        tick_lower_state: ctx.accounts.tick_lower_state.clone(),
+        tick_upper_state: ctx.accounts.tick_upper_state.clone(),
         bitmap_lower_state: ctx.accounts.bitmap_lower_state.clone(),
         bitmap_upper_state: ctx.accounts.bitmap_upper_state.clone(),
         position_state: ctx.accounts.core_position_state.clone(),
         last_observation_state: ctx.accounts.last_observation_state.clone(),
         token_program: ctx.accounts.token_program.clone(),
-        callback_handler: UncheckedAccount::try_from(ctx.accounts.core_program.to_account_info()),
     };
 
     let (liquidity, amount_0, amount_1) = add_liquidity(
-        &mut accs,
+        &mut accounts,
         ctx.remaining_accounts,
         amount_0_desired,
         amount_1_desired,
@@ -166,8 +160,8 @@ pub fn mint_tokenized_position<'a, 'b, 'c, 'info>(
         amount_1_min,
         tick_lower,
         tick_upper,
-    )?;
-
+    )?; 
+    msg!("Create tokenized position, token0 amount: {}, token1 amount: {}", amount_0, amount_1);
     // Mint the NFT
     token::mint_to(
         CpiContext::new_with_signer(
@@ -177,13 +171,13 @@ pub fn mint_tokenized_position<'a, 'b, 'c, 'info>(
                 to: ctx.accounts.nft_account.to_account_info().clone(),
                 authority: ctx.accounts.factory_state.to_account_info().clone(),
             },
-            &[&[&[ctx.accounts.factory_state.load()?.bump] as &[u8]]],
+            &[&[&[ctx.accounts.factory_state.bump] as &[u8]]],
         ),
         1,
     )?;
 
     // Write tokenized position metadata
-    let mut tokenized_position = ctx.accounts.tokenized_position_state.load_init()?;
+    let tokenized_position = &mut ctx.accounts.tokenized_position_state;
     tokenized_position.bump = *ctx.bumps.get("tokenized_position_state").unwrap();
     tokenized_position.mint = ctx.accounts.nft_mint.key();
     tokenized_position.pool_id = ctx.accounts.pool_state.key();
@@ -191,16 +185,12 @@ pub fn mint_tokenized_position<'a, 'b, 'c, 'info>(
     tokenized_position.tick_lower = tick_lower; // can read from core position
     tokenized_position.tick_upper = tick_upper;
     tokenized_position.liquidity = liquidity;
-    tokenized_position.fee_growth_inside_0_last_x32 = AccountLoader::<PositionState>::try_from(
-        &ctx.accounts.core_position_state.to_account_info(),
-    )?
-    .load()?
-    .fee_growth_inside_0_last_x32;
-    tokenized_position.fee_growth_inside_1_last_x32 = AccountLoader::<PositionState>::try_from(
-        &ctx.accounts.core_position_state.to_account_info(),
-    )?
-    .load()?
-    .fee_growth_inside_1_last_x32;
+
+    let updated_core_position = accounts.position_state;
+    tokenized_position.fee_growth_inside_0_last_x32 =
+        updated_core_position.fee_growth_inside_0_last_x32;
+    tokenized_position.fee_growth_inside_1_last_x32 =
+        updated_core_position.fee_growth_inside_1_last_x32;
 
     emit!(IncreaseLiquidityEvent {
         token_id: ctx.accounts.nft_mint.key(),
@@ -234,7 +224,7 @@ pub fn add_liquidity<'info>(
     tick_lower: i32,
     tick_upper: i32,
 ) -> Result<(u64, u64, u64)> {
-    let sqrt_price_x32 = accounts.pool_state.load()?.sqrt_price_x32;
+    let sqrt_price_x32 = accounts.pool_state.sqrt_price_x32;
 
     let sqrt_ratio_a_x32 = tick_math::get_sqrt_ratio_at_tick(tick_lower)?;
     let sqrt_ratio_b_x32 = tick_math::get_sqrt_ratio_at_tick(tick_upper)?;
