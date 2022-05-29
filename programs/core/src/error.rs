@@ -7,79 +7,32 @@ pub enum ErrorCode {
     #[msg("Minting amount should be greater than 0")]
     ZeroMintAmount,
 
-    // states/pool.rs
+    #[msg("The lower tick must be below the upper tick")]
+    TickInvaildOrder,
 
-    // The lower tick must be below the upper tick
-    #[msg("TLU")]
-    TLU,
+    #[msg("The tick must be greater, or equal to the minimum tick(-221818)")]
+    TickLowerOverflow,
 
-    // The tick should be a multiple of tick spacing
-    #[msg("TMS")]
-    TMS,
+    #[msg("The tick must be lesser than, or equal to the maximum tick(221818)")]
+    TickUpperOverflow,
 
-    // The tick must be greater, or equal to, the minimum tick
-    #[msg("TLM")]
-    TLM,
+    #[msg("tick % tick_spacing must be zero")]
+    TickAndSpacingNotMatch,
 
-    // The tick must be lesser than, or equal to, the maximum tick
-    #[msg("TUM")]
-    TUM,
-
-    // Mint 0, The balance of token0 in the given pool before minting must be less than,
-    // or equal to, the balance after minting
-    #[msg("M0")]
-    M0,
-
-    // Mint 1, The balance of token1 in the given pool before minting must be less than,
-    // or equal to, the balance after minting
-    #[msg("M1")]
-    M1,
-
-    // Observation state seed should be valid
-    #[msg("OS")]
-    OS,
-
-    // `amount_specified` cannot be zero
-    #[msg("AS")]
-    AS,
-
-    // Square root price limit
-    #[msg("SPL")]
-    SPL,
-
-    #[msg("IIA")]
-    IIA,
-
-    // states/position.rs
-
-    // No poke/burn for a position with 0 liquidity
-    #[msg("NP")]
-    NP,
-
-    // states/tick.rs
-
-    // liquidity_gross_after must be less than max_liquidity
-    #[msg("LO")]
-    LO,
-
-    // libraries/tick_math.rs
+    #[msg("Square root price limit overflow")]
+    SqrtPriceLimitOverflow,
 
     // second inequality must be < because the price can never reach the price at the max tick
-    #[msg("R")]
-    R,
-    // The given tick must be less than, or equal to, the maximum tick
-    #[msg("T")]
-    T,
-
-    // libraries/liquidity_math.rs
+    #[msg("sqrt_price_x32 out of range")]
+    SqrtPriceX32,
 
     // Liquidity Sub
-    #[msg("LS")]
-    LS,
+    #[msg("Liquidity sub delta L must be smaller than before")]
+    LiquiditySubValueErr,
 
     // Liquidity Add
-    #[msg("LA")]
-    LA,
+    #[msg("Liquidity add delta L must be greater, or equal to before")]
+    LiquidityAddValueErr,
 
     // Non fungible position manager
     #[msg("Transaction too old")]
@@ -95,10 +48,12 @@ pub enum ErrorCode {
     #[msg("Too little received")]
     TooLittleReceived,
 
-    #[msg("Pool state locked")]
-    PoolStateLocked,
     #[msg("Swap special amount can not be zero")]
     InvaildSwapAmountSpecified,
+
     #[msg("Tick index of lower must be smaller than upper")]
     InvaildTickIndex,
+
+    #[msg("Invaild liquidity when update position")]
+    InvaildLiquidity,
 }

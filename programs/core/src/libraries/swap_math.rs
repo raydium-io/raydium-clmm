@@ -2,7 +2,7 @@
 
 use super::full_math::MulDiv;
 use super::sqrt_price_math;
-
+use anchor_lang::prelude::*;
 /// Result of a swap step
 #[derive(Default, Debug)]
 pub struct SwapStep {
@@ -49,7 +49,7 @@ pub fn compute_swap_step(
         let amount_remaining_less_fee = (amount_remaining as u64)
             .mul_div_floor((1_000_000 - fee_pips).into(), 1_000_000)
             .unwrap();
-
+        msg!("amount_remaining_less_fee:{}", amount_remaining_less_fee);
         swap_step.amount_in = if zero_for_one {
             sqrt_price_math::get_amount_0_delta_unsigned(
                 sqrt_ratio_target_x32,

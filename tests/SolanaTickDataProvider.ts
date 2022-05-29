@@ -2,7 +2,12 @@ import * as anchor from '@project-serum/anchor'
 import { PublicKey } from '@solana/web3.js'
 import JSBI from 'jsbi'
 import { BN } from '@project-serum/anchor'
-import { TickDataProvider, PoolVars, tickPosition, TickMath, generateBitmapWord, TICK_SEED, u32ToSeed, BITMAP_SEED, u16ToSeed, nextInitializedBit, buildTick } from '@cykura/sdk'
+import { TickDataProvider, PoolVars, tickPosition, TickMath, generateBitmapWord, u32ToSeed, u16ToSeed, nextInitializedBit, buildTick } from '@cykura/sdk'
+
+import {
+  BITMAP_SEED,
+  TICK_SEED,
+} from "./utils";
 
 interface TickBitmap {
   word: BN[]

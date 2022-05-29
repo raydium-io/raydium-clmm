@@ -4,13 +4,13 @@ anchor_version = "0.24.2"
 seeds = false
 
 [programs.localnet]
-amm_core = "9rB72iQX6NS7jPNHzGpKapgtJZUWUaT2mPSRjgwAwPWt"
+amm_core = "6k2bhNW63RmYFMkySQZNm5VuvVTRngtnnN1ooxcwkFdq"
 
 [programs.devnet]
-amm_core = "9rB72iQX6NS7jPNHzGpKapgtJZUWUaT2mPSRjgwAwPWt"
+amm_core = "6k2bhNW63RmYFMkySQZNm5VuvVTRngtnnN1ooxcwkFdq"
 
 [programs.mainnet]
-amm_core = "9rB72iQX6NS7jPNHzGpKapgtJZUWUaT2mPSRjgwAwPWt"
+amm_core = "6k2bhNW63RmYFMkySQZNm5VuvVTRngtnnN1ooxcwkFdq"
 
 [registry]
 url = "https://github.com/raydium-io/raydium-amm-v3"
@@ -24,3 +24,7 @@ test = "yarn run ts-mocha -p ./tsconfig.json -t 100000 tests/**/*.ts"
 
 [test]
 startup_wait = 20000
+
+[[test.genesis]]
+address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+program = "./external-programs/spl_token_metadata.so"

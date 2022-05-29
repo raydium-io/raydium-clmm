@@ -19,8 +19,9 @@ pub const BITMAP_SEED: &str = "tick_bitmap";
 ///
 /// PDA of `[BITMAP_SEED, token_0, token_1, fee, word_pos]`
 ///
-#[account]
-#[derive(Default, Copy)]
+#[account(zero_copy)]
+#[derive(Default)]
+#[repr(packed)]
 pub struct TickBitmapState {
     /// Bump to identify PDA
     pub bump: u8,
@@ -43,6 +44,7 @@ pub struct Position {
 }
 
 /// The next initialized bit
+#[derive(Debug)]
 pub struct NextBit {
     /// The relative position of the next initialized or uninitialized tick up to 256 ticks away from the current tick
     pub next: u8,

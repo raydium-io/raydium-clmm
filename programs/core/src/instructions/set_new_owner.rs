@@ -2,7 +2,7 @@ use crate::states::*;
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
-pub struct SetOwner<'info> {
+pub struct SetNewOwner<'info> {
     /// Current protocol owner
     #[account(address = factory_state.owner)]
     pub owner: Signer<'info>,
@@ -16,7 +16,7 @@ pub struct SetOwner<'info> {
     pub factory_state: Account<'info, FactoryState>,
 }
 
-pub fn set_owner(ctx: Context<SetOwner>) -> Result<()> {
+pub fn set_new_owner(ctx: Context<SetNewOwner>) -> Result<()> {
     let factory_state = &mut ctx.accounts.factory_state;
     factory_state.owner = ctx.accounts.new_owner.key();
 

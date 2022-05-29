@@ -14,7 +14,7 @@ export async function main() {
   const keypair = new web3.Keypair()
   const wallet = new anchor.Wallet(keypair)
   const connection = new web3.Connection('https://api.mainnet-beta.solana.com')
-  const provider = new anchor.AnchorProvider(connection, wallet, {})
+  const provider = new anchor.Provider(connection, wallet, {})
   anchor.setProvider(provider)
   const ammCore = anchor.workspace.AmmCore as Program<AmmCore>
 

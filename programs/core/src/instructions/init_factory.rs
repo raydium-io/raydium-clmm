@@ -26,7 +26,7 @@ pub fn init_factory(ctx: Context<Initialize>) -> Result<()> {
     let factory_state = ctx.accounts.factory_state.deref_mut();
     factory_state.bump = *ctx.bumps.get("factory_state").unwrap();
     factory_state.owner = ctx.accounts.owner.key();
-    factory_state.fee_protocol = 3; // 1/3 = 33.33%
+    factory_state.protocol_fee = 3; // 1/3 = 33.33%
 
     emit!(OwnerChanged {
         old_owner: Pubkey::default(),

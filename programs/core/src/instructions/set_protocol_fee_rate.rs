@@ -2,7 +2,7 @@ use crate::states::*;
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
-pub struct SetProtocolFee<'info> {
+pub struct SetProtocolFeeRate<'info> {
     /// Valid protocol owner
     #[account(address = factory_state.owner)]
     pub owner: Signer<'info>,

@@ -1,4 +1,3 @@
-use crate::error::ErrorCode;
 use crate::states::*;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program;
@@ -24,8 +23,6 @@ pub fn increase_observation_cardinality_next<'a, 'b, 'c, 'info>(
     observation_account_bumps: Vec<u8>,
 ) -> Result<()> {
     let pool_state = ctx.accounts.pool_state.deref_mut();
-    require!(pool_state.unlocked, ErrorCode::LOK);
-    pool_state.unlocked = false;
 
     let mut i: usize = 0;
     while i < observation_account_bumps.len() {
@@ -34,15 +31,14 @@ pub fn increase_observation_cardinality_next<'a, 'b, 'c, 'info>(
             pool_state.token_0.as_ref(),
             pool_state.token_1.as_ref(),
             &pool_state.fee.to_be_bytes(),
-            // &(pool_state.observation_cardinality_next + i as u16).to_be_bytes(),
+            &(pool_state.observation_cardinality_next + i as u16).to_be_bytes(),
             &[observation_account_bumps[i]],
         ];
 
-        require!(
-            ctx.remaining_accounts[i].key()
-                == Pubkey::create_program_address(&observation_account_seeds[..], &ctx.program_id)
-                    .unwrap(),
-            ErrorCode::OS
+        require_keys_eq!(
+            ctx.remaining_accounts[i].key(),
+            Pubkey::create_program_address(&observation_account_seeds[..], &ctx.program_id)
+                .unwrap()
         );
 
         let space = 8 + size_of::<ObservationState>();
@@ -66,15 +62,17 @@ pub fn increase_observation_cardinality_next<'a, 'b, 'c, 'info>(
             &[&observation_account_seeds[..]],
         )?;
 
-        let mut observation_state_loader =
-            Account::<ObservationState>::try_from(&ctx.remaining_accounts[i].to_account_info())?;
-        let observation_state = observation_state_loader.deref_mut();
+        let mut observation_state = Account::<ObservationState>::try_from_unchecked(
+            &ctx.remaining_accounts[i].to_account_info(),
+        )?;
+
         // this data will not be used because the initialized boolean is still false
         observation_state.bump = observation_account_bumps[i];
         observation_state.index = pool_state.observation_cardinality_next + i as u16;
         observation_state.block_timestamp = 1;
 
-        observation_state_loader.exit(ctx.program_id)?;
+        // drop(observation_state);
+        observation_state.exit(ctx.program_id)?;
 
         i += 1;
     }
@@ -89,6 +87,5 @@ pub fn increase_observation_cardinality_next<'a, 'b, 'c, 'info>(
         observation_cardinality_next_new: pool_state.observation_cardinality_next,
     });
 
-    pool_state.unlocked = true;
     Ok(())
 }

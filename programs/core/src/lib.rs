@@ -12,7 +12,7 @@ use anchor_lang::prelude::*;
 use instructions::*;
 use states::*;
 
-declare_id!("9rB72iQX6NS7jPNHzGpKapgtJZUWUaT2mPSRjgwAwPWt");
+declare_id!("6k2bhNW63RmYFMkySQZNm5VuvVTRngtnnN1ooxcwkFdq");
 
 #[program]
 pub mod amm_core {
@@ -42,8 +42,8 @@ pub mod amm_core {
     ///
     /// * `ctx`- Checks whether protocol owner has signed
     ///
-    pub fn set_owner(ctx: Context<SetOwner>) -> Result<()> {
-        instructions::set_owner(ctx)
+    pub fn set_new_owner(ctx: Context<SetNewOwner>) -> Result<()> {
+        instructions::set_new_owner(ctx)
     }
 
     /// Create a fee account with the given tick_spacing
@@ -120,13 +120,16 @@ pub mod amm_core {
     /// Holds the Factory State account where protocol fee will be saved.
     /// * `fee_protocol` - new protocol fee for all pools
     ///
-    pub fn set_protocol_fee(ctx: Context<SetProtocolFee>, fee_protocol: u8) -> Result<()> {
+    pub fn set_protocol_fee_rate(
+        ctx: Context<SetProtocolFeeRate>,
+        fee_protocol: u8,
+    ) -> Result<()> {
         assert!(fee_protocol >= 2 && fee_protocol <= 10);
         let factory_state = &mut ctx.accounts.factory_state;
-        let fee_protocol_old = factory_state.fee_protocol;
-        factory_state.fee_protocol = fee_protocol;
+        let fee_protocol_old = factory_state.protocol_fee;
+        factory_state.protocol_fee = fee_protocol;
 
-        emit!(SetProtocolFeeEvent {
+        emit!(SetProtocolFeeRateEvent {
             fee_protocol_old,
             fee_protocol
         });
@@ -190,10 +193,10 @@ pub mod amm_core {
             ((tick_math::MAX_TICK / ctx.accounts.pool_state.tick_spacing as i32) >> 8) as i16;
         let min_word_pos =
             ((tick_math::MIN_TICK / ctx.accounts.pool_state.tick_spacing as i32) >> 8) as i16;
-        require!(word_pos >= min_word_pos, ErrorCode::TLM);
-        require!(word_pos <= max_word_pos, ErrorCode::TUM);
+        require!(word_pos >= min_word_pos, ErrorCode::TickLowerOverflow);
+        require!(word_pos <= max_word_pos, ErrorCode::TickUpperOverflow);
 
-        let bitmap_account = &mut ctx.accounts.bitmap_state;
+        let mut bitmap_account = ctx.accounts.bitmap_state.load_init()?;
         bitmap_account.bump = *ctx.bumps.get("bitmap_state").unwrap();
         bitmap_account.word_pos = word_pos;
         Ok(())
@@ -208,7 +211,7 @@ pub mod amm_core {
     /// * `tick` - The tick for which the bitmap account is created. Program address of
     /// the account is derived using most significant 16 bits of the tick
     ///
-    pub fn init_position_account(ctx: Context<InitPositionAccount>) -> Result<()> {
+    pub fn create_procotol_position(ctx: Context<CreateProtocolPosition>) -> Result<()> {
         let position_account = &mut ctx.accounts.position_state;
         position_account.bump = *ctx.bumps.get("position_state").unwrap();
         Ok(())
@@ -216,108 +219,6 @@ pub mod amm_core {
 
     // ---------------------------------------------------------------------
     // Position instructions
-
-    // /// Low-level interface, not supported currently
-    // /// Adds liquidity for the given pool/recipient/tickLower/tickUpper position
-    // ///
-    // /// # Arguments
-    // ///
-    // /// * `ctx` - Holds the recipient's address and program accounts for
-    // /// pool, position and ticks.
-    // /// * `amount` - The amount of liquidity to mint
-    // ///
-    // pub fn mint<'a, 'b, 'c, 'info>(
-    //     ctx: Context<'a, 'b, 'c, 'info, MintContext<'info>>,
-    //     amount: u64,
-    // ) -> Result<()> {
-    //     instructions::mint(ctx, amount)
-    // }
-
-    // /// Low-level interface, not supported currently
-    // /// Burn liquidity from the sender and account tokens owed for the liquidity to the position.
-    // /// Can be used to trigger a recalculation of fees owed to a position by calling with an amount of 0 (poke).
-    // /// Fees must be collected separately via a call to #collect
-    // ///
-    // /// # Arguments
-    // ///
-    // /// * `ctx` - Holds position and other validated accounts need to burn liquidity
-    // /// * `amount` - Amount of liquidity to be burned
-    // ///
-    // pub fn burn<'a, 'b, 'c, 'info>(
-    //     ctx: Context<'a, 'b, 'c, 'info, BurnContext<'info>>,
-    //     amount: u64,
-    // ) -> Result<()> {
-    //     instructions::burn(ctx, amount)
-    // }
-
-    /// Collects tokens owed to a position.
-    ///
-    /// Does not recompute fees earned, which must be done either via mint or burn of any amount of liquidity.
-    /// Collect must be called by the position owner. To withdraw only token_0 or only token_1, amount_0_requested or
-    /// amount_1_requested may be set to zero. To withdraw all tokens owed, caller may pass any value greater than the
-    /// actual tokens owed, e.g. u64::MAX. Tokens owed may be from accumulated swap fees or burned liquidity.
-    ///
-    /// # Arguments
-    ///
-    /// * `amount_0_requested` - How much token_0 should be withdrawn from the fees owed
-    /// * `amount_1_requested` - How much token_1 should be withdrawn from the fees owed
-    ///
-    pub fn collect(
-        ctx: Context<CollectContext>,
-        amount_0_requested: u64,
-        amount_1_requested: u64,
-    ) -> Result<()> {
-        instructions::collect(ctx, amount_0_requested, amount_1_requested)
-    }
-    // ---------------------------------------------------------------------
-    // 4. Swap instructions
-
-    // /// Low-level interface, not supported currently
-    // /// Swap token_0 for token_1, or token_1 for token_0
-    // ///
-    // /// Outstanding tokens must be paid in #swap_callback
-    // ///
-    // /// # Arguments
-    // ///
-    // /// * `ctx` - Accounts required for the swap. Remaining accounts should contain each bitmap leading to
-    // /// the end tick, and each tick being flipped
-    // /// account leading to the destination tick
-    // /// * `deadline` - The time by which the transaction must be included to effect the change
-    // /// * `amount_specified` - The amount of the swap, which implicitly configures the swap as exact input (positive),
-    // /// or exact output (negative)
-    // /// * `sqrt_price_limit` - The Q32.32 sqrt price √P limit. If zero for one, the price cannot
-    // /// be less than this value after the swap.  If one for zero, the price cannot be greater than
-    // /// this value after the swap.
-    // ///
-    // pub fn swap(
-    //     ctx: Context<SwapContext>,
-    //     amount_specified: i64,
-    //     sqrt_price_limit_x32: u64,
-    // ) -> Result<()> {
-    //     instructions::swap(ctx, amount_specified, sqrt_price_limit_x32)
-    // }
-
-    // /// Component function for flash swaps
-    // ///
-    // /// Donate given liquidity to in-range positions then make callback
-    // /// Only callable by a smart contract which implements uniswapV3FlashCallback(),
-    // /// where profitability check can be performed
-    // ///
-    // /// Flash swaps is an advanced feature for developers, not directly available for UI based traders.
-    // /// Periphery does not provide an implementation, but a sample is provided
-    // /// Ref- https://github.com/Uniswap/v3-periphery/blob/main/contracts/examples/PairFlash.sol
-    // ///
-    // ///
-    // /// Flow
-    // /// 1. FlashDapp.initFlash()
-    // /// 2. Core.flash()
-    // /// 3. FlashDapp.uniswapV3FlashCallback()
-    // ///
-    // /// @param amount_0 Amount of token 0 to donate
-    // /// @param amount_1 Amount of token 1 to donate
-    // pub fn flash(ctx: Context<SetFeeProtocol>, amount_0: u64, amount_1: u64) -> Result<()> {
-    //     todo!()
-    // }
 
     // Non fungible position manager
 
@@ -332,22 +233,19 @@ pub mod amm_core {
     /// * `amount_1_min` - The minimum amount of token_1 to spend, which serves as a slippage check
     /// * `deadline` - The time by which the transaction must be included to effect the change
     ///
-    #[access_control(check_deadline(deadline))]
-    pub fn create_tokenized_position<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, CreateTokenizedPosition<'info>>,
+    pub fn create_personal_position<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, CreatePersonalPosition<'info>>,
         amount_0_desired: u64,
         amount_1_desired: u64,
         amount_0_min: u64,
         amount_1_min: u64,
-        deadline: i64,
     ) -> Result<()> {
-        instructions::create_tokenized_position(
+        instructions::create_personal_position(
             ctx,
             amount_0_desired,
             amount_1_desired,
             amount_0_min,
             amount_1_min,
-            deadline,
         )
     }
     /// Attach metaplex metadata to a tokenized position. Permissionless to call.
@@ -357,8 +255,10 @@ pub mod amm_core {
     ///
     /// * `ctx` - Holds validated metadata account and tokenized position addresses
     ///
-    pub fn add_metaplex_metadata(ctx: Context<AddMetaplexMetadata>) -> Result<()> {
-        instructions::add_metaplex_metadata(ctx)
+    pub fn personal_position_with_metadata(
+        ctx: Context<PersonalPositionWithMetadata>,
+    ) -> Result<()> {
+        instructions::personal_position_with_metadata(ctx)
     }
 
     /// Increases liquidity in a tokenized position, with amount paid by `payer`
@@ -372,14 +272,12 @@ pub mod amm_core {
     /// * `amount_1_min` - The minimum amount of token_1 to spend, which serves as a slippage check
     /// * `deadline` - The time by which the transaction must be included to effect the change
     ///
-    #[access_control(check_deadline(deadline))]
     pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, IncreaseLiquidity<'info>>,
         amount_0_desired: u64,
         amount_1_desired: u64,
         amount_0_min: u64,
         amount_1_min: u64,
-        deadline: i64,
     ) -> Result<()> {
         instructions::increase_liquidity(
             ctx,
@@ -387,7 +285,6 @@ pub mod amm_core {
             amount_1_desired,
             amount_0_min,
             amount_1_min,
-            deadline,
         )
     }
     /// Decreases the amount of liquidity in a position and accounts it to the position
@@ -400,16 +297,14 @@ pub mod amm_core {
     /// * `amount_1_min` - The minimum amount of token_1 that should be accounted for the burned liquidity
     /// * `deadline` - The time by which the transaction must be included to effect the change
     ///
-    #[access_control(check_deadline(deadline))]
     #[access_control(is_authorized_for_token(&ctx.accounts.owner_or_delegate, &ctx.accounts.nft_account))]
     pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, DecreaseLiquidity<'info>>,
         liquidity: u64,
         amount_0_min: u64,
         amount_1_min: u64,
-        deadline: i64,
     ) -> Result<()> {
-        instructions::decrease_liquidity(ctx, liquidity, amount_0_min, amount_1_min, deadline)
+        instructions::decrease_liquidity(ctx, liquidity, amount_0_min, amount_1_min)
     }
 
     /// Collects up to a maximum amount of fees owed to a specific tokenized position to the recipient
@@ -422,12 +317,12 @@ pub mod amm_core {
     /// * `amount_1_max` - The maximum amount of token0 to collect
     ///
     #[access_control(is_authorized_for_token(&ctx.accounts.owner_or_delegate, &ctx.accounts.nft_account))]
-    pub fn collect_from_tokenized<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, CollectFromTokenized<'info>>,
+    pub fn collect_fee<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, CollectFee<'info>>,
         amount_0_max: u64,
         amount_1_max: u64,
     ) -> Result<()> {
-        instructions::collect_from_tokenized(ctx, amount_0_max, amount_1_max)
+        instructions::collect_fee(ctx, amount_0_max, amount_1_max)
     }
 
     /// Swaps `amount_in` of one token for as much as possible of another token,
@@ -443,17 +338,14 @@ pub mod amm_core {
     /// be less than this value after the swap.  If one for zero, the price cannot be greater than
     /// this value after the swap.
     ///
-    #[access_control(check_deadline(deadline))]
-    pub fn exact_input_single<'a, 'b, 'c, 'info>(
+    pub fn swap_base_input_single<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, ExactInputSingle<'info>>,
-        deadline: i64,
         amount_in: u64,
         amount_out_minimum: u64,
         sqrt_price_limit_x32: u64,
     ) -> Result<()> {
-        instructions::exact_input_single(
+        instructions::swap_base_input_single(
             ctx,
-            deadline,
             amount_in,
             amount_out_minimum,
             sqrt_price_limit_x32,
@@ -470,17 +362,14 @@ pub mod amm_core {
     /// * `amount_out_minimum` - Panic if output amount is below minimum amount. For slippage.
     /// * `additional_accounts_per_pool` - Additional observation, bitmap and tick accounts per pool
     ///
-    #[access_control(check_deadline(deadline))]
-    pub fn exact_input<'a, 'b, 'c, 'info>(
+    pub fn swap_base_input<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, ExactInput<'info>>,
-        deadline: i64,
         amount_in: u64,
         amount_out_minimum: u64,
         additional_accounts_per_pool: Vec<u8>,
     ) -> Result<()> {
-        instructions::exact_input(
+        instructions::swap_base_input(
             ctx,
-            deadline,
             amount_in,
             amount_out_minimum,
             additional_accounts_per_pool,
@@ -538,9 +427,12 @@ pub mod amm_core {
 /// * `tick` - The price tick
 ///
 pub fn check_tick(tick: i32, tick_spacing: u16) -> Result<()> {
-    require!(tick >= tick_math::MIN_TICK, ErrorCode::TLM);
-    require!(tick <= tick_math::MAX_TICK, ErrorCode::TUM);
-    require!(tick % tick_spacing as i32 == 0, ErrorCode::TMS);
+    require!(tick >= tick_math::MIN_TICK, ErrorCode::TickLowerOverflow);
+    require!(tick <= tick_math::MAX_TICK, ErrorCode::TickUpperOverflow);
+    require!(
+        tick % tick_spacing as i32 == 0,
+        ErrorCode::TickAndSpacingNotMatch
+    );
     Ok(())
 }
 
@@ -552,6 +444,6 @@ pub fn check_tick(tick: i32, tick_spacing: u16) -> Result<()> {
 /// * `tick_upper` - The upper tick
 ///
 pub fn check_ticks(tick_lower: i32, tick_upper: i32) -> Result<()> {
-    require!(tick_lower < tick_upper, ErrorCode::TLU);
+    require!(tick_lower < tick_upper, ErrorCode::TickInvaildOrder);
     Ok(())
 }

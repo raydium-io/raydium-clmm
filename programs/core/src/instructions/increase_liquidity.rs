@@ -1,4 +1,4 @@
-use super::{add_liquidity, MintContext};
+use super::{add_liquidity, MintParam};
 use crate::libraries::{fixed_point_32, full_math::MulDiv};
 use crate::states::*;
 use anchor_lang::prelude::*;
@@ -14,68 +14,61 @@ pub struct IncreaseLiquidity<'info> {
 
     /// Increase liquidity for this position
     #[account(mut)]
-    pub tokenized_position_state: Box<Account<'info, TokenizedPositionState>>,
+    pub personal_position_state: Box<Account<'info, PersonalPositionState>>,
 
     /// Mint liquidity for this pool
-    /// CHECK: Safety check performed inside function body
     #[account(mut)]
     pub pool_state: Box<Account<'info, PoolState>>,
 
     /// Core program account to store position data
-    /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub core_position_state: Box<Account<'info, PositionState>>,
+    pub protocol_position_state: Box<Account<'info, ProcotolPositionState>>,
 
     /// Account to store data for the position's lower tick
-    /// CHECK: Safety check performed inside function body
     #[account(mut)]
     pub tick_lower_state: Box<Account<'info, TickState>>,
 
     /// Account to store data for the position's upper tick
-    /// CHECK: Safety check performed inside function body
     #[account(mut)]
     pub tick_upper_state: Box<Account<'info, TickState>>,
 
     /// Stores init state for the lower tick
-    /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub bitmap_lower_state: Box<Account<'info, TickBitmapState>>,
+    pub bitmap_lower_state: AccountLoader<'info, TickBitmapState>,
 
     /// Stores init state for the upper tick
-    /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub bitmap_upper_state: Box<Account<'info, TickBitmapState>>,
+    pub bitmap_upper_state: AccountLoader<'info, TickBitmapState>,
 
     /// The payer's token account for token_0
     #[account(
         mut,
-        token::mint = vault_0.mint
+        token::mint = token_vault_0.mint
     )]
     pub token_account_0: Box<Account<'info, TokenAccount>>,
 
     /// The token account spending token_1 to mint the position
     #[account(
         mut,
-        token::mint = vault_1.mint
+        token::mint = token_vault_1.mint
     )]
     pub token_account_1: Box<Account<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_0
     #[account(
         mut,
-        constraint = vault_0.key() == pool_state.token_vault_0
+        constraint = token_vault_0.key() == pool_state.token_vault_0
     )]
-    pub vault_0: Box<Account<'info, TokenAccount>>,
+    pub token_vault_0: Box<Account<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_1
     #[account(
         mut,
-        constraint = vault_1.key() == pool_state.token_vault_1
+        constraint = token_vault_1.key() == pool_state.token_vault_1
     )]
-    pub vault_1: Box<Account<'info, TokenAccount>>,
+    pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
     /// The latest observation state
-    /// CHECK: Safety check performed inside function body
     #[account(mut)]
     pub last_observation_state: Box<Account<'info, ObservationState>>,
 
@@ -89,22 +82,23 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     amount_1_desired: u64,
     amount_0_min: u64,
     amount_1_min: u64,
-    deadline: i64,
 ) -> Result<()> {
-    let mut accounts = MintContext {
-        minter: ctx.accounts.payer.clone(),
-        token_account_0: ctx.accounts.token_account_0.clone(),
-        token_account_1: ctx.accounts.token_account_1.clone(),
-        vault_0: ctx.accounts.vault_0.clone(),
-        vault_1: ctx.accounts.vault_1.clone(),
+    let tick_lower = ctx.accounts.tick_lower_state.tick;
+    let tick_upper = ctx.accounts.tick_upper_state.tick;
+    let mut accounts = MintParam {
+        minter: &ctx.accounts.payer,
+        token_account_0: ctx.accounts.token_account_0.as_mut(),
+        token_account_1: ctx.accounts.token_account_1.as_mut(),
+        token_vault_0: ctx.accounts.token_vault_0.as_mut(),
+        token_vault_1: ctx.accounts.token_vault_1.as_mut(),
         recipient: UncheckedAccount::try_from(ctx.accounts.factory_state.to_account_info()),
-        pool_state: ctx.accounts.pool_state.clone(),
-        tick_lower_state: ctx.accounts.tick_lower_state.clone(),
-        tick_upper_state: ctx.accounts.tick_upper_state.clone(),
-        bitmap_lower_state: ctx.accounts.bitmap_lower_state.clone(),
-        bitmap_upper_state: ctx.accounts.bitmap_upper_state.clone(),
-        position_state: ctx.accounts.core_position_state.clone(),
-        last_observation_state: ctx.accounts.last_observation_state.clone(),
+        pool_state: ctx.accounts.pool_state.as_mut(),
+        tick_lower_state: ctx.accounts.tick_lower_state.as_mut(),
+        tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),
+        bitmap_lower_state: &ctx.accounts.bitmap_lower_state,
+        bitmap_upper_state: &ctx.accounts.bitmap_upper_state,
+        position_state: ctx.accounts.protocol_position_state.as_mut(),
+        last_observation_state: ctx.accounts.last_observation_state.as_mut(),
         token_program: ctx.accounts.token_program.clone(),
     };
 
@@ -115,8 +109,8 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         amount_1_desired,
         amount_0_min,
         amount_1_min,
-        ctx.accounts.tick_lower_state.tick,
-        ctx.accounts.tick_upper_state.tick,
+        tick_lower,
+        tick_upper,
     )?;
 
     let updated_core_position = accounts.position_state;
@@ -124,7 +118,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     let fee_growth_inside_1_last_x32 = updated_core_position.fee_growth_inside_1_last_x32;
 
     // Update tokenized position metadata
-    let position = ctx.accounts.tokenized_position_state.as_mut();
+    let position = ctx.accounts.personal_position_state.as_mut();
     position.tokens_owed_0 += (fee_growth_inside_0_last_x32
         - position.fee_growth_inside_0_last_x32)
         .mul_div_floor(position.liquidity, fixed_point_32::Q32)

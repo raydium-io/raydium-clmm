@@ -6,7 +6,7 @@ use anchor_lang::prelude::*;
 ///
 #[account]
 #[derive(Default)]
-pub struct TokenizedPositionState {
+pub struct PersonalPositionState {
     /// Bump to identify PDA
     pub bump: u8,
 

@@ -23,7 +23,7 @@ async function main() {
   const wallet = new anchor.Wallet(keypair)
   const owner = wallet.publicKey
   const connection = new web3.Connection('http://127.0.0.1:8899')
-  const provider = new anchor.AnchorProvider(connection, wallet, {})
+  const provider = new anchor.Provider(connection, wallet, {})
   anchor.setProvider(provider)
   const coreProgram = anchor.workspace.AmmCore as Program<AmmCore>
 

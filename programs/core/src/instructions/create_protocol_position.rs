@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 use std::mem::size_of;
 
 #[derive(Accounts)]
-pub struct InitPositionAccount<'info> {
+pub struct CreateProtocolPosition<'info> {
     /// Pays to create position account
     #[account(mut)]
     pub signer: Signer<'info>,
@@ -39,9 +39,9 @@ pub struct InitPositionAccount<'info> {
         ],
         bump,
         payer = signer,
-        space = 8 + size_of::<PositionState>()
+        space = 8 + size_of::<ProcotolPositionState>()
     )]
-    pub position_state: Account<'info, PositionState>,
+    pub position_state: Account<'info, ProcotolPositionState>,
 
     /// Program to initialize the position account
     pub system_program: Program<'info, System>,

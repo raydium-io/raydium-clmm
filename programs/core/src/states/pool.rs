@@ -1,13 +1,10 @@
 use anchor_lang::prelude::*;
 
-use crate::{
-    program::AmmCore,
-    states::{
-        oracle::{self, OBSERVATION_SEED},
-        position::POSITION_SEED,
-        tick::TICK_SEED,
-        tick_bitmap::BITMAP_SEED,
-    },
+use crate::states::{
+    oracle::{self, OBSERVATION_SEED},
+    position::POSITION_SEED,
+    tick::TICK_SEED,
+    tick_bitmap::BITMAP_SEED,
 };
 
 use super::{oracle::ObservationState, tick::TickState};
@@ -21,7 +18,7 @@ pub const POOL_VAULT_SEED: &str = "pool_vault";
 /// PDA of `[POOL_SEED, market, token_0, token_1, fee]`
 ///
 #[account]
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct PoolState {
     /// Bump to identify PDA
     pub bump: u8,
@@ -73,9 +70,6 @@ pub struct PoolState {
     /// Protocol fees will never exceed u64::MAX in either token
     pub protocol_fees_token_0: u64,
     pub protocol_fees_token_1: u64,
-
-    /// Whether the pool is currently locked to reentrancy
-    pub unlocked: bool,
 }
 
 impl PoolState {
@@ -111,7 +105,7 @@ impl PoolState {
             &index.to_be_bytes(),
             &[bump],
         ];
-        assert!(*key == Pubkey::create_program_address(&seeds, &AmmCore::id()).unwrap());
+        assert!(*key == Pubkey::create_program_address(&seeds, &crate::id()).unwrap());
         Ok(())
     }
 
@@ -135,7 +129,7 @@ impl PoolState {
                     &tick.to_be_bytes(),
                     &[bump],
                 ],
-                &AmmCore::id(),
+                &crate::id(),
             )
             .unwrap(),
         );
@@ -162,7 +156,7 @@ impl PoolState {
                     &word_pos.to_be_bytes(),
                     &[bump],
                 ],
-                &AmmCore::id(),
+                &crate::id(),
             )
             .unwrap(),
         );
@@ -198,7 +192,7 @@ impl PoolState {
                     &tick_upper.to_be_bytes(),
                     &[bump],
                 ],
-                &AmmCore::id(),
+                &crate::id(),
             )
             .unwrap(),
         );

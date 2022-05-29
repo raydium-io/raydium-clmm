@@ -17,7 +17,7 @@ pub const POSITION_SEED: &str = "position";
 ///
 #[account]
 #[derive(Default)]
-pub struct PositionState {
+pub struct ProcotolPositionState {
     /// Bump to identify PDA
     pub bump: u8,
 
@@ -37,7 +37,7 @@ pub struct PositionState {
     pub tokens_owed_1: u64,
 }
 
-impl PositionState {
+impl ProcotolPositionState {
     /// Credits accumulated fees to a user's position
     ///
     /// # Arguments
@@ -56,7 +56,7 @@ impl PositionState {
         fee_growth_inside_1_x32: u64,
     ) -> Result<()> {
         let liquidity_next = if liquidity_delta == 0 {
-            require!(self.liquidity > 0, ErrorCode::NP); // disallow pokes for 0 liquidity positions
+            require!(self.liquidity > 0, ErrorCode::InvaildLiquidity); // disallow pokes for 0 liquidity positions
             self.liquidity
         } else {
             liquidity_math::add_delta(self.liquidity, liquidity_delta)?

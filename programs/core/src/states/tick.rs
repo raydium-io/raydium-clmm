@@ -19,10 +19,9 @@ pub struct TickState {
     /// The price tick whose info is stored in the account
     pub tick: i32,
 
-    /// The total position liquidity that references this tick
-    pub liquidity_net: i64,
-
     /// Amount of net liquidity added (subtracted) when tick is crossed from left to right (right to left)
+    pub liquidity_net: i64,
+    /// The total position liquidity that references this tick
     pub liquidity_gross: u64,
 
     /// Fee growth per unit of liquidity on the _other_ side of this tick (relative to the current tick)
@@ -104,7 +103,7 @@ impl TickState {
             self.liquidity_net.checked_add(liquidity_delta)
         }
         .unwrap();
-
+        msg!("tick update,liquidity_gross_before:{}, liquidity_gross_after:{},liquidity_net:{}, upper:{}", liquidity_gross_before, liquidity_gross_after, self.liquidity_net,upper);
         Ok(flipped)
     }
 

@@ -4,7 +4,6 @@ use crate::libraries::tick_math;
 use crate::states::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
-use std::collections::BTreeMap;
 
 #[derive(Accounts)]
 pub struct ExactInputSingle<'info> {
@@ -47,9 +46,8 @@ pub struct ExactInputSingle<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-pub fn exact_input_single<'a, 'b, 'c, 'info>(
+pub fn swap_base_input_single<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, ExactInputSingle<'info>>,
-    deadline: i64,
     amount_in: u64,
     amount_out_minimum: u64,
     sqrt_price_limit_x32: u64,
@@ -57,19 +55,20 @@ pub fn exact_input_single<'a, 'b, 'c, 'info>(
     let amount_out = exact_input_internal(
         &mut SwapContext {
             signer: ctx.accounts.signer.clone(),
-            factory_state: ctx.accounts.factory_state.clone(),
+            factory_state: ctx.accounts.factory_state.as_mut(),
             input_token_account: ctx.accounts.input_token_account.clone(),
             output_token_account: ctx.accounts.output_token_account.clone(),
             input_vault: ctx.accounts.input_vault.clone(),
             output_vault: ctx.accounts.output_vault.clone(),
             token_program: ctx.accounts.token_program.clone(),
-            pool_state: ctx.accounts.pool_state.clone(),
-            last_observation_state: ctx.accounts.last_observation_state.clone(),
+            pool_state: ctx.accounts.pool_state.as_mut(),
+            last_observation_state: &mut ctx.accounts.last_observation_state,
         },
         ctx.remaining_accounts,
         amount_in,
         sqrt_price_limit_x32,
     )?;
+    msg!("exact_input_single, amount_out: {}", amount_out);
     require!(
         amount_out >= amount_out_minimum,
         ErrorCode::TooLittleReceived
@@ -78,8 +77,8 @@ pub fn exact_input_single<'a, 'b, 'c, 'info>(
 }
 
 /// Performs a single exact input swap
-pub fn exact_input_internal<'info>(
-    accounts: &mut SwapContext<'info>,
+pub fn exact_input_internal<'b, 'info>(
+    accounts: &mut SwapContext<'b, 'info>,
     remaining_accounts: &[AccountInfo<'info>],
     amount_in: u64,
     sqrt_price_limit_x32: u64,
@@ -88,12 +87,8 @@ pub fn exact_input_internal<'info>(
 
     let balance_before = accounts.input_vault.amount;
     swap(
-        Context::new(
-            &crate::ID,
-            accounts,
-            remaining_accounts,
-            BTreeMap::default(),
-        ),
+        accounts,
+        remaining_accounts,
         i64::try_from(amount_in).unwrap(),
         if sqrt_price_limit_x32 == 0 {
             if zero_for_one {

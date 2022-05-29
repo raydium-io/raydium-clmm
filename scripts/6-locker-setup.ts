@@ -61,7 +61,7 @@ async function main() {
   console.log('6-pubkey', keypair.publicKey.toString())
   const wallet = new anchor.Wallet(keypair)
   const connection = new web3.Connection('http://127.0.0.1:8899')
-  const anchorProvider = new anchor.AnchorProvider(connection, wallet, {})
+  const anchorProvider = new anchor.Provider(connection, wallet, {})
   anchor.setProvider(anchorProvider)
 
   const solanaProvider = SolanaProvider.init({

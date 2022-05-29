@@ -26,7 +26,7 @@ pub struct InitBitmapAccount<'info> {
         payer = signer,
         space = 8 + size_of::<TickBitmapState>()
     )]
-    pub bitmap_state: Account<'info, TickBitmapState>,
+    pub bitmap_state: AccountLoader<'info, TickBitmapState>,
 
     /// Program to initialize the tick account
     pub system_program: Program<'info, System>,

@@ -7,7 +7,7 @@ use metaplex_token_metadata::{instruction::create_metadata_accounts, state::Crea
 use spl_token::instruction::AuthorityType;
 
 #[derive(Accounts)]
-pub struct AddMetaplexMetadata<'info> {
+pub struct PersonalPositionWithMetadata<'info> {
     /// Pays to generate the metadata
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -22,9 +22,9 @@ pub struct AddMetaplexMetadata<'info> {
     /// Position state of the tokenized position
     #[account(
         seeds = [POSITION_SEED.as_bytes(), nft_mint.key().as_ref()],
-        bump = tokenized_position_state.bump
+        bump = position_state.bump
     )]
-    pub tokenized_position_state: Account<'info, TokenizedPositionState>,
+    pub position_state: Account<'info, PersonalPositionState>,
 
     /// To store metaplex metadata
     /// CHECK: Safety check performed inside function body
@@ -46,7 +46,7 @@ pub struct AddMetaplexMetadata<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn add_metaplex_metadata(ctx: Context<AddMetaplexMetadata>) -> Result<()> {
+pub fn personal_position_with_metadata(ctx: Context<PersonalPositionWithMetadata>) -> Result<()> {
     let seeds = [&[ctx.accounts.factory_state.bump] as &[u8]];
     let create_metadata_ix = create_metadata_accounts(
         ctx.accounts.metadata_program.key(),
@@ -55,12 +55,9 @@ pub fn add_metaplex_metadata(ctx: Context<AddMetaplexMetadata>) -> Result<()> {
         ctx.accounts.factory_state.key(),
         ctx.accounts.payer.key(),
         ctx.accounts.factory_state.key(),
-        String::from("Raydium AMM Positions NFT-V1"),
-        String::from("RAY-SOL"), // TODO
-        format!(
-            "https://asia-south1-raydium-finance.cloudfunctions.net/nft?mint={}", // TODO
-            ctx.accounts.nft_mint.key()
-        ),
+        String::from("Raydium AMM V3 Positions"),
+        String::from(""), 
+        String::from(""),
         Some(vec![Creator {
             address: ctx.accounts.factory_state.key(),
             verified: true,

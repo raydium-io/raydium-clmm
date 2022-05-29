@@ -14,10 +14,10 @@ pub fn add_delta(x: u64, y: i64) -> Result<u64, anchor_lang::error::Error> {
     let z: u64;
     if y < 0 {
         z = x - (-y as u64);
-        require!(z < x, ErrorCode::LS);
+        require!(z < x, ErrorCode::LiquiditySubValueErr);
     } else {
         z = x + (y as u64);
-        require!(z >= x, ErrorCode::LA);
+        require!(z >= x, ErrorCode::LiquidityAddValueErr);
     }
 
     Ok(z)
