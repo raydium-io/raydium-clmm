@@ -3,7 +3,7 @@ export type AmmCore = {
   "name": "amm_core",
   "instructions": [
     {
-      "name": "initFactory",
+      "name": "createAmmConfig",
       "accounts": [
         {
           "name": "owner",
@@ -11,7 +11,7 @@ export type AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": true,
           "isSigner": false
         },
@@ -37,7 +37,7 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": true,
           "isSigner": false
         }
@@ -53,7 +53,7 @@ export type AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": true,
           "isSigner": false
         },
@@ -86,11 +86,6 @@ export type AmmCore = {
           "name": "poolCreator",
           "isMut": true,
           "isSigner": true
-        },
-        {
-          "name": "serumMarket",
-          "isMut": false,
-          "isSigner": false
         },
         {
           "name": "poolState",
@@ -145,7 +140,7 @@ export type AmmCore = {
       ],
       "args": [
         {
-          "name": "sqrtPriceX32",
+          "name": "sqrtPrice",
           "type": "u64"
         }
       ]
@@ -185,7 +180,7 @@ export type AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": true,
           "isSigner": false
         }
@@ -206,7 +201,7 @@ export type AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": true,
           "isSigner": false
         },
@@ -253,7 +248,7 @@ export type AmmCore = {
       ]
     },
     {
-      "name": "initTickAccount",
+      "name": "createTickAccount",
       "accounts": [
         {
           "name": "signer",
@@ -284,7 +279,7 @@ export type AmmCore = {
       ]
     },
     {
-      "name": "initBitmapAccount",
+      "name": "createBitmapAccount",
       "accounts": [
         {
           "name": "signer",
@@ -323,7 +318,7 @@ export type AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -369,7 +364,7 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -492,7 +487,7 @@ export type AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -543,7 +538,7 @@ export type AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -651,7 +646,7 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -725,7 +720,7 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -802,7 +797,7 @@ export type AmmCore = {
       ]
     },
     {
-      "name": "swapBaseInputSingle",
+      "name": "swapBaseInSingle",
       "accounts": [
         {
           "name": "signer",
@@ -810,7 +805,7 @@ export type AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -860,13 +855,13 @@ export type AmmCore = {
           "type": "u64"
         },
         {
-          "name": "sqrtPriceLimitX32",
+          "name": "sqrtPriceLimit",
           "type": "u64"
         }
       ]
     },
     {
-      "name": "swapBaseInput",
+      "name": "swapBaseIn",
       "accounts": [
         {
           "name": "signer",
@@ -874,7 +869,7 @@ export type AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -907,7 +902,7 @@ export type AmmCore = {
   ],
   "accounts": [
     {
-      "name": "factoryState",
+      "name": "ammConfig",
       "type": {
         "kind": "struct",
         "fields": [
@@ -988,10 +983,6 @@ export type AmmCore = {
             "type": "u8"
           },
           {
-            "name": "market",
-            "type": "publicKey"
-          },
-          {
             "name": "tokenMint0",
             "type": "publicKey"
           },
@@ -1020,7 +1011,7 @@ export type AmmCore = {
             "type": "u64"
           },
           {
-            "name": "sqrtPriceX32",
+            "name": "sqrtPrice",
             "type": "u64"
           },
           {
@@ -1040,11 +1031,11 @@ export type AmmCore = {
             "type": "u16"
           },
           {
-            "name": "feeGrowthGlobal0X32",
+            "name": "feeGrowthGlobal0",
             "type": "u64"
           },
           {
-            "name": "feeGrowthGlobal1X32",
+            "name": "feeGrowthGlobal1",
             "type": "u64"
           },
           {
@@ -1072,11 +1063,11 @@ export type AmmCore = {
             "type": "u64"
           },
           {
-            "name": "feeGrowthInside0LastX32",
+            "name": "feeGrowthInside0Last",
             "type": "u64"
           },
           {
-            "name": "feeGrowthInside1LastX32",
+            "name": "feeGrowthInside1Last",
             "type": "u64"
           },
           {
@@ -1189,11 +1180,11 @@ export type AmmCore = {
             "type": "u64"
           },
           {
-            "name": "feeGrowthInside0LastX32",
+            "name": "feeGrowthInside0Last",
             "type": "u64"
           },
           {
-            "name": "feeGrowthInside1LastX32",
+            "name": "feeGrowthInside1Last",
             "type": "u64"
           },
           {
@@ -1210,7 +1201,22 @@ export type AmmCore = {
   ],
   "events": [
     {
-      "name": "OwnerChanged",
+      "name": "CreateConfigEvent",
+      "fields": [
+        {
+          "name": "owner",
+          "type": "publicKey",
+          "index": false
+        },
+        {
+          "name": "protocolFee",
+          "type": "u8",
+          "index": false
+        }
+      ]
+    },
+    {
+      "name": "OwnerChangedEvent",
       "fields": [
         {
           "name": "oldOwner",
@@ -1240,7 +1246,7 @@ export type AmmCore = {
       ]
     },
     {
-      "name": "FeeAmountEnabled",
+      "name": "CreateFeeAccountEvent",
       "fields": [
         {
           "name": "fee",
@@ -1270,15 +1276,15 @@ export type AmmCore = {
       ]
     },
     {
-      "name": "PoolCreatedAndInitialized",
+      "name": "PoolCreatedEvent",
       "fields": [
         {
-          "name": "token0",
+          "name": "tokenMint0",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "token1",
+          "name": "tokenMint1",
           "type": "publicKey",
           "index": false
         },
@@ -1298,7 +1304,7 @@ export type AmmCore = {
           "index": false
         },
         {
-          "name": "sqrtPriceX32",
+          "name": "sqrtPrice",
           "type": "u64",
           "index": false
         },
@@ -1308,24 +1314,19 @@ export type AmmCore = {
           "index": false
         },
         {
-          "name": "market",
+          "name": "tokenVault0",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "vault0",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "vault1",
+          "name": "tokenVault1",
           "type": "publicKey",
           "index": false
         }
       ]
     },
     {
-      "name": "CollectProtocolEvent",
+      "name": "CollectProtocolFeeEvent",
       "fields": [
         {
           "name": "poolState",
@@ -1333,17 +1334,12 @@ export type AmmCore = {
           "index": false
         },
         {
-          "name": "sender",
+          "name": "recipientTokenAccount0",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "recipientWallet0",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "recipientWallet1",
+          "name": "recipientTokenAccount1",
           "type": "publicKey",
           "index": false
         },
@@ -1410,7 +1406,7 @@ export type AmmCore = {
       ]
     },
     {
-      "name": "MintEvent",
+      "name": "CreatePersonalPositionEvent",
       "fields": [
         {
           "name": "poolState",
@@ -1418,12 +1414,12 @@ export type AmmCore = {
           "index": false
         },
         {
-          "name": "sender",
+          "name": "minter",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "owner",
+          "name": "nftOwner",
           "type": "publicKey",
           "index": false
         },
@@ -1438,17 +1434,17 @@ export type AmmCore = {
           "index": false
         },
         {
-          "name": "amount",
+          "name": "liquidity",
           "type": "u64",
           "index": false
         },
         {
-          "name": "amount0",
+          "name": "depositAmount0",
           "type": "u64",
           "index": false
         },
         {
-          "name": "amount1",
+          "name": "depositAmount1",
           "type": "u64",
           "index": false
         }
@@ -1495,7 +1491,7 @@ export type AmmCore = {
       ]
     },
     {
-      "name": "CollectEvent",
+      "name": "CollectFeeEvent",
       "fields": [
         {
           "name": "poolState",
@@ -1518,12 +1514,12 @@ export type AmmCore = {
           "index": false
         },
         {
-          "name": "amount0",
+          "name": "collectAmount0",
           "type": "u64",
           "index": false
         },
         {
-          "name": "amount1",
+          "name": "collectAmount1",
           "type": "u64",
           "index": false
         }
@@ -1533,7 +1529,7 @@ export type AmmCore = {
       "name": "IncreaseLiquidityEvent",
       "fields": [
         {
-          "name": "tokenId",
+          "name": "positionNftMint",
           "type": "publicKey",
           "index": false
         },
@@ -1558,7 +1554,7 @@ export type AmmCore = {
       "name": "DecreaseLiquidityEvent",
       "fields": [
         {
-          "name": "tokenId",
+          "name": "positionNftMint",
           "type": "publicKey",
           "index": false
         },
@@ -1580,20 +1576,20 @@ export type AmmCore = {
       ]
     },
     {
-      "name": "CollectTokenizedEvent",
+      "name": "CollectPersonalFeeEvent",
       "fields": [
         {
-          "name": "tokenId",
+          "name": "positionNftMint",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "recipientWallet0",
+          "name": "recipientTokenAccount0",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "recipientWallet1",
+          "name": "recipientTokenAccount1",
           "type": "publicKey",
           "index": false
         },
@@ -1704,7 +1700,7 @@ export const IDL: AmmCore = {
   "name": "amm_core",
   "instructions": [
     {
-      "name": "initFactory",
+      "name": "createAmmConfig",
       "accounts": [
         {
           "name": "owner",
@@ -1712,7 +1708,7 @@ export const IDL: AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": true,
           "isSigner": false
         },
@@ -1738,7 +1734,7 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": true,
           "isSigner": false
         }
@@ -1754,7 +1750,7 @@ export const IDL: AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": true,
           "isSigner": false
         },
@@ -1787,11 +1783,6 @@ export const IDL: AmmCore = {
           "name": "poolCreator",
           "isMut": true,
           "isSigner": true
-        },
-        {
-          "name": "serumMarket",
-          "isMut": false,
-          "isSigner": false
         },
         {
           "name": "poolState",
@@ -1846,7 +1837,7 @@ export const IDL: AmmCore = {
       ],
       "args": [
         {
-          "name": "sqrtPriceX32",
+          "name": "sqrtPrice",
           "type": "u64"
         }
       ]
@@ -1886,7 +1877,7 @@ export const IDL: AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": true,
           "isSigner": false
         }
@@ -1907,7 +1898,7 @@ export const IDL: AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": true,
           "isSigner": false
         },
@@ -1954,7 +1945,7 @@ export const IDL: AmmCore = {
       ]
     },
     {
-      "name": "initTickAccount",
+      "name": "createTickAccount",
       "accounts": [
         {
           "name": "signer",
@@ -1985,7 +1976,7 @@ export const IDL: AmmCore = {
       ]
     },
     {
-      "name": "initBitmapAccount",
+      "name": "createBitmapAccount",
       "accounts": [
         {
           "name": "signer",
@@ -2024,7 +2015,7 @@ export const IDL: AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -2070,7 +2061,7 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -2193,7 +2184,7 @@ export const IDL: AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -2244,7 +2235,7 @@ export const IDL: AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -2352,7 +2343,7 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -2426,7 +2417,7 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -2503,7 +2494,7 @@ export const IDL: AmmCore = {
       ]
     },
     {
-      "name": "swapBaseInputSingle",
+      "name": "swapBaseInSingle",
       "accounts": [
         {
           "name": "signer",
@@ -2511,7 +2502,7 @@ export const IDL: AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -2561,13 +2552,13 @@ export const IDL: AmmCore = {
           "type": "u64"
         },
         {
-          "name": "sqrtPriceLimitX32",
+          "name": "sqrtPriceLimit",
           "type": "u64"
         }
       ]
     },
     {
-      "name": "swapBaseInput",
+      "name": "swapBaseIn",
       "accounts": [
         {
           "name": "signer",
@@ -2575,7 +2566,7 @@ export const IDL: AmmCore = {
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -2608,7 +2599,7 @@ export const IDL: AmmCore = {
   ],
   "accounts": [
     {
-      "name": "factoryState",
+      "name": "ammConfig",
       "type": {
         "kind": "struct",
         "fields": [
@@ -2689,10 +2680,6 @@ export const IDL: AmmCore = {
             "type": "u8"
           },
           {
-            "name": "market",
-            "type": "publicKey"
-          },
-          {
             "name": "tokenMint0",
             "type": "publicKey"
           },
@@ -2721,7 +2708,7 @@ export const IDL: AmmCore = {
             "type": "u64"
           },
           {
-            "name": "sqrtPriceX32",
+            "name": "sqrtPrice",
             "type": "u64"
           },
           {
@@ -2741,11 +2728,11 @@ export const IDL: AmmCore = {
             "type": "u16"
           },
           {
-            "name": "feeGrowthGlobal0X32",
+            "name": "feeGrowthGlobal0",
             "type": "u64"
           },
           {
-            "name": "feeGrowthGlobal1X32",
+            "name": "feeGrowthGlobal1",
             "type": "u64"
           },
           {
@@ -2773,11 +2760,11 @@ export const IDL: AmmCore = {
             "type": "u64"
           },
           {
-            "name": "feeGrowthInside0LastX32",
+            "name": "feeGrowthInside0Last",
             "type": "u64"
           },
           {
-            "name": "feeGrowthInside1LastX32",
+            "name": "feeGrowthInside1Last",
             "type": "u64"
           },
           {
@@ -2890,11 +2877,11 @@ export const IDL: AmmCore = {
             "type": "u64"
           },
           {
-            "name": "feeGrowthInside0LastX32",
+            "name": "feeGrowthInside0Last",
             "type": "u64"
           },
           {
-            "name": "feeGrowthInside1LastX32",
+            "name": "feeGrowthInside1Last",
             "type": "u64"
           },
           {
@@ -2911,7 +2898,22 @@ export const IDL: AmmCore = {
   ],
   "events": [
     {
-      "name": "OwnerChanged",
+      "name": "CreateConfigEvent",
+      "fields": [
+        {
+          "name": "owner",
+          "type": "publicKey",
+          "index": false
+        },
+        {
+          "name": "protocolFee",
+          "type": "u8",
+          "index": false
+        }
+      ]
+    },
+    {
+      "name": "OwnerChangedEvent",
       "fields": [
         {
           "name": "oldOwner",
@@ -2941,7 +2943,7 @@ export const IDL: AmmCore = {
       ]
     },
     {
-      "name": "FeeAmountEnabled",
+      "name": "CreateFeeAccountEvent",
       "fields": [
         {
           "name": "fee",
@@ -2971,15 +2973,15 @@ export const IDL: AmmCore = {
       ]
     },
     {
-      "name": "PoolCreatedAndInitialized",
+      "name": "PoolCreatedEvent",
       "fields": [
         {
-          "name": "token0",
+          "name": "tokenMint0",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "token1",
+          "name": "tokenMint1",
           "type": "publicKey",
           "index": false
         },
@@ -2999,7 +3001,7 @@ export const IDL: AmmCore = {
           "index": false
         },
         {
-          "name": "sqrtPriceX32",
+          "name": "sqrtPrice",
           "type": "u64",
           "index": false
         },
@@ -3009,24 +3011,19 @@ export const IDL: AmmCore = {
           "index": false
         },
         {
-          "name": "market",
+          "name": "tokenVault0",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "vault0",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "vault1",
+          "name": "tokenVault1",
           "type": "publicKey",
           "index": false
         }
       ]
     },
     {
-      "name": "CollectProtocolEvent",
+      "name": "CollectProtocolFeeEvent",
       "fields": [
         {
           "name": "poolState",
@@ -3034,17 +3031,12 @@ export const IDL: AmmCore = {
           "index": false
         },
         {
-          "name": "sender",
+          "name": "recipientTokenAccount0",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "recipientWallet0",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "recipientWallet1",
+          "name": "recipientTokenAccount1",
           "type": "publicKey",
           "index": false
         },
@@ -3111,7 +3103,7 @@ export const IDL: AmmCore = {
       ]
     },
     {
-      "name": "MintEvent",
+      "name": "CreatePersonalPositionEvent",
       "fields": [
         {
           "name": "poolState",
@@ -3119,12 +3111,12 @@ export const IDL: AmmCore = {
           "index": false
         },
         {
-          "name": "sender",
+          "name": "minter",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "owner",
+          "name": "nftOwner",
           "type": "publicKey",
           "index": false
         },
@@ -3139,17 +3131,17 @@ export const IDL: AmmCore = {
           "index": false
         },
         {
-          "name": "amount",
+          "name": "liquidity",
           "type": "u64",
           "index": false
         },
         {
-          "name": "amount0",
+          "name": "depositAmount0",
           "type": "u64",
           "index": false
         },
         {
-          "name": "amount1",
+          "name": "depositAmount1",
           "type": "u64",
           "index": false
         }
@@ -3196,7 +3188,7 @@ export const IDL: AmmCore = {
       ]
     },
     {
-      "name": "CollectEvent",
+      "name": "CollectFeeEvent",
       "fields": [
         {
           "name": "poolState",
@@ -3219,12 +3211,12 @@ export const IDL: AmmCore = {
           "index": false
         },
         {
-          "name": "amount0",
+          "name": "collectAmount0",
           "type": "u64",
           "index": false
         },
         {
-          "name": "amount1",
+          "name": "collectAmount1",
           "type": "u64",
           "index": false
         }
@@ -3234,7 +3226,7 @@ export const IDL: AmmCore = {
       "name": "IncreaseLiquidityEvent",
       "fields": [
         {
-          "name": "tokenId",
+          "name": "positionNftMint",
           "type": "publicKey",
           "index": false
         },
@@ -3259,7 +3251,7 @@ export const IDL: AmmCore = {
       "name": "DecreaseLiquidityEvent",
       "fields": [
         {
-          "name": "tokenId",
+          "name": "positionNftMint",
           "type": "publicKey",
           "index": false
         },
@@ -3281,20 +3273,20 @@ export const IDL: AmmCore = {
       ]
     },
     {
-      "name": "CollectTokenizedEvent",
+      "name": "CollectPersonalFeeEvent",
       "fields": [
         {
-          "name": "tokenId",
+          "name": "positionNftMint",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "recipientWallet0",
+          "name": "recipientTokenAccount0",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "recipientWallet1",
+          "name": "recipientTokenAccount1",
           "type": "publicKey",
           "index": false
         },

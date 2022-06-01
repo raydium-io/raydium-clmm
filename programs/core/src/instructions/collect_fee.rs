@@ -54,7 +54,7 @@ pub struct CollectFee<'info> {
     pub personal_position_state: Box<Account<'info, PersonalPositionState>>,
 
     /// The program account acting as the core liquidity custodian for token holder
-    pub factory_state: Box<Account<'info, FactoryState>>,
+    pub amm_config: Box<Account<'info, AmmConfig>>,
 
     /// The program account for the liquidity pool from which fees are collected
     #[account(mut)]
@@ -121,7 +121,7 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
     let mut tokens_owed_0 = tokenized_position.tokens_owed_0;
     let mut tokens_owed_1 = tokenized_position.tokens_owed_1;
 
-    let mut core_position_owner = ctx.accounts.factory_state.to_account_info();
+    let mut core_position_owner = ctx.accounts.amm_config.to_account_info();
     core_position_owner.is_signer = true;
     // trigger an update of the position fees owed and fee growth snapshots if it has any liquidity
     if tokenized_position.liquidity > 0 {
@@ -156,7 +156,7 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
     let amount_0 = amount_0_max.min(tokens_owed_0);
     let amount_1 = amount_1_max.min(tokens_owed_1);
 
-    // let mut core_position_owner = ctx.accounts.factory_state.to_account_info().clone();
+    // let mut core_position_owner = ctx.accounts.amm_config.to_account_info().clone();
     // core_position_owner.is_signer = true;
 
     msg!("withdrawing amounts {} {}", amount_0, amount_1);

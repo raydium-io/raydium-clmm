@@ -4,10 +4,10 @@ use anchor_lang::prelude::*;
 #[derive(Accounts)]
 pub struct SetProtocolFeeRate<'info> {
     /// Valid protocol owner
-    #[account(address = factory_state.owner)]
+    #[account(address = amm_config.owner)]
     pub owner: Signer<'info>,
 
     /// Factory state stores the protocol owner address
     #[account(mut)]
-    pub factory_state: Account<'info, FactoryState>,
+    pub amm_config: Account<'info, AmmConfig>,
 }

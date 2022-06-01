@@ -1,9 +1,9 @@
 use crate::states::*;
 use anchor_lang::prelude::*;
-use std::{ops::DerefMut};
+use std::ops::DerefMut;
 
 #[derive(Accounts)]
-pub struct Initialize<'info> {
+pub struct CreateAmmConfig<'info> {
     /// Address to be set as protocol owner. It pays to create factory state account.
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -14,23 +14,23 @@ pub struct Initialize<'info> {
         seeds = [],
         bump,
         payer = owner,
-        space = FactoryState::LEN
+        space = AmmConfig::LEN
     )]
-    pub factory_state: Account<'info, FactoryState>,
+    pub amm_config: Account<'info, AmmConfig>,
 
     /// To create a new program account
     pub system_program: Program<'info, System>,
 }
 
-pub fn init_factory(ctx: Context<Initialize>) -> Result<()> {
-    let factory_state = ctx.accounts.factory_state.deref_mut();
-    factory_state.bump = *ctx.bumps.get("factory_state").unwrap();
-    factory_state.owner = ctx.accounts.owner.key();
-    factory_state.protocol_fee = 3; // 1/3 = 33.33%
+pub fn create_amm_config(ctx: Context<CreateAmmConfig>) -> Result<()> {
+    let amm_config = ctx.accounts.amm_config.deref_mut();
+    amm_config.bump = *ctx.bumps.get("amm_config").unwrap();
+    amm_config.owner = ctx.accounts.owner.key();
+    amm_config.protocol_fee = 3; // 1/3 = 33.33%
 
-    emit!(InitFactoryEvent {
+    emit!(CreateConfigEvent {
         owner: ctx.accounts.owner.key(),
-        protocol_fee: factory_state.protocol_fee,
+        protocol_fee: amm_config.protocol_fee,
     });
 
     Ok(())

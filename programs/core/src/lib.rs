@@ -12,7 +12,7 @@ use anchor_lang::prelude::*;
 use instructions::*;
 use states::*;
 
-declare_id!("WECDYraS4R4g6WF5wvFXEtvCsGrnw1jHgBFdxjKoeaE");
+declare_id!("FA51eLCcZMd2Cm63g9GfY7MBdftKN8aARDtwyqBdyhQp");
 
 #[program]
 pub mod amm_core {
@@ -29,10 +29,10 @@ pub mod amm_core {
     /// # Arguments
     ///
     /// * `ctx`- Initializes the factory state account
-    /// * `factory_state_bump` - Bump to validate factory state address
+    /// * `amm_config_bump` - Bump to validate factory state address
     ///
-    pub fn init_factory(ctx: Context<Initialize>) -> Result<()> {
-        instructions::init_factory(ctx)
+    pub fn create_amm_config(ctx: Context<CreateAmmConfig>) -> Result<()> {
+        instructions::create_amm_config(ctx)
     }
 
     /// Updates the owner of the factory
@@ -122,9 +122,9 @@ pub mod amm_core {
     ///
     pub fn set_protocol_fee_rate(ctx: Context<SetProtocolFeeRate>, fee_protocol: u8) -> Result<()> {
         assert!(fee_protocol >= 2 && fee_protocol <= 10);
-        let factory_state = &mut ctx.accounts.factory_state;
-        let fee_protocol_old = factory_state.protocol_fee;
-        factory_state.protocol_fee = fee_protocol;
+        let amm_config = &mut ctx.accounts.amm_config;
+        let fee_protocol_old = amm_config.protocol_fee;
+        amm_config.protocol_fee = fee_protocol;
 
         emit!(SetProtocolFeeRateEvent {
             fee_protocol_old,
@@ -166,7 +166,7 @@ pub mod amm_core {
     /// * `tick_account_bump` - Bump to validate tick account PDA
     /// * `tick` - The tick for which the account is created
     ///
-    pub fn init_tick_account(ctx: Context<InitTickAccount>, tick: i32) -> Result<()> {
+    pub fn create_tick_account(ctx: Context<CreateTickAccount>, tick: i32) -> Result<()> {
         let pool_state = &mut ctx.accounts.pool_state;
         check_tick(tick, pool_state.tick_spacing)?;
         let tick_state = &mut ctx.accounts.tick_state;
@@ -185,7 +185,7 @@ pub mod amm_core {
     /// divide the tick by tick spacing to get a 24 bit compressed result, then right shift to obtain the
     /// most significant 16 bits.
     ///
-    pub fn init_bitmap_account(ctx: Context<InitBitmapAccount>, word_pos: i16) -> Result<()> {
+    pub fn create_bitmap_account(ctx: Context<CreateBitmapAccount>, word_pos: i16) -> Result<()> {
         let max_word_pos =
             ((tick_math::MAX_TICK / ctx.accounts.pool_state.tick_spacing as i32) >> 8) as i16;
         let min_word_pos =
@@ -335,18 +335,13 @@ pub mod amm_core {
     /// be less than this value after the swap.  If one for zero, the price cannot be greater than
     /// this value after the swap.
     ///
-    pub fn swap_base_input_single<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, ExactInputSingle<'info>>,
+    pub fn swap_base_in_single<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, SwapBaseInSingle<'info>>,
         amount_in: u64,
         amount_out_minimum: u64,
         sqrt_price_limit: u64,
     ) -> Result<()> {
-        instructions::swap_base_input_single(
-            ctx,
-            amount_in,
-            amount_out_minimum,
-            sqrt_price_limit,
-        )
+        instructions::swap_base_in_single(ctx, amount_in, amount_out_minimum, sqrt_price_limit)
     }
     /// Swaps `amount_in` of one token for as much as possible of another token,
     /// across the path provided
@@ -359,13 +354,13 @@ pub mod amm_core {
     /// * `amount_out_minimum` - Panic if output amount is below minimum amount. For slippage.
     /// * `additional_accounts_per_pool` - Additional observation, bitmap and tick accounts per pool
     ///
-    pub fn swap_base_input<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, ExactInput<'info>>,
+    pub fn swap_base_in<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, SwapBaseIn<'info>>,
         amount_in: u64,
         amount_out_minimum: u64,
         additional_accounts_per_pool: Vec<u8>,
     ) -> Result<()> {
-        instructions::swap_base_input(
+        instructions::swap_base_in(
             ctx,
             amount_in,
             amount_out_minimum,

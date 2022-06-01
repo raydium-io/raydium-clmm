@@ -6,13 +6,13 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
 
 #[derive(Accounts)]
-pub struct ExactInputSingle<'info> {
+pub struct SwapBaseInSingle<'info> {
     /// The user performing the swap
     pub signer: Signer<'info>,
 
     /// The factory state to read protocol fees
     /// CHECK: Safety check performed inside function body
-    pub factory_state: Box<Account<'info, FactoryState>>,
+    pub amm_config: Box<Account<'info, AmmConfig>>,
 
     /// The program account of the pool in which the swap will be performed
     /// CHECK: Safety check performed inside function body
@@ -46,8 +46,8 @@ pub struct ExactInputSingle<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-pub fn swap_base_input_single<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, ExactInputSingle<'info>>,
+pub fn swap_base_in_single<'a, 'b, 'c, 'info>(
+    ctx: Context<'a, 'b, 'c, 'info, SwapBaseInSingle<'info>>,
     amount_in: u64,
     amount_out_minimum: u64,
     sqrt_price_limit_x32: u64,
@@ -55,7 +55,7 @@ pub fn swap_base_input_single<'a, 'b, 'c, 'info>(
     let amount_out = exact_input_internal(
         &mut SwapContext {
             signer: ctx.accounts.signer.clone(),
-            factory_state: ctx.accounts.factory_state.as_mut(),
+            amm_config: ctx.accounts.amm_config.as_mut(),
             input_token_account: ctx.accounts.input_token_account.clone(),
             output_token_account: ctx.accounts.output_token_account.clone(),
             input_vault: ctx.accounts.input_vault.clone(),

@@ -28,7 +28,7 @@ pub struct SwapContext<'b, 'info> {
     pub token_program: Program<'info, Token>,
 
     /// The factory state to read protocol fees
-    pub factory_state: &'b Account<'info, FactoryState>,
+    pub amm_config: &'b Account<'info, AmmConfig>,
 
     /// The program account of the pool in which the swap will be performed
     pub pool_state: &'b mut Account<'info, PoolState>,
@@ -97,7 +97,7 @@ pub fn swap<'b, 'info>(
 ) -> Result<()> {
     require!(amount_specified != 0, ErrorCode::InvaildSwapAmountSpecified);
 
-    let factory_state = ctx.factory_state.deref();
+    let amm_config = ctx.amm_config.deref();
     let pool_state_info = ctx.pool_state.to_account_info();
 
     let zero_for_one = ctx.input_vault.mint == ctx.pool_state.token_mint_0;
@@ -140,7 +140,7 @@ pub fn swap<'b, 'info>(
     let cache = &mut SwapCache {
         liquidity_start: ctx.pool_state.liquidity,
         block_timestamp: oracle::_block_timestamp(),
-        fee_protocol: factory_state.protocol_fee,
+        fee_protocol: amm_config.protocol_fee,
         seconds_per_liquidity_cumulative_x32: 0,
         tick_cumulative: 0,
         computed_latest_observation: false,
@@ -476,3 +476,4 @@ pub fn swap<'b, 'info>(
 
     Ok(())
 }
+

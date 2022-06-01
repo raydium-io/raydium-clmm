@@ -3,7 +3,7 @@
   "name": "amm_core",
   "instructions": [
     {
-      "name": "initFactory",
+      "name": "createAmmConfig",
       "accounts": [
         {
           "name": "owner",
@@ -11,7 +11,7 @@
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": true,
           "isSigner": false
         },
@@ -37,7 +37,7 @@
           "isSigner": false
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": true,
           "isSigner": false
         }
@@ -53,7 +53,7 @@
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": true,
           "isSigner": false
         },
@@ -86,11 +86,6 @@
           "name": "poolCreator",
           "isMut": true,
           "isSigner": true
-        },
-        {
-          "name": "serumMarket",
-          "isMut": false,
-          "isSigner": false
         },
         {
           "name": "poolState",
@@ -145,7 +140,7 @@
       ],
       "args": [
         {
-          "name": "sqrtPriceX32",
+          "name": "sqrtPrice",
           "type": "u64"
         }
       ]
@@ -185,7 +180,7 @@
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": true,
           "isSigner": false
         }
@@ -206,7 +201,7 @@
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": true,
           "isSigner": false
         },
@@ -253,7 +248,7 @@
       ]
     },
     {
-      "name": "initTickAccount",
+      "name": "createTickAccount",
       "accounts": [
         {
           "name": "signer",
@@ -284,7 +279,7 @@
       ]
     },
     {
-      "name": "initBitmapAccount",
+      "name": "createBitmapAccount",
       "accounts": [
         {
           "name": "signer",
@@ -323,7 +318,7 @@
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -369,7 +364,7 @@
           "isSigner": false
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -492,7 +487,7 @@
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -543,7 +538,7 @@
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -651,7 +646,7 @@
           "isSigner": false
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -725,7 +720,7 @@
           "isSigner": false
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -802,7 +797,7 @@
       ]
     },
     {
-      "name": "swapBaseInputSingle",
+      "name": "swapBaseInSingle",
       "accounts": [
         {
           "name": "signer",
@@ -810,7 +805,7 @@
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -860,13 +855,13 @@
           "type": "u64"
         },
         {
-          "name": "sqrtPriceLimitX32",
+          "name": "sqrtPriceLimit",
           "type": "u64"
         }
       ]
     },
     {
-      "name": "swapBaseInput",
+      "name": "swapBaseIn",
       "accounts": [
         {
           "name": "signer",
@@ -874,7 +869,7 @@
           "isSigner": true
         },
         {
-          "name": "factoryState",
+          "name": "ammConfig",
           "isMut": false,
           "isSigner": false
         },
@@ -907,7 +902,7 @@
   ],
   "accounts": [
     {
-      "name": "FactoryState",
+      "name": "AmmConfig",
       "type": {
         "kind": "struct",
         "fields": [
@@ -988,10 +983,6 @@
             "type": "u8"
           },
           {
-            "name": "market",
-            "type": "publicKey"
-          },
-          {
             "name": "tokenMint0",
             "type": "publicKey"
           },
@@ -1020,7 +1011,7 @@
             "type": "u64"
           },
           {
-            "name": "sqrtPriceX32",
+            "name": "sqrtPrice",
             "type": "u64"
           },
           {
@@ -1040,11 +1031,11 @@
             "type": "u16"
           },
           {
-            "name": "feeGrowthGlobal0X32",
+            "name": "feeGrowthGlobal0",
             "type": "u64"
           },
           {
-            "name": "feeGrowthGlobal1X32",
+            "name": "feeGrowthGlobal1",
             "type": "u64"
           },
           {
@@ -1072,11 +1063,11 @@
             "type": "u64"
           },
           {
-            "name": "feeGrowthInside0LastX32",
+            "name": "feeGrowthInside0Last",
             "type": "u64"
           },
           {
-            "name": "feeGrowthInside1LastX32",
+            "name": "feeGrowthInside1Last",
             "type": "u64"
           },
           {
@@ -1189,11 +1180,11 @@
             "type": "u64"
           },
           {
-            "name": "feeGrowthInside0LastX32",
+            "name": "feeGrowthInside0Last",
             "type": "u64"
           },
           {
-            "name": "feeGrowthInside1LastX32",
+            "name": "feeGrowthInside1Last",
             "type": "u64"
           },
           {
@@ -1210,7 +1201,22 @@
   ],
   "events": [
     {
-      "name": "OwnerChanged",
+      "name": "CreateConfigEvent",
+      "fields": [
+        {
+          "name": "owner",
+          "type": "publicKey",
+          "index": false
+        },
+        {
+          "name": "protocolFee",
+          "type": "u8",
+          "index": false
+        }
+      ]
+    },
+    {
+      "name": "OwnerChangedEvent",
       "fields": [
         {
           "name": "oldOwner",
@@ -1240,7 +1246,7 @@
       ]
     },
     {
-      "name": "FeeAmountEnabled",
+      "name": "CreateFeeAccountEvent",
       "fields": [
         {
           "name": "fee",
@@ -1270,15 +1276,15 @@
       ]
     },
     {
-      "name": "PoolCreatedAndInitialized",
+      "name": "PoolCreatedEvent",
       "fields": [
         {
-          "name": "token0",
+          "name": "tokenMint0",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "token1",
+          "name": "tokenMint1",
           "type": "publicKey",
           "index": false
         },
@@ -1298,7 +1304,7 @@
           "index": false
         },
         {
-          "name": "sqrtPriceX32",
+          "name": "sqrtPrice",
           "type": "u64",
           "index": false
         },
@@ -1308,24 +1314,19 @@
           "index": false
         },
         {
-          "name": "market",
+          "name": "tokenVault0",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "vault0",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "vault1",
+          "name": "tokenVault1",
           "type": "publicKey",
           "index": false
         }
       ]
     },
     {
-      "name": "CollectProtocolEvent",
+      "name": "CollectProtocolFeeEvent",
       "fields": [
         {
           "name": "poolState",
@@ -1333,17 +1334,12 @@
           "index": false
         },
         {
-          "name": "sender",
+          "name": "recipientTokenAccount0",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "recipientWallet0",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "recipientWallet1",
+          "name": "recipientTokenAccount1",
           "type": "publicKey",
           "index": false
         },
@@ -1410,7 +1406,7 @@
       ]
     },
     {
-      "name": "MintEvent",
+      "name": "CreatePersonalPositionEvent",
       "fields": [
         {
           "name": "poolState",
@@ -1418,12 +1414,12 @@
           "index": false
         },
         {
-          "name": "sender",
+          "name": "minter",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "owner",
+          "name": "nftOwner",
           "type": "publicKey",
           "index": false
         },
@@ -1438,17 +1434,17 @@
           "index": false
         },
         {
-          "name": "amount",
+          "name": "liquidity",
           "type": "u64",
           "index": false
         },
         {
-          "name": "amount0",
+          "name": "depositAmount0",
           "type": "u64",
           "index": false
         },
         {
-          "name": "amount1",
+          "name": "depositAmount1",
           "type": "u64",
           "index": false
         }
@@ -1495,7 +1491,7 @@
       ]
     },
     {
-      "name": "CollectEvent",
+      "name": "CollectFeeEvent",
       "fields": [
         {
           "name": "poolState",
@@ -1518,12 +1514,12 @@
           "index": false
         },
         {
-          "name": "amount0",
+          "name": "collectAmount0",
           "type": "u64",
           "index": false
         },
         {
-          "name": "amount1",
+          "name": "collectAmount1",
           "type": "u64",
           "index": false
         }
@@ -1533,7 +1529,7 @@
       "name": "IncreaseLiquidityEvent",
       "fields": [
         {
-          "name": "tokenId",
+          "name": "positionNftMint",
           "type": "publicKey",
           "index": false
         },
@@ -1558,7 +1554,7 @@
       "name": "DecreaseLiquidityEvent",
       "fields": [
         {
-          "name": "tokenId",
+          "name": "positionNftMint",
           "type": "publicKey",
           "index": false
         },
@@ -1580,20 +1576,20 @@
       ]
     },
     {
-      "name": "CollectTokenizedEvent",
+      "name": "CollectPersonalFeeEvent",
       "fields": [
         {
-          "name": "tokenId",
+          "name": "positionNftMint",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "recipientWallet0",
+          "name": "recipientTokenAccount0",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "recipientWallet1",
+          "name": "recipientTokenAccount1",
           "type": "publicKey",
           "index": false
         },
@@ -1696,8 +1692,5 @@
       "name": "InvaildLiquidity",
       "msg": "Invaild liquidity when update position"
     }
-  ],
-  "metadata": {
-    "address": "6k2bhNW63RmYFMkySQZNm5VuvVTRngtnnN1ooxcwkFdq"
-  }
+  ]
 }

@@ -12,7 +12,7 @@ use anchor_lang::prelude::*;
 ///
 #[account]
 #[derive(Default)]
-pub struct FactoryState {
+pub struct AmmConfig {
     /// Bump to identify PDA
     pub bump: u8,
 
@@ -25,12 +25,12 @@ pub struct FactoryState {
     // pub padding: [u64; 16],
 }
 
-impl FactoryState {
+impl AmmConfig {
     pub const LEN: usize = 8 + 1 + 32 + 1 + 128;
 }
 
 #[event]
-pub struct InitFactoryEvent {
+pub struct CreateConfigEvent {
     /// The owner before the owner was changed
     #[index]
     pub owner: Pubkey,

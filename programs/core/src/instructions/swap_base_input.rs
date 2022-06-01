@@ -5,13 +5,13 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
 
 #[derive(Accounts)]
-pub struct ExactInput<'info> {
+pub struct SwapBaseIn<'info> {
     /// The user performing the swap
     pub signer: Signer<'info>,
 
     /// The factory state to read protocol fees
     /// CHECK: Safety check performed inside function body
-    pub factory_state: Box<Account<'info, FactoryState>>,
+    pub amm_config: Box<Account<'info, AmmConfig>>,
 
     /// The token account that pays input tokens for the swap
     /// CHECK: Account validation is performed by the token program
@@ -22,8 +22,8 @@ pub struct ExactInput<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-pub fn swap_base_input<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, ExactInput<'info>>,
+pub fn swap_base_in<'a, 'b, 'c, 'info>(
+    ctx: Context<'a, 'b, 'c, 'info, SwapBaseIn<'info>>,
     amount_in: u64,
     amount_out_minimum: u64,
     additional_accounts_per_pool: Vec<u8>,
@@ -47,7 +47,7 @@ pub fn swap_base_input<'a, 'b, 'c, 'info>(
         amount_in_internal = exact_input_internal(
             &mut SwapContext {
                 signer: ctx.accounts.signer.clone(),
-                factory_state: ctx.accounts.factory_state.as_mut(),
+                amm_config: ctx.accounts.amm_config.as_mut(),
                 input_token_account: input_token_account.clone(),
                 pool_state: pool_state.as_mut(),
                 output_token_account: output_token_account.clone(),

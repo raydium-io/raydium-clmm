@@ -21,7 +21,7 @@ pub struct DecreaseLiquidity<'info> {
     pub personal_position_state: Account<'info, PersonalPositionState>,
 
     /// The program account acting as the core liquidity custodian for token holder
-    pub factory_state: Account<'info, FactoryState>,
+    pub amm_config: Account<'info, AmmConfig>,
 
     /// Burn liquidity for this pool
     #[account(mut)]
@@ -63,7 +63,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     let tokens_owed_0_before = ctx.accounts.protocol_position_state.tokens_owed_0;
     let tokens_owed_1_before = ctx.accounts.protocol_position_state.tokens_owed_1;
 
-    let mut core_position_owner = ctx.accounts.factory_state.to_account_info();
+    let mut core_position_owner = ctx.accounts.amm_config.to_account_info();
     core_position_owner.is_signer = true;
     let mut accounts = BurnParam {
         owner: &Signer::try_from(&core_position_owner)?,

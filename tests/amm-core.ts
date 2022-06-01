@@ -81,11 +81,11 @@ describe("amm-core", async () => {
   const tickSpacing = 10;
 
   // find factory address
-  const [factoryState, factoryStateBump] = await PublicKey.findProgramAddress(
+  const [ammConfig, ammConfigBump] = await PublicKey.findProgramAddress(
     [],
     program.programId
   );
-  console.log("factory address: ", factoryState.toString());
+  console.log("factory address: ", ammConfig.toString());
 
   // find fee address
   const [feeState, feeStateBump] = await PublicKey.findProgramAddress(
@@ -338,16 +338,16 @@ describe("amm-core", async () => {
     console.log("got poolB vaultB2 address", vaultB2.toString());
   });
 
-  describe("#init_factory", () => {
+  describe("#create_config", () => {
     // Test for event and owner value
-    it("initializes factory and emits an event", async () => {
-      if (await accountExist(connection, factoryState)) {
+    it("initializes config and emits an event", async () => {
+      if (await accountExist(connection, ammConfig)) {
         return;
       }
       // let listener: number;
       // let [_event, _slot] = await new Promise((resolve, _reject) => {
       //   listener = program.addEventListener(
-      //     "OwnerChanged",
+      //     "CreateConfigEvent",
       //     (event, slot) => {
       //       assert((event.oldOwner as web3.PublicKey).equals(new PublicKey(0)));
       //       assert((event.newOwner as web3.PublicKey).equals(owner));
@@ -357,37 +357,37 @@ describe("amm-core", async () => {
       //   );
       //   console.log("init factory in listener");
       //   program.methods
-      //     .initFactory()
+      //     .createAmmConfig()
       //     .accounts({
       //       owner,
-      //       factoryState,
+      //       ammConfig,
       //       systemProgram: SystemProgram.programId,
       //     })
       //     .rpc();
       // });
       // await program.removeEventListener(listener);
-      const tx = await program.rpc.initFactory({
+      const tx = await program.rpc.createAmmConfig({
         accounts: {
           owner,
-          factoryState,
+          ammConfig,
           systemProgram: SystemProgram.programId,
         },
       });
-      console.log("init factory without listener, tx: ", tx);
-      const factoryStateData = await program.account.factoryState.fetch(
-        factoryState
+      console.log("init config without listener, tx: ", tx);
+      const ammConfigData = await program.account.ammConfig.fetch(
+        ammConfig
       );
-      assert.equal(factoryStateData.bump, factoryStateBump);
-      assert(factoryStateData.owner.equals(owner));
-      assert.equal(factoryStateData.protocolFee, 3);
+      assert.equal(ammConfigData.bump, ammConfigBump);
+      assert(ammConfigData.owner.equals(owner));
+      assert.equal(ammConfigData.protocolFee, 3);
     });
 
-    it("Trying to re-initialize factory fails", async () => {
+    it("Trying to re-initialize config fails", async () => {
       await expect(
-        program.rpc.initFactory({
+        program.rpc.createAmmConfig({
           accounts: {
             owner,
-            factoryState,
+            ammConfig,
             systemProgram: anchor.web3.SystemProgram.programId,
           },
         })
@@ -403,7 +403,7 @@ describe("amm-core", async () => {
         accounts: {
           owner,
           newOwner: newOwner.publicKey,
-          factoryState,
+          ammConfig,
         },
       });
       tx.recentBlockhash = (await connection.getRecentBlockhash()).blockhash;
@@ -418,7 +418,7 @@ describe("amm-core", async () => {
         accounts: {
           owner,
           newOwner: newOwner.publicKey,
-          factoryState,
+          ammConfig,
         },
       });
       tx.recentBlockhash = (await connection.getRecentBlockhash()).blockhash;
@@ -434,7 +434,7 @@ describe("amm-core", async () => {
           accounts: {
             owner: notOwner.publicKey,
             newOwner: newOwner.publicKey,
-            factoryState,
+            ammConfig,
           },
         })
       ).to.be.rejectedWith(Error);
@@ -460,7 +460,7 @@ describe("amm-core", async () => {
       //     accounts: {
       //       owner,
       //       newOwner: newOwner.publicKey,
-      //       factoryState,
+      //       ammConfig,
       //     },
       //   });
       // });
@@ -470,14 +470,14 @@ describe("amm-core", async () => {
         accounts: {
           owner,
           newOwner: newOwner.publicKey,
-          factoryState,
+          ammConfig,
         },
       });
 
-      const factoryStateData = await program.account.factoryState.fetch(
-        factoryState
+      const ammConfigData = await program.account.ammConfig.fetch(
+        ammConfig
       );
-      assert(factoryStateData.owner.equals(newOwner.publicKey));
+      assert(ammConfigData.owner.equals(newOwner.publicKey));
     });
 
     it("reverts to original owner when signed by the new owner", async () => {
@@ -485,12 +485,12 @@ describe("amm-core", async () => {
         accounts: {
           owner: newOwner.publicKey,
           newOwner: owner,
-          factoryState,
+          ammConfig,
         },
         signers: [newOwner],
       });
-      const factoryStateData = await program.account.factoryState.fetch(
-        factoryState
+      const factoryStateData = await program.account.ammConfig.fetch(
+        ammConfig
       );
       assert(factoryStateData.owner.equals(owner));
     });
@@ -502,7 +502,7 @@ describe("amm-core", async () => {
         program.rpc.createFeeAccount(fee + 1, tickSpacing, {
           accounts: {
             owner,
-            factoryState,
+            ammConfig,
             feeState,
             systemProgram: SystemProgram.programId,
           },
@@ -514,7 +514,7 @@ describe("amm-core", async () => {
       const tx = program.transaction.createFeeAccount(fee, tickSpacing, {
         accounts: {
           owner: notOwner.publicKey,
-          factoryState,
+          ammConfig,
           feeState,
           systemProgram: SystemProgram.programId,
         },
@@ -539,7 +539,7 @@ describe("amm-core", async () => {
         program.rpc.createFeeAccount(highFee, tickSpacing, {
           accounts: {
             owner,
-            factoryState,
+            ammConfig,
             feeState: highFeeState,
             systemProgram: SystemProgram.programId,
           },
@@ -552,7 +552,7 @@ describe("amm-core", async () => {
         program.rpc.createFeeAccount(fee, 0, {
           accounts: {
             owner,
-            factoryState,
+            ammConfig,
             feeState: feeState,
             systemProgram: SystemProgram.programId,
           },
@@ -565,7 +565,7 @@ describe("amm-core", async () => {
         program.rpc.createFeeAccount(fee, 16384, {
           accounts: {
             owner,
-            factoryState,
+            ammConfig,
             feeState: feeState,
             systemProgram: SystemProgram.programId,
           },
@@ -592,7 +592,7 @@ describe("amm-core", async () => {
       //   program.rpc.createFeeAccount(fee, tickSpacing, {
       //     accounts: {
       //       owner,
-      //       factoryState,
+      //       ammConfig,
       //       feeState,
       //       systemProgram: SystemProgram.programId,
       //     },
@@ -602,7 +602,7 @@ describe("amm-core", async () => {
       await program.rpc.createFeeAccount(fee, tickSpacing, {
         accounts: {
           owner,
-          factoryState,
+          ammConfig,
           feeState,
           systemProgram: SystemProgram.programId,
         },
@@ -619,7 +619,7 @@ describe("amm-core", async () => {
         program.rpc.createFeeAccount(feeStateBump, fee, tickSpacing, {
           accounts: {
             owner,
-            factoryState,
+            ammConfig,
             feeState,
             systemProgram: SystemProgram.programId,
           },
@@ -632,7 +632,7 @@ describe("amm-core", async () => {
         program.rpc.createFeeAccount(feeStateBump, fee, tickSpacing + 1, {
           accounts: {
             owner,
-            factoryState,
+            ammConfig,
             feeState,
             systemProgram: SystemProgram.programId,
           },
@@ -1267,7 +1267,7 @@ describe("amm-core", async () => {
         program.rpc.setProtocolFeeRate(6, {
           accounts: {
             owner: notOwner.publicKey,
-            factoryState,
+            ammConfig,
           },
           signers: [notOwner],
         })
@@ -1279,7 +1279,7 @@ describe("amm-core", async () => {
         program.rpc.setProtocolFeeRate(1, {
           accounts: {
             owner,
-            factoryState,
+            ammConfig,
           },
         })
       ).to.be.rejectedWith(Error);
@@ -1288,7 +1288,7 @@ describe("amm-core", async () => {
         program.rpc.setProtocolFeeRate(11, {
           accounts: {
             owner,
-            factoryState,
+            ammConfig,
           },
         })
       ).to.be.rejectedWith(Error);
@@ -1307,7 +1307,7 @@ describe("amm-core", async () => {
       //   program.rpc.setFeeProtocol(6, {
       //     accounts: {
       //       owner,
-      //       factoryState,
+      //       ammConfig,
       //     }
       //   })
       // })
@@ -1316,12 +1316,12 @@ describe("amm-core", async () => {
       await program.rpc.setProtocolFeeRate(6, {
         accounts: {
           owner,
-          factoryState,
+          ammConfig,
         },
       });
 
-      const factoryStateData = await program.account.factoryState.fetch(
-        factoryState
+      const factoryStateData = await program.account.ammConfig.fetch(
+        ammConfig
       );
       assert.equal(factoryStateData.protocolFee, 6);
     });
@@ -1342,7 +1342,7 @@ describe("amm-core", async () => {
         program.rpc.collectProtocolFee(MaxU64, MaxU64, {
           accounts: {
             owner: notOwner,
-            factoryState,
+            ammConfig,
             poolState: poolAState,
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
@@ -1359,7 +1359,7 @@ describe("amm-core", async () => {
         program.rpc.collectProtocolFee(MaxU64, MaxU64, {
           accounts: {
             owner: notOwner,
-            factoryState,
+            ammConfig,
             poolState: poolAState,
             tokenVault0: new Keypair().publicKey,
             tokenVault1: vaultA1,
@@ -1376,7 +1376,7 @@ describe("amm-core", async () => {
         program.rpc.collectProtocolFee(MaxU64, MaxU64, {
           accounts: {
             owner: notOwner,
-            factoryState,
+            ammConfig,
             poolState: poolAState,
             tokenVault0: vaultA0,
             tokenVault1: new Keypair().publicKey,
@@ -1406,7 +1406,7 @@ describe("amm-core", async () => {
       //   program.rpc.collectProtocolFee(MaxU64, MaxU64, {
       //     accounts: {
       //       owner,
-      //       factoryState,
+      //       ammConfig,
       //       poolState: poolAState,
       //       tokenVault0: vaultA0,
       //       tokenVault1: vaultA1,
@@ -1420,7 +1420,7 @@ describe("amm-core", async () => {
       await program.rpc.collectProtocolFee(MaxU64, MaxU64, {
         accounts: {
           owner,
-          factoryState,
+          ammConfig,
           poolState: poolAState,
           tokenVault0: vaultA0,
           tokenVault1: vaultA1,
@@ -1540,7 +1540,7 @@ describe("amm-core", async () => {
           token0.publicKey.toBuffer(),
           token1.publicKey.toBuffer(),
           u32ToSeed(fee),
-          factoryState.toBuffer(),
+          ammConfig.toBuffer(),
           u32ToSeed(tickLower),
           u32ToSeed(tickUpper),
         ],
@@ -1553,7 +1553,7 @@ describe("amm-core", async () => {
           token1.publicKey.toBuffer(),
           token2.publicKey.toBuffer(),
           u32ToSeed(fee),
-          factoryState.toBuffer(),
+          ammConfig.toBuffer(),
           u32ToSeed(tickLower),
           u32ToSeed(tickUpper),
         ],
@@ -1618,7 +1618,7 @@ describe("amm-core", async () => {
         );
 
       await expect(
-        program.rpc.initTickAccount(MIN_TICK - 1, {
+        program.rpc.createTickAccount(MIN_TICK - 1, {
           accounts: {
             signer: owner,
             poolState: poolAState,
@@ -1643,7 +1643,7 @@ describe("amm-core", async () => {
         );
 
       await expect(
-        program.rpc.initTickAccount(MAX_TICK + 1, {
+        program.rpc.createTickAccount(MAX_TICK + 1, {
           accounts: {
             signer: owner,
             poolState: poolAState,
@@ -1668,7 +1668,7 @@ describe("amm-core", async () => {
       );
 
       await expect(
-        program.rpc.initTickAccount(invalidTick, {
+        program.rpc.createTickAccount(invalidTick, {
           accounts: {
             signer: owner,
             poolState: poolAState,
@@ -1680,7 +1680,7 @@ describe("amm-core", async () => {
     });
 
     it("creates new tick accounts for lower and upper ticks", async () => {
-      await program.rpc.initTickAccount(tickLower, {
+      await program.rpc.createTickAccount(tickLower, {
         accounts: {
           signer: owner,
           poolState: poolAState,
@@ -1689,7 +1689,7 @@ describe("amm-core", async () => {
         },
       });
 
-      await program.rpc.initTickAccount(tickUpper, {
+      await program.rpc.createTickAccount(tickUpper, {
         accounts: {
           signer: owner,
           poolState: poolAState,
@@ -1730,7 +1730,7 @@ describe("amm-core", async () => {
         );
 
       await expect(
-        program.rpc.initBitmapAccount(minWordPos - 1, {
+        program.rpc.createBitmapAccount(minWordPos - 1, {
           accounts: {
             signer: owner,
             poolState: poolAState,
@@ -1755,7 +1755,7 @@ describe("amm-core", async () => {
         );
 
       await expect(
-        program.rpc.initBitmapAccount(maxWordPos + 1, {
+        program.rpc.createBitmapAccount(maxWordPos + 1, {
           accounts: {
             signer: owner,
             poolState: poolAState,
@@ -1767,7 +1767,7 @@ describe("amm-core", async () => {
     });
 
     it("creates new bitmap account for lower and upper ticks", async () => {
-      await program.rpc.initBitmapAccount(wordPosLower, {
+      await program.rpc.createBitmapAccount(wordPosLower, {
         accounts: {
           signer: owner,
           poolState: poolAState,
@@ -1795,7 +1795,7 @@ describe("amm-core", async () => {
             token0.publicKey.toBuffer(),
             token1.publicKey.toBuffer(),
             u32ToSeed(fee),
-            factoryState.toBuffer(),
+            ammConfig.toBuffer(),
             // posMgrState.toBuffer(),
             u32ToSeed(tickUpper), // upper first
             u32ToSeed(tickLower),
@@ -1807,7 +1807,7 @@ describe("amm-core", async () => {
         program.rpc.createProcotolPosition({
           accounts: {
             signer: owner,
-            factoryState: factoryState,
+            ammConfig: ammConfig,
             poolState: poolAState,
             tickLowerState: tickUpperAState,
             tickUpperState: tickLowerAState,
@@ -1822,7 +1822,7 @@ describe("amm-core", async () => {
       await program.rpc.createProcotolPosition({
         accounts: {
           signer: owner,
-          factoryState: factoryState,
+          ammConfig: ammConfig,
           poolState: poolAState,
           tickLowerState: tickLowerAState,
           tickUpperState: tickUpperAState,
@@ -1896,7 +1896,7 @@ describe("amm-core", async () => {
           accounts: {
             minter: owner,
             positionNftOwner: owner,
-            factoryState,
+            ammConfig,
             positionNftMint: nftMintAKeypair.publicKey,
             positionNftAccount: positionANftAccount,
             poolState: poolAState,
@@ -1946,7 +1946,7 @@ describe("amm-core", async () => {
       //       accounts: {
       //         minter: owner,
       //         recipient: owner,
-      //         factoryState,
+      //         ammConfig,
       //         nftMint: nftMintAKeypair.publicKey,
       //         nftAccount: positionANftAccount,
       //         poolState: poolAState,
@@ -2093,7 +2093,7 @@ describe("amm-core", async () => {
       await program.rpc.personalPositionWithMetadata({
         accounts: {
           payer: owner,
-          factoryState,
+          ammConfig,
           nftMint: nftMintAKeypair.publicKey,
           positionState: tokenizedPositionAState,
           metadataAccount,
@@ -2108,13 +2108,13 @@ describe("amm-core", async () => {
       assert.isNull(nftMintInfo.mintAuthority);
       const metadata = await Metadata.load(connection, metadataAccount);
       assert.equal(metadata.data.mint, nftMint.publicKey.toString());
-      assert.equal(metadata.data.updateAuthority, factoryState.toString());
+      assert.equal(metadata.data.updateAuthority, ammConfig.toString());
       assert.equal(metadata.data.data.name, "Raydium AMM V3 Positions");
       assert.equal(metadata.data.data.symbol, "");
       assert.equal(metadata.data.data.uri, "");
       assert.deepEqual(metadata.data.data.creators, [
         {
-          address: factoryState.toString(),
+          address: ammConfig.toString(),
           // @ts-ignore
           verified: 1,
           share: 100,
@@ -2130,7 +2130,7 @@ describe("amm-core", async () => {
         program.rpc.personalPositionWithMetadata({
           accounts: {
             payer: owner,
-            factoryState,
+            ammConfig,
             nftMint: nftMintAKeypair.publicKey,
             positionState: tokenizedPositionAState,
             metadataAccount,
@@ -2201,7 +2201,7 @@ describe("amm-core", async () => {
         {
           accounts: {
             payer: owner,
-            factoryState,
+            ammConfig,
             poolState: poolAState,
             protocolPositionState: corePositionAState,
             tickLowerState: tickLowerAState,
@@ -2279,7 +2279,7 @@ describe("amm-core", async () => {
       //     deadline, {
       //     accounts: {
       //       payer: owner,
-      //       factoryState,
+      //       ammConfig,
       //       poolState: poolAState,
       //       protocolPositionState: corePositionAState,
       //       tickLowerState: tickLowerAState,
@@ -2372,7 +2372,7 @@ describe("amm-core", async () => {
             ownerOrDelegate: notOwner,
             nftAccount: positionANftAccount,
             personalPositionState: tokenizedPositionAState,
-            factoryState,
+            ammConfig,
             poolState: poolAState,
             protocolPositionState: corePositionAState,
             tickLowerState: tickLowerAState,
@@ -2403,7 +2403,7 @@ describe("amm-core", async () => {
               ownerOrDelegate: owner,
               nftAccount: positionANftAccount,
               personalPositionState: tokenizedPositionAState,
-              factoryState,
+              ammConfig,
               poolState: poolAState,
               protocolPositionState: corePositionAState,
               tickLowerState: tickLowerAState,
@@ -2454,7 +2454,7 @@ describe("amm-core", async () => {
             ownerOrDelegate: owner,
             nftAccount: positionANftAccount, // no balance
             personalPositionState: tokenizedPositionAState,
-            factoryState,
+            ammConfig,
             poolState: poolAState,
             protocolPositionState: corePositionAState,
             tickLowerState: tickLowerAState,
@@ -2511,7 +2511,7 @@ describe("amm-core", async () => {
       //         ownerOrDelegate: owner,
       //         nftAccount: positionANftAccount,
       //         personalPositionState: tokenizedPositionAState,
-      //         factoryState,
+      //         ammConfig,
       //         poolState: poolAState,
       //         protocolPositionState: corePositionAState,
       //         tickLowerState: tickLowerAState,
@@ -2542,7 +2542,7 @@ describe("amm-core", async () => {
             ownerOrDelegate: owner,
             nftAccount: positionANftAccount,
             personalPositionState: tokenizedPositionAState,
-            factoryState,
+            ammConfig,
             poolState: poolAState,
             protocolPositionState: corePositionAState,
             tickLowerState: tickLowerAState,
@@ -2622,7 +2622,7 @@ describe("amm-core", async () => {
             ownerOrDelegate: mintAuthority.publicKey,
             nftAccount: positionANftAccount,
             personalPositionState: tokenizedPositionAState,
-            factoryState,
+            ammConfig,
             poolState: poolAState,
             protocolPositionState: corePositionAState,
             tickLowerState: tickLowerAState,
@@ -2672,7 +2672,7 @@ describe("amm-core", async () => {
             ownerOrDelegate: mintAuthority.publicKey,
             nftAccount: positionANftAccount,
             personalPositionState: tokenizedPositionAState,
-            factoryState,
+            ammConfig,
             poolState: poolAState,
             protocolPositionState: corePositionAState,
             tickLowerState: tickLowerAState,
@@ -2710,7 +2710,7 @@ describe("amm-core", async () => {
       //         ownerOrDelegate: mintAuthority.publicKey,
       //         nftAccount: positionANftAccount,
       //         personalPositionState: tokenizedPositionAState,
-      //         factoryState,
+      //         ammConfig,
       //         poolState: poolAState,
       //         protocolPositionState: corePositionAState,
       //         tickLowerState: tickLowerAState,
@@ -2758,7 +2758,7 @@ describe("amm-core", async () => {
             ownerOrDelegate: mintAuthority.publicKey,
             nftAccount: positionANftAccount,
             personalPositionState: tokenizedPositionAState,
-            factoryState,
+            ammConfig,
             poolState: poolAState,
             protocolPositionState: corePositionAState,
             tickLowerState: tickLowerAState,
@@ -2791,7 +2791,7 @@ describe("amm-core", async () => {
             ownerOrDelegate: owner,
             nftAccount: positionANftAccount,
             personalPositionState: tokenizedPositionAState,
-            factoryState,
+            ammConfig,
             poolState: poolAState,
             protocolPositionState: corePositionAState,
             tickLowerState: tickLowerAState,
@@ -2822,7 +2822,7 @@ describe("amm-core", async () => {
           ownerOrDelegate: notOwner.publicKey,
           nftAccount: positionANftAccount,
           personalPositionState: tokenizedPositionAState,
-          factoryState,
+          ammConfig,
           poolState: poolAState,
           protocolPositionState: corePositionAState,
           tickLowerState: tickLowerAState,
@@ -2871,7 +2871,7 @@ describe("amm-core", async () => {
           ownerOrDelegate: mintAuthority.publicKey,
           nftAccount: positionANftAccount,
           personalPositionState: tokenizedPositionAState,
-          factoryState,
+          ammConfig,
           poolState: poolAState,
           protocolPositionState: corePositionAState,
           tickLowerState: tickLowerAState,
@@ -2921,7 +2921,7 @@ describe("amm-core", async () => {
             ownerOrDelegate: owner,
             nftAccount: positionANftAccount,
             personalPositionState: tokenizedPositionAState,
-            factoryState,
+            ammConfig,
             poolState: poolAState,
             protocolPositionState: corePositionAState,
             tickLowerState: tickLowerAState,
@@ -2964,7 +2964,7 @@ describe("amm-core", async () => {
           ownerOrDelegate: owner,
           nftAccount: positionANftAccount,
           personalPositionState: tokenizedPositionAState,
-          factoryState,
+          ammConfig,
           poolState: poolAState,
           protocolPositionState: corePositionAState,
           tickLowerState: tickLowerAState,
@@ -3039,7 +3039,7 @@ describe("amm-core", async () => {
           ownerOrDelegate: mintAuthority.publicKey,
           nftAccount: positionANftAccount,
           personalPositionState: tokenizedPositionAState,
-          factoryState,
+          ammConfig,
           poolState: poolAState,
           protocolPositionState: corePositionAState,
           tickLowerState: tickLowerAState,
@@ -3103,7 +3103,7 @@ describe("amm-core", async () => {
       const sqrtPriceLimitX32 = new BN(4297115220);
 
       await expect(
-        program.rpc.swapBaseInputSingle(
+        program.rpc.swapBaseInSingle(
           // true,
           amountIn,
           amountOutMinimum,
@@ -3111,7 +3111,7 @@ describe("amm-core", async () => {
           {
             accounts: {
               signer: owner,
-              factoryState,
+              ammConfig,
               poolState: poolAState,
               inputTokenAccount: minterWallet0,
               outputTokenAccount: minterWallet1,
@@ -3186,14 +3186,14 @@ describe("amm-core", async () => {
         sqrtPriceLimitX32.toString()
       );
 
-      const tx = await program.rpc.swapBaseInputSingle(
+      const tx = await program.rpc.swapBaseInSingle(
         amountIn,
         amountOutMinimum,
         sqrtPriceLimitX32,
         {
           accounts: {
             signer: owner,
-            factoryState,
+            ammConfig,
             poolState: poolAState,
             inputTokenAccount: minterWallet0,
             outputTokenAccount: minterWallet1,
@@ -3292,10 +3292,10 @@ describe("amm-core", async () => {
       console.log("expected pool", expectedNewPool);
 
       await program.methods
-        .swapBaseInputSingle(amountIn, amountOutMinimum, sqrtPriceLimitX32)
+        .swapBaseInSingle(amountIn, amountOutMinimum, sqrtPriceLimitX32)
         .accounts({
           signer: owner,
-          factoryState,
+          ammConfig,
           poolState: poolAState,
           inputTokenAccount: minterWallet0,
           outputTokenAccount: minterWallet1,
@@ -3321,7 +3321,7 @@ describe("amm-core", async () => {
       //   {
       //     accounts: {
       //       signer: owner,
-      //       factoryState,
+      //       ammConfig,
       //       poolState: poolAState,
       //       inputTokenAccount: minterWallet0,
       //       outputTokenAccount: minterWallet1,
@@ -3399,14 +3399,14 @@ describe("amm-core", async () => {
         );
       console.log("expected pool", expectedNewPool);
 
-      await program.rpc.swapBaseInput(
+      await program.rpc.swapBaseIn(
         amountIn,
         amountOutMinimum,
         Buffer.from([2]),
         {
           accounts: {
             signer: owner,
-            factoryState,
+            ammConfig,
             inputTokenAccount: minterWallet0,
             tokenProgram: TOKEN_PROGRAM_ID,
           },
@@ -3511,7 +3511,7 @@ describe("amm-core", async () => {
       const tx = new web3.Transaction();
       tx.recentBlockhash = (await connection.getRecentBlockhash()).blockhash;
       tx.instructions = [
-        program.instruction.initTickAccount(tickLower, {
+        program.instruction.createTickAccount(tickLower, {
           accounts: {
             signer: owner,
             poolState: poolBState,
@@ -3519,7 +3519,7 @@ describe("amm-core", async () => {
             systemProgram: SystemProgram.programId,
           },
         }),
-        program.instruction.initTickAccount(tickUpper, {
+        program.instruction.createTickAccount(tickUpper, {
           accounts: {
             signer: owner,
             poolState: poolBState,
@@ -3527,7 +3527,7 @@ describe("amm-core", async () => {
             systemProgram: SystemProgram.programId,
           },
         }),
-        program.instruction.initBitmapAccount(wordPosLower, {
+        program.instruction.createBitmapAccount(wordPosLower, {
           accounts: {
             signer: owner,
             poolState: poolBState,
@@ -3538,7 +3538,7 @@ describe("amm-core", async () => {
         program.instruction.createProcotolPosition({
           accounts: {
             signer: owner,
-            factoryState: factoryState,
+            ammConfig: ammConfig,
             poolState: poolBState,
             tickLowerState: tickLowerBState,
             tickUpperState: tickUpperBState,
@@ -3559,7 +3559,7 @@ describe("amm-core", async () => {
           accounts: {
             minter: owner,
             positionNftOwner: owner,
-            factoryState,
+            ammConfig,
             positionNftMint: nftMintBKeypair.publicKey,
             positionNftAccount: positionBNftAccount,
             poolState: poolBState,
@@ -3722,7 +3722,7 @@ describe("amm-core", async () => {
       const amountIn = new BN(100_000);
       const amountOutMinimum = new BN(0);
       await program.methods
-        .swapBaseInput(
+        .swapBaseIn(
           amountIn,
           amountOutMinimum,
           Buffer.from([2, 2])
@@ -3730,7 +3730,7 @@ describe("amm-core", async () => {
         )
         .accounts({
           signer: owner,
-          factoryState,
+          ammConfig,
           inputTokenAccount: minterWallet0,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
@@ -3904,7 +3904,7 @@ describe("amm-core", async () => {
             ownerOrDelegate: owner,
             nftAccount: positionANftAccount,
             personalPositionState: tokenizedPositionAState,
-            factoryState,
+            ammConfig,
             poolState: poolAState,
             protocolPositionState: corePositionAState,
             tickLowerState: tickLowerAState,

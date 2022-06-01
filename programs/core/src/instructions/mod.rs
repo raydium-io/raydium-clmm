@@ -1,5 +1,5 @@
-pub mod init_factory;
-pub use init_factory::*;
+pub mod create_amm_config;
+pub use create_amm_config::*;
 
 pub mod set_new_owner;
 pub use set_new_owner::*;
@@ -19,11 +19,11 @@ pub use set_protocol_fee_rate::*;
 pub mod collect_protocol_fee;
 pub use collect_protocol_fee::*;
 
-pub mod init_tick_account;
-pub use init_tick_account::*;
+pub mod create_tick_account;
+pub use create_tick_account::*;
 
-pub mod init_bitmap_account;
-pub use init_bitmap_account::*;
+pub mod create_bitmap_account;
+pub use create_bitmap_account::*;
 
 pub mod create_protocol_position;
 pub use create_protocol_position::*;

@@ -3,7 +3,7 @@ use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 #[instruction(tick: i32)]
-pub struct InitTickAccount<'info> {
+pub struct CreateTickAccount<'info> {
     /// Pays to create tick account
     #[account(mut)]
     pub signer: Signer<'info>,

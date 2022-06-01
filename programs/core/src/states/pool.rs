@@ -69,7 +69,6 @@ pub struct PoolState {
     /// Protocol fees will never exceed u64::MAX in either token
     pub protocol_fees_token_0: u64,
     pub protocol_fees_token_1: u64,
-
     // padding space for upgrade
     // pub padding_1: [u64; 16],
     // pub padding_2: [u64; 16],

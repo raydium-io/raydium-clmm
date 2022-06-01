@@ -1,17 +1,17 @@
 use crate::states::*;
 use anchor_lang::prelude::*;
-use std::{ops::DerefMut};
+use std::ops::DerefMut;
 
 #[derive(Accounts)]
 #[instruction(fee: u32, tick_spacing: u16)]
 pub struct CreateFeeAccount<'info> {
     /// Valid protocol owner
-    #[account(mut, address = factory_state.owner)]
+    #[account(mut, address = amm_config.owner)]
     pub owner: Signer<'info>,
 
     /// Factory state stores the protocol owner address
     #[account(mut)]
-    pub factory_state: Account<'info, FactoryState>,
+    pub amm_config: Account<'info, AmmConfig>,
 
     /// Initialize an account to store new fee tier and tick spacing
     /// Fees are paid by owner

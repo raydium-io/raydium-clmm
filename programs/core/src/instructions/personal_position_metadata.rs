@@ -13,7 +13,7 @@ pub struct PersonalPositionWithMetadata<'info> {
     pub payer: Signer<'info>,
 
     /// Authority of the NFT mint
-    pub factory_state: Account<'info, FactoryState>,
+    pub amm_config: Account<'info, AmmConfig>,
 
     /// Mint address for the tokenized position
     #[account(mut)]
@@ -47,19 +47,19 @@ pub struct PersonalPositionWithMetadata<'info> {
 }
 
 pub fn personal_position_with_metadata(ctx: Context<PersonalPositionWithMetadata>) -> Result<()> {
-    let seeds = [&[ctx.accounts.factory_state.bump] as &[u8]];
+    let seeds = [&[ctx.accounts.amm_config.bump] as &[u8]];
     let create_metadata_ix = create_metadata_accounts(
         ctx.accounts.metadata_program.key(),
         ctx.accounts.metadata_account.key(),
         ctx.accounts.nft_mint.key(),
-        ctx.accounts.factory_state.key(),
+        ctx.accounts.amm_config.key(),
         ctx.accounts.payer.key(),
-        ctx.accounts.factory_state.key(),
+        ctx.accounts.amm_config.key(),
         String::from("Raydium AMM V3 Positions"),
         String::from(""),
         String::from(""),
         Some(vec![Creator {
-            address: ctx.accounts.factory_state.key(),
+            address: ctx.accounts.amm_config.key(),
             verified: true,
             share: 100,
         }]),
@@ -73,7 +73,7 @@ pub fn personal_position_with_metadata(ctx: Context<PersonalPositionWithMetadata
             ctx.accounts.metadata_account.to_account_info().clone(),
             ctx.accounts.nft_mint.to_account_info().clone(),
             ctx.accounts.payer.to_account_info().clone(),
-            ctx.accounts.factory_state.to_account_info().clone(), // mint and update authority
+            ctx.accounts.amm_config.to_account_info().clone(), // mint and update authority
             ctx.accounts.system_program.to_account_info().clone(),
             ctx.accounts.rent.to_account_info().clone(),
         ],
@@ -85,7 +85,7 @@ pub fn personal_position_with_metadata(ctx: Context<PersonalPositionWithMetadata
         CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info().clone(),
             token::SetAuthority {
-                current_authority: ctx.accounts.factory_state.to_account_info().clone(),
+                current_authority: ctx.accounts.amm_config.to_account_info().clone(),
                 account_or_mint: ctx.accounts.nft_mint.to_account_info().clone(),
             },
             &[&seeds[..]],

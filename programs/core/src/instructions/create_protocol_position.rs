@@ -10,7 +10,7 @@ pub struct CreateProtocolPosition<'info> {
 
     /// The address of the position owner
     /// CHECK: This is not dangerous because we don't read or write from this account
-    pub factory_state: UncheckedAccount<'info>,
+    pub amm_config: UncheckedAccount<'info>,
 
     /// Create a position account for this pool
     pub pool_state: Account<'info, PoolState>,
@@ -32,7 +32,7 @@ pub struct CreateProtocolPosition<'info> {
             pool_state.token_mint_0.as_ref(),
             pool_state.token_mint_1.as_ref(),
             &pool_state.fee.to_be_bytes(),
-            factory_state.key().as_ref(),
+            amm_config.key().as_ref(),
             &tick_lower_state.tick.to_be_bytes(),
             &tick_upper_state.tick.to_be_bytes(),
         ],

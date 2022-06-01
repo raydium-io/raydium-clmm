@@ -4,7 +4,7 @@ use std::mem::size_of;
 
 #[derive(Accounts)]
 #[instruction(word_pos: i16)]
-pub struct InitBitmapAccount<'info> {
+pub struct CreateBitmapAccount<'info> {
     /// Pays to create bitmap account
     #[account(mut)]
     pub signer: Signer<'info>,

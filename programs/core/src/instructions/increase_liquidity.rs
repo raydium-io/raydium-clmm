@@ -10,7 +10,7 @@ pub struct IncreaseLiquidity<'info> {
     pub payer: Signer<'info>,
 
     /// Authority PDA for the NFT mint
-    pub factory_state: Account<'info, FactoryState>,
+    pub amm_config: Account<'info, AmmConfig>,
 
     /// Increase liquidity for this position
     #[account(mut)]
@@ -92,7 +92,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         token_vault_0: ctx.accounts.token_vault_0.as_mut(),
         token_vault_1: ctx.accounts.token_vault_1.as_mut(),
         protocol_position_owner: UncheckedAccount::try_from(
-            ctx.accounts.factory_state.to_account_info(),
+            ctx.accounts.amm_config.to_account_info(),
         ),
         pool_state: ctx.accounts.pool_state.as_mut(),
         tick_lower_state: ctx.accounts.tick_lower_state.as_mut(),

@@ -64,13 +64,13 @@ pub struct CreatePersonalPosition<'info> {
 
     /// The program account acting as the core liquidity custodian for token holder, and as
     /// mint authority of the position NFT
-    pub factory_state: Box<Account<'info, FactoryState>>,
+    pub amm_config: Box<Account<'info, AmmConfig>>,
 
     /// Unique token mint address
     #[account(
         init,
         mint::decimals = 0,
-        mint::authority = factory_state,
+        mint::authority = amm_config,
         payer = minter
     )]
     pub position_nft_mint: Box<Account<'info, Mint>>,
@@ -186,7 +186,7 @@ pub fn create_personal_position<'a, 'b, 'c, 'info>(
         token_vault_0: ctx.accounts.token_vault_0.as_mut(),
         token_vault_1: ctx.accounts.token_vault_1.as_mut(),
         protocol_position_owner: UncheckedAccount::try_from(
-            ctx.accounts.factory_state.to_account_info(),
+            ctx.accounts.amm_config.to_account_info(),
         ),
         pool_state: ctx.accounts.pool_state.as_mut(),
         tick_lower_state: ctx.accounts.tick_lower_state.as_mut(),
@@ -216,9 +216,9 @@ pub fn create_personal_position<'a, 'b, 'c, 'info>(
             token::MintTo {
                 mint: ctx.accounts.position_nft_mint.to_account_info().clone(),
                 to: ctx.accounts.position_nft_account.to_account_info().clone(),
-                authority: ctx.accounts.factory_state.to_account_info().clone(),
+                authority: ctx.accounts.amm_config.to_account_info().clone(),
             },
-            &[&[&[ctx.accounts.factory_state.bump] as &[u8]]],
+            &[&[&[ctx.accounts.amm_config.bump] as &[u8]]],
         ),
         1,
     )?;
