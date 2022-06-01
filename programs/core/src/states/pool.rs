@@ -15,7 +15,7 @@ pub const POOL_VAULT_SEED: &str = "pool_vault";
 
 /// The pool state
 ///
-/// PDA of `[POOL_SEED, market, token_0, token_1, fee]`
+/// PDA of `[POOL_SEED, market, token_mint_0, token_mint_1, fee]`
 ///
 #[account]
 #[derive(Default, Debug)]
@@ -24,9 +24,9 @@ pub struct PoolState {
     pub bump: u8,
     // Serum market id
     pub market: Pubkey,
-    /// Token pair of the pool, where token_0 address < token_1 address
-    pub token_0: Pubkey,
-    pub token_1: Pubkey,
+    /// Token pair of the pool, where token_mint_0 address < token_mint_1 address
+    pub token_mint_0: Pubkey,
+    pub token_mint_1: Pubkey,
 
     /// Token pair vault
     pub token_vault_0: Pubkey,
@@ -99,8 +99,8 @@ impl PoolState {
         };
         let seeds = [
             &OBSERVATION_SEED.as_bytes(),
-            self.token_0.as_ref(),
-            self.token_1.as_ref(),
+            self.token_mint_0.as_ref(),
+            self.token_mint_1.as_ref(),
             &self.fee.to_be_bytes(),
             &index.to_be_bytes(),
             &[bump],
@@ -123,8 +123,8 @@ impl PoolState {
             *key == Pubkey::create_program_address(
                 &[
                     &TICK_SEED.as_bytes(),
-                    self.token_0.as_ref(),
-                    self.token_1.as_ref(),
+                    self.token_mint_0.as_ref(),
+                    self.token_mint_1.as_ref(),
                     &self.fee.to_be_bytes(),
                     &tick.to_be_bytes(),
                     &[bump],
@@ -150,8 +150,8 @@ impl PoolState {
             *key == Pubkey::create_program_address(
                 &[
                     &BITMAP_SEED.as_bytes(),
-                    self.token_0.as_ref(),
-                    self.token_1.as_ref(),
+                    self.token_mint_0.as_ref(),
+                    self.token_mint_1.as_ref(),
                     &self.fee.to_be_bytes(),
                     &word_pos.to_be_bytes(),
                     &[bump],
@@ -184,8 +184,8 @@ impl PoolState {
             *key == Pubkey::create_program_address(
                 &[
                     &POSITION_SEED.as_bytes(),
-                    self.token_0.as_ref(),
-                    self.token_1.as_ref(),
+                    self.token_mint_0.as_ref(),
+                    self.token_mint_1.as_ref(),
                     &self.fee.to_be_bytes(),
                     position_owner.as_ref(),
                     &tick_lower.to_be_bytes(),

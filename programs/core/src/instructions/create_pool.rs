@@ -97,8 +97,8 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x32: u64) -> Result<()> 
 
     pool_state.bump = *ctx.bumps.get("pool_state").unwrap();
     pool_state.market = ctx.accounts.serum_market.key();
-    pool_state.token_0 = ctx.accounts.token_mint_0.key();
-    pool_state.token_1 = ctx.accounts.token_mint_1.key();
+    pool_state.token_mint_0 = ctx.accounts.token_mint_0.key();
+    pool_state.token_mint_1 = ctx.accounts.token_mint_1.key();
     pool_state.token_vault_0 = ctx.accounts.token_vault_0.key();
     pool_state.token_vault_1 = ctx.accounts.token_vault_1.key();
     pool_state.fee = ctx.accounts.fee_state.fee;

@@ -27,7 +27,7 @@ pub struct MintParam<'b, 'info> {
 
     /// Liquidity is minted on behalf of recipient
     /// CHECK: This is not dangerous because we don't read or write from this account
-    pub recipient: UncheckedAccount<'info>,
+    pub protocol_position_owner: UncheckedAccount<'info>,
 
     /// Mint liquidity for this pool
     pub pool_state: &'b mut Account<'info, PoolState>,
@@ -62,7 +62,7 @@ pub struct CreatePersonalPosition<'info> {
 
     /// Receives the position NFT
     /// CHECK: This is not dangerous because we don't read or write from this account
-    pub recipient: UncheckedAccount<'info>,
+    pub position_nft_owner: UncheckedAccount<'info>,
 
     /// The program account acting as the core liquidity custodian for token holder, and as
     /// mint authority of the position NFT
@@ -75,16 +75,16 @@ pub struct CreatePersonalPosition<'info> {
         mint::authority = factory_state,
         payer = minter
     )]
-    pub nft_mint: Box<Account<'info, Mint>>,
+    pub position_nft_mint: Box<Account<'info, Mint>>,
 
     /// Token account where position NFT will be minted
     #[account(
         init,
-        associated_token::mint = nft_mint,
-        associated_token::authority = recipient,
+        associated_token::mint = position_nft_mint,
+        associated_token::authority = position_nft_owner,
         payer = minter
     )]
-    pub nft_account: Box<Account<'info, TokenAccount>>,
+    pub position_nft_account: Box<Account<'info, TokenAccount>>,
 
     /// Mint liquidity for this pool
     #[account(mut)]
@@ -113,7 +113,7 @@ pub struct CreatePersonalPosition<'info> {
     /// Metadata for the tokenized position
     #[account(
         init,
-        seeds = [POSITION_SEED.as_bytes(), nft_mint.key().as_ref()],
+        seeds = [POSITION_SEED.as_bytes(), position_nft_mint.key().as_ref()],
         bump,
         payer = minter,
         space = 8 + size_of::<PersonalPositionState>()
@@ -187,7 +187,7 @@ pub fn create_personal_position<'a, 'b, 'c, 'info>(
         token_account_1: ctx.accounts.token_account_1.as_mut(),
         token_vault_0: ctx.accounts.token_vault_0.as_mut(),
         token_vault_1: ctx.accounts.token_vault_1.as_mut(),
-        recipient: UncheckedAccount::try_from(ctx.accounts.factory_state.to_account_info()),
+        protocol_position_owner: UncheckedAccount::try_from(ctx.accounts.factory_state.to_account_info()),
         pool_state: ctx.accounts.pool_state.as_mut(),
         tick_lower_state: ctx.accounts.tick_lower_state.as_mut(),
         tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),
@@ -214,8 +214,8 @@ pub fn create_personal_position<'a, 'b, 'c, 'info>(
         CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info().clone(),
             token::MintTo {
-                mint: ctx.accounts.nft_mint.to_account_info().clone(),
-                to: ctx.accounts.nft_account.to_account_info().clone(),
+                mint: ctx.accounts.position_nft_mint.to_account_info().clone(),
+                to: ctx.accounts.position_nft_account.to_account_info().clone(),
                 authority: ctx.accounts.factory_state.to_account_info().clone(),
             },
             &[&[&[ctx.accounts.factory_state.bump] as &[u8]]],
@@ -226,7 +226,7 @@ pub fn create_personal_position<'a, 'b, 'c, 'info>(
     // Write tokenized position metadata
     let tokenized_position = &mut ctx.accounts.personal_position_state;
     tokenized_position.bump = *ctx.bumps.get("personal_position_state").unwrap();
-    tokenized_position.mint = ctx.accounts.nft_mint.key();
+    tokenized_position.mint = ctx.accounts.position_nft_mint.key();
     tokenized_position.pool_id = pool_state_info.key();
 
     tokenized_position.tick_lower = tick_lower; // can read from core position
@@ -240,7 +240,7 @@ pub fn create_personal_position<'a, 'b, 'c, 'info>(
         updated_core_position.fee_growth_inside_1_last_x32;
 
     emit!(IncreaseLiquidityEvent {
-        token_id: ctx.accounts.nft_mint.key(),
+        token_id: ctx.accounts.position_nft_mint.key(),
         liquidity,
         amount_0,
         amount_1
@@ -335,7 +335,7 @@ pub fn mint<'b, 'info>(
     ctx.pool_state.validate_position_address(
         &ctx.position_state.key(),
         ctx.position_state.bump,
-        &ctx.recipient.key(),
+        &ctx.protocol_position_owner.key(),
         ctx.tick_lower_state.tick,
         ctx.tick_upper_state.tick,
     )?;
@@ -387,7 +387,7 @@ pub fn mint<'b, 'info>(
     emit!(MintEvent {
         pool_state: pool_state_info.key(),
         sender: ctx.minter.key(),
-        owner: ctx.recipient.key(),
+        owner: ctx.protocol_position_owner.key(),
         tick_lower: ctx.tick_lower_state.tick,
         tick_upper: ctx.tick_upper_state.tick,
         amount,

@@ -20,7 +20,7 @@ pub struct CollectProtocolFee<'info> {
     /// The address that holds pool tokens for token_0
     #[account(
         mut,
-        token::mint = pool_state.token_0,
+        token::mint = pool_state.token_mint_0,
         constraint = token_vault_0.key() == pool_state.token_vault_0,
     )]
     pub token_vault_0: Account<'info, TokenAccount>,
@@ -28,7 +28,7 @@ pub struct CollectProtocolFee<'info> {
     /// The address that holds pool tokens for token_1
     #[account(
         mut,
-        token::mint = pool_state.token_1,
+        token::mint = pool_state.token_mint_1,
         constraint = token_vault_1.key() == pool_state.token_vault_1,
     )]
     pub token_vault_1: Account<'info, TokenAccount>,

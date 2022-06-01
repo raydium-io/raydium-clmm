@@ -34,8 +34,8 @@ pub fn transfer_from_pool_vault_to_user<'info>(
     let pool_state_seeds = [
         &POOL_SEED.as_bytes(),
         &pool.market.to_bytes() as &[u8],
-        &pool.token_0.to_bytes() as &[u8],
-        &pool.token_1.to_bytes() as &[u8],
+        &pool.token_mint_0.to_bytes() as &[u8],
+        &pool.token_mint_1.to_bytes() as &[u8],
         &pool.fee.to_be_bytes(),
         &[pool.bump],
     ];

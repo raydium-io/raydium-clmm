@@ -17,8 +17,8 @@ pub struct InitTickAccount<'info> {
         init,
         seeds = [
             TICK_SEED.as_bytes(),
-            pool_state.token_0.as_ref(),
-            pool_state.token_1.as_ref(),
+            pool_state.token_mint_0.as_ref(),
+            pool_state.token_mint_1.as_ref(),
             &pool_state.fee.to_be_bytes(),
             &tick.to_be_bytes()
         ],

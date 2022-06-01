@@ -100,7 +100,7 @@ pub fn swap<'b, 'info>(
     let factory_state = ctx.factory_state.deref();
     let pool_state_info = ctx.pool_state.to_account_info();
 
-    let zero_for_one = ctx.input_vault.mint == ctx.pool_state.token_0;
+    let zero_for_one = ctx.input_vault.mint == ctx.pool_state.token_mint_0;
 
     let (token_account_0, token_account_1, vault_0, vault_1) = if zero_for_one {
         (
@@ -198,8 +198,8 @@ pub fn swap<'b, 'info>(
                 Pubkey::find_program_address(
                     &[
                         BITMAP_SEED.as_bytes(),
-                        ctx.pool_state.token_0.as_ref(),
-                        ctx.pool_state.token_1.as_ref(),
+                        ctx.pool_state.token_mint_0.as_ref(),
+                        ctx.pool_state.token_mint_1.as_ref(),
                         &ctx.pool_state.fee.to_be_bytes(),
                         &word_pos.to_be_bytes(),
                     ],

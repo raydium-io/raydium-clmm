@@ -83,7 +83,7 @@ pub fn exact_input_internal<'b, 'info>(
     amount_in: u64,
     sqrt_price_limit_x32: u64,
 ) -> Result<u64> {
-    let zero_for_one = accounts.input_vault.mint == accounts.pool_state.token_0;
+    let zero_for_one = accounts.input_vault.mint == accounts.pool_state.token_mint_0;
 
     let balance_before = accounts.input_vault.amount;
     swap(

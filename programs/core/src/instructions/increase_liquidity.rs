@@ -91,7 +91,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         token_account_1: ctx.accounts.token_account_1.as_mut(),
         token_vault_0: ctx.accounts.token_vault_0.as_mut(),
         token_vault_1: ctx.accounts.token_vault_1.as_mut(),
-        recipient: UncheckedAccount::try_from(ctx.accounts.factory_state.to_account_info()),
+        protocol_position_owner: UncheckedAccount::try_from(ctx.accounts.factory_state.to_account_info()),
         pool_state: ctx.accounts.pool_state.as_mut(),
         tick_lower_state: ctx.accounts.tick_lower_state.as_mut(),
         tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),

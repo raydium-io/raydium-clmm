@@ -12,8 +12,14 @@ import {
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { Pool, u16ToSeed, u32ToSeed } from "@cykura/sdk";
-import { CurrencyAmount, Token as UniToken } from "@cykura/sdk-core";
+import {
+  Pool,
+  u16ToSeed,
+  u32ToSeed,
+  TickMath,
+  maxLiquidityForAmounts,
+} from "@cykura/sdk";
+import { CurrencyAmount, Token as UniToken, BigintIsh } from "@cykura/sdk-core";
 import { assert, expect } from "chai";
 import * as chai from "chai";
 import chaiAsPromised from "chai-as-promised";
@@ -36,7 +42,7 @@ import {
   accountExist,
 } from "./utils";
 import SolanaTickDataProvider from "./SolanaTickDataProvider";
-import { Transaction,ConfirmOptions } from "@solana/web3.js";
+import { Transaction, ConfirmOptions } from "@solana/web3.js";
 import JSBI from "jsbi";
 
 console.log("starting test");
@@ -56,11 +62,11 @@ describe("amm-core", async () => {
   // };
 
   // Configure the client to use the local cluster.
-  const provider = anchor.Provider.local("http://localhost:8899",{
+  const provider = anchor.Provider.local("http://localhost:8899", {
     skipPreflight: true,
     preflightCommitment: "processed",
     commitment: "processed",
-  })
+  });
   anchor.setProvider(provider);
   console.log("provider set");
 
@@ -872,8 +878,8 @@ describe("amm-core", async () => {
       // pool state variables
       const poolStateData = await program.account.poolState.fetch(poolAState);
       assert.equal(poolStateData.bump, poolAStateBump);
-      assert(poolStateData.token0.equals(token0.publicKey));
-      assert(poolStateData.token1.equals(token1.publicKey));
+      assert(poolStateData.tokenMint0.equals(token0.publicKey));
+      assert(poolStateData.tokenMint1.equals(token1.publicKey));
       assert(poolStateData.tokenVault0.equals(vaultA0));
       assert(poolStateData.tokenVault1.equals(vaultA1));
       assert.equal(poolStateData.fee, fee);
@@ -1836,14 +1842,13 @@ describe("amm-core", async () => {
         },
       });
 
-      const corePositionData = await program.account.procotolPositionState.fetch(
-        corePositionAState
-      );
+      const corePositionData =
+        await program.account.procotolPositionState.fetch(corePositionAState);
       assert.equal(corePositionData.bump, corePositionABump);
     });
   });
 
-  describe("#create_tokenized_position", () => {
+  describe("#create_personal_position", () => {
     it("generate observation PDAs", async () => {
       const { observationIndex, observationCardinalityNext } =
         await program.account.poolState.fetch(poolAState);
@@ -1878,6 +1883,21 @@ describe("amm-core", async () => {
     it("create tokenized position", async () => {
       console.log("word upper", wordPosUpper);
       console.log("word upper bytes", u16ToSeed(wordPosUpper));
+
+      // pool currency price: 4297115210, pool currency tick: 10
+      // tick_lower: 0, tick_upper: 10, so only token_1 be added.
+      const price_lower = TickMath.getSqrtRatioAtTick(tickLower);
+      const price_upper = TickMath.getSqrtRatioAtTick(tickUpper);
+      //  ΔL = Δy / (√P_upper - √P_lower)
+      const expectLiquity = maxLiquidityForAmounts(
+        JSBI.BigInt(4297115210),
+        price_lower,
+        price_upper,
+        JSBI.BigInt(amount0Desired),
+        JSBI.BigInt(amount1Desired),
+        true
+      );
+     
       const tx = await program.rpc.createPersonalPosition(
         amount0Desired,
         amount1Desired,
@@ -1886,10 +1906,10 @@ describe("amm-core", async () => {
         {
           accounts: {
             minter: owner,
-            recipient: owner,
+            positionNftOwner: owner,
             factoryState,
-            nftMint: nftMintAKeypair.publicKey,
-            nftAccount: positionANftAccount,
+            positionNftMint: nftMintAKeypair.publicKey,
+            positionNftAccount: positionANftAccount,
             poolState: poolAState,
             protocolPositionState: corePositionAState,
             tickLowerState: tickLowerAState,
@@ -1989,9 +2009,12 @@ describe("amm-core", async () => {
         );
       console.log("Tokenized position", tokenizedPositionData);
       console.log(
-        "liquidity inside position",
-        tokenizedPositionData.liquidity.toNumber()
+        "liquidity inside position: ",
+        tokenizedPositionData.liquidity.toNumber(),
+        " expect:",
+        expectLiquity,
       );
+    
       assert.equal(tokenizedPositionData.bump, tokenizedPositionABump);
       assert(tokenizedPositionData.poolId.equals(poolAState));
       assert(tokenizedPositionData.mint.equals(nftMintAKeypair.publicKey));
@@ -2099,10 +2122,7 @@ describe("amm-core", async () => {
       assert.equal(metadata.data.updateAuthority, factoryState.toString());
       assert.equal(metadata.data.data.name, "Raydium AMM V3 Positions");
       assert.equal(metadata.data.data.symbol, "");
-      assert.equal(
-        metadata.data.data.uri,
-        ""
-      );
+      assert.equal(metadata.data.data.uri, "");
       assert.deepEqual(metadata.data.data.creators, [
         {
           address: factoryState.toString(),
@@ -2201,7 +2221,7 @@ describe("amm-core", async () => {
             bitmapUpperState: bitmapUpperAState,
             tokenAccount0: minterWallet0,
             tokenAccount1: minterWallet1,
-            tokenVault0:vaultA0,
+            tokenVault0: vaultA0,
             tokenVault1: vaultA1,
             lastObservationState: lastObservationAState,
             personalPositionState: tokenizedPositionAState,
@@ -2978,9 +2998,8 @@ describe("amm-core", async () => {
         ],
       });
 
-      const corePositionData = await program.account.procotolPositionState.fetch(
-        corePositionAState
-      );
+      const corePositionData =
+        await program.account.procotolPositionState.fetch(corePositionAState);
       assert(corePositionData.tokensOwed0.eqn(0));
       assert(corePositionData.tokensOwed1.eqn(1000489)); // minus 10
 
@@ -3055,9 +3074,8 @@ describe("amm-core", async () => {
         signers: [mintAuthority],
       });
       console.log("collectFromTokenized delegated authority, tx: ", tx);
-      const corePositionData = await program.account.procotolPositionState.fetch(
-        corePositionAState
-      );
+      const corePositionData =
+        await program.account.procotolPositionState.fetch(corePositionAState);
       console.log("corePositionAState: ", corePositionData);
       assert(corePositionData.tokensOwed0.eqn(0));
       assert(corePositionData.tokensOwed1.eqn(1000479));
@@ -3552,10 +3570,10 @@ describe("amm-core", async () => {
         {
           accounts: {
             minter: owner,
-            recipient: owner,
+            positionNftOwner: owner,
             factoryState,
-            nftMint: nftMintBKeypair.publicKey,
-            nftAccount: positionBNftAccount,
+            positionNftMint: nftMintBKeypair.publicKey,
+            positionNftAccount: positionBNftAccount,
             poolState: poolBState,
             protocolPositionState: corePositionBState,
             tickLowerState: tickLowerBState,
@@ -3602,8 +3620,8 @@ describe("amm-core", async () => {
         await PublicKey.findProgramAddress(
           [
             BITMAP_SEED,
-            poolStateDataBefore.token0.toBuffer(),
-            poolStateDataBefore.token1.toBuffer(),
+            poolStateDataBefore.tokenMint0.toBuffer(),
+            poolStateDataBefore.tokenMint1.toBuffer(),
             u32ToSeed(poolStateDataBefore.fee),
             u16ToSeed(wordPosLower),
           ],
@@ -3694,24 +3712,24 @@ describe("amm-core", async () => {
 
       console.log("pool B address", poolBState.toString());
 
-      console.log("poolAState: ", poolAState.toString());
-      console.log("minterWallet1: ", minterWallet1.toString());
-      console.log("vaultA0: ", vaultA0.toString());
-      console.log("vaultA1: ", vaultA1.toString());
-      console.log("lastObservationAState: ", lastObservationAState.toString());
-      console.log("bitmapLowerAState: ", bitmapLowerAState.toString());
-      console.log("nextObservationAState: ", nextObservationAState.toString());
-      console.log("poolBState: ", poolBState.toString());
-      console.log("minterWallet2: ", minterWallet2.toString());
-      console.log("vaultB1: ", vaultB1.toString());
-      console.log("vaultB2: ", vaultB2.toString());
-      console.log(
-        "latestObservationBState: ",
-        latestObservationBState.toString()
-      );
-      console.log("bitmapLowerBState: ", bitmapLowerBState.toString());
-      console.log("tickUpperBState: ", tickUpperBState.toString());
-      console.log("nextObservationBState: ", nextObservationBState.toString());
+      // console.log("poolAState: ", poolAState.toString());
+      // console.log("minterWallet1: ", minterWallet1.toString());
+      // console.log("vaultA0: ", vaultA0.toString());
+      // console.log("vaultA1: ", vaultA1.toString());
+      // console.log("lastObservationAState: ", lastObservationAState.toString());
+      // console.log("bitmapLowerAState: ", bitmapLowerAState.toString());
+      // console.log("nextObservationAState: ", nextObservationAState.toString());
+      // console.log("poolBState: ", poolBState.toString());
+      // console.log("minterWallet2: ", minterWallet2.toString());
+      // console.log("vaultB1: ", vaultB1.toString());
+      // console.log("vaultB2: ", vaultB2.toString());
+      // console.log(
+      //   "latestObservationBState: ",
+      //   latestObservationBState.toString()
+      // );
+      // console.log("bitmapLowerBState: ", bitmapLowerBState.toString());
+      // console.log("tickUpperBState: ", tickUpperBState.toString());
+      // console.log("nextObservationBState: ", nextObservationBState.toString());
 
       const amountIn = new BN(100_000);
       const amountOutMinimum = new BN(0);
@@ -3887,40 +3905,34 @@ describe("amm-core", async () => {
     });
 
     it("burn entire of the position liquidity as owner", async () => {
-      const { liquidity } =
-        await program.account.personalPositionState.fetch(
-          tokenizedPositionAState
-        );
+      const { liquidity } = await program.account.personalPositionState.fetch(
+        tokenizedPositionAState
+      );
       console.log("liquidity in position", liquidity);
       const tx = new Transaction();
       tx.instructions = [
-        program.instruction.decreaseLiquidity(
-          liquidity,
-          new BN(0),
-          new BN(0),
-          {
-            accounts: {
-              ownerOrDelegate: owner,
-              nftAccount: positionANftAccount,
-              personalPositionState: tokenizedPositionAState,
-              factoryState,
-              poolState: poolAState,
-              protocolPositionState: corePositionAState,
-              tickLowerState: tickLowerAState,
-              tickUpperState: tickUpperAState,
-              bitmapLowerState: bitmapLowerAState,
-              bitmapUpperState: bitmapUpperAState,
-              lastObservationState: lastObservationAState,
+        program.instruction.decreaseLiquidity(liquidity, new BN(0), new BN(0), {
+          accounts: {
+            ownerOrDelegate: owner,
+            nftAccount: positionANftAccount,
+            personalPositionState: tokenizedPositionAState,
+            factoryState,
+            poolState: poolAState,
+            protocolPositionState: corePositionAState,
+            tickLowerState: tickLowerAState,
+            tickUpperState: tickUpperAState,
+            bitmapLowerState: bitmapLowerAState,
+            bitmapUpperState: bitmapUpperAState,
+            lastObservationState: lastObservationAState,
+          },
+          remainingAccounts: [
+            {
+              pubkey: nextObservationAState,
+              isSigner: false,
+              isWritable: true,
             },
-            remainingAccounts: [
-              {
-                pubkey: nextObservationAState,
-                isSigner: false,
-                isWritable: true,
-              },
-            ],
-          }
-        ),
+          ],
+        }),
         // not support
         // program.instruction.closeTickAccount({
         //   accounts: {

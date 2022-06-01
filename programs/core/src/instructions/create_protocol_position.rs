@@ -30,8 +30,8 @@ pub struct CreateProtocolPosition<'info> {
         init,
         seeds = [
             POSITION_SEED.as_bytes(),
-            pool_state.token_0.as_ref(),
-            pool_state.token_1.as_ref(),
+            pool_state.token_mint_0.as_ref(),
+            pool_state.token_mint_1.as_ref(),
             &pool_state.fee.to_be_bytes(),
             factory_state.key().as_ref(),
             &tick_lower_state.tick.to_be_bytes(),

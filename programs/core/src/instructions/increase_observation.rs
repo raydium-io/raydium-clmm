@@ -28,8 +28,8 @@ pub fn increase_observation_cardinality_next<'a, 'b, 'c, 'info>(
     while i < observation_account_bumps.len() {
         let observation_account_seeds = [
             &OBSERVATION_SEED.as_bytes(),
-            pool_state.token_0.as_ref(),
-            pool_state.token_1.as_ref(),
+            pool_state.token_mint_0.as_ref(),
+            pool_state.token_mint_1.as_ref(),
             &pool_state.fee.to_be_bytes(),
             &(pool_state.observation_cardinality_next + i as u16).to_be_bytes(),
             &[observation_account_bumps[i]],
