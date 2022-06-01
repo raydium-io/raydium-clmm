@@ -22,8 +22,7 @@ pub const POOL_VAULT_SEED: &str = "pool_vault";
 pub struct PoolState {
     /// Bump to identify PDA
     pub bump: u8,
-    // Serum market id
-    pub market: Pubkey,
+
     /// Token pair of the pool, where token_mint_0 address < token_mint_1 address
     pub token_mint_0: Pubkey,
     pub token_mint_1: Pubkey,
@@ -43,7 +42,7 @@ pub struct PoolState {
     pub liquidity: u64,
 
     /// The current price of the pool as a sqrt(token_1/token_0) Q32.32 value
-    pub sqrt_price_x32: u64,
+    pub sqrt_price: u64,
 
     /// The current tick of the pool, i.e. according to the last tick transition that was run.
     /// This value may not always be equal to SqrtTickMath.getTickAtSqrtRatio(sqrtPriceX96) if the
@@ -63,16 +62,24 @@ pub struct PoolState {
     /// The fee growth as a Q32.32 number, i.e. fees of token_0 and token_1 collected per
     /// unit of liquidity for the entire life of the pool.
     /// These values can overflow u64
-    pub fee_growth_global_0_x32: u64,
-    pub fee_growth_global_1_x32: u64,
+    pub fee_growth_global_0: u64,
+    pub fee_growth_global_1: u64,
 
     /// The amounts of token_0 and token_1 that are owed to the protocol.
     /// Protocol fees will never exceed u64::MAX in either token
     pub protocol_fees_token_0: u64,
     pub protocol_fees_token_1: u64,
+
+    // padding space for upgrade
+    // pub padding_1: [u64; 16],
+    // pub padding_2: [u64; 16],
+    // pub padding_3: [u64; 16],
+    // pub padding_4: [u64; 16],
 }
 
 impl PoolState {
+    pub const LEN: usize = 8 + 1 + 32 * 4 + 4 + 2 + 8 + 8 + 4 + 2 + 2 + 2 + 8 * 4 + 512;
+
     /// Returns the observation index after the currently active one in a liquidity pool
     ///
     /// # Arguments
@@ -273,14 +280,14 @@ pub struct SnapshotCumulative {
 /// Emitted when a pool is created and initialized with a starting price
 ///
 #[event]
-pub struct PoolCreatedAndInitialized {
+pub struct PoolCreatedEvent {
     /// The first token of the pool by address sort order
     #[index]
-    pub token_0: Pubkey,
+    pub token_mint_0: Pubkey,
 
     /// The second token of the pool by address sort order
     #[index]
-    pub token_1: Pubkey,
+    pub token_mint_1: Pubkey,
 
     /// The fee collected upon every swap in the pool, denominated in hundredths of a bip
     #[index]
@@ -293,34 +300,29 @@ pub struct PoolCreatedAndInitialized {
     pub pool_state: Pubkey,
 
     /// The initial sqrt price of the pool, as a Q32.32
-    pub sqrt_price_x32: u64,
+    pub sqrt_price: u64,
 
     /// The initial tick of the pool, i.e. log base 1.0001 of the starting price of the pool
     pub tick: i32,
-    /// Serum market
-    pub market: Pubkey,
+
     /// Vault of token_0
-    pub vault_0: Pubkey,
+    pub token_vault_0: Pubkey,
     /// Vault of token_1
-    pub vault_1: Pubkey,
+    pub token_vault_1: Pubkey,
 }
 
 /// Emitted when the collected protocol fees are withdrawn by the factory owner
 #[event]
-pub struct CollectProtocolEvent {
+pub struct CollectProtocolFeeEvent {
     /// The pool whose protocol fee is collected
     #[index]
     pub pool_state: Pubkey,
 
-    /// The address that collects the protocol fees
-    #[index]
-    pub sender: Pubkey,
-
     /// The address that receives the collected token_0 protocol fees
-    pub recipient_wallet_0: Pubkey,
+    pub recipient_token_account_0: Pubkey,
 
     /// The address that receives the collected token_1 protocol fees
-    pub recipient_wallet_1: Pubkey,
+    pub recipient_token_account_1: Pubkey,
 
     /// The amount of token_0 protocol fees that is withdrawn
     pub amount_0: u64,

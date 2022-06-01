@@ -1,6 +1,6 @@
 use crate::states::*;
 use anchor_lang::prelude::*;
-use std::{mem::size_of, ops::DerefMut};
+use std::{ops::DerefMut};
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -14,7 +14,7 @@ pub struct Initialize<'info> {
         seeds = [],
         bump,
         payer = owner,
-        space = 8 + size_of::<FactoryState>()
+        space = FactoryState::LEN
     )]
     pub factory_state: Account<'info, FactoryState>,
 
@@ -28,9 +28,9 @@ pub fn init_factory(ctx: Context<Initialize>) -> Result<()> {
     factory_state.owner = ctx.accounts.owner.key();
     factory_state.protocol_fee = 3; // 1/3 = 33.33%
 
-    emit!(OwnerChanged {
-        old_owner: Pubkey::default(),
-        new_owner: ctx.accounts.owner.key(),
+    emit!(InitFactoryEvent {
+        owner: ctx.accounts.owner.key(),
+        protocol_fee: factory_state.protocol_fee,
     });
 
     Ok(())

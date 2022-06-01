@@ -3,7 +3,6 @@ use crate::error::ErrorCode;
 use crate::states::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
-use solana_program::log;
 
 #[derive(Accounts)]
 pub struct ExactInput<'info> {

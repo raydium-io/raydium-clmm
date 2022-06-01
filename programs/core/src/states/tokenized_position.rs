@@ -26,16 +26,22 @@ pub struct PersonalPositionState {
     pub liquidity: u64,
 
     /// The token_0 fee growth of the aggregate position as of the last action on the individual position
-    pub fee_growth_inside_0_last_x32: u64,
+    pub fee_growth_inside_0_last: u64,
 
     /// The token_0 fee growth of the aggregate position as of the last action on the individual position
-    pub fee_growth_inside_1_last_x32: u64,
+    pub fee_growth_inside_1_last: u64,
 
     /// How many uncollected token_0 are owed to the position, as of the last computation
     pub tokens_owed_0: u64,
 
     /// How many uncollected token_0 are owed to the position, as of the last computation
     pub tokens_owed_1: u64,
+    // padding space for upgrade
+    // pub padding: [u64; 8],
+}
+
+impl PersonalPositionState {
+    pub const LEN: usize = 8 + 1 + 32 + 32 + 4 + 4 + 8 + 8 + 8 + 8 + 8 + 64;
 }
 
 /// Emitted when liquidity is increased for a position NFT.
@@ -44,7 +50,7 @@ pub struct PersonalPositionState {
 pub struct IncreaseLiquidityEvent {
     /// The ID of the token for which liquidity was increased
     #[index]
-    pub token_id: Pubkey,
+    pub position_nft_mint: Pubkey,
 
     /// The amount by which liquidity for the NFT position was increased
     pub liquidity: u64,
@@ -61,7 +67,7 @@ pub struct IncreaseLiquidityEvent {
 pub struct DecreaseLiquidityEvent {
     /// The ID of the token for which liquidity was decreased
     #[index]
-    pub token_id: Pubkey,
+    pub position_nft_mint: Pubkey,
 
     /// The amount by which liquidity for the NFT position was decreased
     pub liquidity: u64,
@@ -76,16 +82,16 @@ pub struct DecreaseLiquidityEvent {
 /// Emitted when tokens are collected for a position NFT
 /// The amounts reported may not be exactly equivalent to the amounts transferred, due to rounding behavior
 #[event]
-pub struct CollectTokenizedEvent {
+pub struct CollectPersonalFeeEvent {
     /// The ID of the token for which underlying tokens were collected
     #[index]
-    pub token_id: Pubkey,
+    pub position_nft_mint: Pubkey,
 
     /// The token account that received the collected token_0 tokens
-    pub recipient_wallet_0: Pubkey,
+    pub recipient_token_account_0: Pubkey,
 
     /// The token account that received the collected token_1 tokens
-    pub recipient_wallet_1: Pubkey,
+    pub recipient_token_account_1: Pubkey,
 
     /// The amount of token_0 owed to the position that was collected
     pub amount_0: u64,

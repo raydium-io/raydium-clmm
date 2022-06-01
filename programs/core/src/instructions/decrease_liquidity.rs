@@ -87,26 +87,26 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     );
 
     // Update the tokenized position to the current transaction
-    let fee_growth_inside_0_last_x32 = updated_core_position.fee_growth_inside_0_last_x32;
-    let fee_growth_inside_1_last_x32 = updated_core_position.fee_growth_inside_1_last_x32;
+    let fee_growth_inside_0_last_x32 = updated_core_position.fee_growth_inside_0_last;
+    let fee_growth_inside_1_last_x32 = updated_core_position.fee_growth_inside_1_last;
 
     let tokenized_position = &mut ctx.accounts.personal_position_state;
     tokenized_position.tokens_owed_0 += amount_0
-        + (fee_growth_inside_0_last_x32 - tokenized_position.fee_growth_inside_0_last_x32)
+        + (fee_growth_inside_0_last_x32 - tokenized_position.fee_growth_inside_0_last)
             .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
             .unwrap();
 
     tokenized_position.tokens_owed_1 += amount_1
-        + (fee_growth_inside_1_last_x32 - tokenized_position.fee_growth_inside_1_last_x32)
+        + (fee_growth_inside_1_last_x32 - tokenized_position.fee_growth_inside_1_last)
             .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
             .unwrap();
 
-    tokenized_position.fee_growth_inside_0_last_x32 = fee_growth_inside_0_last_x32;
-    tokenized_position.fee_growth_inside_1_last_x32 = fee_growth_inside_1_last_x32;
+    tokenized_position.fee_growth_inside_0_last = fee_growth_inside_0_last_x32;
+    tokenized_position.fee_growth_inside_1_last = fee_growth_inside_1_last_x32;
     tokenized_position.liquidity -= liquidity;
 
     emit!(DecreaseLiquidityEvent {
-        token_id: tokenized_position.mint,
+        position_nft_mint: tokenized_position.mint,
         liquidity,
         amount_0,
         amount_1
@@ -146,8 +146,6 @@ pub fn burn<'b, 'info>(
     remaining_accounts: &[AccountInfo<'info>],
     amount: u64,
 ) -> Result<()> {
-    let pool_state_info = ctx.pool_state.to_account_info();
-
     ctx.pool_state.validate_tick_address(
         &ctx.tick_lower_state.key(),
         ctx.tick_lower_state.bump,
@@ -204,14 +202,5 @@ pub fn burn<'b, 'info>(
         position_state.tokens_owed_1 += amount_1;
     }
 
-    emit!(BurnEvent {
-        pool_state: pool_state_info.key(),
-        owner: ctx.owner.key(),
-        tick_lower: ctx.tick_lower_state.tick,
-        tick_upper: ctx.tick_upper_state.tick,
-        amount,
-        amount_0,
-        amount_1,
-    });
     Ok(())
 }

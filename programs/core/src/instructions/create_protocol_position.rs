@@ -1,7 +1,6 @@
 use crate::error::ErrorCode;
 use crate::states::*;
 use anchor_lang::prelude::*;
-use std::mem::size_of;
 
 #[derive(Accounts)]
 pub struct CreateProtocolPosition<'info> {
@@ -39,7 +38,7 @@ pub struct CreateProtocolPosition<'info> {
         ],
         bump,
         payer = signer,
-        space = 8 + size_of::<ProcotolPositionState>()
+        space = ProcotolPositionState::LEN
     )]
     pub position_state: Account<'info, ProcotolPositionState>,
 

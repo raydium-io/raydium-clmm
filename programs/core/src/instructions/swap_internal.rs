@@ -128,10 +128,10 @@ pub fn swap<'b, 'info>(
 
     require!(
         if zero_for_one {
-            sqrt_price_limit_x32 < ctx.pool_state.sqrt_price_x32
+            sqrt_price_limit_x32 < ctx.pool_state.sqrt_price
                 && sqrt_price_limit_x32 > tick_math::MIN_SQRT_RATIO
         } else {
-            sqrt_price_limit_x32 > ctx.pool_state.sqrt_price_x32
+            sqrt_price_limit_x32 > ctx.pool_state.sqrt_price
                 && sqrt_price_limit_x32 < tick_math::MAX_SQRT_RATIO
         },
         ErrorCode::SqrtPriceLimitOverflow
@@ -151,12 +151,12 @@ pub fn swap<'b, 'info>(
     let mut state = SwapState {
         amount_specified_remaining: amount_specified,
         amount_calculated: 0,
-        sqrt_price_x32: ctx.pool_state.sqrt_price_x32,
+        sqrt_price_x32: ctx.pool_state.sqrt_price,
         tick: ctx.pool_state.tick,
         fee_growth_global_x32: if zero_for_one {
-            ctx.pool_state.fee_growth_global_0_x32
+            ctx.pool_state.fee_growth_global_0
         } else {
-            ctx.pool_state.fee_growth_global_1_x32
+            ctx.pool_state.fee_growth_global_1
         },
         protocol_fee: 0,
         liquidity: cache.liquidity_start,
@@ -323,10 +323,10 @@ pub fn swap<'b, 'info>(
                     if zero_for_one {
                         state.fee_growth_global_x32
                     } else {
-                        ctx.pool_state.fee_growth_global_0_x32
+                        ctx.pool_state.fee_growth_global_0
                     },
                     if zero_for_one {
-                        ctx.pool_state.fee_growth_global_1_x32
+                        ctx.pool_state.fee_growth_global_1
                     } else {
                         state.fee_growth_global_x32
                     },
@@ -383,7 +383,7 @@ pub fn swap<'b, 'info>(
             ctx.pool_state.observation_cardinality_next,
         );
     }
-    ctx.pool_state.sqrt_price_x32 = state.sqrt_price_x32;
+    ctx.pool_state.sqrt_price = state.sqrt_price_x32;
 
     // update liquidity if it changed
     if cache.liquidity_start != state.liquidity {
@@ -393,12 +393,12 @@ pub fn swap<'b, 'info>(
     // update fee growth global and, if necessary, protocol fees
     // overflow is acceptable, protocol has to withdraw before it hit u64::MAX fees
     if zero_for_one {
-        ctx.pool_state.fee_growth_global_0_x32 = state.fee_growth_global_x32;
+        ctx.pool_state.fee_growth_global_0 = state.fee_growth_global_x32;
         if state.protocol_fee > 0 {
             ctx.pool_state.protocol_fees_token_0 += state.protocol_fee;
         }
     } else {
-        ctx.pool_state.fee_growth_global_1_x32 = state.fee_growth_global_x32;
+        ctx.pool_state.fee_growth_global_1 = state.fee_growth_global_x32;
         if state.protocol_fee > 0 {
             ctx.pool_state.protocol_fees_token_1 += state.protocol_fee;
         }

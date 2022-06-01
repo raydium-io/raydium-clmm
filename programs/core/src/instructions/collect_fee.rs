@@ -139,19 +139,17 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
 
         let core_position = burn_accounts.position_state.deref();
 
-        tokens_owed_0 += (core_position.fee_growth_inside_0_last_x32
-            - tokenized_position.fee_growth_inside_0_last_x32)
+        tokens_owed_0 += (core_position.fee_growth_inside_0_last
+            - tokenized_position.fee_growth_inside_0_last)
             .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
             .unwrap();
-        tokens_owed_1 += (core_position.fee_growth_inside_1_last_x32
-            - tokenized_position.fee_growth_inside_1_last_x32)
+        tokens_owed_1 += (core_position.fee_growth_inside_1_last
+            - tokenized_position.fee_growth_inside_1_last)
             .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
             .unwrap();
 
-        tokenized_position.fee_growth_inside_0_last_x32 =
-            core_position.fee_growth_inside_0_last_x32;
-        tokenized_position.fee_growth_inside_1_last_x32 =
-            core_position.fee_growth_inside_1_last_x32;
+        tokenized_position.fee_growth_inside_0_last = core_position.fee_growth_inside_0_last;
+        tokenized_position.fee_growth_inside_1_last = core_position.fee_growth_inside_1_last;
     }
 
     // adjust amounts to the max for the position
@@ -188,10 +186,10 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
     tokenized_position.tokens_owed_0 = tokens_owed_0 - amount_0;
     tokenized_position.tokens_owed_1 = tokens_owed_1 - amount_1;
 
-    emit!(CollectTokenizedEvent {
-        token_id: tokenized_position.mint,
-        recipient_wallet_0: ctx.accounts.recipient_token_account_0.key(),
-        recipient_wallet_1: ctx.accounts.recipient_token_account_1.key(),
+    emit!(CollectPersonalFeeEvent {
+        position_nft_mint: tokenized_position.mint,
+        recipient_token_account_0: ctx.accounts.recipient_token_account_0.key(),
+        recipient_token_account_1: ctx.accounts.recipient_token_account_1.key(),
         amount_0,
         amount_1
     });
@@ -252,13 +250,13 @@ pub fn collect<'b, 'info>(
         )?;
     }
 
-    emit!(CollectEvent {
+    emit!(CollectFeeEvent {
         pool_state: pool_state_info.key(),
         owner: ctx.owner.key(),
         tick_lower: ctx.tick_lower_state.tick,
         tick_upper: ctx.tick_upper_state.tick,
-        amount_0,
-        amount_1,
+        collect_amount_0: amount_0,
+        collect_amount_1: amount_1,
     });
 
     Ok(())

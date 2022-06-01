@@ -21,11 +21,17 @@ pub struct FeeState {
     /// The minimum number of ticks between initialized ticks for pools
     /// created with the given fee
     pub tick_spacing: u16,
+    // padding space for upgrade
+    // pub padding: [u64; 16],
+}
+
+impl FeeState {
+    pub const LEN: usize = 8 + 1 + 4 + 2 + 128;
 }
 
 /// Emitted when a new fee amount is enabled for pool creation via the factory
 #[event]
-pub struct FeeAmountEnabled {
+pub struct CreateFeeAccountEvent {
     /// The enabled fee, denominated in hundredths of a bip (10^-6)
     #[index]
     pub fee: u32,

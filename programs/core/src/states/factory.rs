@@ -21,11 +21,26 @@ pub struct FactoryState {
 
     /// The global protocol fee
     pub protocol_fee: u8,
+    // padding space for upgrade
+    // pub padding: [u64; 16],
+}
+
+impl FactoryState {
+    pub const LEN: usize = 8 + 1 + 32 + 1 + 128;
+}
+
+#[event]
+pub struct InitFactoryEvent {
+    /// The owner before the owner was changed
+    #[index]
+    pub owner: Pubkey,
+
+    pub protocol_fee: u8,
 }
 
 /// Emitted when the owner of the factory is changed
 #[event]
-pub struct OwnerChanged {
+pub struct OwnerChangedEvent {
     /// The owner before the owner was changed
     #[index]
     pub old_owner: Pubkey,

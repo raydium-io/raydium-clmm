@@ -96,9 +96,9 @@ describe("amm-core", async () => {
 
   const mintAuthority = new Keypair();
 
-  // ssrum market
-  const serumMarketA = new Keypair().publicKey;
-  const serumMarketB = new Keypair().publicKey;
+  // serum market
+  // const serumMarketA = new Keypair().publicKey;
+  // const serumMarketB = new Keypair().publicKey;
 
   // Tokens constituting the pool
   let token0: Token;
@@ -275,7 +275,6 @@ describe("amm-core", async () => {
     [poolAState, poolAStateBump] = await PublicKey.findProgramAddress(
       [
         POOL_SEED,
-        serumMarketA.toBuffer(),
         token0.publicKey.toBuffer(),
         token1.publicKey.toBuffer(),
         u32ToSeed(fee),
@@ -287,7 +286,6 @@ describe("amm-core", async () => {
     [poolBState, poolBStateBump] = await PublicKey.findProgramAddress(
       [
         POOL_SEED,
-        serumMarketB.toBuffer(),
         token1.publicKey.toBuffer(),
         token2.publicKey.toBuffer(),
         u32ToSeed(fee),
@@ -675,7 +673,6 @@ describe("amm-core", async () => {
         program.rpc.createPool(initialPriceX32, {
           accounts: {
             poolCreator: owner,
-            serumMarket: serumMarketA,
             tokenMint0: token1.publicKey,
             tokenMint1: token0.publicKey,
             tokenVault0: vaultA0,
@@ -702,7 +699,6 @@ describe("amm-core", async () => {
             feeState,
             poolState: poolAState,
             initialObservationState: initialObservationStateA,
-            serumMarket: serumMarketA,
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
             tokenProgram: TOKEN_PROGRAM_ID,
@@ -728,7 +724,6 @@ describe("amm-core", async () => {
             feeState: uninitializedFeeState,
             poolState: poolAState,
             initialObservationState: initialObservationStateA,
-            serumMarket: serumMarketA,
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
             tokenProgram: TOKEN_PROGRAM_ID,
@@ -749,7 +744,6 @@ describe("amm-core", async () => {
             feeState,
             poolState: poolAState,
             initialObservationState: initialObservationStateA,
-            serumMarket: serumMarketA,
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
             tokenProgram: TOKEN_PROGRAM_ID,
@@ -768,7 +762,6 @@ describe("amm-core", async () => {
             feeState,
             poolState: poolAState,
             initialObservationState: initialObservationStateA,
-            serumMarket: serumMarketA,
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
             tokenProgram: TOKEN_PROGRAM_ID,
@@ -789,7 +782,6 @@ describe("amm-core", async () => {
             feeState,
             poolState: poolAState,
             initialObservationState: initialObservationStateA,
-            serumMarket: serumMarketA,
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
             tokenProgram: TOKEN_PROGRAM_ID,
@@ -809,7 +801,6 @@ describe("amm-core", async () => {
             feeState,
             poolState: poolAState,
             initialObservationState: initialObservationStateA,
-            serumMarket: serumMarketA,
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
             tokenProgram: TOKEN_PROGRAM_ID,
@@ -867,7 +858,6 @@ describe("amm-core", async () => {
           feeState,
           poolState: poolAState,
           initialObservationState: initialObservationStateA,
-          serumMarket: serumMarketA,
           tokenVault0: vaultA0,
           tokenVault1: vaultA1,
           tokenProgram: TOKEN_PROGRAM_ID,
@@ -885,13 +875,13 @@ describe("amm-core", async () => {
       assert.equal(poolStateData.fee, fee);
       assert.equal(poolStateData.tickSpacing, tickSpacing);
       assert(poolStateData.liquidity.eqn(0));
-      assert(poolStateData.sqrtPriceX32.eq(initialPriceX32));
+      assert(poolStateData.sqrtPrice.eq(initialPriceX32));
       assert.equal(poolStateData.tick, initialTick);
       assert.equal(poolStateData.observationIndex, 0);
       assert.equal(poolStateData.observationCardinality, 1);
       assert.equal(poolStateData.observationCardinalityNext, 1);
-      assert(poolStateData.feeGrowthGlobal0X32.eq(new BN(0)));
-      assert(poolStateData.feeGrowthGlobal1X32.eq(new BN(0)));
+      assert(poolStateData.feeGrowthGlobal0.eq(new BN(0)));
+      assert(poolStateData.feeGrowthGlobal1.eq(new BN(0)));
       assert(poolStateData.protocolFeesToken0.eq(new BN(0)));
       assert(poolStateData.protocolFeesToken1.eq(new BN(0)));
 
@@ -923,7 +913,6 @@ describe("amm-core", async () => {
             feeState,
             poolState: poolAState,
             initialObservationState: initialObservationStateA,
-            serumMarket: serumMarketA,
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
             tokenProgram: TOKEN_PROGRAM_ID,
@@ -2020,8 +2009,8 @@ describe("amm-core", async () => {
       assert(tokenizedPositionData.mint.equals(nftMintAKeypair.publicKey));
       assert.equal(tokenizedPositionData.tickLower, tickLower);
       assert.equal(tokenizedPositionData.tickUpper, tickUpper);
-      assert(tokenizedPositionData.feeGrowthInside0LastX32.eqn(0));
-      assert(tokenizedPositionData.feeGrowthInside1LastX32.eqn(0));
+      assert(tokenizedPositionData.feeGrowthInside0Last.eqn(0));
+      assert(tokenizedPositionData.feeGrowthInside1Last.eqn(0));
       assert(tokenizedPositionData.tokensOwed0.eqn(0));
       assert(tokenizedPositionData.tokensOwed1.eqn(0));
 
@@ -3172,7 +3161,7 @@ describe("amm-core", async () => {
 
       const {
         tick: currentTick,
-        sqrtPriceX32: currentSqrtPriceX32,
+        sqrtPrice: currentSqrtPriceX32,
         liquidity: currentLiquidity,
       } = await program.account.poolState.fetch(poolAState);
       await tickDataProvider.eagerLoadCache(currentTick, tickSpacing);
@@ -3229,18 +3218,18 @@ describe("amm-core", async () => {
         "poolStateData.tick:",
         poolStateData.tick,
         "poolStateData.sqrtPriceX32: ",
-        poolStateData.sqrtPriceX32.toNumber(),
+        poolStateData.sqrtPrice.toNumber(),
         "sqrtPriceLimitX32:",
         sqrtPriceLimitX32.toNumber()
       );
-      assert(poolStateData.sqrtPriceX32.eq(sqrtPriceLimitX32));
+      assert(poolStateData.sqrtPrice.eq(sqrtPriceLimitX32));
       // assert.equal(poolStateData.tick,expectedNewPool.tickCurrent);
 
       console.log(
         "tick after swap",
         poolStateData.tick,
         "price",
-        poolStateData.sqrtPriceX32.toString()
+        poolStateData.sqrtPrice.toString()
       );
       uniPoolA = expectedNewPool;
       let poolAStateData = await program.account.poolState.fetch(poolAState);
@@ -3253,7 +3242,7 @@ describe("amm-core", async () => {
       let poolStateDataBefore = await program.account.poolState.fetch(
         poolAState
       );
-      console.log("pool price", poolStateDataBefore.sqrtPriceX32.toNumber());
+      console.log("pool price", poolStateDataBefore.sqrtPrice.toNumber());
       console.log("pool tick", poolStateDataBefore.tick);
 
       const { observationIndex, observationCardinalityNext } =
@@ -3356,7 +3345,7 @@ describe("amm-core", async () => {
       );
       console.log(
         "pool price after",
-        poolStateDataAfter.sqrtPriceX32.toNumber()
+        poolStateDataAfter.sqrtPrice.toNumber()
       );
       console.log("pool tick after", poolStateDataAfter.tick);
 
@@ -3370,7 +3359,7 @@ describe("amm-core", async () => {
       const poolStateDataBefore = await program.account.poolState.fetch(
         poolAState
       );
-      console.log("pool price", poolStateDataBefore.sqrtPriceX32.toNumber());
+      console.log("pool price", poolStateDataBefore.sqrtPrice.toNumber());
       console.log("pool tick", poolStateDataBefore.tick);
 
       const { observationIndex, observationCardinalityNext } =
@@ -3462,7 +3451,7 @@ describe("amm-core", async () => {
       );
       console.log(
         "pool price after",
-        poolStateDataAfter.sqrtPriceX32.toNumber()
+        poolStateDataAfter.sqrtPrice.toNumber()
       );
       console.log("pool tick after", poolStateDataAfter.tick);
 
@@ -3478,7 +3467,6 @@ describe("amm-core", async () => {
           feeState,
           poolState: poolBState,
           initialObservationState: initialObservationStateB,
-          serumMarket: serumMarketB,
           tokenVault0: vaultB1,
           tokenVault1: vaultB2,
           tokenProgram: TOKEN_PROGRAM_ID,
@@ -3608,7 +3596,7 @@ describe("amm-core", async () => {
       const poolStateDataBefore = await program.account.poolState.fetch(
         poolAState
       );
-      console.log("pool price", poolStateDataBefore.sqrtPriceX32.toNumber());
+      console.log("pool price", poolStateDataBefore.sqrtPrice.toNumber());
       console.log("pool tick", poolStateDataBefore.tick);
       // console.log("poolStateDataBefore.tokenMint0: ", poolStateDataBefore.token0.toString())
       // console.log("poolStateDataBefore.tokenMint1: ", poolStateDataBefore.token1.toString())
@@ -3847,7 +3835,7 @@ describe("amm-core", async () => {
       );
       console.log(
         "pool A price after",
-        poolStateDataAfter.sqrtPriceX32.toNumber()
+        poolStateDataAfter.sqrtPrice.toNumber()
       );
       console.log("pool A tick after", poolStateDataAfter.tick);
 

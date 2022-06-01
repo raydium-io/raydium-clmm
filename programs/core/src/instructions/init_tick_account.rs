@@ -1,6 +1,5 @@
 use crate::states::*;
 use anchor_lang::prelude::*;
-use std::mem::size_of;
 
 #[derive(Accounts)]
 #[instruction(tick: i32)]
@@ -24,7 +23,7 @@ pub struct InitTickAccount<'info> {
         ],
         bump,
         payer = signer,
-        space = 8 + size_of::<TickState>()
+        space = TickState::LEN
     )]
     pub tick_state: Account<'info, TickState>,
 

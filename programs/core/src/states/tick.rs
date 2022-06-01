@@ -39,6 +39,12 @@ pub struct TickState {
     /// The seconds spent on the other side of the tick (relative to the current tick)
     /// only has relative meaning, not absolute — the value depends on when the tick is initialized
     pub seconds_outside: u32,
+    // padding space for upgrade
+    // pub padding: [u64; 8],
+}
+
+impl TickState {
+    pub const LEN: usize = 8 + 1 + 4 + 8 + 8 + 8 + 8 + 8 + 8 + 4 + 64;
 }
 
 impl TickState {

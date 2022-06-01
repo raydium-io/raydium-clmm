@@ -78,11 +78,10 @@ pub fn collect_protocol_fee(
         )?;
     }
 
-    emit!(CollectProtocolEvent {
+    emit!(CollectProtocolFeeEvent {
         pool_state: pool_state_info.key(),
-        sender: ctx.accounts.owner.key(),
-        recipient_wallet_0: ctx.accounts.recipient_token_account_0.key(),
-        recipient_wallet_1: ctx.accounts.recipient_token_account_1.key(),
+        recipient_token_account_0: ctx.accounts.recipient_token_account_0.key(),
+        recipient_token_account_1: ctx.accounts.recipient_token_account_1.key(),
         amount_0,
         amount_1,
     });

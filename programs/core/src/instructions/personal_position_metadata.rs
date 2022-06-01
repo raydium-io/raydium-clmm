@@ -56,7 +56,7 @@ pub fn personal_position_with_metadata(ctx: Context<PersonalPositionWithMetadata
         ctx.accounts.payer.key(),
         ctx.accounts.factory_state.key(),
         String::from("Raydium AMM V3 Positions"),
-        String::from(""), 
+        String::from(""),
         String::from(""),
         Some(vec![Creator {
             address: ctx.accounts.factory_state.key(),

@@ -20,7 +20,7 @@ pub fn set_new_owner(ctx: Context<SetNewOwner>) -> Result<()> {
     let factory_state = &mut ctx.accounts.factory_state;
     factory_state.owner = ctx.accounts.new_owner.key();
 
-    emit!(OwnerChanged {
+    emit!(OwnerChangedEvent {
         old_owner: ctx.accounts.owner.key(),
         new_owner: ctx.accounts.new_owner.key(),
     });

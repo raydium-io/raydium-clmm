@@ -1,6 +1,6 @@
 use crate::states::*;
 use anchor_lang::prelude::*;
-use std::{mem::size_of, ops::DerefMut};
+use std::{ops::DerefMut};
 
 #[derive(Accounts)]
 #[instruction(fee: u32, tick_spacing: u16)]
@@ -20,7 +20,7 @@ pub struct CreateFeeAccount<'info> {
         seeds = [FEE_SEED.as_bytes(), &fee.to_be_bytes()],
         bump,
         payer = owner,
-        space = 8 + size_of::<FeeState>()
+        space = FeeState::LEN
     )]
     pub fee_state: Account<'info, FeeState>,
 
@@ -45,6 +45,6 @@ pub fn create_fee_account(
     fee_state.fee = fee;
     fee_state.tick_spacing = tick_spacing;
 
-    emit!(FeeAmountEnabled { fee, tick_spacing });
+    emit!(CreateFeeAccountEvent { fee, tick_spacing });
     Ok(())
 }

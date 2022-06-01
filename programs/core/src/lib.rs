@@ -12,7 +12,7 @@ use anchor_lang::prelude::*;
 use instructions::*;
 use states::*;
 
-declare_id!("6k2bhNW63RmYFMkySQZNm5VuvVTRngtnnN1ooxcwkFdq");
+declare_id!("WECDYraS4R4g6WF5wvFXEtvCsGrnw1jHgBFdxjKoeaE");
 
 #[program]
 pub mod amm_core {
@@ -81,8 +81,8 @@ pub mod amm_core {
     /// * `observation_state_bump` - Bump to validate Observation State address
     /// * `sqrt_price_x32` - the initial sqrt price (amount_token_1 / amount_token_0) of the pool as a Q32.32
     ///
-    pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x32: u64) -> Result<()> {
-        instructions::create_pool(ctx, sqrt_price_x32)
+    pub fn create_pool(ctx: Context<CreatePool>, sqrt_price: u64) -> Result<()> {
+        instructions::create_pool(ctx, sqrt_price)
     }
 
     // ---------------------------------------------------------------------
@@ -120,10 +120,7 @@ pub mod amm_core {
     /// Holds the Factory State account where protocol fee will be saved.
     /// * `fee_protocol` - new protocol fee for all pools
     ///
-    pub fn set_protocol_fee_rate(
-        ctx: Context<SetProtocolFeeRate>,
-        fee_protocol: u8,
-    ) -> Result<()> {
+    pub fn set_protocol_fee_rate(ctx: Context<SetProtocolFeeRate>, fee_protocol: u8) -> Result<()> {
         assert!(fee_protocol >= 2 && fee_protocol <= 10);
         let factory_state = &mut ctx.accounts.factory_state;
         let fee_protocol_old = factory_state.protocol_fee;
@@ -342,13 +339,13 @@ pub mod amm_core {
         ctx: Context<'a, 'b, 'c, 'info, ExactInputSingle<'info>>,
         amount_in: u64,
         amount_out_minimum: u64,
-        sqrt_price_limit_x32: u64,
+        sqrt_price_limit: u64,
     ) -> Result<()> {
         instructions::swap_base_input_single(
             ctx,
             amount_in,
             amount_out_minimum,
-            sqrt_price_limit_x32,
+            sqrt_price_limit,
         )
     }
     /// Swaps `amount_in` of one token for as much as possible of another token,

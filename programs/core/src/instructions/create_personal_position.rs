@@ -1,5 +1,4 @@
 use crate::error::ErrorCode;
-use crate::libraries::big_num::U256;
 use crate::libraries::{liquidity_amounts, liquidity_math, sqrt_price_math, tick_math};
 use crate::states::*;
 use crate::util::*;
@@ -7,7 +6,6 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token;
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use std::mem::size_of;
 use std::ops::{Deref, DerefMut};
 pub struct MintParam<'b, 'info> {
     /// Pays to mint liquidity
@@ -116,7 +114,7 @@ pub struct CreatePersonalPosition<'info> {
         seeds = [POSITION_SEED.as_bytes(), position_nft_mint.key().as_ref()],
         bump,
         payer = minter,
-        space = 8 + size_of::<PersonalPositionState>()
+        space = PersonalPositionState::LEN
     )]
     pub personal_position_state: Box<Account<'info, PersonalPositionState>>,
 
@@ -187,7 +185,9 @@ pub fn create_personal_position<'a, 'b, 'c, 'info>(
         token_account_1: ctx.accounts.token_account_1.as_mut(),
         token_vault_0: ctx.accounts.token_vault_0.as_mut(),
         token_vault_1: ctx.accounts.token_vault_1.as_mut(),
-        protocol_position_owner: UncheckedAccount::try_from(ctx.accounts.factory_state.to_account_info()),
+        protocol_position_owner: UncheckedAccount::try_from(
+            ctx.accounts.factory_state.to_account_info(),
+        ),
         pool_state: ctx.accounts.pool_state.as_mut(),
         tick_lower_state: ctx.accounts.tick_lower_state.as_mut(),
         tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),
@@ -208,7 +208,7 @@ pub fn create_personal_position<'a, 'b, 'c, 'info>(
         tick_lower,
         tick_upper,
     )?;
-   
+
     // Mint the NFT
     token::mint_to(
         CpiContext::new_with_signer(
@@ -234,13 +234,11 @@ pub fn create_personal_position<'a, 'b, 'c, 'info>(
     tokenized_position.liquidity = liquidity;
 
     let updated_core_position = accounts.position_state;
-    tokenized_position.fee_growth_inside_0_last_x32 =
-        updated_core_position.fee_growth_inside_0_last_x32;
-    tokenized_position.fee_growth_inside_1_last_x32 =
-        updated_core_position.fee_growth_inside_1_last_x32;
+    tokenized_position.fee_growth_inside_0_last = updated_core_position.fee_growth_inside_0_last;
+    tokenized_position.fee_growth_inside_1_last = updated_core_position.fee_growth_inside_1_last;
 
     emit!(IncreaseLiquidityEvent {
-        token_id: ctx.accounts.position_nft_mint.key(),
+        position_nft_mint: ctx.accounts.position_nft_mint.key(),
         liquidity,
         amount_0,
         amount_1
@@ -271,7 +269,7 @@ pub fn add_liquidity<'b, 'info>(
     tick_lower: i32,
     tick_upper: i32,
 ) -> Result<(u64, u64, u64)> {
-    let sqrt_price_x32 = accounts.pool_state.sqrt_price_x32;
+    let sqrt_price_x32 = accounts.pool_state.sqrt_price;
 
     let sqrt_ratio_a_x32 = tick_math::get_sqrt_ratio_at_tick(tick_lower)?;
     let sqrt_ratio_b_x32 = tick_math::get_sqrt_ratio_at_tick(tick_upper)?;
@@ -384,15 +382,15 @@ pub fn mint<'b, 'info>(
             amount_1,
         )?;
     }
-    emit!(MintEvent {
+    emit!(CreatePersonalPositionEvent {
         pool_state: pool_state_info.key(),
-        sender: ctx.minter.key(),
-        owner: ctx.protocol_position_owner.key(),
+        minter: ctx.minter.key(),
+        nft_owner: ctx.protocol_position_owner.key(),
         tick_lower: ctx.tick_lower_state.tick,
         tick_upper: ctx.tick_upper_state.tick,
-        amount,
-        amount_0,
-        amount_1
+        liquidity: amount,
+        deposit_amount_0: amount_0,
+        deposit_amount_1: amount_1,
     });
 
     Ok(())
@@ -491,13 +489,13 @@ pub fn _modify_position<'info>(
 
             // Both Δtoken_0 and Δtoken_1 will be needed in current price
             amount_0 = sqrt_price_math::get_amount_0_delta_signed(
-                pool_state.sqrt_price_x32,
+                pool_state.sqrt_price,
                 tick_math::get_sqrt_ratio_at_tick(tick_upper)?,
                 liquidity_delta,
             );
             amount_1 = sqrt_price_math::get_amount_1_delta_signed(
                 tick_math::get_sqrt_ratio_at_tick(tick_lower)?,
-                pool_state.sqrt_price_x32,
+                pool_state.sqrt_price,
                 liquidity_delta,
             );
             pool_state.liquidity =
@@ -560,8 +558,8 @@ pub fn _update_position<'info>(
         flipped_lower = tick_lower.update(
             pool_state.tick,
             liquidity_delta,
-            pool_state.fee_growth_global_0_x32,
-            pool_state.fee_growth_global_1_x32,
+            pool_state.fee_growth_global_0,
+            pool_state.fee_growth_global_1,
             seconds_per_liquidity_cumulative_x32,
             tick_cumulative,
             time,
@@ -571,8 +569,8 @@ pub fn _update_position<'info>(
         flipped_upper = tick_upper.update(
             pool_state.tick,
             liquidity_delta,
-            pool_state.fee_growth_global_0_x32,
-            pool_state.fee_growth_global_1_x32,
+            pool_state.fee_growth_global_0,
+            pool_state.fee_growth_global_1,
             seconds_per_liquidity_cumulative_x32,
             tick_cumulative,
             time,
@@ -598,8 +596,8 @@ pub fn _update_position<'info>(
         tick_lower.deref(),
         tick_upper.deref(),
         pool_state.tick,
-        pool_state.fee_growth_global_0_x32,
-        pool_state.fee_growth_global_1_x32,
+        pool_state.fee_growth_global_0,
+        pool_state.fee_growth_global_1,
     );
     position_state.update(
         liquidity_delta,

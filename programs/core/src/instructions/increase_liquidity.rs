@@ -91,7 +91,9 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         token_account_1: ctx.accounts.token_account_1.as_mut(),
         token_vault_0: ctx.accounts.token_vault_0.as_mut(),
         token_vault_1: ctx.accounts.token_vault_1.as_mut(),
-        protocol_position_owner: UncheckedAccount::try_from(ctx.accounts.factory_state.to_account_info()),
+        protocol_position_owner: UncheckedAccount::try_from(
+            ctx.accounts.factory_state.to_account_info(),
+        ),
         pool_state: ctx.accounts.pool_state.as_mut(),
         tick_lower_state: ctx.accounts.tick_lower_state.as_mut(),
         tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),
@@ -114,27 +116,25 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     )?;
 
     let updated_core_position = accounts.position_state;
-    let fee_growth_inside_0_last_x32 = updated_core_position.fee_growth_inside_0_last_x32;
-    let fee_growth_inside_1_last_x32 = updated_core_position.fee_growth_inside_1_last_x32;
+    let fee_growth_inside_0_last_x32 = updated_core_position.fee_growth_inside_0_last;
+    let fee_growth_inside_1_last_x32 = updated_core_position.fee_growth_inside_1_last;
 
     // Update tokenized position metadata
     let position = ctx.accounts.personal_position_state.as_mut();
-    position.tokens_owed_0 += (fee_growth_inside_0_last_x32
-        - position.fee_growth_inside_0_last_x32)
+    position.tokens_owed_0 += (fee_growth_inside_0_last_x32 - position.fee_growth_inside_0_last)
         .mul_div_floor(position.liquidity, fixed_point_32::Q32)
         .unwrap();
 
-    position.tokens_owed_1 += (fee_growth_inside_1_last_x32
-        - position.fee_growth_inside_1_last_x32)
+    position.tokens_owed_1 += (fee_growth_inside_1_last_x32 - position.fee_growth_inside_1_last)
         .mul_div_floor(position.liquidity, fixed_point_32::Q32)
         .unwrap();
 
-    position.fee_growth_inside_0_last_x32 = fee_growth_inside_0_last_x32;
-    position.fee_growth_inside_1_last_x32 = fee_growth_inside_1_last_x32;
+    position.fee_growth_inside_0_last = fee_growth_inside_0_last_x32;
+    position.fee_growth_inside_1_last = fee_growth_inside_1_last_x32;
     position.liquidity += liquidity;
 
     emit!(IncreaseLiquidityEvent {
-        token_id: position.mint,
+        position_nft_mint: position.mint,
         liquidity,
         amount_0,
         amount_1
