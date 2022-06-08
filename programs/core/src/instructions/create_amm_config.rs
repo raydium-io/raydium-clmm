@@ -22,15 +22,15 @@ pub struct CreateAmmConfig<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn create_amm_config(ctx: Context<CreateAmmConfig>) -> Result<()> {
+pub fn create_amm_config(ctx: Context<CreateAmmConfig>, protocol_fee_rate: u8) -> Result<()> {
     let amm_config = ctx.accounts.amm_config.deref_mut();
     amm_config.bump = *ctx.bumps.get("amm_config").unwrap();
     amm_config.owner = ctx.accounts.owner.key();
-    amm_config.protocol_fee = 3; // 1/3 = 33.33%
+    amm_config.protocol_fee_rate = protocol_fee_rate; //  default vaule is  1/3 = 33.33%
 
     emit!(CreateConfigEvent {
         owner: ctx.accounts.owner.key(),
-        protocol_fee: amm_config.protocol_fee,
+        protocol_fee: amm_config.protocol_fee_rate,
     });
 
     Ok(())

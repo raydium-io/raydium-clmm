@@ -1,4 +1,4 @@
-use super::{exact_input_internal, SwapContext};
+use super::{exact_internal, SwapContext};
 use crate::error::ErrorCode;
 use crate::states::*;
 use anchor_lang::prelude::*;
@@ -44,7 +44,7 @@ pub fn swap_base_in<'a, 'b, 'c, 'info>(
             remaining_accounts.next().unwrap(),
         )?);
         solana_program::log::sol_log_compute_units();
-        amount_in_internal = exact_input_internal(
+        amount_in_internal = exact_internal(
             &mut SwapContext {
                 signer: ctx.accounts.signer.clone(),
                 amm_config: ctx.accounts.amm_config.as_mut(),
@@ -59,6 +59,7 @@ pub fn swap_base_in<'a, 'b, 'c, 'info>(
             remaining_accounts.as_slice(),
             amount_in_internal,
             0,
+            true,
         )?;
         // solana_program::log::sol_log_compute_units();
         output_token_account.reload()?;
@@ -76,7 +77,7 @@ pub fn swap_base_in<'a, 'b, 'c, 'info>(
     }
     require!(
         amount_in_internal >= amount_out_minimum,
-        ErrorCode::TooLittleReceived
+        ErrorCode::TooLittleOutputReceived
     );
 
     Ok(())

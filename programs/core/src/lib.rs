@@ -31,8 +31,9 @@ pub mod amm_core {
     /// * `ctx`- Initializes the factory state account
     /// * `amm_config_bump` - Bump to validate factory state address
     ///
-    pub fn create_amm_config(ctx: Context<CreateAmmConfig>) -> Result<()> {
-        instructions::create_amm_config(ctx)
+    pub fn create_amm_config(ctx: Context<CreateAmmConfig>,protocol_fee_rate: u8) -> Result<()> {
+        assert!(protocol_fee_rate >= 2 && protocol_fee_rate <= 10);
+        instructions::create_amm_config(ctx,protocol_fee_rate)
     }
 
     /// Updates the owner of the factory
@@ -120,15 +121,15 @@ pub mod amm_core {
     /// Holds the Factory State account where protocol fee will be saved.
     /// * `fee_protocol` - new protocol fee for all pools
     ///
-    pub fn set_protocol_fee_rate(ctx: Context<SetProtocolFeeRate>, fee_protocol: u8) -> Result<()> {
-        assert!(fee_protocol >= 2 && fee_protocol <= 10);
+    pub fn set_protocol_fee_rate(ctx: Context<SetProtocolFeeRate>, protocol_fee_rate: u8) -> Result<()> {
+        assert!(protocol_fee_rate >= 2 && protocol_fee_rate <= 10);
         let amm_config = &mut ctx.accounts.amm_config;
-        let fee_protocol_old = amm_config.protocol_fee;
-        amm_config.protocol_fee = fee_protocol;
+        let protocol_fee_rate_old = amm_config.protocol_fee_rate;
+        amm_config.protocol_fee_rate = protocol_fee_rate;
 
         emit!(SetProtocolFeeRateEvent {
-            fee_protocol_old,
-            fee_protocol
+            protocol_fee_rate_old,
+            protocol_fee_rate
         });
 
         Ok(())
@@ -329,19 +330,20 @@ pub mod amm_core {
     ///
     /// * `ctx` - Accounts required for the swap
     /// * `deadline` - The time by which the transaction must be included to effect the change
-    /// * `amount_in` - Token amount to be swapped in
-    /// * `amount_out_minimum` - The minimum amount to swap out, which serves as a slippage check
+    /// * `amount_in` - Arranged in pairs with other_amount_threshold. (amount_in, amount_out_minimum) or (amount_out, amount_in_maximum)
+    /// * `other_amount_threshold` - For slippage check
     /// * `sqrt_price_limit` - The Q32.32 sqrt price √P limit. If zero for one, the price cannot
     /// be less than this value after the swap.  If one for zero, the price cannot be greater than
     /// this value after the swap.
     ///
-    pub fn swap_base_in_single<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, SwapBaseInSingle<'info>>,
-        amount_in: u64,
-        amount_out_minimum: u64,
+    pub fn swap_single<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, SwapSingle<'info>>,
+        amount: u64,
+        other_amount_threshold: u64,
         sqrt_price_limit: u64,
+        is_base_input: bool,
     ) -> Result<()> {
-        instructions::swap_base_in_single(ctx, amount_in, amount_out_minimum, sqrt_price_limit)
+        instructions::swap_single(ctx, amount, other_amount_threshold, sqrt_price_limit, is_base_input)
     }
     /// Swaps `amount_in` of one token for as much as possible of another token,
     /// across the path provided
@@ -367,28 +369,6 @@ pub mod amm_core {
             additional_accounts_per_pool,
         )
     }
-    //  /// Swaps as little as possible of one token for `amount_out` of another token,
-    // /// across a single pool
-    // ///
-    // /// # Arguments
-    // ///
-    // /// * `ctx` - Token and pool accounts for swap
-    // /// * `zero_for_one` - Direction of swap. Swap token_0 for token_1 if true
-    // /// * `deadline` - Swap should if fail if past deadline
-    // /// * `amount_out` - Token amount to be swapped out
-    // /// * `amount_in_maximum` - For slippage. Panic if required input exceeds max limit.
-    // /// * `sqrt_price_limit` - Limit price √P for slippage
-    // ///
-    // pub fn exact_output_single(
-    //     ctx: Context<ExactInputSingle>,
-    //     zero_for_one: bool,
-    //     deadline: u64,
-    //     amount_out: u64,
-    //     amount_in_maximum: u64,
-    //     sqrt_price_limit_x32: u64,
-    // ) -> Result<()> {
-    //     todo!()
-    // }
 
     // /// Swaps as little as possible of one token for `amount_out` of another
     // /// along the specified path (reversed)

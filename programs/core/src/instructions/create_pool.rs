@@ -23,11 +23,6 @@ pub struct CreatePool<'info> {
         space = PoolState::LEN
     )]
     pub pool_state: Account<'info, PoolState>,
-    /// Desired token pair for the pool
-    /// token_0 mint address should be smaller than token_1 address
-    #[account(
-        constraint = token_mint_0.key() < token_mint_1.key()
-    )]
     pub token_mint_0: Box<Account<'info, Mint>>,
     pub token_mint_1: Box<Account<'info, Mint>>,
     /// Token_0 vault

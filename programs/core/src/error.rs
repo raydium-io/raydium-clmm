@@ -44,9 +44,11 @@ pub enum ErrorCode {
     #[msg("Not approved")]
     NotApproved,
 
-    // Swap router
-    #[msg("Too little received")]
-    TooLittleReceived,
+    #[msg("Too little output received")]
+    TooLittleOutputReceived,
+
+    #[msg("Too much input paid")]
+    TooMuchInputPaid,
 
     #[msg("Swap special amount can not be zero")]
     InvaildSwapAmountSpecified,

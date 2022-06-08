@@ -356,11 +356,11 @@ pub fn mint<'b, 'info>(
         ctx.last_observation_state,
         remaining_accounts,
     )?;
-    msg!(
-        "amount_0_int:{},amount_1_int:{}",
-        amount_0_int,
-        amount_1_int
-    );
+    // msg!(
+    //     "amount_0_int:{},amount_1_int:{}",
+    //     amount_0_int,
+    //     amount_1_int
+    // );
     let amount_0 = amount_0_int as u64;
     let amount_1 = amount_1_int as u64;
 

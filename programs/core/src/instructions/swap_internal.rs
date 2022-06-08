@@ -39,7 +39,7 @@ pub struct SwapContext<'b, 'info> {
 
 pub struct SwapCache {
     // the protocol fee for the input token
-    pub fee_protocol: u8,
+    pub protocol_fee_rate: u8,
     // liquidity at the beginning of the swap
     pub liquidity_start: u64,
     // the timestamp of the current block
@@ -94,13 +94,12 @@ pub fn swap<'b, 'info>(
     remaining_accounts: &[AccountInfo<'info>],
     amount_specified: i64,
     sqrt_price_limit_x32: u64,
+    zero_for_one: bool,
 ) -> Result<()> {
     require!(amount_specified != 0, ErrorCode::InvaildSwapAmountSpecified);
 
     let amm_config = ctx.amm_config.deref();
     let pool_state_info = ctx.pool_state.to_account_info();
-
-    let zero_for_one = ctx.input_vault.mint == ctx.pool_state.token_mint_0;
 
     let (token_account_0, token_account_1, vault_0, vault_1) = if zero_for_one {
         (
@@ -140,7 +139,7 @@ pub fn swap<'b, 'info>(
     let cache = &mut SwapCache {
         liquidity_start: ctx.pool_state.liquidity,
         block_timestamp: oracle::_block_timestamp(),
-        fee_protocol: amm_config.protocol_fee,
+        protocol_fee_rate: amm_config.protocol_fee_rate,
         seconds_per_liquidity_cumulative_x32: 0,
         tick_cumulative: 0,
         computed_latest_observation: false,
@@ -191,7 +190,7 @@ pub fn swap<'b, 'info>(
         // crossed out of this bitmap
         if bitmap_cache.is_none() || bitmap_cache.unwrap().word_pos != word_pos {
             let bitmap_account = remaining_accounts_iter.next().unwrap();
-            msg!("check bitmap {}", word_pos);
+            // msg!("check bitmap {}", word_pos);
             // ensure this is a valid PDA, even if account is not initialized
             require_keys_eq!(
                 bitmap_account.key(),
@@ -225,7 +224,7 @@ pub fn swap<'b, 'info>(
         let next_initialized_bit = if let Some(bitmap) = bitmap_cache {
             bitmap.next_initialized_bit(bit_pos, zero_for_one)
         } else {
-            msg!("NextBit");
+            // msg!("NextBit");
             NextBit {
                 next: if zero_for_one { 0 } else { 255 },
                 initialized: false,
@@ -280,8 +279,8 @@ pub fn swap<'b, 'info>(
         }
 
         // if the protocol fee is on, calculate how much is owed, decrement fee_amount, and increment protocol_fee
-        if cache.fee_protocol > 0 {
-            let delta = step.fee_amount / cache.fee_protocol as u64;
+        if cache.protocol_fee_rate > 0 {
+            let delta = step.fee_amount / cache.protocol_fee_rate as u64;
             step.fee_amount -= delta;
             state.protocol_fee += delta;
         }
@@ -311,7 +310,7 @@ pub fn swap<'b, 'info>(
                     cache.computed_latest_observation = true;
                 }
 
-                msg!("loading tick {}", step.tick_next);
+                msg!("loading next tick {}", step.tick_next);
                 let mut tick_state =
                     Account::<TickState>::try_from(remaining_accounts_iter.next().unwrap())?;
                 ctx.pool_state.validate_tick_address(
@@ -421,16 +420,6 @@ pub fn swap<'b, 'info>(
     //     vault_1.amount
     // );
     if zero_for_one {
-        // x -> y，transfer y token from pool vault to user.
-        if amount_1 < 0 {
-            transfer_from_pool_vault_to_user(
-                ctx.pool_state,
-                &vault_1,
-                &token_account_1,
-                &ctx.token_program,
-                amount_1.neg() as u64,
-            )?;
-        }
         //  x -> y, deposit x token from user to pool vault.
         if amount_0 > 0 {
             transfer_from_user_to_pool_vault(
@@ -441,16 +430,17 @@ pub fn swap<'b, 'info>(
                 amount_0 as u64,
             )?;
         }
-    } else {
-        if amount_0 < 0 {
+        // x -> y，transfer y token from pool vault to user.
+        if amount_1 < 0 {
             transfer_from_pool_vault_to_user(
                 ctx.pool_state,
-                &vault_0,
-                &token_account_0,
+                &vault_1,
+                &token_account_1,
                 &ctx.token_program,
-                amount_0.neg() as u64,
+                amount_1.neg() as u64,
             )?;
         }
+    } else {
         if amount_1 > 0 {
             transfer_from_user_to_pool_vault(
                 &ctx.signer,
@@ -458,6 +448,15 @@ pub fn swap<'b, 'info>(
                 &vault_1,
                 &ctx.token_program,
                 amount_1 as u64,
+            )?;
+        }
+        if amount_0 < 0 {
+            transfer_from_pool_vault_to_user(
+                ctx.pool_state,
+                &vault_0,
+                &token_account_0,
+                &ctx.token_program,
+                amount_0.neg() as u64,
             )?;
         }
     }
@@ -476,4 +475,3 @@ pub fn swap<'b, 'info>(
 
     Ok(())
 }
-

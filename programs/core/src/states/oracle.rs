@@ -37,7 +37,7 @@ pub struct ObservationState {
     pub tick_cumulative: i64,
 
     /// The seconds per in range liquidity for the life of the pool as of the observation timestamp
-    pub seconds_per_liquidity_cumulative_x32: u64,
+    pub liquidity_cumulative: u64,
 
     /// Whether the observation has been initialized and the values are safe to use
     pub initialized: bool,
@@ -62,7 +62,7 @@ impl ObservationState {
             index: self.index,
             block_timestamp,
             tick_cumulative: self.tick_cumulative + tick as i64 * delta as i64,
-            seconds_per_liquidity_cumulative_x32: self.seconds_per_liquidity_cumulative_x32
+            liquidity_cumulative: self.liquidity_cumulative
                 + ((delta as u64) << 32) / if liquidity > 0 { liquidity } else { 1 },
             initialized: true,
         }
@@ -118,10 +118,7 @@ impl ObservationState {
         if self.block_timestamp != time {
             last = self.transform(time, tick, liquidity);
         }
-        (
-            last.tick_cumulative,
-            last.seconds_per_liquidity_cumulative_x32,
-        )
+        (last.tick_cumulative, last.liquidity_cumulative)
     }
 }
 

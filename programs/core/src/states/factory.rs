@@ -20,7 +20,7 @@ pub struct AmmConfig {
     pub owner: Pubkey,
 
     /// The global protocol fee
-    pub protocol_fee: u8,
+    pub protocol_fee_rate: u8,
     // padding space for upgrade
     // pub padding: [u64; 16],
 }
@@ -54,8 +54,8 @@ pub struct OwnerChangedEvent {
 #[event]
 pub struct SetProtocolFeeRateEvent {
     /// The previous value of the protocol fee
-    pub fee_protocol_old: u8,
+    pub protocol_fee_rate_old: u8,
 
     /// The updated value of the protocol fee
-    pub fee_protocol: u8,
+    pub protocol_fee_rate: u8,
 }

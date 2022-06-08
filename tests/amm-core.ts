@@ -62,11 +62,8 @@ describe("amm-core", async () => {
   // };
 
   // Configure the client to use the local cluster.
-  const provider = anchor.Provider.local("http://localhost:8899", {
-    skipPreflight: true,
-    preflightCommitment: "processed",
-    commitment: "processed",
-  });
+  const provider = anchor.Provider.env();
+  provider.opts.skipPreflight = true;
   anchor.setProvider(provider);
   console.log("provider set");
 
@@ -366,7 +363,7 @@ describe("amm-core", async () => {
       //     .rpc();
       // });
       // await program.removeEventListener(listener);
-      const tx = await program.rpc.createAmmConfig({
+      const tx = await program.rpc.createAmmConfig(3, {
         accounts: {
           owner,
           ammConfig,
@@ -374,12 +371,10 @@ describe("amm-core", async () => {
         },
       });
       console.log("init config without listener, tx: ", tx);
-      const ammConfigData = await program.account.ammConfig.fetch(
-        ammConfig
-      );
+      const ammConfigData = await program.account.ammConfig.fetch(ammConfig);
       assert.equal(ammConfigData.bump, ammConfigBump);
       assert(ammConfigData.owner.equals(owner));
-      assert.equal(ammConfigData.protocolFee, 3);
+      assert.equal(ammConfigData.protocolFeeRate, 3);
     });
 
     it("Trying to re-initialize config fails", async () => {
@@ -474,9 +469,7 @@ describe("amm-core", async () => {
         },
       });
 
-      const ammConfigData = await program.account.ammConfig.fetch(
-        ammConfig
-      );
+      const ammConfigData = await program.account.ammConfig.fetch(ammConfig);
       assert(ammConfigData.owner.equals(newOwner.publicKey));
     });
 
@@ -489,9 +482,7 @@ describe("amm-core", async () => {
         },
         signers: [newOwner],
       });
-      const factoryStateData = await program.account.ammConfig.fetch(
-        ammConfig
-      );
+      const factoryStateData = await program.account.ammConfig.fetch(ammConfig);
       assert(factoryStateData.owner.equals(owner));
     });
   });
@@ -892,7 +883,7 @@ describe("amm-core", async () => {
       assert.equal(observationStateData.bump, initialObservationBumpA);
       assert.equal(observationStateData.index, 0);
       assert(observationStateData.tickCumulative.eqn(0));
-      assert(observationStateData.secondsPerLiquidityCumulativeX32.eqn(0));
+      assert(observationStateData.liquidityCumulative.eqn(0));
       assert(observationStateData.initialized);
       // assert.approximately(
       //   observationStateData.blockTimestamp,
@@ -1106,7 +1097,7 @@ describe("amm-core", async () => {
       assert.equal(observationState1Data.index, 1);
       assert.equal(observationState1Data.blockTimestamp, 1);
       assert(observationState1Data.tickCumulative.eqn(0));
-      assert(observationState1Data.secondsPerLiquidityCumulativeX32.eqn(0));
+      assert(observationState1Data.liquidityCumulative.eqn(0));
       assert.isFalse(observationState1Data.initialized);
 
       const poolStateData = await program.account.poolState.fetch(poolAState);
@@ -1320,10 +1311,8 @@ describe("amm-core", async () => {
         },
       });
 
-      const factoryStateData = await program.account.ammConfig.fetch(
-        ammConfig
-      );
-      assert.equal(factoryStateData.protocolFee, 6);
+      const factoryStateData = await program.account.ammConfig.fetch(ammConfig);
+      assert.equal(factoryStateData.protocolFeeRate, 6);
     });
   });
 
@@ -1886,7 +1875,7 @@ describe("amm-core", async () => {
         JSBI.BigInt(amount1Desired),
         true
       );
-     
+
       const tx = await program.rpc.createPersonalPosition(
         amount0Desired,
         amount1Desired,
@@ -2001,9 +1990,9 @@ describe("amm-core", async () => {
         "liquidity inside position: ",
         tokenizedPositionData.liquidity.toNumber(),
         " expect:",
-        expectLiquity,
+        expectLiquity
       );
-    
+
       assert.equal(tokenizedPositionData.bump, tokenizedPositionABump);
       assert(tokenizedPositionData.poolId.equals(poolAState));
       assert(tokenizedPositionData.mint.equals(nftMintAKeypair.publicKey));
@@ -3092,7 +3081,7 @@ describe("amm-core", async () => {
     });
   });
 
-  describe("#exact_input_single", () => {
+  describe("#swap_base_input_single", () => {
     // before swapping, current tick = 10 and price = 4297115210
     // active ticks are 0 and 10
     // entire liquidity is in token_1
@@ -3103,11 +3092,12 @@ describe("amm-core", async () => {
       const sqrtPriceLimitX32 = new BN(4297115220);
 
       await expect(
-        program.rpc.swapBaseInSingle(
+        program.rpc.swapSingle(
           // true,
           amountIn,
           amountOutMinimum,
           sqrtPriceLimitX32,
+          true,
           {
             accounts: {
               signer: owner,
@@ -3186,10 +3176,11 @@ describe("amm-core", async () => {
         sqrtPriceLimitX32.toString()
       );
 
-      const tx = await program.rpc.swapBaseInSingle(
+      const tx = await program.rpc.swapSingle(
         amountIn,
         amountOutMinimum,
         sqrtPriceLimitX32,
+        true,
         {
           accounts: {
             signer: owner,
@@ -3220,10 +3211,13 @@ describe("amm-core", async () => {
         "poolStateData.sqrtPriceX32: ",
         poolStateData.sqrtPrice.toNumber(),
         "sqrtPriceLimitX32:",
-        sqrtPriceLimitX32.toNumber()
+        sqrtPriceLimitX32.toNumber(),
+        "expectedAmountOut:",
+        JSBI.toNumber(expectedAmountOut.numerator)
       );
       assert(poolStateData.sqrtPrice.eq(sqrtPriceLimitX32));
-      // assert.equal(poolStateData.tick,expectedNewPool.tickCurrent);
+      assert.equal(poolStateData.tick, expectedNewPool.tickCurrent);
+      // assert.equal(expectedAmountOut)
 
       console.log(
         "tick after swap",
@@ -3235,7 +3229,7 @@ describe("amm-core", async () => {
       let poolAStateData = await program.account.poolState.fetch(poolAState);
       assert.equal(poolAStateData.liquidity.toNumber(), 1998599283);
 
-      console.log("---------------poolAStateData1: ", poolAStateData);
+      // console.log("---------------poolAStateData1: ", poolAStateData);
     });
 
     it("performs a zero for one swap without a limit price", async () => {
@@ -3245,6 +3239,9 @@ describe("amm-core", async () => {
       console.log("pool price", poolStateDataBefore.sqrtPrice.toNumber());
       console.log("pool tick", poolStateDataBefore.tick);
 
+      const feeGrowthGlobalToken0Before =
+        poolStateDataBefore.protocolFeesToken0;
+      const vaultBalanceA1Befer = await token1.getAccountInfo(vaultA1);
       const { observationIndex, observationCardinalityNext } =
         await program.account.poolState.fetch(poolAState);
 
@@ -3292,7 +3289,7 @@ describe("amm-core", async () => {
       console.log("expected pool", expectedNewPool);
 
       await program.methods
-        .swapBaseInSingle(amountIn, amountOutMinimum, sqrtPriceLimitX32)
+        .swapSingle(amountIn, amountOutMinimum, sqrtPriceLimitX32, true)
         .accounts({
           signer: owner,
           ammConfig,
@@ -3313,43 +3310,182 @@ describe("amm-core", async () => {
           },
         ])
         .rpc();
-      // await program.rpc.exactInputSingle(
-      //   // true,
-      //   amountIn,
-      //   amountOutMinimum,
-      //   sqrtPriceLimitX32,
-      //   {
-      //     accounts: {
-      //       signer: owner,
-      //       ammConfig,
-      //       poolState: poolAState,
-      //       inputTokenAccount: minterWallet0,
-      //       outputTokenAccount: minterWallet1,
-      //       inputVault: vaultA0,
-      //       outputVault: vaultA1,
-      //       lastObservationState: lastObservationAState,
-      //       tokenProgram: TOKEN_PROGRAM_ID,
-      //     },
-      //     remainingAccounts: [
-      //       ...bitmapAndTickAccounts,
-      //       {
-      //         pubkey: nextObservationAState,
-      //         isSigner: false,
-      //         isWritable: true,
-      //       },
-      //     ],
-      //   }
-      // );
+
       const poolStateDataAfter = await program.account.poolState.fetch(
         poolAState
       );
-      console.log(
-        "pool price after",
-        poolStateDataAfter.sqrtPrice.toNumber()
-      );
+      console.log("---------------poolAStateData2: ", poolStateDataAfter);
+      console.log("pool price after", poolStateDataAfter.sqrtPrice.toNumber());
       console.log("pool tick after", poolStateDataAfter.tick);
 
-      console.log("---------------poolAStateData2: ", poolStateDataAfter);
+      assert.equal(
+        poolStateDataAfter.sqrtPrice.toNumber(),
+        JSBI.toNumber(expectedNewPool.sqrtRatioX32)
+      );
+      assert.equal(poolStateDataAfter.tick, expectedNewPool.tickCurrent);
+
+      const feeGrowthGlobalToken0After = poolStateDataAfter.protocolFeesToken0;
+      const vaultBalanceA1After = await token1.getAccountInfo(vaultA1);
+
+      assert.equal(
+        feeGrowthGlobalToken0After.toNumber(),
+        feeGrowthGlobalToken0Before.toNumber() + 8
+      );
+      assert.equal(
+        vaultBalanceA1Befer.amount.toNumber()- vaultBalanceA1After.amount.toNumber(),
+        JSBI.toNumber(expectedAmountOut.numerator)
+      );
+      console.log(
+        "expectedAmountOut: ",
+        JSBI.toNumber(expectedAmountOut.numerator)
+      );
+
+      uniPoolA = expectedNewPool;
+    });
+  });
+
+  describe("#swap_base_output_single", () => {
+    it("fails if amount_in is greater than amountInMaximum", async () => {
+      const amountInMaximum = new BN(100);
+      const amountOut = new BN(100_000);
+      const sqrtPriceLimitX32 = new BN(0);
+
+      await expect(
+        program.rpc.swapSingle(
+          amountOut,
+          amountInMaximum,
+          sqrtPriceLimitX32,
+          false,
+          {
+            accounts: {
+              signer: owner,
+              ammConfig,
+              poolState: poolAState,
+              inputTokenAccount: minterWallet0,
+              outputTokenAccount: minterWallet1,
+              inputVault: vaultA0,
+              outputVault: vaultA1,
+              lastObservationState: lastObservationAState,
+              tokenProgram: TOKEN_PROGRAM_ID,
+            },
+            remainingAccounts: [
+              {
+                pubkey: bitmapLowerAState,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: nextObservationAState,
+                isSigner: false,
+                isWritable: true,
+              },
+            ],
+          }
+        )
+      ).to.be.rejectedWith(Error);
+    });
+
+    it("performs a zero for one swap with exact output", async () => {
+      let poolStateDataBefore = await program.account.poolState.fetch(
+        poolAState
+      );
+      console.log("pool price", poolStateDataBefore.sqrtPrice.toNumber());
+      console.log("pool tick", poolStateDataBefore.tick);
+
+      const { observationIndex, observationCardinalityNext } =
+        await program.account.poolState.fetch(poolAState);
+
+      lastObservationAState = (
+        await PublicKey.findProgramAddress(
+          [
+            OBSERVATION_SEED,
+            token0.publicKey.toBuffer(),
+            token1.publicKey.toBuffer(),
+            u32ToSeed(fee),
+            u16ToSeed(observationIndex),
+          ],
+          program.programId
+        )
+      )[0];
+
+      nextObservationAState = (
+        await PublicKey.findProgramAddress(
+          [
+            OBSERVATION_SEED,
+            token0.publicKey.toBuffer(),
+            token1.publicKey.toBuffer(),
+            u32ToSeed(fee),
+            u16ToSeed((observationIndex + 1) % observationCardinalityNext),
+          ],
+          program.programId
+        )
+      )[0];
+
+      const amountInMaximum = new BN(100_000);
+      const amountOut = new BN(100_000);
+      const sqrtPriceLimitX32 = new BN(0);
+
+      console.log(
+        "pool tick",
+        uniPoolA.tickCurrent,
+        "price",
+        uniPoolA.sqrtRatioX32.toString()
+      );
+      const [expectedAmountIn, expectedNewPool] = await uniPoolA.getInputAmount(
+        CurrencyAmount.fromRawAmount(uniToken1, amountOut.toNumber())
+        // JSBI.BigInt(sqrtPriceLimitX32)
+      );
+      console.log(
+        "expectedAmountIn: ",
+        JSBI.toNumber(expectedAmountIn.numerator)
+      );
+      console.log("expected pool", expectedNewPool);
+
+      let vaultBalanceA0Before = await token0.getAccountInfo(vaultA0);
+      await program.methods
+        .swapSingle(amountOut, amountInMaximum, sqrtPriceLimitX32, false)
+        .accounts({
+          signer: owner,
+          ammConfig,
+          poolState: poolAState,
+          inputTokenAccount: minterWallet0,
+          outputTokenAccount: minterWallet1,
+          inputVault: vaultA0,
+          outputVault: vaultA1,
+          lastObservationState: lastObservationAState,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .remainingAccounts([
+          {
+            pubkey: bitmapLowerAState,
+            isSigner: false,
+            isWritable: true,
+          },
+          {
+            pubkey: nextObservationAState,
+            isSigner: false,
+            isWritable: true,
+          },
+        ])
+        .rpc();
+
+      const poolStateDataAfter = await program.account.poolState.fetch(
+        poolAState
+      );
+      console.log("pool price after", poolStateDataAfter.sqrtPrice.toNumber());
+      console.log("pool tick after", poolStateDataAfter.tick);
+
+      assert.equal(poolStateDataAfter.tick, expectedNewPool.tickCurrent);
+      assert.equal(
+        poolStateDataAfter.sqrtPrice.toNumber(),
+        JSBI.toNumber(expectedNewPool.sqrtRatioX32)
+      );
+
+      let vaultBalanceA0After = await token0.getAccountInfo(vaultA0);
+      assert.equal(
+        JSBI.toNumber(expectedAmountIn.numerator),
+        new Number(vaultBalanceA0After.amount.sub(vaultBalanceA0Before.amount))
+      );
       uniPoolA = expectedNewPool;
     });
   });
@@ -3397,6 +3533,10 @@ describe("amm-core", async () => {
         await uniPoolA.getOutputAmount(
           CurrencyAmount.fromRawAmount(uniToken0, amountIn.toNumber())
         );
+      console.log(
+        "expectedAmountOut: ",
+        JSBI.toNumber(expectedAmountOut.numerator)
+      );
       console.log("expected pool", expectedNewPool);
 
       await program.rpc.swapBaseIn(
@@ -3449,10 +3589,7 @@ describe("amm-core", async () => {
       const poolStateDataAfter = await program.account.poolState.fetch(
         poolAState
       );
-      console.log(
-        "pool price after",
-        poolStateDataAfter.sqrtPrice.toNumber()
-      );
+      console.log("pool price after", poolStateDataAfter.sqrtPrice.toNumber());
       console.log("pool tick after", poolStateDataAfter.tick);
 
       console.log("---------------poolAStateData3: ", poolStateDataAfter);
@@ -3598,12 +3735,7 @@ describe("amm-core", async () => {
       );
       console.log("pool price", poolStateDataBefore.sqrtPrice.toNumber());
       console.log("pool tick", poolStateDataBefore.tick);
-      // console.log("poolStateDataBefore.tokenMint0: ", poolStateDataBefore.token0.toString())
-      // console.log("poolStateDataBefore.tokenMint1: ", poolStateDataBefore.token1.toString())
-      // console.log("poolStateDataBefore.fee: ", poolStateDataBefore.fee)
-      // console.log("poolStateDataBefore.liquidity: ", poolStateDataBefore.liquidity)
-      // console.log("poolStateDataBefore.liquidityGross: ", poolStateDataBefore.liquidityGross)
-      // console.log("poolStateDataBefore.liquidityNet: ", poolStateDataBefore.liquidityNet)
+
       const tickBitmap_lower = (
         await PublicKey.findProgramAddress(
           [
@@ -3700,34 +3832,10 @@ describe("amm-core", async () => {
 
       console.log("pool B address", poolBState.toString());
 
-      // console.log("poolAState: ", poolAState.toString());
-      // console.log("minterWallet1: ", minterWallet1.toString());
-      // console.log("vaultA0: ", vaultA0.toString());
-      // console.log("vaultA1: ", vaultA1.toString());
-      // console.log("lastObservationAState: ", lastObservationAState.toString());
-      // console.log("bitmapLowerAState: ", bitmapLowerAState.toString());
-      // console.log("nextObservationAState: ", nextObservationAState.toString());
-      // console.log("poolBState: ", poolBState.toString());
-      // console.log("minterWallet2: ", minterWallet2.toString());
-      // console.log("vaultB1: ", vaultB1.toString());
-      // console.log("vaultB2: ", vaultB2.toString());
-      // console.log(
-      //   "latestObservationBState: ",
-      //   latestObservationBState.toString()
-      // );
-      // console.log("bitmapLowerBState: ", bitmapLowerBState.toString());
-      // console.log("tickUpperBState: ", tickUpperBState.toString());
-      // console.log("nextObservationBState: ", nextObservationBState.toString());
-
       const amountIn = new BN(100_000);
       const amountOutMinimum = new BN(0);
       await program.methods
-        .swapBaseIn(
-          amountIn,
-          amountOutMinimum,
-          Buffer.from([2, 2])
-          // Buffer.from([2]),
-        )
+        .swapBaseIn(amountIn, amountOutMinimum, Buffer.from([2, 2]))
         .accounts({
           signer: owner,
           ammConfig,

@@ -6,7 +6,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
 
 #[derive(Accounts)]
-pub struct SwapBaseInSingle<'info> {
+pub struct SwapSingle<'info> {
     /// The user performing the swap
     pub signer: Signer<'info>,
 
@@ -46,13 +46,14 @@ pub struct SwapBaseInSingle<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-pub fn swap_base_in_single<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, SwapBaseInSingle<'info>>,
-    amount_in: u64,
-    amount_out_minimum: u64,
+pub fn swap_single<'a, 'b, 'c, 'info>(
+    ctx: Context<'a, 'b, 'c, 'info, SwapSingle<'info>>,
+    amount: u64,
+    other_amount_threshold: u64,
     sqrt_price_limit_x32: u64,
+    is_base_input: bool,
 ) -> Result<()> {
-    let amount_out = exact_input_internal(
+    let amount = exact_internal(
         &mut SwapContext {
             signer: ctx.accounts.signer.clone(),
             amm_config: ctx.accounts.amm_config.as_mut(),
@@ -65,31 +66,47 @@ pub fn swap_base_in_single<'a, 'b, 'c, 'info>(
             last_observation_state: &mut ctx.accounts.last_observation_state,
         },
         ctx.remaining_accounts,
-        amount_in,
+        amount,
         sqrt_price_limit_x32,
+        is_base_input,
     )?;
-    msg!("exact_input_single, amount_out: {}", amount_out);
-    require!(
-        amount_out >= amount_out_minimum,
-        ErrorCode::TooLittleReceived
-    );
+    if is_base_input {
+        require!(
+            amount >= other_amount_threshold,
+            ErrorCode::TooLittleOutputReceived
+        );
+    } else {
+        require!(
+            amount <= other_amount_threshold,
+            ErrorCode::TooMuchInputPaid
+        );
+    }
+
     Ok(())
 }
 
-/// Performs a single exact input swap
-pub fn exact_input_internal<'b, 'info>(
+/// Performs a single exact input/output swap
+/// if is_base_input = true, return vaule is the max_amount_out, otherwise is min_amount_in
+pub fn exact_internal<'b, 'info>(
     accounts: &mut SwapContext<'b, 'info>,
     remaining_accounts: &[AccountInfo<'info>],
-    amount_in: u64,
+    amount_specified: u64,
     sqrt_price_limit_x32: u64,
+    is_base_input: bool,
 ) -> Result<u64> {
     let zero_for_one = accounts.input_vault.mint == accounts.pool_state.token_mint_0;
+    let input_balance_before = accounts.input_vault.amount;
+    let output_balance_before = accounts.output_vault.amount;
 
-    let balance_before = accounts.input_vault.amount;
+    let mut amount_specified = i64::try_from(amount_specified).unwrap();
+    if !is_base_input {
+        amount_specified = -i64::try_from(amount_specified).unwrap();
+    };
+
     swap(
         accounts,
         remaining_accounts,
-        i64::try_from(amount_in).unwrap(),
+        amount_specified,
         if sqrt_price_limit_x32 == 0 {
             if zero_for_one {
                 tick_math::MIN_SQRT_RATIO + 1
@@ -99,8 +116,20 @@ pub fn exact_input_internal<'b, 'info>(
         } else {
             sqrt_price_limit_x32
         },
+        zero_for_one,
     )?;
 
     accounts.input_vault.reload()?;
-    Ok(accounts.input_vault.amount - balance_before)
+    accounts.output_vault.reload()?;
+    // msg!(
+    //     "exact_swap_internal, is_base_input:{}, amount_in: {}, amount_out: {}",
+    //     is_base_input,
+    //     accounts.input_vault.amount - input_balance_before,
+    //     output_balance_before - accounts.output_vault.amount
+    // );
+    if is_base_input {
+        Ok(output_balance_before - accounts.output_vault.amount)
+    } else {
+        Ok(accounts.input_vault.amount - input_balance_before)
+    }
 }

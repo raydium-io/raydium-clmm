@@ -21,7 +21,12 @@ export type AmmCore = {
           "isSigner": false
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "protocolFeeRate",
+          "type": "u8"
+        }
+      ]
     },
     {
       "name": "setNewOwner",
@@ -187,7 +192,7 @@ export type AmmCore = {
       ],
       "args": [
         {
-          "name": "feeProtocol",
+          "name": "protocolFeeRate",
           "type": "u8"
         }
       ]
@@ -797,7 +802,7 @@ export type AmmCore = {
       ]
     },
     {
-      "name": "swapBaseInSingle",
+      "name": "swapSingle",
       "accounts": [
         {
           "name": "signer",
@@ -847,16 +852,20 @@ export type AmmCore = {
       ],
       "args": [
         {
-          "name": "amountIn",
+          "name": "amount",
           "type": "u64"
         },
         {
-          "name": "amountOutMinimum",
+          "name": "otherAmountThreshold",
           "type": "u64"
         },
         {
           "name": "sqrtPriceLimit",
           "type": "u64"
+        },
+        {
+          "name": "isBaseInput",
+          "type": "bool"
         }
       ]
     },
@@ -915,7 +924,7 @@ export type AmmCore = {
             "type": "publicKey"
           },
           {
-            "name": "protocolFee",
+            "name": "protocolFeeRate",
             "type": "u8"
           }
         ]
@@ -963,7 +972,7 @@ export type AmmCore = {
             "type": "i64"
           },
           {
-            "name": "secondsPerLiquidityCumulativeX32",
+            "name": "liquidityCumulative",
             "type": "u64"
           },
           {
@@ -1234,12 +1243,12 @@ export type AmmCore = {
       "name": "SetProtocolFeeRateEvent",
       "fields": [
         {
-          "name": "feeProtocolOld",
+          "name": "protocolFeeRateOld",
           "type": "u8",
           "index": false
         },
         {
-          "name": "feeProtocol",
+          "name": "protocolFeeRate",
           "type": "u8",
           "index": false
         }
@@ -1674,21 +1683,26 @@ export type AmmCore = {
     },
     {
       "code": 6013,
-      "name": "TooLittleReceived",
-      "msg": "Too little received"
+      "name": "TooLittleOutputReceived",
+      "msg": "Too little output received"
     },
     {
       "code": 6014,
+      "name": "TooMuchInputPaid",
+      "msg": "Too much input paid"
+    },
+    {
+      "code": 6015,
       "name": "InvaildSwapAmountSpecified",
       "msg": "Swap special amount can not be zero"
     },
     {
-      "code": 6015,
+      "code": 6016,
       "name": "InvaildTickIndex",
       "msg": "Tick index of lower must be smaller than upper"
     },
     {
-      "code": 6016,
+      "code": 6017,
       "name": "InvaildLiquidity",
       "msg": "Invaild liquidity when update position"
     }
@@ -1718,7 +1732,12 @@ export const IDL: AmmCore = {
           "isSigner": false
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "protocolFeeRate",
+          "type": "u8"
+        }
+      ]
     },
     {
       "name": "setNewOwner",
@@ -1884,7 +1903,7 @@ export const IDL: AmmCore = {
       ],
       "args": [
         {
-          "name": "feeProtocol",
+          "name": "protocolFeeRate",
           "type": "u8"
         }
       ]
@@ -2494,7 +2513,7 @@ export const IDL: AmmCore = {
       ]
     },
     {
-      "name": "swapBaseInSingle",
+      "name": "swapSingle",
       "accounts": [
         {
           "name": "signer",
@@ -2544,16 +2563,20 @@ export const IDL: AmmCore = {
       ],
       "args": [
         {
-          "name": "amountIn",
+          "name": "amount",
           "type": "u64"
         },
         {
-          "name": "amountOutMinimum",
+          "name": "otherAmountThreshold",
           "type": "u64"
         },
         {
           "name": "sqrtPriceLimit",
           "type": "u64"
+        },
+        {
+          "name": "isBaseInput",
+          "type": "bool"
         }
       ]
     },
@@ -2612,7 +2635,7 @@ export const IDL: AmmCore = {
             "type": "publicKey"
           },
           {
-            "name": "protocolFee",
+            "name": "protocolFeeRate",
             "type": "u8"
           }
         ]
@@ -2660,7 +2683,7 @@ export const IDL: AmmCore = {
             "type": "i64"
           },
           {
-            "name": "secondsPerLiquidityCumulativeX32",
+            "name": "liquidityCumulative",
             "type": "u64"
           },
           {
@@ -2931,12 +2954,12 @@ export const IDL: AmmCore = {
       "name": "SetProtocolFeeRateEvent",
       "fields": [
         {
-          "name": "feeProtocolOld",
+          "name": "protocolFeeRateOld",
           "type": "u8",
           "index": false
         },
         {
-          "name": "feeProtocol",
+          "name": "protocolFeeRate",
           "type": "u8",
           "index": false
         }
@@ -3371,21 +3394,26 @@ export const IDL: AmmCore = {
     },
     {
       "code": 6013,
-      "name": "TooLittleReceived",
-      "msg": "Too little received"
+      "name": "TooLittleOutputReceived",
+      "msg": "Too little output received"
     },
     {
       "code": 6014,
+      "name": "TooMuchInputPaid",
+      "msg": "Too much input paid"
+    },
+    {
+      "code": 6015,
       "name": "InvaildSwapAmountSpecified",
       "msg": "Swap special amount can not be zero"
     },
     {
-      "code": 6015,
+      "code": 6016,
       "name": "InvaildTickIndex",
       "msg": "Tick index of lower must be smaller than upper"
     },
     {
-      "code": 6016,
+      "code": 6017,
       "name": "InvaildLiquidity",
       "msg": "Invaild liquidity when update position"
     }

@@ -197,9 +197,8 @@ pub fn burn<'b, 'info>(
     let amount_0 = (-amount_0_int) as u64;
     let amount_1 = (-amount_1_int) as u64;
     if amount_0 > 0 || amount_1 > 0 {
-        let position_state = &mut ctx.position_state;
-        position_state.tokens_owed_0 += amount_0;
-        position_state.tokens_owed_1 += amount_1;
+        ctx.position_state.tokens_owed_0 += amount_0;
+        ctx.position_state.tokens_owed_1 += amount_1;
     }
 
     Ok(())

@@ -9,7 +9,7 @@ pub fn transfer_from_user_to_pool_vault<'info>(
     token_program: &Program<'info, Token>,
     amount: u64,
 ) -> Result<()> {
-    msg!("deposit to vault amount {}", amount);
+    msg!("deposit to vault, amount: {}", amount);
     token::transfer(
         CpiContext::new(
             token_program.to_account_info(),
@@ -30,7 +30,7 @@ pub fn transfer_from_pool_vault_to_user<'info>(
     token_program: &Program<'info, Token>,
     amount: u64,
 ) -> Result<()> {
-    msg!("withdraw from vault amount {}", amount);
+    msg!("withdraw from vault, amount: {}", amount);
     let pool_state_seeds = [
         &POOL_SEED.as_bytes(),
         &pool.token_mint_0.to_bytes() as &[u8],

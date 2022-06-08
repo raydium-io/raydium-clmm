@@ -121,12 +121,12 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
     let mut tokens_owed_0 = tokenized_position.tokens_owed_0;
     let mut tokens_owed_1 = tokenized_position.tokens_owed_1;
 
-    let mut core_position_owner = ctx.accounts.amm_config.to_account_info();
-    core_position_owner.is_signer = true;
+    let mut protocol_position_owner = ctx.accounts.amm_config.to_account_info();
+    protocol_position_owner.is_signer = true;
     // trigger an update of the position fees owed and fee growth snapshots if it has any liquidity
     if tokenized_position.liquidity > 0 {
         let mut burn_accounts = BurnParam {
-            owner: &Signer::try_from(&core_position_owner)?,
+            owner: &Signer::try_from(&protocol_position_owner)?,
             pool_state: ctx.accounts.pool_state.as_mut(),
             tick_lower_state: ctx.accounts.tick_lower_state.as_mut(),
             tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),
@@ -135,6 +135,7 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
             position_state: ctx.accounts.protocol_position_state.as_mut(),
             last_observation_state: ctx.accounts.last_observation_state.as_mut(),
         };
+        // update fee inside
         burn(&mut burn_accounts, ctx.remaining_accounts, 0)?;
 
         let core_position = burn_accounts.position_state.deref();
@@ -156,18 +157,15 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
     let amount_0 = amount_0_max.min(tokens_owed_0);
     let amount_1 = amount_1_max.min(tokens_owed_1);
 
-    // let mut core_position_owner = ctx.accounts.amm_config.to_account_info().clone();
-    // core_position_owner.is_signer = true;
-
-    msg!("withdrawing amounts {} {}", amount_0, amount_1);
-    msg!(
-        "vault balances {} {}",
-        ctx.accounts.token_vault_0.amount,
-        ctx.accounts.token_vault_1.amount
-    );
+    msg!("withdrawing amount_0: {}, amount_1: {}", amount_0, amount_1);
+    // msg!(
+    //     "vault balances {} {}",
+    //     ctx.accounts.token_vault_0.amount,
+    //     ctx.accounts.token_vault_1.amount
+    // );
 
     let mut accounts = CollectParam {
-        owner: &Signer::try_from(&core_position_owner)?,
+        owner: &Signer::try_from(&protocol_position_owner)?,
         pool_state: ctx.accounts.pool_state.as_mut(),
         tick_lower_state: ctx.accounts.tick_lower_state.as_mut(),
         tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),

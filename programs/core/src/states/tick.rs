@@ -109,7 +109,7 @@ impl TickState {
             self.liquidity_net.checked_add(liquidity_delta)
         }
         .unwrap();
-        msg!("tick update,liquidity_gross_before:{}, liquidity_gross_after:{},liquidity_net:{}, upper:{}", liquidity_gross_before, liquidity_gross_after, self.liquidity_net,upper);
+        // msg!("tick update,liquidity_gross_before:{}, liquidity_gross_after:{},liquidity_net:{}, upper:{}", liquidity_gross_before, liquidity_gross_after, self.liquidity_net,upper);
         Ok(flipped)
     }
 

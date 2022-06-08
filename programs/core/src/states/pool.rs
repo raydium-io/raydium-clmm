@@ -235,7 +235,7 @@ impl PoolState {
             let time = oracle::_block_timestamp();
             let ObservationState {
                 tick_cumulative,
-                seconds_per_liquidity_cumulative_x32,
+                liquidity_cumulative: seconds_per_liquidity_cumulative_x32,
                 ..
             } = if latest_observation.block_timestamp == time {
                 *latest_observation
