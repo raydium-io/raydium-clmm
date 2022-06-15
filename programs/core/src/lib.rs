@@ -31,9 +31,9 @@ pub mod amm_core {
     /// * `ctx`- Initializes the factory state account
     /// * `amm_config_bump` - Bump to validate factory state address
     ///
-    pub fn create_amm_config(ctx: Context<CreateAmmConfig>,protocol_fee_rate: u8) -> Result<()> {
+    pub fn create_amm_config(ctx: Context<CreateAmmConfig>, protocol_fee_rate: u8) -> Result<()> {
         assert!(protocol_fee_rate >= 2 && protocol_fee_rate <= 10);
-        instructions::create_amm_config(ctx,protocol_fee_rate)
+        instructions::create_amm_config(ctx, protocol_fee_rate)
     }
 
     /// Updates the owner of the factory
@@ -121,7 +121,10 @@ pub mod amm_core {
     /// Holds the Factory State account where protocol fee will be saved.
     /// * `fee_protocol` - new protocol fee for all pools
     ///
-    pub fn set_protocol_fee_rate(ctx: Context<SetProtocolFeeRate>, protocol_fee_rate: u8) -> Result<()> {
+    pub fn set_protocol_fee_rate(
+        ctx: Context<SetProtocolFeeRate>,
+        protocol_fee_rate: u8,
+    ) -> Result<()> {
         assert!(protocol_fee_rate >= 2 && protocol_fee_rate <= 10);
         let amm_config = &mut ctx.accounts.amm_config;
         let protocol_fee_rate_old = amm_config.protocol_fee_rate;
@@ -343,7 +346,13 @@ pub mod amm_core {
         sqrt_price_limit: u64,
         is_base_input: bool,
     ) -> Result<()> {
-        instructions::swap_single(ctx, amount, other_amount_threshold, sqrt_price_limit, is_base_input)
+        instructions::swap_single(
+            ctx,
+            amount,
+            other_amount_threshold,
+            sqrt_price_limit,
+            is_base_input,
+        )
     }
     /// Swaps `amount_in` of one token for as much as possible of another token,
     /// across the path provided

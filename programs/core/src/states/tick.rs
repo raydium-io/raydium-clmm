@@ -133,12 +133,19 @@ impl TickState {
         tick_cumulative: i64,
         time: u32,
     ) -> i64 {
-        self.fee_growth_outside_0_x32 = fee_growth_global_0_x32 - self.fee_growth_outside_0_x32;
-        self.fee_growth_outside_1_x32 = fee_growth_global_1_x32 - self.fee_growth_outside_1_x32;
-        self.seconds_per_liquidity_outside_x32 =
-            seconds_per_liquidity_cumulative_x32 - self.seconds_per_liquidity_outside_x32;
-        self.tick_cumulative_outside = tick_cumulative - self.tick_cumulative_outside;
-        self.seconds_outside = time - self.seconds_outside;
+        self.fee_growth_outside_0_x32 = fee_growth_global_0_x32
+            .checked_sub(self.fee_growth_outside_0_x32)
+            .unwrap();
+        self.fee_growth_outside_1_x32 = fee_growth_global_1_x32
+            .checked_sub(self.fee_growth_outside_1_x32)
+            .unwrap();
+        self.seconds_per_liquidity_outside_x32 = seconds_per_liquidity_cumulative_x32
+            .checked_sub(self.seconds_per_liquidity_outside_x32)
+            .unwrap();
+        self.tick_cumulative_outside = tick_cumulative
+            .checked_sub(self.tick_cumulative_outside)
+            .unwrap();
+        self.seconds_outside = time.checked_sub(self.seconds_outside).unwrap();
 
         self.liquidity_net
     }
@@ -198,8 +205,12 @@ pub fn get_fee_growth_inside(
         )
     } else {
         (
-            fee_growth_global_0_x32 - tick_lower.fee_growth_outside_0_x32,
-            fee_growth_global_1_x32 - tick_lower.fee_growth_outside_1_x32,
+            fee_growth_global_0_x32
+                .checked_sub(tick_lower.fee_growth_outside_0_x32)
+                .unwrap(),
+            fee_growth_global_1_x32
+                .checked_sub(tick_lower.fee_growth_outside_1_x32)
+                .unwrap(),
         )
     };
 
@@ -211,14 +222,24 @@ pub fn get_fee_growth_inside(
         )
     } else {
         (
-            fee_growth_global_0_x32 - tick_upper.fee_growth_outside_0_x32,
-            fee_growth_global_1_x32 - tick_upper.fee_growth_outside_1_x32,
+            fee_growth_global_0_x32
+                .checked_sub(tick_upper.fee_growth_outside_0_x32)
+                .unwrap(),
+            fee_growth_global_1_x32
+                .checked_sub(tick_upper.fee_growth_outside_1_x32)
+                .unwrap(),
         )
     };
-    let fee_growth_inside_0_x32 =
-        fee_growth_global_0_x32 - fee_growth_below_0_x32 - fee_growth_above_0_x32;
-    let fee_growth_inside_1_x32 =
-        fee_growth_global_1_x32 - fee_growth_below_1_x32 - fee_growth_above_1_x32;
+    let fee_growth_inside_0_x32 = fee_growth_global_0_x32
+        .checked_sub(fee_growth_below_0_x32)
+        .unwrap()
+        .checked_sub(fee_growth_above_0_x32)
+        .unwrap();
+    let fee_growth_inside_1_x32 = fee_growth_global_1_x32
+        .checked_sub(fee_growth_below_1_x32)
+        .unwrap()
+        .checked_sub(fee_growth_above_1_x32)
+        .unwrap();
 
     (fee_growth_inside_0_x32, fee_growth_inside_1_x32)
 }

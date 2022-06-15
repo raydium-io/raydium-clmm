@@ -56,7 +56,7 @@ impl ObservationState {
     /// * `liquidity` - The total in-range liquidity at the time of the new observation
     ///
     pub fn transform(self, block_timestamp: u32, tick: i32, liquidity: u64) -> ObservationState {
-        let delta = block_timestamp - self.block_timestamp;
+        let delta = block_timestamp.saturating_sub(self.block_timestamp);
         ObservationState {
             bump: self.bump,
             index: self.index,

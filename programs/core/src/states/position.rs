@@ -16,7 +16,7 @@ pub const POSITION_SEED: &str = "position";
 /// PDA of `[POSITION_SEED, token_0, token_1, fee, owner, tick_lower, tick_upper]`
 ///
 #[account]
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ProcotolPositionState {
     /// Bump to identify PDA
     pub bump: u8,
@@ -66,10 +66,12 @@ impl ProcotolPositionState {
         };
 
         // calculate accumulated Fees
-        let tokens_owed_0 = (fee_growth_inside_0_x32 - self.fee_growth_inside_0_last)
+        let tokens_owed_0 = fee_growth_inside_0_x32
+            .saturating_sub(self.fee_growth_inside_0_last)
             .mul_div_floor(self.liquidity as u64, fixed_point_32::Q32)
             .unwrap();
-        let tokens_owed_1 = (fee_growth_inside_1_x32 - self.fee_growth_inside_1_last)
+        let tokens_owed_1 = fee_growth_inside_1_x32
+            .saturating_sub(self.fee_growth_inside_1_last)
             .mul_div_floor(self.liquidity as u64, fixed_point_32::Q32)
             .unwrap();
 
@@ -81,8 +83,8 @@ impl ProcotolPositionState {
         self.fee_growth_inside_1_last = fee_growth_inside_1_x32;
         if tokens_owed_0 > 0 || tokens_owed_1 > 0 {
             // overflow is acceptable, have to withdraw before you hit u64::MAX fees
-            self.tokens_owed_0 += tokens_owed_0;
-            self.tokens_owed_1 += tokens_owed_1;
+            self.tokens_owed_0 = self.tokens_owed_0.checked_add(tokens_owed_0).unwrap();
+            self.tokens_owed_1 = self.tokens_owed_1.checked_add(tokens_owed_1).unwrap();
         }
 
         Ok(())

@@ -2555,7 +2555,7 @@ describe("amm-core", async () => {
           tokenizedPositionAState
         );
       assert(tokenizedPositionData.tokensOwed0.eqn(0));
-      assert(tokenizedPositionData.tokensOwed1.eqn(999999));
+      assert.equal(tokenizedPositionData.tokensOwed1.toNumber(),999999);
 
       const tickLowerData = await program.account.tickState.fetch(
         tickLowerAState
@@ -2979,7 +2979,7 @@ describe("amm-core", async () => {
       const corePositionData =
         await program.account.procotolPositionState.fetch(corePositionAState);
       assert(corePositionData.tokensOwed0.eqn(0));
-      assert(corePositionData.tokensOwed1.eqn(1000489)); // minus 10
+      assert.equal(corePositionData.tokensOwed1.toNumber(),1000489); // minus 10
 
       const tokenizedPositionData =
         await program.account.personalPositionState.fetch(
@@ -3063,7 +3063,7 @@ describe("amm-core", async () => {
           tokenizedPositionAState
         );
       assert(tokenizedPositionData.tokensOwed0.eqn(0));
-      assert(tokenizedPositionData.tokensOwed1.eqn(1000479));
+      assert.equal(tokenizedPositionData.tokensOwed1.toNumber(), 1000479);
 
       const recipientWallet0Info = await token0.getAccountInfo(
         feeRecipientWallet0

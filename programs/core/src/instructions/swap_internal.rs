@@ -405,13 +405,13 @@ pub fn swap<'b, 'info>(
 
     let (amount_0, amount_1) = if zero_for_one == exact_input {
         (
-            amount_specified - state.amount_specified_remaining,
+            amount_specified.saturating_sub(state.amount_specified_remaining),
             state.amount_calculated,
         )
     } else {
         (
             state.amount_calculated,
-            amount_specified - state.amount_specified_remaining,
+            amount_specified.saturating_sub(state.amount_specified_remaining),
         )
     };
     // msg!(

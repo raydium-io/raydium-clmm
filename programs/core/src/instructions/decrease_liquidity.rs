@@ -79,8 +79,14 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     burn(&mut accounts, ctx.remaining_accounts, liquidity)?;
 
     let updated_core_position = accounts.position_state;
-    let amount_0 = updated_core_position.tokens_owed_0 - tokens_owed_0_before;
-    let amount_1 = updated_core_position.tokens_owed_1 - tokens_owed_1_before;
+    let amount_0 = updated_core_position
+        .tokens_owed_0
+        .checked_sub(tokens_owed_0_before)
+        .unwrap();
+    let amount_1 = updated_core_position
+        .tokens_owed_1
+        .checked_sub(tokens_owed_1_before)
+        .unwrap();
     require!(
         amount_0 >= amount_0_min && amount_1 >= amount_1_min,
         ErrorCode::PriceSlippageCheck
@@ -91,19 +97,37 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     let fee_growth_inside_1_last_x32 = updated_core_position.fee_growth_inside_1_last;
 
     let tokenized_position = &mut ctx.accounts.personal_position_state;
-    tokenized_position.tokens_owed_0 += amount_0
-        + (fee_growth_inside_0_last_x32 - tokenized_position.fee_growth_inside_0_last)
-            .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
-            .unwrap();
 
-    tokenized_position.tokens_owed_1 += amount_1
-        + (fee_growth_inside_1_last_x32 - tokenized_position.fee_growth_inside_1_last)
-            .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
-            .unwrap();
+    tokenized_position.tokens_owed_0 = tokenized_position
+        .tokens_owed_0
+        .checked_add(
+            amount_0
+                .checked_add(
+                    fee_growth_inside_0_last_x32
+                        .saturating_sub(tokenized_position.fee_growth_inside_0_last)
+                        .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
+                        .unwrap(),
+                )
+                .unwrap(),
+        )
+        .unwrap();
 
+    tokenized_position.tokens_owed_1 = tokenized_position
+        .tokens_owed_1
+        .checked_add(
+            amount_1
+                .checked_add(
+                    fee_growth_inside_1_last_x32
+                        .saturating_sub(tokenized_position.fee_growth_inside_1_last)
+                        .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
+                        .unwrap(),
+                )
+                .unwrap(),
+        )
+        .unwrap();
     tokenized_position.fee_growth_inside_0_last = fee_growth_inside_0_last_x32;
     tokenized_position.fee_growth_inside_1_last = fee_growth_inside_1_last_x32;
-    tokenized_position.liquidity -= liquidity;
+    tokenized_position.liquidity = tokenized_position.liquidity.checked_sub(liquidity).unwrap();
 
     emit!(DecreaseLiquidityEvent {
         position_nft_mint: tokenized_position.mint,
@@ -197,8 +221,16 @@ pub fn burn<'b, 'info>(
     let amount_0 = (-amount_0_int) as u64;
     let amount_1 = (-amount_1_int) as u64;
     if amount_0 > 0 || amount_1 > 0 {
-        ctx.position_state.tokens_owed_0 += amount_0;
-        ctx.position_state.tokens_owed_1 += amount_1;
+        ctx.position_state.tokens_owed_0 = ctx
+            .position_state
+            .tokens_owed_0
+            .checked_add(amount_0)
+            .unwrap();
+        ctx.position_state.tokens_owed_1 = ctx
+            .position_state
+            .tokens_owed_1
+            .checked_add(amount_1)
+            .unwrap();
     }
 
     Ok(())

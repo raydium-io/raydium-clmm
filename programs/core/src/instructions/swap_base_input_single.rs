@@ -128,8 +128,14 @@ pub fn exact_internal<'b, 'info>(
     //     output_balance_before - accounts.output_vault.amount
     // );
     if is_base_input {
-        Ok(output_balance_before - accounts.output_vault.amount)
+        Ok(output_balance_before
+            .checked_sub(accounts.output_vault.amount)
+            .unwrap())
     } else {
-        Ok(accounts.input_vault.amount - input_balance_before)
+        Ok(accounts
+            .input_vault
+            .amount
+            .checked_sub(input_balance_before)
+            .unwrap())
     }
 }

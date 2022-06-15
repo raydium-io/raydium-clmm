@@ -153,7 +153,9 @@ pub fn compute_swap_step(
     swap_step.fee_amount = if exact_in && swap_step.sqrt_ratio_next_x32 != sqrt_ratio_target_x32 {
         // we didn't reach the target, so take the remainder of the maximum input as fee
         // swap dust is granted as fee
-        amount_remaining as u64 - swap_step.amount_in
+        (amount_remaining as u64)
+            .checked_sub(swap_step.amount_in)
+            .unwrap()
     } else {
         // take pip percentage as fee
         swap_step
