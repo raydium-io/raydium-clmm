@@ -22,7 +22,7 @@ pub struct CreatePool<'info> {
         payer = pool_creator,
         space = PoolState::LEN
     )]
-    pub pool_state: Account<'info, PoolState>,
+    pub pool_state: Box<Account<'info, PoolState>>,
     pub token_mint_0: Box<Account<'info, Mint>>,
     pub token_mint_1: Box<Account<'info, Mint>>,
     /// Token_0 vault
@@ -96,6 +96,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price: u64) -> Result<()> {
     pool_state.tick = tick;
     pool_state.observation_cardinality = 1;
     pool_state.observation_cardinality_next = 1;
+    pool_state.reward_infos = [RewardInfo::new(); NUM_REWARDS];
 
     let initial_observation_state = ctx.accounts.initial_observation_state.deref_mut();
     initial_observation_state.bump = *ctx.bumps.get("initial_observation_state").unwrap();

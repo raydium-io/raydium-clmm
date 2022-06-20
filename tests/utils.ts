@@ -14,6 +14,9 @@ export const POOL_SEED = Buffer.from(anchor.utils.bytes.utf8.encode("pool"));
 export const POOL_VAULT_SEED = Buffer.from(
   anchor.utils.bytes.utf8.encode("pool_vault")
 );
+export const POOL_REWARD_VAULT_SEED = Buffer.from(
+  anchor.utils.bytes.utf8.encode("pool_reward_vault")
+);
 export const FEE_SEED = Buffer.from(anchor.utils.bytes.utf8.encode("fee"));
 export const BITMAP_SEED = Buffer.from(
   anchor.utils.bytes.utf8.encode("tick_bitmap")
@@ -37,3 +40,7 @@ export async function accountExist(connection: anchor.web3.Connection, account: 
   }
   return alreadCreatedMarket;
 }
+
+export const getUnixTs = () => {
+  return new Date().getTime() / 1000;
+};

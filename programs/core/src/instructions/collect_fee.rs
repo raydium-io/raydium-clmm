@@ -138,19 +138,31 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
         // update fee inside
         burn(&mut burn_accounts, ctx.remaining_accounts, 0)?;
 
-        let core_position = burn_accounts.position_state.deref();
+        let updated_core_position = burn_accounts.position_state.deref();
 
-        tokens_owed_0 += (core_position.fee_growth_inside_0_last
-            - tokenized_position.fee_growth_inside_0_last)
-            .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
+        tokens_owed_0 = tokens_owed_0
+            .checked_add(
+                (updated_core_position.fee_growth_inside_0_last
+                    - tokenized_position.fee_growth_inside_0_last)
+                    .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
+                    .unwrap(),
+            )
             .unwrap();
-        tokens_owed_1 += (core_position.fee_growth_inside_1_last
-            - tokenized_position.fee_growth_inside_1_last)
-            .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
+        tokens_owed_1 = tokens_owed_1
+            .checked_add(
+                (updated_core_position.fee_growth_inside_1_last
+                    - tokenized_position.fee_growth_inside_1_last)
+                    .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
+                    .unwrap(),
+            )
             .unwrap();
 
-        tokenized_position.fee_growth_inside_0_last = core_position.fee_growth_inside_0_last;
-        tokenized_position.fee_growth_inside_1_last = core_position.fee_growth_inside_1_last;
+        tokenized_position.fee_growth_inside_0_last =
+            updated_core_position.fee_growth_inside_0_last;
+        tokenized_position.fee_growth_inside_1_last =
+            updated_core_position.fee_growth_inside_1_last;
+
+        tokenized_position.update_rewards(updated_core_position.reward_growth_inside)?;
     }
 
     // adjust amounts to the max for the position

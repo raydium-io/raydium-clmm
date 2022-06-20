@@ -37,13 +37,16 @@ import {
   OBSERVATION_SEED,
   POOL_SEED,
   POOL_VAULT_SEED,
+  POOL_REWARD_VAULT_SEED,
   POSITION_SEED,
   TICK_SEED,
   accountExist,
+  getUnixTs,
 } from "./utils";
 import SolanaTickDataProvider from "./SolanaTickDataProvider";
 import { Transaction, ConfirmOptions } from "@solana/web3.js";
 import JSBI from "jsbi";
+import { Spl } from "@raydium-io/raydium-sdk";
 
 console.log("starting test");
 const {
@@ -117,6 +120,24 @@ describe("amm-core", async () => {
   let _bumpB1;
   let vaultB2: web3.PublicKey;
   let _bumpB2;
+
+  let rewardFounder = new Keypair();
+  // Reward token
+  let rewardToken0: Token;
+  let rewardToken1: Token;
+  let rewardToken2: Token;
+
+  // reward token vault
+  let rewardVault0: web3.PublicKey;
+  let _reward_bump0;
+  let rewardVault1: web3.PublicKey;
+  let _reward_bump1;
+  let rewardVault2: web3.PublicKey;
+  let _reward_bump2;
+
+  let rewardFounderTokenAccount0: web3.PublicKey;
+  let rewardFounderTokenAccount1: web3.PublicKey;
+  let rewardFounderTokenAccount2: web3.PublicKey;
 
   let poolAState: web3.PublicKey;
   let poolAStateBump: number;
@@ -333,6 +354,109 @@ describe("amm-core", async () => {
       program.programId
     );
     console.log("got poolB vaultB2 address", vaultB2.toString());
+  });
+
+  it("Create reward token mints and vault", async () => {
+    console.log("creating reward token mints");
+    const transferSolTx = new web3.Transaction().add(
+      web3.SystemProgram.transfer({
+        fromPubkey: owner,
+        toPubkey: mintAuthority.publicKey,
+        lamports: web3.LAMPORTS_PER_SOL,
+      })
+    );
+    transferSolTx.add(
+      web3.SystemProgram.transfer({
+        fromPubkey: owner,
+        toPubkey: notOwner.publicKey,
+        lamports: web3.LAMPORTS_PER_SOL,
+      })
+    );
+    await anchor.getProvider().send(transferSolTx);
+
+    rewardToken0 = await Token.createMint(
+      connection,
+      mintAuthority,
+      mintAuthority.publicKey,
+      null,
+      8,
+      TOKEN_PROGRAM_ID
+    );
+    rewardToken1 = await Token.createMint(
+      connection,
+      mintAuthority,
+      mintAuthority.publicKey,
+      null,
+      8,
+      TOKEN_PROGRAM_ID
+    );
+    rewardToken2 = await Token.createMint(
+      connection,
+      mintAuthority,
+      mintAuthority.publicKey,
+      null,
+      8,
+      TOKEN_PROGRAM_ID
+    );
+
+    console.log("rewardToken0", rewardToken0.publicKey.toString());
+    console.log("rewardToken1", rewardToken1.publicKey.toString());
+    console.log("rewardToken2", rewardToken2.publicKey.toString());
+
+    [rewardVault0, _reward_bump0] = await PublicKey.findProgramAddress(
+      [
+        POOL_REWARD_VAULT_SEED,
+        poolAState.toBuffer(),
+        rewardToken0.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+    console.log("got poolA rewardVault0 address", rewardVault0.toString());
+    [rewardVault1, _reward_bump1] = await PublicKey.findProgramAddress(
+      [
+        POOL_REWARD_VAULT_SEED,
+        poolAState.toBuffer(),
+        rewardToken1.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+    console.log("got poolA rewardVault1 address", rewardVault1.toString());
+    [rewardVault2, _reward_bump2] = await PublicKey.findProgramAddress(
+      [
+        POOL_REWARD_VAULT_SEED,
+        poolAState.toBuffer(),
+        rewardToken2.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+    console.log("got poolA rewardVault2 address", rewardVault2.toString());
+  });
+
+  it("creates reward token accounts for reward founder and airdrops to them", async () => {
+    rewardFounderTokenAccount0 =
+      await rewardToken0.createAssociatedTokenAccount(rewardFounder.publicKey);
+    rewardFounderTokenAccount1 =
+      await rewardToken1.createAssociatedTokenAccount(rewardFounder.publicKey);
+    rewardFounderTokenAccount2 =
+      await rewardToken2.createAssociatedTokenAccount(rewardFounder.publicKey);
+    await rewardToken0.mintTo(
+      rewardFounderTokenAccount0,
+      mintAuthority,
+      [],
+      100_000_000
+    );
+    await rewardToken1.mintTo(
+      rewardFounderTokenAccount1,
+      mintAuthority,
+      [],
+      100_000_000
+    );
+    await rewardToken2.mintTo(
+      rewardFounderTokenAccount2,
+      mintAuthority,
+      [],
+      100_000_000
+    );
   });
 
   describe("#create_config", () => {
@@ -1316,6 +1440,172 @@ describe("amm-core", async () => {
     });
   });
 
+  describe("#initialize_reward", () => {
+    it("fails if openTime greater than endTime", async () => {
+      await expect(
+        program.methods
+          .initializeReward({
+            rewardIndex: 0,
+            openTime: new BN(2),
+            endTime: new BN(1),
+            rewardPerSecond: new BN(1),
+            amount: new BN(0),
+          })
+          .accounts({
+            rewardFunder: rewardFounder.publicKey,
+            funderTokenAccount: rewardFounderTokenAccount0,
+            poolState: poolAState,
+            rewardTokenMint: rewardToken0.publicKey,
+            rewardTokenVault: rewardVault0,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+            rent: web3.SYSVAR_RENT_PUBKEY,
+          })
+          .rpc()
+      ).to.be.rejectedWith(Error);
+    });
+    it("fails if endTime less than currentTime", async () => {
+      await expect(
+        program.methods
+          .initializeReward({
+            rewardIndex: 0,
+            openTime: new BN(1),
+            endTime: new BN(1),
+            rewardPerSecond: new BN(1),
+            amount: new BN(0),
+          })
+          .accounts({
+            rewardFunder: rewardFounder.publicKey,
+            funderTokenAccount: rewardFounderTokenAccount0,
+            poolState: poolAState,
+            rewardTokenMint: rewardToken0.publicKey,
+            rewardTokenVault: rewardVault0,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+            rent: web3.SYSVAR_RENT_PUBKEY,
+          })
+          .rpc()
+      ).to.be.rejectedWith(Error);
+    });
+    it("fails if reward index overflow", async () => {
+      await expect(
+        program.methods
+          .initializeReward({
+            rewardIndex: 3,
+            openTime: new BN(1),
+            endTime: new BN(getUnixTs() + 100),
+            rewardPerSecond: new BN(1),
+            amount: new BN(0),
+          })
+          .accounts({
+            rewardFunder: rewardFounder.publicKey,
+            funderTokenAccount: rewardFounderTokenAccount0,
+            poolState: poolAState,
+            rewardTokenMint: rewardToken0.publicKey,
+            rewardTokenVault: rewardVault0,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+            rent: web3.SYSVAR_RENT_PUBKEY,
+          })
+          .rpc()
+      ).to.be.rejectedWith(Error);
+    });
+
+    it("fails if rewardPerSecond is zero", async () => {
+      await expect(
+        program.methods
+          .initializeReward({
+            rewardIndex: 0,
+            openTime: new BN(1),
+            endTime: new BN(getUnixTs() + 100),
+            rewardPerSecond: new BN(0),
+            amount: new BN(0),
+          })
+          .accounts({
+            rewardFunder: rewardFounder.publicKey,
+            funderTokenAccount: rewardFounderTokenAccount0,
+            poolState: poolAState,
+            rewardTokenMint: rewardToken0.publicKey,
+            rewardTokenVault: rewardVault0,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+            rent: web3.SYSVAR_RENT_PUBKEY,
+          })
+          .rpc()
+      ).to.be.rejectedWith(Error);
+    });
+
+    it("fails if rewardPerSecond is zero", async () => {
+      await expect(
+        program.methods
+          .initializeReward({
+            rewardIndex: 0,
+            openTime: new BN(1),
+            endTime: new BN(getUnixTs() + 100),
+            rewardPerSecond: new BN(0),
+            amount: new BN(0),
+          })
+          .accounts({
+            rewardFunder: rewardFounder.publicKey,
+            funderTokenAccount: rewardFounderTokenAccount0,
+            poolState: poolAState,
+            rewardTokenMint: rewardToken0.publicKey,
+            rewardTokenVault: rewardVault0,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+            rent: web3.SYSVAR_RENT_PUBKEY,
+          })
+          .rpc()
+      ).to.be.rejectedWith(Error);
+    });
+
+    it("init reward index 0 with rewardPerSecond 100", async () => {
+      const curr_timestamp = getUnixTs();
+      await program.methods
+        .initializeReward({
+          rewardIndex: 0,
+          openTime: new BN(curr_timestamp),
+          endTime: new BN(curr_timestamp + 3),
+          rewardPerSecond: new BN(100),
+          amount: new BN(0),
+        })
+        .accounts({
+          rewardFunder: rewardFounder.publicKey,
+          funderTokenAccount: rewardFounderTokenAccount0,
+          poolState: poolAState,
+          rewardTokenMint: rewardToken0.publicKey,
+          rewardTokenVault: rewardVault0,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: web3.SYSVAR_RENT_PUBKEY,
+        })
+        .rpc();
+    });
+
+    it("init reward index 1 with rewardPerSecond 10 and init amount 100", async () => {
+      const curr_timestamp = getUnixTs();
+      await program.methods
+        .initializeReward({
+          rewardIndex: 1,
+          openTime: new BN(curr_timestamp),
+          endTime: new BN(curr_timestamp + 3),
+          rewardPerSecond: new BN(100),
+          amount: new BN(0),
+        })
+        .accounts({
+          rewardFunder: rewardFounder.publicKey,
+          funderTokenAccount: rewardFounderTokenAccount1,
+          poolState: poolAState,
+          rewardTokenMint: rewardToken0.publicKey,
+          rewardTokenVault: rewardVault0,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: web3.SYSVAR_RENT_PUBKEY,
+        })
+        .rpc();
+    });
+  });
+
   describe("#collect_protocol_fee", () => {
     it("creates token accounts for recipient", async () => {
       feeRecipientWallet0 = await token0.createAssociatedTokenAccount(
@@ -1775,7 +2065,7 @@ describe("amm-core", async () => {
     });
   });
 
-  describe("#init_position_account", () => {
+  describe("#create_protocol_position_account", () => {
     it("fails if tick lower is not less than tick upper", async () => {
       const [invalidPosition, invalidPositionBump] =
         await PublicKey.findProgramAddress(
@@ -2555,7 +2845,7 @@ describe("amm-core", async () => {
           tokenizedPositionAState
         );
       assert(tokenizedPositionData.tokensOwed0.eqn(0));
-      assert.equal(tokenizedPositionData.tokensOwed1.toNumber(),999999);
+      assert.equal(tokenizedPositionData.tokensOwed1.toNumber(), 999999);
 
       const tickLowerData = await program.account.tickState.fetch(
         tickLowerAState
@@ -2772,7 +3062,7 @@ describe("amm-core", async () => {
     });
   });
 
-  describe("#collect_from_tokenized", () => {
+  describe("#collect_fee", () => {
     it("fails if both amounts are set as 0", async () => {
       await expect(
         program.rpc.collectFee(new BN(0), new BN(0), {
@@ -2979,7 +3269,7 @@ describe("amm-core", async () => {
       const corePositionData =
         await program.account.procotolPositionState.fetch(corePositionAState);
       assert(corePositionData.tokensOwed0.eqn(0));
-      assert.equal(corePositionData.tokensOwed1.toNumber(),1000489); // minus 10
+      assert.equal(corePositionData.tokensOwed1.toNumber(), 1000489); // minus 10
 
       const tokenizedPositionData =
         await program.account.personalPositionState.fetch(
@@ -3332,7 +3622,8 @@ describe("amm-core", async () => {
         feeGrowthGlobalToken0Before.toNumber() + 8
       );
       assert.equal(
-        vaultBalanceA1Befer.amount.toNumber()- vaultBalanceA1After.amount.toNumber(),
+        vaultBalanceA1Befer.amount.toNumber() -
+          vaultBalanceA1After.amount.toNumber(),
         JSBI.toNumber(expectedAmountOut.numerator)
       );
       console.log(
@@ -3949,6 +4240,125 @@ describe("amm-core", async () => {
 
       token2AccountInfo = await token2.getAccountInfo(minterWallet2);
       console.log("token 2 balance after", token2AccountInfo.amount.toNumber());
+    });
+  });
+
+  describe("#update_reward_and_fee", () => {
+    it("fails if both amounts are set as 0", async () => {
+      await expect(
+        program.methods
+          .updateFeeAndRewards()
+          .accounts({
+            ownerOrDelegate: owner,
+            nftAccount: positionANftAccount,
+            personalPositionState: tokenizedPositionAState,
+            ammConfig,
+            poolState: poolAState,
+            protocolPositionState: corePositionAState,
+            tickLowerState: tickLowerAState,
+            tickUpperState: tickUpperAState,
+            bitmapLowerState: bitmapLowerAState,
+            bitmapUpperState: bitmapUpperAState,
+            lastObservationState: lastObservationAState,
+          })
+          .remainingAccounts([])
+          .rpc()
+      ).to.be.rejectedWith(Error);
+    });
+  });
+
+  describe("#collect_reward", () => {
+    let ownerRewardTokenAccount0;
+    let ownerRewardTokenAccount1;
+    let ownerRewardTokenAccount2;
+
+    it("update_reward_and_fee, fails if both amounts are set as 0", async () => {
+      await expect(
+        program.methods
+          .updateFeeAndRewards()
+          .accounts({
+            ownerOrDelegate: owner,
+            nftAccount: positionANftAccount,
+            personalPositionState: tokenizedPositionAState,
+            ammConfig,
+            poolState: poolAState,
+            protocolPositionState: corePositionAState,
+            tickLowerState: tickLowerAState,
+            tickUpperState: tickUpperAState,
+            bitmapLowerState: bitmapLowerAState,
+            bitmapUpperState: bitmapUpperAState,
+            lastObservationState: lastObservationAState,
+          })
+          .remainingAccounts([])
+          .rpc()
+      ).to.be.rejectedWith(Error);
+    });
+
+    it("creates reward token accounts for owner", async () => {
+      ownerRewardTokenAccount0 =
+        await rewardToken0.createAssociatedTokenAccount(owner);
+
+      ownerRewardTokenAccount1 =
+        await rewardToken1.createAssociatedTokenAccount(owner);
+
+      ownerRewardTokenAccount2 =
+        await rewardToken2.createAssociatedTokenAccount(owner);
+    });
+
+    it("fails if amount desired is overflow", async () => {
+      await expect(
+        program.methods
+          .collectReward(0, new BN(100000))
+          .accounts({
+            ownerOrDelegate: owner,
+            nftAccount: positionANftAccount,
+            personalPositionState: tokenizedPositionAState,
+            poolState: poolAState,
+            rewardTokenVault: rewardFounderTokenAccount0,
+            recipientTokenAccount: ownerRewardTokenAccount0,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .remainingAccounts([])
+          .rpc()
+      ).to.be.rejectedWith(Error);
+    });
+
+    it("colect reward with a special amount", async () => {
+      const rewardTokenBalanceBefer = await rewardToken0.getAccountInfo(ownerRewardTokenAccount0);
+
+      await program.methods
+        .collectReward(0, new BN(1))
+        .accounts({
+          ownerOrDelegate: owner,
+          nftAccount: positionANftAccount,
+          personalPositionState: tokenizedPositionAState,
+          poolState: poolAState,
+          rewardTokenVault: rewardFounderTokenAccount0,
+          recipientTokenAccount: ownerRewardTokenAccount0,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .remainingAccounts([])
+        .rpc();
+
+        const rewardTokenBalanceAfter = await rewardToken0.getAccountInfo(ownerRewardTokenAccount0);
+
+        assert.equal(rewardTokenBalanceAfter.amount.toNumber()-1,rewardTokenBalanceBefer.amount.toNumber());
+    });
+
+    it("colect all reward amount", async () => {
+      await program.methods
+        .collectReward(0, new BN(1))
+        .accounts({
+          ownerOrDelegate: owner,
+          nftAccount: positionANftAccount,
+          personalPositionState: tokenizedPositionAState,
+          poolState: poolAState,
+          rewardTokenVault: rewardFounderTokenAccount0,
+          recipientTokenAccount: ownerRewardTokenAccount0,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .remainingAccounts([])
+        .rpc();
     });
   });
 

@@ -95,7 +95,6 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     // Update the tokenized position to the current transaction
     let fee_growth_inside_0_last_x32 = updated_core_position.fee_growth_inside_0_last;
     let fee_growth_inside_1_last_x32 = updated_core_position.fee_growth_inside_1_last;
-
     let tokenized_position = &mut ctx.accounts.personal_position_state;
 
     tokenized_position.tokens_owed_0 = tokenized_position
@@ -128,6 +127,9 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     tokenized_position.fee_growth_inside_0_last = fee_growth_inside_0_last_x32;
     tokenized_position.fee_growth_inside_1_last = fee_growth_inside_1_last_x32;
     tokenized_position.liquidity = tokenized_position.liquidity.checked_sub(liquidity).unwrap();
+
+    // update rewards
+    tokenized_position.update_rewards(updated_core_position.reward_growth_inside)?;
 
     emit!(DecreaseLiquidityEvent {
         position_nft_mint: tokenized_position.mint,

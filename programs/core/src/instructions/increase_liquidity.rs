@@ -145,6 +145,9 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     position.fee_growth_inside_1_last = fee_growth_inside_1_last_x32;
     position.liquidity = position.liquidity.checked_add(liquidity).unwrap();
 
+    // update rewards
+    position.update_rewards(updated_core_position.reward_growth_inside)?;
+
     emit!(IncreaseLiquidityEvent {
         position_nft_mint: position.mint,
         liquidity,

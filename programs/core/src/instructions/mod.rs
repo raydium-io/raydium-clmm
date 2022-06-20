@@ -51,3 +51,12 @@ pub use swap_base_input_single::*;
 
 pub mod swap_base_input;
 pub use swap_base_input::*;
+
+pub mod initialize_reward;
+pub use initialize_reward::*;
+
+pub mod collect_reward;
+pub use collect_reward::*;
+
+pub mod update_fee_and_rewards;
+pub use update_fee_and_rewards::*;

@@ -1,5 +1,6 @@
+use crate::error::ErrorCode;
+use crate::libraries::full_math::MulDiv;
 use anchor_lang::prelude::*;
-
 use crate::states::{
     oracle::{self, OBSERVATION_SEED},
     position::POSITION_SEED,
@@ -12,6 +13,9 @@ use super::{oracle::ObservationState, tick::TickState};
 /// Seed to derive account address and signature
 pub const POOL_SEED: &str = "pool";
 pub const POOL_VAULT_SEED: &str = "pool_vault";
+pub const POOL_REWARD_VAULT_SEED: &str = "pool_reward_vault";
+// Number of rewards Token
+pub const NUM_REWARDS: usize = 3;
 
 /// The pool state
 ///
@@ -69,15 +73,18 @@ pub struct PoolState {
     /// Protocol fees will never exceed u64::MAX in either token
     pub protocol_fees_token_0: u64,
     pub protocol_fees_token_1: u64,
-    // padding space for upgrade
-    // pub padding_1: [u64; 16],
-    // pub padding_2: [u64; 16],
-    // pub padding_3: [u64; 16],
-    // pub padding_4: [u64; 16],
+
+    pub reward_last_updated_timestamp: u64, 
+    pub reward_infos: [RewardInfo; NUM_REWARDS],
+                                            // padding space for upgrade
+                                            // pub padding_1: [u64; 16],
+                                            // pub padding_2: [u64; 16],
+                                            // pub padding_3: [u64; 16],
+                                            // pub padding_4: [u64; 16],
 }
 
 impl PoolState {
-    pub const LEN: usize = 8 + 1 + 32 * 4 + 4 + 2 + 8 + 8 + 4 + 2 + 2 + 2 + 8 * 4 + 512;
+    pub const LEN: usize = 8 + 1 + 32 * 4 + 4 + 2 + 8 + 8 + 4 + 2 + 2 + 2 + 8 * 5 + RewardInfo::LEN * NUM_REWARDS + 512;
 
     /// Returns the observation index after the currently active one in a liquidity pool
     ///
@@ -261,6 +268,145 @@ impl PoolState {
                 seconds_inside: upper.seconds_outside - lower.seconds_outside,
             }
         }
+    }
+
+    pub fn initialize_reward(
+        &mut self,
+        curr_timestamp: u64,
+        index: usize,
+        open_time: u64,
+        end_time: u64,
+        reward_per_second: u64,
+        token_mint: Pubkey,
+        token_vault: Pubkey,
+    ) -> Result<()> {
+        if index >= NUM_REWARDS {
+            return Err(ErrorCode::InvalidRewardIndex.into());
+        }
+
+        let lowest_index = match self.reward_infos.iter().position(|r| !r.initialized()) {
+            Some(lowest_index) => lowest_index,
+            None => return Err(ErrorCode::InvalidRewardIndex.into()),
+        };
+
+        if lowest_index != index {
+            return Err(ErrorCode::InvalidRewardIndex.into());
+        }
+        if open_time > curr_timestamp {
+            self.reward_infos[index].reward_state = RewardState::Initialized as u8;
+        } else {
+            self.reward_infos[index].reward_state = RewardState::Opening as u8;
+        }
+        self.reward_infos[index].reward_open_time = open_time;
+        self.reward_infos[index].reward_end_time = end_time;
+        self.reward_infos[index].reward_emission_per_second = reward_per_second;
+        self.reward_infos[index].reward_token_mint = token_mint;
+        self.reward_infos[index].reward_token_vault = token_vault;
+
+     
+        Ok(())
+    }
+
+    // Calculates the next global reward growth variables based on the given timestamp.
+    // The provided timestamp must be greater than or equal to the last updated timestamp.
+    pub fn update_reward_infos(
+        &mut self,
+        curr_timestamp: u64,
+    ) -> Result<([RewardInfo; NUM_REWARDS])> {
+        let last_timestamp = self.reward_last_updated_timestamp;
+
+        // No-op if no liquidity or no change in timestamp
+        if self.liquidity == 0 || curr_timestamp <= last_timestamp {
+            return Ok(self.reward_infos);
+        }
+
+        // Calculate new global reward growth
+        let mut next_reward_infos = self.reward_infos;
+        let time_delta = curr_timestamp - last_timestamp;
+        for i in 0..NUM_REWARDS {
+            if !next_reward_infos[i].initialized() {
+                continue;
+            }
+            let reward_info = &mut next_reward_infos[i];
+
+            // Calculate the new reward growth delta.
+            // If the calculation overflows, set the delta value to zero.
+            // This will halt reward distributions for this reward.
+            let reward_growth_delta = time_delta
+                .mul_div_floor(reward_info.reward_emission_per_second, self.liquidity)
+                .unwrap();
+
+            // Add the reward growth delta to the global reward growth.
+            let curr_growth_global = reward_info.growth_global_x32;
+            reward_info.growth_global_x32 = curr_growth_global.wrapping_add(reward_growth_delta);
+        }
+        self.reward_infos = next_reward_infos;
+        self.reward_last_updated_timestamp = curr_timestamp;
+        Ok(next_reward_infos)
+    }
+}
+
+#[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Debug, PartialEq)]
+/// State of reward
+pub enum RewardState {
+    /// Reward not initialized
+    Uninitialized,
+    /// Reward initialized, but reward time is not start
+    Initialized,
+    /// Reward in progress
+    Opening,
+    /// Reward end, reward time expire or
+    Ended,
+}
+
+#[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Default, Debug, PartialEq)]
+pub struct RewardInfo {
+    /// Reward state
+    pub reward_state: u8,
+    /// Reward open time
+    pub reward_open_time: u64,
+    /// Reward end time
+    pub reward_end_time: u64,
+    /// Reward last update time
+    pub reward_last_update_time: u64,
+    /// Indicates how many tokens per second are earned per unit of liquidity.
+    pub reward_emission_per_second: u64,
+    /// The total amount of reward emissioned
+    pub reward_total_emissioned: u128,
+    /// The total amount of claimed reward
+    pub reward_claimed: u128,
+    /// Reward token mint.
+    pub reward_token_mint: Pubkey,
+    /// Reward vault token account.
+    pub reward_token_vault: Pubkey,
+
+    /// Number that tracks the total tokens earned per unit of liquidity since the reward
+    /// emissions were turned on.
+    pub growth_global_x32: u64,
+}
+
+impl RewardInfo {
+    pub const LEN: usize = 1 + 8 + 8 + 8 + 8 + 16 + 16 + 32 + 32 + 8; // 137
+    /// Creates a new RewardInfo
+    pub fn new() -> Self {
+        Self {
+            ..Default::default()
+        }
+    }
+
+    /// Returns true if this reward is initialized.
+    /// Once initialized, a reward cannot transition back to uninitialized.
+    pub fn initialized(&self) -> bool {
+        self.reward_token_mint.ne(&Pubkey::default())
+    }
+
+    /// Maps all reward data to only the reward growth accumulators
+    pub fn to_reward_growths(reward_infos: &[RewardInfo; NUM_REWARDS]) -> [u64; NUM_REWARDS] {
+        let mut reward_growths = [0u64; NUM_REWARDS];
+        for i in 0..NUM_REWARDS {
+            reward_growths[i] = reward_infos[i].growth_global_x32;
+        }
+        reward_growths
     }
 }
 

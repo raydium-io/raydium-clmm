@@ -97,6 +97,16 @@ pub fn swap<'b, 'info>(
     zero_for_one: bool,
 ) -> Result<()> {
     require!(amount_specified != 0, ErrorCode::InvaildSwapAmountSpecified);
+    require!(
+        if zero_for_one {
+            sqrt_price_limit_x32 < ctx.pool_state.sqrt_price
+                && sqrt_price_limit_x32 > tick_math::MIN_SQRT_RATIO
+        } else {
+            sqrt_price_limit_x32 > ctx.pool_state.sqrt_price
+                && sqrt_price_limit_x32 < tick_math::MAX_SQRT_RATIO
+        },
+        ErrorCode::SqrtPriceLimitOverflow
+    );
 
     let amm_config = ctx.amm_config.deref();
     let pool_state_info = ctx.pool_state.to_account_info();
@@ -125,17 +135,6 @@ pub fn swap<'b, 'info>(
         false,
     )?;
 
-    require!(
-        if zero_for_one {
-            sqrt_price_limit_x32 < ctx.pool_state.sqrt_price
-                && sqrt_price_limit_x32 > tick_math::MIN_SQRT_RATIO
-        } else {
-            sqrt_price_limit_x32 > ctx.pool_state.sqrt_price
-                && sqrt_price_limit_x32 < tick_math::MAX_SQRT_RATIO
-        },
-        ErrorCode::SqrtPriceLimitOverflow
-    );
-
     let cache = &mut SwapCache {
         liquidity_start: ctx.pool_state.liquidity,
         block_timestamp: oracle::_block_timestamp(),
@@ -144,6 +143,8 @@ pub fn swap<'b, 'info>(
         tick_cumulative: 0,
         computed_latest_observation: false,
     };
+
+    let updated_reward_infos = ctx.pool_state.update_reward_infos(cache.block_timestamp as u64)?;
 
     let exact_input = amount_specified > 0;
 
@@ -332,6 +333,7 @@ pub fn swap<'b, 'info>(
                     cache.seconds_per_liquidity_cumulative_x32,
                     cache.tick_cumulative,
                     cache.block_timestamp,
+                    &updated_reward_infos,
                 );
 
                 // if we're moving leftward, we interpret liquidity_net as the opposite sign

@@ -12,7 +12,7 @@ use anchor_lang::prelude::*;
 use instructions::*;
 use states::*;
 
-declare_id!("FA51eLCcZMd2Cm63g9GfY7MBdftKN8aARDtwyqBdyhQp");
+declare_id!("D9umkjFcnRGDG7Cz8naxSRPinRc6dHqjorRGhYqS9Y1F");
 
 #[program]
 pub mod amm_core {
@@ -84,6 +84,52 @@ pub mod amm_core {
     ///
     pub fn create_pool(ctx: Context<CreatePool>, sqrt_price: u64) -> Result<()> {
         instructions::create_pool(ctx, sqrt_price)
+    }
+
+    /// Initialize a reward info for a given pool and reward index
+    ///
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`- Validates token addresses and fee state. Initializes pool, observation and
+    /// token accounts
+    /// * `reward_index` - the index to init info
+    /// * `open_time` - reward open timestamp
+    /// * `end_time` - reward end timestamp
+    /// * `reward_per_second` - Token reward per second are earned per unit of liquidity.
+    ///
+    pub fn initialize_reward(
+        ctx: Context<InitializeReward>,
+        param: InitializeRewardParam,
+    ) -> Result<()> {
+        instructions::initialize_reward(ctx, param)
+    }
+
+    /// Update fee and rewards owned.
+    ///
+    #[access_control(is_authorized_for_token(&ctx.accounts.owner_or_delegate, &ctx.accounts.nft_account))]
+    pub fn update_fee_and_rewards<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, UpdateFeeAndRewards<'info>>,
+    ) -> Result<()> {
+        instructions::update_fee_and_rewards(ctx)
+    }
+
+    /// Collects up to a derired amount of reward owed to a specific tokenized position to the recipient
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - Validated addresses of the tokenized position and token accounts. Reward can be sent
+    /// to third parties
+    /// * `reward_index` - The index of reward token in the pool.
+    /// * `amount_desired` - The desired amount of reward to collect, if set 0, all will be collect.
+    ///
+    #[access_control(is_authorized_for_token(&ctx.accounts.owner_or_delegate, &ctx.accounts.nft_account))]
+    pub fn collect_reward<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, CollectReward<'info>>,
+        reward_index: u8,
+        amount_desired: u64,
+    ) -> Result<()> {
+        instructions::collect_reward(ctx, reward_index, amount_desired)
     }
 
     // ---------------------------------------------------------------------
