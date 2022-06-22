@@ -9,6 +9,8 @@ pub struct CreatePool<'info> {
     /// Address paying to create the pool. Can be anyone
     #[account(mut)]
     pub pool_creator: Signer<'info>,
+    /// Which config the pool belongs to.
+    pub amm_config: Box<Account<'info, AmmConfig>>,
     /// Initialize an account to store the pool state
     #[account(
         init,
@@ -86,6 +88,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price: u64) -> Result<()> {
     let tick = tick_math::get_tick_at_sqrt_ratio(sqrt_price)?;
 
     pool_state.bump = *ctx.bumps.get("pool_state").unwrap();
+    pool_state.amm_config = ctx.accounts.amm_config.key();
     pool_state.token_mint_0 = ctx.accounts.token_mint_0.key();
     pool_state.token_mint_1 = ctx.accounts.token_mint_1.key();
     pool_state.token_vault_0 = ctx.accounts.token_vault_0.key();

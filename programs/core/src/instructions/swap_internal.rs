@@ -89,7 +89,7 @@ struct StepComputations {
     fee_amount: u64,
 }
 
-pub fn swap<'b, 'info>(
+pub fn swap_internal<'b, 'info>(
     ctx: &mut SwapContext<'b, 'info>,
     remaining_accounts: &[AccountInfo<'info>],
     amount_specified: i64,
@@ -144,7 +144,9 @@ pub fn swap<'b, 'info>(
         computed_latest_observation: false,
     };
 
-    let updated_reward_infos = ctx.pool_state.update_reward_infos(cache.block_timestamp as u64)?;
+    let updated_reward_infos = ctx
+        .pool_state
+        .update_reward_infos(cache.block_timestamp as u64)?;
 
     let exact_input = amount_specified > 0;
 
@@ -191,7 +193,6 @@ pub fn swap<'b, 'info>(
         // crossed out of this bitmap
         if bitmap_cache.is_none() || bitmap_cache.unwrap().word_pos != word_pos {
             let bitmap_account = remaining_accounts_iter.next().unwrap();
-            // msg!("check bitmap {}", word_pos);
             // ensure this is a valid PDA, even if account is not initialized
             require_keys_eq!(
                 bitmap_account.key(),
@@ -225,7 +226,6 @@ pub fn swap<'b, 'info>(
         let next_initialized_bit = if let Some(bitmap) = bitmap_cache {
             bitmap.next_initialized_bit(bit_pos, zero_for_one)
         } else {
-            // msg!("NextBit");
             NextBit {
                 next: if zero_for_one { 0 } else { 255 },
                 initialized: false,

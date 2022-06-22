@@ -160,7 +160,7 @@ impl TickState {
             }
 
             self.reward_growths_outside[i] = reward_infos[i]
-                .growth_global_x32
+                .reward_growth_global_x32
                 .checked_sub(self.reward_growths_outside[i])
                 .unwrap();
         }
@@ -279,10 +279,10 @@ pub fn get_reward_growths_inside(
 
         // By convention, assume all prior growth happened below the tick
         let reward_growths_below = if tick_lower.liquidity_gross == 0 {
-            reward_infos[i].growth_global_x32
+            reward_infos[i].reward_growth_global_x32
         } else if tick_current_index < tick_lower.tick {
             reward_infos[i]
-                .growth_global_x32
+                .reward_growth_global_x32
                 .checked_sub(tick_lower.reward_growths_outside[i])
                 .unwrap()
         } else {
@@ -296,13 +296,13 @@ pub fn get_reward_growths_inside(
             tick_upper.reward_growths_outside[i]
         } else {
             reward_infos[i]
-                .growth_global_x32
+                .reward_growth_global_x32
                 .checked_sub(tick_upper.reward_growths_outside[i])
                 .unwrap()
         };
 
         reward_growths_inside[i] = reward_infos[i]
-            .growth_global_x32
+            .reward_growth_global_x32
             .checked_sub(reward_growths_below)
             .unwrap()
             .checked_sub(reward_growths_above)

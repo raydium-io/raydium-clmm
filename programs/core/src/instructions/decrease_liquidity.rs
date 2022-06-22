@@ -2,8 +2,9 @@ use super::_modify_position;
 use crate::error::ErrorCode;
 use crate::libraries::{fixed_point_32, full_math::MulDiv};
 use crate::states::*;
+use crate::util::transfer_from_pool_vault_to_user;
 use anchor_lang::prelude::*;
-use anchor_spl::token::TokenAccount;
+use anchor_spl::token::{Token, TokenAccount};
 
 #[derive(Accounts)]
 pub struct DecreaseLiquidity<'info> {
@@ -31,6 +32,20 @@ pub struct DecreaseLiquidity<'info> {
     #[account(mut)]
     pub protocol_position_state: Box<Account<'info, ProcotolPositionState>>,
 
+    /// Token_0 vault
+    #[account(
+        mut,
+        constraint = pool_state.token_vault_0 == token_vault_0.key()
+    )]
+    pub token_vault_0: Box<Account<'info, TokenAccount>>,
+
+    /// Token_1 vault
+    #[account(
+        mut,
+        constraint = pool_state.token_vault_1 == token_vault_1.key()
+    )]
+    pub token_vault_1: Box<Account<'info, TokenAccount>>,
+
     /// Account to store data for the position's lower tick
     #[account(mut)]
     pub tick_lower_state: Box<Account<'info, TickState>>,
@@ -50,6 +65,23 @@ pub struct DecreaseLiquidity<'info> {
     /// The latest observation state
     #[account(mut)]
     pub last_observation_state: Box<Account<'info, ObservationState>>,
+
+    /// The destination token account for the collected amount_0
+    #[account(
+        mut,
+        token::mint = token_vault_0.mint
+    )]
+    pub recipient_token_account_0: Account<'info, TokenAccount>,
+
+    /// The destination token account for the collected amount_1
+    #[account(
+        mut,
+        token::mint = token_vault_1.mint
+    )]
+    pub recipient_token_account_1: Account<'info, TokenAccount>,
+
+    /// SPL program to transfer out tokens
+    pub token_program: Program<'info, Token>,
 }
 
 pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
@@ -60,14 +92,12 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
 ) -> Result<()> {
     assert!(liquidity > 0);
 
-    let tokens_owed_0_before = ctx.accounts.protocol_position_state.tokens_owed_0;
-    let tokens_owed_1_before = ctx.accounts.protocol_position_state.tokens_owed_1;
-
     let mut core_position_owner = ctx.accounts.amm_config.to_account_info();
     core_position_owner.is_signer = true;
+    let mut pool_state = ctx.accounts.pool_state.as_mut().clone();
     let mut accounts = BurnParam {
         owner: &Signer::try_from(&core_position_owner)?,
-        pool_state: ctx.accounts.pool_state.as_mut(),
+        pool_state: &mut pool_state,
         tick_lower_state: ctx.accounts.tick_lower_state.as_mut(),
         tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),
         bitmap_lower_state: &ctx.accounts.bitmap_lower_state,
@@ -76,66 +106,79 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         last_observation_state: ctx.accounts.last_observation_state.as_mut(),
     };
 
-    burn(&mut accounts, ctx.remaining_accounts, liquidity)?;
-
-    let updated_core_position = accounts.position_state;
-    let amount_0 = updated_core_position
-        .tokens_owed_0
-        .checked_sub(tokens_owed_0_before)
-        .unwrap();
-    let amount_1 = updated_core_position
-        .tokens_owed_1
-        .checked_sub(tokens_owed_1_before)
-        .unwrap();
+    let (decrease_amount_0, decrease_amount_1) =
+        burn(&mut accounts, ctx.remaining_accounts, liquidity)?;
     require!(
-        amount_0 >= amount_0_min && amount_1 >= amount_1_min,
+        decrease_amount_0 >= amount_0_min && decrease_amount_1 >= amount_1_min,
         ErrorCode::PriceSlippageCheck
     );
 
+    if decrease_amount_0 > 0 {
+        msg!(
+            "decrease_amount_0 transfer before:{}, tranafer amount:{}",
+            ctx.accounts.recipient_token_account_0.amount,
+            decrease_amount_0
+        );
+        transfer_from_pool_vault_to_user(
+            ctx.accounts.pool_state.clone().as_mut(),
+            &ctx.accounts.token_vault_0,
+            &ctx.accounts.recipient_token_account_0,
+            &ctx.accounts.token_program,
+            decrease_amount_0,
+        )?;
+    }
+    if decrease_amount_1 > 0 {
+        msg!(
+            "decrease_amount_1 transfer before:{}, tranafer amount:{}",
+            ctx.accounts.recipient_token_account_1.amount,
+            decrease_amount_1
+        );
+        transfer_from_pool_vault_to_user(
+            ctx.accounts.pool_state.clone().as_mut(),
+            &ctx.accounts.token_vault_1,
+            &ctx.accounts.recipient_token_account_1,
+            &ctx.accounts.token_program,
+            decrease_amount_1,
+        )?;
+    }
+
     // Update the tokenized position to the current transaction
+    let updated_core_position = accounts.position_state;
     let fee_growth_inside_0_last_x32 = updated_core_position.fee_growth_inside_0_last;
     let fee_growth_inside_1_last_x32 = updated_core_position.fee_growth_inside_1_last;
     let tokenized_position = &mut ctx.accounts.personal_position_state;
 
-    tokenized_position.tokens_owed_0 = tokenized_position
-        .tokens_owed_0
+    tokenized_position.token_fees_owed_0 = tokenized_position
+        .token_fees_owed_0
         .checked_add(
-            amount_0
-                .checked_add(
-                    fee_growth_inside_0_last_x32
-                        .saturating_sub(tokenized_position.fee_growth_inside_0_last)
-                        .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
-                        .unwrap(),
-                )
+            fee_growth_inside_0_last_x32
+                .saturating_sub(tokenized_position.fee_growth_inside_0_last)
+                .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
                 .unwrap(),
         )
         .unwrap();
 
-    tokenized_position.tokens_owed_1 = tokenized_position
-        .tokens_owed_1
+    tokenized_position.token_fees_owed_1 = tokenized_position
+        .token_fees_owed_1
         .checked_add(
-            amount_1
-                .checked_add(
-                    fee_growth_inside_1_last_x32
-                        .saturating_sub(tokenized_position.fee_growth_inside_1_last)
-                        .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
-                        .unwrap(),
-                )
+            fee_growth_inside_1_last_x32
+                .saturating_sub(tokenized_position.fee_growth_inside_1_last)
+                .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
                 .unwrap(),
         )
         .unwrap();
     tokenized_position.fee_growth_inside_0_last = fee_growth_inside_0_last_x32;
     tokenized_position.fee_growth_inside_1_last = fee_growth_inside_1_last_x32;
-    tokenized_position.liquidity = tokenized_position.liquidity.checked_sub(liquidity).unwrap();
 
-    // update rewards
+    // update rewards, must update before decrease liquidity
     tokenized_position.update_rewards(updated_core_position.reward_growth_inside)?;
+    tokenized_position.liquidity = tokenized_position.liquidity.checked_sub(liquidity).unwrap();
 
     emit!(DecreaseLiquidityEvent {
         position_nft_mint: tokenized_position.mint,
         liquidity,
-        amount_0,
-        amount_1
+        amount_0: decrease_amount_0,
+        amount_1: decrease_amount_1
     });
 
     Ok(())
@@ -171,7 +214,7 @@ pub fn burn<'b, 'info>(
     ctx: &mut BurnParam<'b, 'info>,
     remaining_accounts: &[AccountInfo<'info>],
     amount: u64,
-) -> Result<()> {
+) -> Result<(u64, u64)> {
     ctx.pool_state.validate_tick_address(
         &ctx.tick_lower_state.key(),
         ctx.tick_lower_state.bump,
@@ -222,18 +265,18 @@ pub fn burn<'b, 'info>(
 
     let amount_0 = (-amount_0_int) as u64;
     let amount_1 = (-amount_1_int) as u64;
-    if amount_0 > 0 || amount_1 > 0 {
-        ctx.position_state.tokens_owed_0 = ctx
-            .position_state
-            .tokens_owed_0
-            .checked_add(amount_0)
-            .unwrap();
-        ctx.position_state.tokens_owed_1 = ctx
-            .position_state
-            .tokens_owed_1
-            .checked_add(amount_1)
-            .unwrap();
-    }
+    // if amount_0 > 0 || amount_1 > 0 {
+    //     ctx.position_state.tokens_owed_0 = ctx
+    //         .position_state
+    //         .tokens_owed_0
+    //         .checked_add(amount_0)
+    //         .unwrap();
+    //     ctx.position_state.tokens_owed_1 = ctx
+    //         .position_state
+    //         .tokens_owed_1
+    //         .checked_add(amount_1)
+    //         .unwrap();
+    // }
 
-    Ok(())
+    Ok((amount_0, amount_1))
 }

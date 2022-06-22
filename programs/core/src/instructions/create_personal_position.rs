@@ -542,7 +542,10 @@ pub fn _update_position<'info>(
     let clock = Clock::get()?;
     let updated_reward_infos = pool_state.update_reward_infos(clock.unix_timestamp as u64)?;
     let reward_growths_outside = RewardInfo::to_reward_growths(&updated_reward_infos);
-
+    msg!(
+        "_update_position: update_rewared_info:{:?}",
+        reward_growths_outside
+    );
     let tick_lower = tick_lower_state.deref_mut();
     let tick_upper = tick_upper_state.deref_mut();
 
@@ -583,7 +586,11 @@ pub fn _update_position<'info>(
             max_liquidity_per_tick,
             reward_growths_outside,
         )?;
-
+        msg!(
+            "tick_upper.reward_growths_outside:{:?}, tick_lower.reward_growths_outside:{:?}",
+            tick_upper.reward_growths_outside,
+            tick_lower.reward_growths_outside
+        );
         if flipped_lower {
             let bit_pos = ((tick_lower.tick / pool_state.tick_spacing as i32) % 256) as u8; // rightmost 8 bits
             bitmap_lower.load_mut()?.flip_bit(bit_pos);

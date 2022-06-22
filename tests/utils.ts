@@ -1,6 +1,7 @@
 import BN from "bn.js";
 import * as anchor from "@project-serum/anchor";
 import {getMultipleAccountsInfo} from "@raydium-io/raydium-sdk";
+import { Connection } from "@solana/web3.js";
 
 export const MIN_SQRT_RATIO = new BN(65536);
 export const MAX_SQRT_RATIO = new BN(281474976710656);
@@ -44,3 +45,12 @@ export async function accountExist(connection: anchor.web3.Connection, account: 
 export const getUnixTs = () => {
   return new Date().getTime() / 1000;
 };
+
+export async function getBlockTimestamp(connection :anchor.web3.Connection){
+  const slot = await connection.getSlot();
+  return await connection.getBlockTime(slot);
+} 
+
+export async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}

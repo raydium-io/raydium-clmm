@@ -1,14 +1,13 @@
+use super::{oracle::ObservationState, tick::TickState};
 use crate::error::ErrorCode;
-use crate::libraries::full_math::MulDiv;
-use anchor_lang::prelude::*;
+use crate::libraries::{fixed_point_32, full_math::MulDiv};
 use crate::states::{
     oracle::{self, OBSERVATION_SEED},
     position::POSITION_SEED,
     tick::TICK_SEED,
     tick_bitmap::BITMAP_SEED,
 };
-
-use super::{oracle::ObservationState, tick::TickState};
+use anchor_lang::prelude::*;
 
 /// Seed to derive account address and signature
 pub const POOL_SEED: &str = "pool";
@@ -26,6 +25,8 @@ pub const NUM_REWARDS: usize = 3;
 pub struct PoolState {
     /// Bump to identify PDA
     pub bump: u8,
+    // which config the pool belongs
+    pub amm_config: Pubkey,
 
     /// Token pair of the pool, where token_mint_0 address < token_mint_1 address
     pub token_mint_0: Pubkey,
@@ -74,17 +75,30 @@ pub struct PoolState {
     pub protocol_fees_token_0: u64,
     pub protocol_fees_token_1: u64,
 
-    pub reward_last_updated_timestamp: u64, 
+    pub reward_last_updated_timestamp: u64,
     pub reward_infos: [RewardInfo; NUM_REWARDS],
-                                            // padding space for upgrade
-                                            // pub padding_1: [u64; 16],
-                                            // pub padding_2: [u64; 16],
-                                            // pub padding_3: [u64; 16],
-                                            // pub padding_4: [u64; 16],
+    // padding space for upgrade
+    // pub padding_1: [u64; 16],
+    // pub padding_2: [u64; 16],
+    // pub padding_3: [u64; 16],
+    // pub padding_4: [u64; 16],
 }
 
 impl PoolState {
-    pub const LEN: usize = 8 + 1 + 32 * 4 + 4 + 2 + 8 + 8 + 4 + 2 + 2 + 2 + 8 * 5 + RewardInfo::LEN * NUM_REWARDS + 512;
+    pub const LEN: usize = 8
+        + 1
+        + 32 * 4
+        + 4
+        + 2
+        + 8
+        + 8
+        + 4
+        + 2
+        + 2
+        + 2
+        + 8 * 5
+        + RewardInfo::LEN * NUM_REWARDS
+        + 512;
 
     /// Returns the observation index after the currently active one in a liquidity pool
     ///
@@ -276,9 +290,9 @@ impl PoolState {
         index: usize,
         open_time: u64,
         end_time: u64,
-        reward_per_second: u64,
-        token_mint: Pubkey,
-        token_vault: Pubkey,
+        reward_per_second_x32: u64,
+        token_mint: &Pubkey,
+        token_vault: &Pubkey,
     ) -> Result<()> {
         if index >= NUM_REWARDS {
             return Err(ErrorCode::InvalidRewardIndex.into());
@@ -289,21 +303,32 @@ impl PoolState {
             None => return Err(ErrorCode::InvalidRewardIndex.into()),
         };
 
+        for i in 0..lowest_index {
+            require_keys_neq!(*token_mint, self.reward_infos[i].reward_token_mint);
+        }
+
         if lowest_index != index {
             return Err(ErrorCode::InvalidRewardIndex.into());
         }
         if open_time > curr_timestamp {
             self.reward_infos[index].reward_state = RewardState::Initialized as u8;
+            self.reward_infos[index].reward_last_update_time = open_time;
         } else {
             self.reward_infos[index].reward_state = RewardState::Opening as u8;
+            self.reward_infos[index].reward_last_update_time = curr_timestamp;
         }
         self.reward_infos[index].reward_open_time = open_time;
         self.reward_infos[index].reward_end_time = end_time;
-        self.reward_infos[index].reward_emission_per_second = reward_per_second;
-        self.reward_infos[index].reward_token_mint = token_mint;
-        self.reward_infos[index].reward_token_vault = token_vault;
+        self.reward_infos[index].reward_emission_per_second_x32 = reward_per_second_x32;
+        self.reward_infos[index].reward_token_mint = *token_mint;
+        self.reward_infos[index].reward_token_vault = *token_vault;
 
-     
+        msg!(
+            "reward_index:{},curr_timestamp:{}, reward_infos:{:?}",
+            index,
+            curr_timestamp,
+            self.reward_infos[index],
+        );
         Ok(())
     }
 
@@ -313,36 +338,84 @@ impl PoolState {
         &mut self,
         curr_timestamp: u64,
     ) -> Result<([RewardInfo; NUM_REWARDS])> {
-        let last_timestamp = self.reward_last_updated_timestamp;
-
         // No-op if no liquidity or no change in timestamp
-        if self.liquidity == 0 || curr_timestamp <= last_timestamp {
+        if self.liquidity == 0 || curr_timestamp <= self.reward_last_updated_timestamp {
             return Ok(self.reward_infos);
         }
 
         // Calculate new global reward growth
         let mut next_reward_infos = self.reward_infos;
-        let time_delta = curr_timestamp - last_timestamp;
+
         for i in 0..NUM_REWARDS {
             if !next_reward_infos[i].initialized() {
                 continue;
             }
-            let reward_info = &mut next_reward_infos[i];
+            let mut latest_update_timestamp = curr_timestamp;
+            if latest_update_timestamp > next_reward_infos[i].reward_end_time {
+                if next_reward_infos[i].reward_last_update_time
+                    < next_reward_infos[i].reward_end_time
+                {
+                    latest_update_timestamp = next_reward_infos[i].reward_end_time
+                } else {
+                    continue;
+                }
+            }
 
+            let reward_info = &mut next_reward_infos[i];
+            let time_delta = latest_update_timestamp - reward_info.reward_last_update_time;
             // Calculate the new reward growth delta.
             // If the calculation overflows, set the delta value to zero.
             // This will halt reward distributions for this reward.
             let reward_growth_delta = time_delta
-                .mul_div_floor(reward_info.reward_emission_per_second, self.liquidity)
+                .mul_div_floor(reward_info.reward_emission_per_second_x32, self.liquidity)
                 .unwrap();
 
             // Add the reward growth delta to the global reward growth.
-            let curr_growth_global = reward_info.growth_global_x32;
-            reward_info.growth_global_x32 = curr_growth_global.wrapping_add(reward_growth_delta);
+            reward_info.reward_growth_global_x32 = reward_info
+                .reward_growth_global_x32
+                .checked_add(reward_growth_delta)
+                .unwrap();
+
+            reward_info.reward_total_emissioned = reward_info
+                .reward_total_emissioned
+                .checked_add(
+                    time_delta
+                        .mul_div_floor(
+                            reward_info.reward_emission_per_second_x32,
+                            fixed_point_32::Q32,
+                        )
+                        .unwrap(),
+                )
+                .unwrap();
+
+            msg!(
+                "reward_index:{}, currency timestamp:{},latest_update_timestamp:{},reward_info.reward_last_update_time:{},time_delta:{},reward_emission_per_second_x32:{},reward_growth_delta:{},reward_info.reward_growth_global_x32:{}",
+                i,
+                curr_timestamp,
+                latest_update_timestamp,
+                reward_info.reward_last_update_time,
+                time_delta,
+                reward_info.reward_emission_per_second_x32,
+                reward_growth_delta,
+                reward_info.reward_growth_global_x32
+            );
+            reward_info.reward_last_update_time = latest_update_timestamp;
         }
         self.reward_infos = next_reward_infos;
         self.reward_last_updated_timestamp = curr_timestamp;
+        msg!("update pool reward info, reward_0_emissioned:{}, reward_1_emissioned:{},reward_2_emissioned:{},pool.liquidity:{}", 
+        self.reward_infos[0].reward_total_emissioned,self.reward_infos[1].reward_total_emissioned,self.reward_infos[2].reward_total_emissioned, self.liquidity);
+
         Ok(next_reward_infos)
+    }
+
+    pub fn add_reward_clamed(&mut self, index: usize, amount: u64) -> Result<()> {
+        assert!(index < NUM_REWARDS);
+        self.reward_infos[index].reward_claimed = self.reward_infos[index]
+            .reward_claimed
+            .checked_add(amount)
+            .unwrap();
+        Ok(())
     }
 }
 
@@ -369,20 +442,19 @@ pub struct RewardInfo {
     pub reward_end_time: u64,
     /// Reward last update time
     pub reward_last_update_time: u64,
-    /// Indicates how many tokens per second are earned per unit of liquidity.
-    pub reward_emission_per_second: u64,
+    /// Q32.32 number indicates how many tokens per second are earned per unit of liquidity.
+    pub reward_emission_per_second_x32: u64,
     /// The total amount of reward emissioned
-    pub reward_total_emissioned: u128,
+    pub reward_total_emissioned: u64,
     /// The total amount of claimed reward
-    pub reward_claimed: u128,
+    pub reward_claimed: u64,
     /// Reward token mint.
     pub reward_token_mint: Pubkey,
     /// Reward vault token account.
     pub reward_token_vault: Pubkey,
-
-    /// Number that tracks the total tokens earned per unit of liquidity since the reward
+    /// Q32.32 number that tracks the total tokens earned per unit of liquidity since the reward
     /// emissions were turned on.
-    pub growth_global_x32: u64,
+    pub reward_growth_global_x32: u64,
 }
 
 impl RewardInfo {
@@ -404,7 +476,7 @@ impl RewardInfo {
     pub fn to_reward_growths(reward_infos: &[RewardInfo; NUM_REWARDS]) -> [u64; NUM_REWARDS] {
         let mut reward_growths = [0u64; NUM_REWARDS];
         for i in 0..NUM_REWARDS {
-            reward_growths[i] = reward_infos[i].growth_global_x32;
+            reward_growths[i] = reward_infos[i].reward_growth_global_x32;
         }
         reward_growths
     }

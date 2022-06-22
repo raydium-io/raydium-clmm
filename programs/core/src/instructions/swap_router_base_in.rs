@@ -22,7 +22,7 @@ pub struct SwapBaseIn<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-pub fn swap_base_in<'a, 'b, 'c, 'info>(
+pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, SwapBaseIn<'info>>,
     amount_in: u64,
     amount_out_minimum: u64,

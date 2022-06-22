@@ -121,8 +121,8 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
 
     // Update tokenized position metadata
     let position = ctx.accounts.personal_position_state.as_mut();
-    position.tokens_owed_0 = position
-        .tokens_owed_0
+    position.token_fees_owed_0 = position
+        .token_fees_owed_0
         .checked_add(
             fee_growth_inside_0_last_x32
                 .saturating_sub(position.fee_growth_inside_0_last)
@@ -131,8 +131,8 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         )
         .unwrap();
 
-    position.tokens_owed_1 = position
-        .tokens_owed_1
+    position.token_fees_owed_1 = position
+        .token_fees_owed_1
         .checked_add(
             fee_growth_inside_1_last_x32
                 .saturating_sub(position.fee_growth_inside_1_last)
@@ -143,10 +143,10 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
 
     position.fee_growth_inside_0_last = fee_growth_inside_0_last_x32;
     position.fee_growth_inside_1_last = fee_growth_inside_1_last_x32;
-    position.liquidity = position.liquidity.checked_add(liquidity).unwrap();
-
-    // update rewards
+    
+    // update rewards, must update before increase liquidity
     position.update_rewards(updated_core_position.reward_growth_inside)?;
+    position.liquidity = position.liquidity.checked_add(liquidity).unwrap();
 
     emit!(IncreaseLiquidityEvent {
         position_nft_mint: position.mint,

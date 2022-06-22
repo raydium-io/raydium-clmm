@@ -1,5 +1,8 @@
+use crate::libraries::{fixed_point_32, full_math::MulDiv};
 use crate::pool::NUM_REWARDS;
 use anchor_lang::prelude::*;
+
+use super::pool::RewardInfo;
 /// Position wrapped as an SPL non-fungible token
 ///
 /// PDA of `[POSITION_SEED, mint_address]`
@@ -31,11 +34,11 @@ pub struct PersonalPositionState {
     /// The token_0 fee growth of the aggregate position as of the last action on the individual position
     pub fee_growth_inside_1_last: u64,
 
-    /// How many uncollected token_0 are owed to the position, as of the last computation
-    pub tokens_owed_0: u64,
+    /// The fees owed to the position owner in token_0, as of the last computation
+    pub token_fees_owed_0: u64,
 
-    /// How many uncollected token_1 are owed to the position, as of the last computation
-    pub tokens_owed_1: u64,
+    /// The fees owed to the position owner in token_1, as of the last computation
+    pub token_fees_owed_1: u64,
 
     // Position reward info
     pub reward_infos: [PositionRewardInfo; NUM_REWARDS],
@@ -57,8 +60,10 @@ impl PersonalPositionState {
             let reward_growth_delta = reward_growth_inside
                 .checked_sub(curr_reward_info.growth_inside_last)
                 .unwrap_or(0);
-            let amount_owed_delta = self.liquidity.checked_mul(reward_growth_delta).unwrap();
 
+            let amount_owed_delta = reward_growth_delta
+                .mul_div_floor(self.liquidity as u64, fixed_point_32::Q32)
+                .unwrap();
             self.reward_infos[i].growth_inside_last = reward_growth_inside;
 
             // Overflows allowed. Must collect rewards owed before overflow.
@@ -66,6 +71,8 @@ impl PersonalPositionState {
                 .reward_amount_owed
                 .checked_add(amount_owed_delta)
                 .unwrap();
+
+            msg!("update personal reward, index:{}, owed_before:{:?}, amount_owed_delta:{}, owed_after:{}, reward_growth_delta:{}, self.liquidity:{}", i, curr_reward_info.reward_amount_owed,amount_owed_delta, self.reward_infos[i].reward_amount_owed,reward_growth_delta,self.liquidity );
         }
         Ok(())
     }
@@ -73,6 +80,7 @@ impl PersonalPositionState {
 
 #[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Default, Debug, PartialEq)]
 pub struct PositionRewardInfo {
+    // Q32.32
     pub growth_inside_last: u64,
     pub reward_amount_owed: u64,
 }
@@ -135,26 +143,7 @@ pub struct CollectPersonalFeeEvent {
 
 /// Emitted when Reward are updated for a position NFT
 #[event]
-pub struct UpdateFeeAndRewardsEvent {
-    /// The ID of the token for which underlying tokens were collected
-    #[index]
-    pub position_nft_mint: Pubkey,
-    /// The amount of token_0 owed to the position that was collected
-    pub tokens_owed_0: u64,
-    /// The amount of token_1 owed to the position that was collected
-    pub tokens_owed_1: u64,
+pub struct UpdateRewardInfosEvent {
     /// Reward info
-    pub reward_infos: [PositionRewardInfo; NUM_REWARDS],
-}
-
-/// Emitted when Reward are collected for a position NFT
-#[event]
-pub struct CollectRewardEvent {
-    /// The ID of the token for which underlying tokens were collected
-    #[index]
-    pub reward_mint: Pubkey,
-    /// The amount of token_0 owed to the position that was collected
-    pub reward_amount: u64,
-    /// The amount of token_1 owed to the position that was collected
-    pub reward_index: u8,
+    pub reward_infos: [RewardInfo; NUM_REWARDS],
 }

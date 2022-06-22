@@ -12,7 +12,7 @@ use anchor_lang::prelude::*;
 use instructions::*;
 use states::*;
 
-declare_id!("D9umkjFcnRGDG7Cz8naxSRPinRc6dHqjorRGhYqS9Y1F");
+declare_id!("CKq5ceybhfHqywrQG7sgNi8bHthG64dCpsVRs9dKzeEd");
 
 #[program]
 pub mod amm_core {
@@ -107,11 +107,11 @@ pub mod amm_core {
 
     /// Update fee and rewards owned.
     ///
-    #[access_control(is_authorized_for_token(&ctx.accounts.owner_or_delegate, &ctx.accounts.nft_account))]
-    pub fn update_fee_and_rewards<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, UpdateFeeAndRewards<'info>>,
+    // #[access_control(is_authorized_for_token(&ctx.accounts.owner_or_delegate, &ctx.accounts.nft_account))]
+    pub fn update_reward_infos<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, UpdateRewardInfos<'info>>,
     ) -> Result<()> {
-        instructions::update_fee_and_rewards(ctx)
+        instructions::update_reward_infos(ctx)
     }
 
     /// Collects up to a derired amount of reward owed to a specific tokenized position to the recipient
@@ -124,14 +124,28 @@ pub mod amm_core {
     /// * `amount_desired` - The desired amount of reward to collect, if set 0, all will be collect.
     ///
     #[access_control(is_authorized_for_token(&ctx.accounts.owner_or_delegate, &ctx.accounts.nft_account))]
-    pub fn collect_reward<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, CollectReward<'info>>,
-        reward_index: u8,
-        amount_desired: u64,
+    pub fn collect_rewards<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, CollectRewards<'info>>,
     ) -> Result<()> {
-        instructions::collect_reward(ctx, reward_index, amount_desired)
+        instructions::collect_rewards(ctx)
     }
 
+    /// Set reward emission per second.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - Validated addresses of the tokenized position and token accounts. Reward can be sent
+    /// to third parties
+    /// * `reward_index` - The index of reward token in the pool.
+    /// * `emissions_per_second_x32` - The per second emission reward
+    ///
+    pub fn set_reward_emissions(
+        ctx: Context<SetRewardEmissions>,
+        reward_index: u8,
+        emissions_per_second_x32: u64,
+    ) -> Result<()> {
+        instructions::set_reward_emissions(ctx, reward_index, emissions_per_second_x32)
+    }
     // ---------------------------------------------------------------------
     // Oracle
 
@@ -385,14 +399,14 @@ pub mod amm_core {
     /// be less than this value after the swap.  If one for zero, the price cannot be greater than
     /// this value after the swap.
     ///
-    pub fn swap_single<'a, 'b, 'c, 'info>(
+    pub fn swap<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, SwapSingle<'info>>,
         amount: u64,
         other_amount_threshold: u64,
         sqrt_price_limit: u64,
         is_base_input: bool,
     ) -> Result<()> {
-        instructions::swap_single(
+        instructions::swap(
             ctx,
             amount,
             other_amount_threshold,
@@ -411,13 +425,13 @@ pub mod amm_core {
     /// * `amount_out_minimum` - Panic if output amount is below minimum amount. For slippage.
     /// * `additional_accounts_per_pool` - Additional observation, bitmap and tick accounts per pool
     ///
-    pub fn swap_base_in<'a, 'b, 'c, 'info>(
+    pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, SwapBaseIn<'info>>,
         amount_in: u64,
         amount_out_minimum: u64,
         additional_accounts_per_pool: Vec<u8>,
     ) -> Result<()> {
-        instructions::swap_base_in(
+        instructions::swap_router_base_in(
             ctx,
             amount_in,
             amount_out_minimum,

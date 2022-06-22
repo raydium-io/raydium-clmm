@@ -49,7 +49,7 @@ pub struct InitializeRewardParam {
     /// Reward end time
     pub end_time: u64,
     /// Token reward per second are earned per unit of liquidity
-    pub reward_per_second: u64,
+    pub emissions_per_second_x32: u64,
     /// Initialize amount desposit to reward vault account
     pub amount: u64,
 }
@@ -58,7 +58,7 @@ impl InitializeRewardParam {
     pub fn check(&self, curr_timestamp: u64) -> Result<()> {
         if self.open_time >= self.end_time
             || self.end_time < curr_timestamp
-            || self.reward_per_second == 0
+            || self.emissions_per_second_x32 == 0
             || self.reward_index >= NUM_REWARDS as u8
         {
             return Err(ErrorCode::InvalidRewardInitParam.into());
@@ -80,9 +80,9 @@ pub fn initialize_reward(
         param.reward_index as usize,
         param.open_time,
         param.end_time,
-        param.reward_per_second,
-        ctx.accounts.reward_token_mint.key(),
-        ctx.accounts.reward_token_vault.key(),
+        param.emissions_per_second_x32,
+        &ctx.accounts.reward_token_mint.key(),
+        &ctx.accounts.reward_token_vault.key(),
     )?;
 
     if param.amount > 0 {

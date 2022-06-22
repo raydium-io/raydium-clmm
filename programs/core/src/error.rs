@@ -65,4 +65,8 @@ pub enum ErrorCode {
     InvalidRewardInitParam,
     #[msg("Invalid collect reward desired amount")]
     InvalidRewardDesiredAmount,
+    #[msg("Invalid collect reward input account number")]
+    InvalidRewardInputAccountNumber,
+    #[msg("uninitialized reward info")]
+    UnInitializedRewardInfo,
 }

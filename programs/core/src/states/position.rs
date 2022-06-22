@@ -32,10 +32,10 @@ pub struct ProcotolPositionState {
     pub fee_growth_inside_1_last: u64,
 
     /// The fees owed to the position owner in token_0
-    pub tokens_owed_0: u64,
+    pub token_fees_owed_0: u64,
 
     /// The fees owed to the position owner in token_1
-    pub tokens_owed_1: u64,
+    pub token_fees_owed_1: u64,
 
     /// The reward growth per unit of liquidity as of the last update to liquidity
     pub reward_growth_inside: [u64; NUM_REWARDS], // 24
@@ -88,13 +88,17 @@ impl ProcotolPositionState {
         self.fee_growth_inside_1_last = fee_growth_inside_1_x32;
         if tokens_owed_0 > 0 || tokens_owed_1 > 0 {
             // overflow is acceptable, have to withdraw before you hit u64::MAX fees
-            self.tokens_owed_0 = self.tokens_owed_0.checked_add(tokens_owed_0).unwrap();
-            self.tokens_owed_1 = self.tokens_owed_1.checked_add(tokens_owed_1).unwrap();
+            self.token_fees_owed_0 = self.token_fees_owed_0.checked_add(tokens_owed_0).unwrap();
+            self.token_fees_owed_1 = self.token_fees_owed_1.checked_add(tokens_owed_1).unwrap();
         }
 
+        self.update_reward_growths_inside(reward_growths_inside);
+        Ok(())
+    }
+
+    pub fn update_reward_growths_inside(&mut self, reward_growths_inside: [u64; NUM_REWARDS]) {
         // just record, calculate reward owed in persional position
         self.reward_growth_inside = reward_growths_inside;
-        Ok(())
     }
 }
 
