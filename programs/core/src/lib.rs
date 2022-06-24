@@ -12,7 +12,7 @@ use anchor_lang::prelude::*;
 use instructions::*;
 use states::*;
 
-declare_id!("FA51eLCcZMd2Cm63g9GfY7MBdftKN8aARDtwyqBdyhQp");
+declare_id!("CKq5ceybhfHqywrQG7sgNi8bHthG64dCpsVRs9dKzeEd");
 
 #[program]
 pub mod amm_core {
@@ -31,9 +31,9 @@ pub mod amm_core {
     /// * `ctx`- Initializes the factory state account
     /// * `amm_config_bump` - Bump to validate factory state address
     ///
-    pub fn create_amm_config(ctx: Context<CreateAmmConfig>,protocol_fee_rate: u8) -> Result<()> {
+    pub fn create_amm_config(ctx: Context<CreateAmmConfig>, protocol_fee_rate: u8) -> Result<()> {
         assert!(protocol_fee_rate >= 2 && protocol_fee_rate <= 10);
-        instructions::create_amm_config(ctx,protocol_fee_rate)
+        instructions::create_amm_config(ctx, protocol_fee_rate)
     }
 
     /// Updates the owner of the factory
@@ -86,6 +86,66 @@ pub mod amm_core {
         instructions::create_pool(ctx, sqrt_price)
     }
 
+    /// Initialize a reward info for a given pool and reward index
+    ///
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`- Validates token addresses and fee state. Initializes pool, observation and
+    /// token accounts
+    /// * `reward_index` - the index to init info
+    /// * `open_time` - reward open timestamp
+    /// * `end_time` - reward end timestamp
+    /// * `reward_per_second` - Token reward per second are earned per unit of liquidity.
+    ///
+    pub fn initialize_reward(
+        ctx: Context<InitializeReward>,
+        param: InitializeRewardParam,
+    ) -> Result<()> {
+        instructions::initialize_reward(ctx, param)
+    }
+
+    /// Update fee and rewards owned.
+    ///
+    // #[access_control(is_authorized_for_token(&ctx.accounts.owner_or_delegate, &ctx.accounts.nft_account))]
+    pub fn update_reward_infos<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, UpdateRewardInfos<'info>>,
+    ) -> Result<()> {
+        instructions::update_reward_infos(ctx)
+    }
+
+    /// Collects up to a derired amount of reward owed to a specific tokenized position to the recipient
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - Validated addresses of the tokenized position and token accounts. Reward can be sent
+    /// to third parties
+    /// * `reward_index` - The index of reward token in the pool.
+    /// * `amount_desired` - The desired amount of reward to collect, if set 0, all will be collect.
+    ///
+    #[access_control(is_authorized_for_token(&ctx.accounts.owner_or_delegate, &ctx.accounts.nft_account))]
+    pub fn collect_rewards<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, CollectRewards<'info>>,
+    ) -> Result<()> {
+        instructions::collect_rewards(ctx)
+    }
+
+    /// Set reward emission per second.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - Validated addresses of the tokenized position and token accounts. Reward can be sent
+    /// to third parties
+    /// * `reward_index` - The index of reward token in the pool.
+    /// * `emissions_per_second_x32` - The per second emission reward
+    ///
+    pub fn set_reward_emissions(
+        ctx: Context<SetRewardEmissions>,
+        reward_index: u8,
+        emissions_per_second_x32: u64,
+    ) -> Result<()> {
+        instructions::set_reward_emissions(ctx, reward_index, emissions_per_second_x32)
+    }
     // ---------------------------------------------------------------------
     // Oracle
 
@@ -121,7 +181,10 @@ pub mod amm_core {
     /// Holds the Factory State account where protocol fee will be saved.
     /// * `fee_protocol` - new protocol fee for all pools
     ///
-    pub fn set_protocol_fee_rate(ctx: Context<SetProtocolFeeRate>, protocol_fee_rate: u8) -> Result<()> {
+    pub fn set_protocol_fee_rate(
+        ctx: Context<SetProtocolFeeRate>,
+        protocol_fee_rate: u8,
+    ) -> Result<()> {
         assert!(protocol_fee_rate >= 2 && protocol_fee_rate <= 10);
         let amm_config = &mut ctx.accounts.amm_config;
         let protocol_fee_rate_old = amm_config.protocol_fee_rate;
@@ -336,14 +399,20 @@ pub mod amm_core {
     /// be less than this value after the swap.  If one for zero, the price cannot be greater than
     /// this value after the swap.
     ///
-    pub fn swap_single<'a, 'b, 'c, 'info>(
+    pub fn swap<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, SwapSingle<'info>>,
         amount: u64,
         other_amount_threshold: u64,
         sqrt_price_limit: u64,
         is_base_input: bool,
     ) -> Result<()> {
-        instructions::swap_single(ctx, amount, other_amount_threshold, sqrt_price_limit, is_base_input)
+        instructions::swap(
+            ctx,
+            amount,
+            other_amount_threshold,
+            sqrt_price_limit,
+            is_base_input,
+        )
     }
     /// Swaps `amount_in` of one token for as much as possible of another token,
     /// across the path provided
@@ -356,13 +425,13 @@ pub mod amm_core {
     /// * `amount_out_minimum` - Panic if output amount is below minimum amount. For slippage.
     /// * `additional_accounts_per_pool` - Additional observation, bitmap and tick accounts per pool
     ///
-    pub fn swap_base_in<'a, 'b, 'c, 'info>(
+    pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, SwapBaseIn<'info>>,
         amount_in: u64,
         amount_out_minimum: u64,
         additional_accounts_per_pool: Vec<u8>,
     ) -> Result<()> {
-        instructions::swap_base_in(
+        instructions::swap_router_base_in(
             ctx,
             amount_in,
             amount_out_minimum,

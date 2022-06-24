@@ -1,4 +1,5 @@
 use crate::libraries::full_math::MulDiv;
+use crate::pool::NUM_REWARDS;
 use crate::{
     error::ErrorCode,
     libraries::{fixed_point_32, liquidity_math},
@@ -16,7 +17,7 @@ pub const POSITION_SEED: &str = "position";
 /// PDA of `[POSITION_SEED, token_0, token_1, fee, owner, tick_lower, tick_upper]`
 ///
 #[account]
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ProcotolPositionState {
     /// Bump to identify PDA
     pub bump: u8,
@@ -31,16 +32,19 @@ pub struct ProcotolPositionState {
     pub fee_growth_inside_1_last: u64,
 
     /// The fees owed to the position owner in token_0
-    pub tokens_owed_0: u64,
+    pub token_fees_owed_0: u64,
 
     /// The fees owed to the position owner in token_1
-    pub tokens_owed_1: u64,
-    // padding space for upgrade
-    // pub padding: [u64; 8],
+    pub token_fees_owed_1: u64,
+
+    /// The reward growth per unit of liquidity as of the last update to liquidity
+    pub reward_growth_inside: [u64; NUM_REWARDS], // 24
+                                                  // padding space for upgrade
+                                                  // pub padding: [u64; 8],
 }
 
 impl ProcotolPositionState {
-    pub const LEN: usize = 8 + 1 + 8 + 8 + 8 + 8 + 8 + 64;
+    pub const LEN: usize = 8 + 1 + 8 + 8 + 8 + 8 + 8 + 8 * NUM_REWARDS + 64;
     /// Credits accumulated fees to a user's position
     ///
     /// # Arguments
@@ -57,6 +61,7 @@ impl ProcotolPositionState {
         liquidity_delta: i64,
         fee_growth_inside_0_x32: u64,
         fee_growth_inside_1_x32: u64,
+        reward_growths_inside: [u64; NUM_REWARDS],
     ) -> Result<()> {
         let liquidity_next = if liquidity_delta == 0 {
             require!(self.liquidity > 0, ErrorCode::InvaildLiquidity); // disallow pokes for 0 liquidity positions
@@ -66,10 +71,12 @@ impl ProcotolPositionState {
         };
 
         // calculate accumulated Fees
-        let tokens_owed_0 = (fee_growth_inside_0_x32 - self.fee_growth_inside_0_last)
+        let tokens_owed_0 = fee_growth_inside_0_x32
+            .saturating_sub(self.fee_growth_inside_0_last)
             .mul_div_floor(self.liquidity as u64, fixed_point_32::Q32)
             .unwrap();
-        let tokens_owed_1 = (fee_growth_inside_1_x32 - self.fee_growth_inside_1_last)
+        let tokens_owed_1 = fee_growth_inside_1_x32
+            .saturating_sub(self.fee_growth_inside_1_last)
             .mul_div_floor(self.liquidity as u64, fixed_point_32::Q32)
             .unwrap();
 
@@ -81,11 +88,17 @@ impl ProcotolPositionState {
         self.fee_growth_inside_1_last = fee_growth_inside_1_x32;
         if tokens_owed_0 > 0 || tokens_owed_1 > 0 {
             // overflow is acceptable, have to withdraw before you hit u64::MAX fees
-            self.tokens_owed_0 += tokens_owed_0;
-            self.tokens_owed_1 += tokens_owed_1;
+            self.token_fees_owed_0 = self.token_fees_owed_0.checked_add(tokens_owed_0).unwrap();
+            self.token_fees_owed_1 = self.token_fees_owed_1.checked_add(tokens_owed_1).unwrap();
         }
 
+        self.update_reward_growths_inside(reward_growths_inside);
         Ok(())
+    }
+
+    pub fn update_reward_growths_inside(&mut self, reward_growths_inside: [u64; NUM_REWARDS]) {
+        // just record, calculate reward owed in persional position
+        self.reward_growth_inside = reward_growths_inside;
     }
 }
 

@@ -118,8 +118,8 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
     assert!(amount_0_max > 0 || amount_1_max > 0);
 
     let tokenized_position = ctx.accounts.personal_position_state.as_mut();
-    let mut tokens_owed_0 = tokenized_position.tokens_owed_0;
-    let mut tokens_owed_1 = tokenized_position.tokens_owed_1;
+    let mut token_fees_owed_0 = tokenized_position.token_fees_owed_0;
+    let mut token_fees_owed_1 = tokenized_position.token_fees_owed_1;
 
     let mut protocol_position_owner = ctx.accounts.amm_config.to_account_info();
     protocol_position_owner.is_signer = true;
@@ -138,31 +138,38 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
         // update fee inside
         burn(&mut burn_accounts, ctx.remaining_accounts, 0)?;
 
-        let core_position = burn_accounts.position_state.deref();
+        let updated_core_position = burn_accounts.position_state.deref();
 
-        tokens_owed_0 += (core_position.fee_growth_inside_0_last
-            - tokenized_position.fee_growth_inside_0_last)
-            .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
+        token_fees_owed_0 = token_fees_owed_0
+            .checked_add(
+                (updated_core_position.fee_growth_inside_0_last
+                    - tokenized_position.fee_growth_inside_0_last)
+                    .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
+                    .unwrap(),
+            )
             .unwrap();
-        tokens_owed_1 += (core_position.fee_growth_inside_1_last
-            - tokenized_position.fee_growth_inside_1_last)
-            .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
+        token_fees_owed_1 = token_fees_owed_1
+            .checked_add(
+                (updated_core_position.fee_growth_inside_1_last
+                    - tokenized_position.fee_growth_inside_1_last)
+                    .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
+                    .unwrap(),
+            )
             .unwrap();
 
-        tokenized_position.fee_growth_inside_0_last = core_position.fee_growth_inside_0_last;
-        tokenized_position.fee_growth_inside_1_last = core_position.fee_growth_inside_1_last;
+        tokenized_position.fee_growth_inside_0_last =
+            updated_core_position.fee_growth_inside_0_last;
+        tokenized_position.fee_growth_inside_1_last =
+            updated_core_position.fee_growth_inside_1_last;
+
+        tokenized_position.update_rewards(updated_core_position.reward_growth_inside)?;
     }
 
     // adjust amounts to the max for the position
-    let amount_0 = amount_0_max.min(tokens_owed_0);
-    let amount_1 = amount_1_max.min(tokens_owed_1);
+    let amount_0 = amount_0_max.min(token_fees_owed_0);
+    let amount_1 = amount_1_max.min(token_fees_owed_1);
 
     msg!("withdrawing amount_0: {}, amount_1: {}", amount_0, amount_1);
-    // msg!(
-    //     "vault balances {} {}",
-    //     ctx.accounts.token_vault_0.amount,
-    //     ctx.accounts.token_vault_1.amount
-    // );
 
     let mut accounts = CollectParam {
         owner: &Signer::try_from(&protocol_position_owner)?,
@@ -181,8 +188,8 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
     // sometimes there will be a few less wei than expected due to rounding down in core, but
     // we just subtract the full amount expected
     // instead of the actual amount so we can burn the token
-    tokenized_position.tokens_owed_0 = tokens_owed_0 - amount_0;
-    tokenized_position.tokens_owed_1 = tokens_owed_1 - amount_1;
+    tokenized_position.token_fees_owed_0 = token_fees_owed_0 - amount_0;
+    tokenized_position.token_fees_owed_1 = token_fees_owed_1 - amount_1;
 
     emit!(CollectPersonalFeeEvent {
         position_nft_mint: tokenized_position.mint,
@@ -224,11 +231,11 @@ pub fn collect<'b, 'info>(
 
     let position = &mut ctx.position_state;
 
-    let amount_0 = amount_0_requested.min(position.tokens_owed_0);
-    let amount_1 = amount_1_requested.min(position.tokens_owed_1);
+    let amount_0 = amount_0_requested.min(position.token_fees_owed_0);
+    let amount_1 = amount_1_requested.min(position.token_fees_owed_1);
 
     if amount_0 > 0 {
-        position.tokens_owed_0 -= amount_0;
+        position.token_fees_owed_0 -= amount_0;
         transfer_from_pool_vault_to_user(
             ctx.pool_state,
             &ctx.vault_0,
@@ -238,7 +245,7 @@ pub fn collect<'b, 'info>(
         )?;
     }
     if amount_1 > 0 {
-        position.tokens_owed_1 -= amount_1;
+        position.token_fees_owed_1 -= amount_1;
         transfer_from_pool_vault_to_user(
             ctx.pool_state,
             &ctx.vault_1,

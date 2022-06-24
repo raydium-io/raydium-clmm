@@ -58,4 +58,15 @@ pub enum ErrorCode {
 
     #[msg("Invaild liquidity when update position")]
     InvaildLiquidity,
+
+    #[msg("Invalid reward index")]
+    InvalidRewardIndex,
+    #[msg("Invalid reward init param")]
+    InvalidRewardInitParam,
+    #[msg("Invalid collect reward desired amount")]
+    InvalidRewardDesiredAmount,
+    #[msg("Invalid collect reward input account number")]
+    InvalidRewardInputAccountNumber,
+    #[msg("uninitialized reward info")]
+    UnInitializedRewardInfo,
 }

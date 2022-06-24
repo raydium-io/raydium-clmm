@@ -89,7 +89,7 @@ struct StepComputations {
     fee_amount: u64,
 }
 
-pub fn swap<'b, 'info>(
+pub fn swap_internal<'b, 'info>(
     ctx: &mut SwapContext<'b, 'info>,
     remaining_accounts: &[AccountInfo<'info>],
     amount_specified: i64,
@@ -97,6 +97,16 @@ pub fn swap<'b, 'info>(
     zero_for_one: bool,
 ) -> Result<()> {
     require!(amount_specified != 0, ErrorCode::InvaildSwapAmountSpecified);
+    require!(
+        if zero_for_one {
+            sqrt_price_limit_x32 < ctx.pool_state.sqrt_price
+                && sqrt_price_limit_x32 > tick_math::MIN_SQRT_RATIO
+        } else {
+            sqrt_price_limit_x32 > ctx.pool_state.sqrt_price
+                && sqrt_price_limit_x32 < tick_math::MAX_SQRT_RATIO
+        },
+        ErrorCode::SqrtPriceLimitOverflow
+    );
 
     let amm_config = ctx.amm_config.deref();
     let pool_state_info = ctx.pool_state.to_account_info();
@@ -125,17 +135,6 @@ pub fn swap<'b, 'info>(
         false,
     )?;
 
-    require!(
-        if zero_for_one {
-            sqrt_price_limit_x32 < ctx.pool_state.sqrt_price
-                && sqrt_price_limit_x32 > tick_math::MIN_SQRT_RATIO
-        } else {
-            sqrt_price_limit_x32 > ctx.pool_state.sqrt_price
-                && sqrt_price_limit_x32 < tick_math::MAX_SQRT_RATIO
-        },
-        ErrorCode::SqrtPriceLimitOverflow
-    );
-
     let cache = &mut SwapCache {
         liquidity_start: ctx.pool_state.liquidity,
         block_timestamp: oracle::_block_timestamp(),
@@ -144,6 +143,10 @@ pub fn swap<'b, 'info>(
         tick_cumulative: 0,
         computed_latest_observation: false,
     };
+
+    let updated_reward_infos = ctx
+        .pool_state
+        .update_reward_infos(cache.block_timestamp as u64)?;
 
     let exact_input = amount_specified > 0;
 
@@ -190,7 +193,6 @@ pub fn swap<'b, 'info>(
         // crossed out of this bitmap
         if bitmap_cache.is_none() || bitmap_cache.unwrap().word_pos != word_pos {
             let bitmap_account = remaining_accounts_iter.next().unwrap();
-            // msg!("check bitmap {}", word_pos);
             // ensure this is a valid PDA, even if account is not initialized
             require_keys_eq!(
                 bitmap_account.key(),
@@ -224,7 +226,6 @@ pub fn swap<'b, 'info>(
         let next_initialized_bit = if let Some(bitmap) = bitmap_cache {
             bitmap.next_initialized_bit(bit_pos, zero_for_one)
         } else {
-            // msg!("NextBit");
             NextBit {
                 next: if zero_for_one { 0 } else { 255 },
                 initialized: false,
@@ -332,6 +333,7 @@ pub fn swap<'b, 'info>(
                     cache.seconds_per_liquidity_cumulative_x32,
                     cache.tick_cumulative,
                     cache.block_timestamp,
+                    &updated_reward_infos,
                 );
 
                 // if we're moving leftward, we interpret liquidity_net as the opposite sign
@@ -405,13 +407,13 @@ pub fn swap<'b, 'info>(
 
     let (amount_0, amount_1) = if zero_for_one == exact_input {
         (
-            amount_specified - state.amount_specified_remaining,
+            amount_specified.saturating_sub(state.amount_specified_remaining),
             state.amount_calculated,
         )
     } else {
         (
             state.amount_calculated,
-            amount_specified - state.amount_specified_remaining,
+            amount_specified.saturating_sub(state.amount_specified_remaining),
         )
     };
     // msg!(

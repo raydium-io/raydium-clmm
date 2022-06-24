@@ -1,6 +1,7 @@
 import BN from "bn.js";
 import * as anchor from "@project-serum/anchor";
 import {getMultipleAccountsInfo} from "@raydium-io/raydium-sdk";
+import { Connection } from "@solana/web3.js";
 
 export const MIN_SQRT_RATIO = new BN(65536);
 export const MAX_SQRT_RATIO = new BN(281474976710656);
@@ -13,6 +14,9 @@ export const MaxU64 = new BN(2).pow(new BN(64)).subn(1);
 export const POOL_SEED = Buffer.from(anchor.utils.bytes.utf8.encode("pool"));
 export const POOL_VAULT_SEED = Buffer.from(
   anchor.utils.bytes.utf8.encode("pool_vault")
+);
+export const POOL_REWARD_VAULT_SEED = Buffer.from(
+  anchor.utils.bytes.utf8.encode("pool_reward_vault")
 );
 export const FEE_SEED = Buffer.from(anchor.utils.bytes.utf8.encode("fee"));
 export const BITMAP_SEED = Buffer.from(
@@ -36,4 +40,17 @@ export async function accountExist(connection: anchor.web3.Connection, account: 
       }
   }
   return alreadCreatedMarket;
+}
+
+export const getUnixTs = () => {
+  return new Date().getTime() / 1000;
+};
+
+export async function getBlockTimestamp(connection :anchor.web3.Connection){
+  const slot = await connection.getSlot();
+  return await connection.getBlockTime(slot);
+} 
+
+export async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

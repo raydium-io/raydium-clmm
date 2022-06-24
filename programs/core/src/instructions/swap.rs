@@ -1,4 +1,4 @@
-use super::{swap, SwapContext};
+use super::{swap_internal, SwapContext};
 use crate::error::ErrorCode;
 use crate::libraries::tick_math;
 use crate::states::*;
@@ -46,7 +46,7 @@ pub struct SwapSingle<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-pub fn swap_single<'a, 'b, 'c, 'info>(
+pub fn swap<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, SwapSingle<'info>>,
     amount: u64,
     other_amount_threshold: u64,
@@ -103,7 +103,7 @@ pub fn exact_internal<'b, 'info>(
         amount_specified = -i64::try_from(amount_specified).unwrap();
     };
 
-    swap(
+    swap_internal(
         accounts,
         remaining_accounts,
         amount_specified,
@@ -128,8 +128,14 @@ pub fn exact_internal<'b, 'info>(
     //     output_balance_before - accounts.output_vault.amount
     // );
     if is_base_input {
-        Ok(output_balance_before - accounts.output_vault.amount)
+        Ok(output_balance_before
+            .checked_sub(accounts.output_vault.amount)
+            .unwrap())
     } else {
-        Ok(accounts.input_vault.amount - input_balance_before)
+        Ok(accounts
+            .input_vault
+            .amount
+            .checked_sub(input_balance_before)
+            .unwrap())
     }
 }

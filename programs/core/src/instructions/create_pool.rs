@@ -9,6 +9,8 @@ pub struct CreatePool<'info> {
     /// Address paying to create the pool. Can be anyone
     #[account(mut)]
     pub pool_creator: Signer<'info>,
+    /// Which config the pool belongs to.
+    pub amm_config: Box<Account<'info, AmmConfig>>,
     /// Initialize an account to store the pool state
     #[account(
         init,
@@ -22,7 +24,7 @@ pub struct CreatePool<'info> {
         payer = pool_creator,
         space = PoolState::LEN
     )]
-    pub pool_state: Account<'info, PoolState>,
+    pub pool_state: Box<Account<'info, PoolState>>,
     pub token_mint_0: Box<Account<'info, Mint>>,
     pub token_mint_1: Box<Account<'info, Mint>>,
     /// Token_0 vault
@@ -86,6 +88,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price: u64) -> Result<()> {
     let tick = tick_math::get_tick_at_sqrt_ratio(sqrt_price)?;
 
     pool_state.bump = *ctx.bumps.get("pool_state").unwrap();
+    pool_state.amm_config = ctx.accounts.amm_config.key();
     pool_state.token_mint_0 = ctx.accounts.token_mint_0.key();
     pool_state.token_mint_1 = ctx.accounts.token_mint_1.key();
     pool_state.token_vault_0 = ctx.accounts.token_vault_0.key();
@@ -96,6 +99,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price: u64) -> Result<()> {
     pool_state.tick = tick;
     pool_state.observation_cardinality = 1;
     pool_state.observation_cardinality_next = 1;
+    pool_state.reward_infos = [RewardInfo::new(); NUM_REWARDS];
 
     let initial_observation_state = ctx.accounts.initial_observation_state.deref_mut();
     initial_observation_state.bump = *ctx.bumps.get("initial_observation_state").unwrap();

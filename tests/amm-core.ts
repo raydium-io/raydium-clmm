@@ -37,13 +37,18 @@ import {
   OBSERVATION_SEED,
   POOL_SEED,
   POOL_VAULT_SEED,
+  POOL_REWARD_VAULT_SEED,
   POSITION_SEED,
   TICK_SEED,
   accountExist,
+  getUnixTs,
+  sleep,
+  getBlockTimestamp,
 } from "./utils";
 import SolanaTickDataProvider from "./SolanaTickDataProvider";
 import { Transaction, ConfirmOptions } from "@solana/web3.js";
 import JSBI from "jsbi";
+import { Spl } from "@raydium-io/raydium-sdk";
 
 console.log("starting test");
 const {
@@ -117,6 +122,24 @@ describe("amm-core", async () => {
   let _bumpB1;
   let vaultB2: web3.PublicKey;
   let _bumpB2;
+
+  let rewardFounder = new Keypair();
+  // Reward token
+  let rewardToken0: Token;
+  let rewardToken1: Token;
+  let rewardToken2: Token;
+
+  // reward token vault
+  let rewardVault0: web3.PublicKey;
+  let _reward_bump0;
+  let rewardVault1: web3.PublicKey;
+  let _reward_bump1;
+  let rewardVault2: web3.PublicKey;
+  let _reward_bump2;
+
+  let rewardFounderTokenAccount0: web3.PublicKey;
+  let rewardFounderTokenAccount1: web3.PublicKey;
+  let rewardFounderTokenAccount2: web3.PublicKey;
 
   let poolAState: web3.PublicKey;
   let poolAStateBump: number;
@@ -201,6 +224,13 @@ describe("amm-core", async () => {
       web3.SystemProgram.transfer({
         fromPubkey: owner,
         toPubkey: notOwner.publicKey,
+        lamports: web3.LAMPORTS_PER_SOL,
+      })
+    );
+    transferSolTx.add(
+      web3.SystemProgram.transfer({
+        fromPubkey: owner,
+        toPubkey: rewardFounder.publicKey,
         lamports: web3.LAMPORTS_PER_SOL,
       })
     );
@@ -333,6 +363,109 @@ describe("amm-core", async () => {
       program.programId
     );
     console.log("got poolB vaultB2 address", vaultB2.toString());
+  });
+
+  it("Create reward token mints and vault", async () => {
+    console.log("creating reward token mints");
+    const transferSolTx = new web3.Transaction().add(
+      web3.SystemProgram.transfer({
+        fromPubkey: owner,
+        toPubkey: mintAuthority.publicKey,
+        lamports: web3.LAMPORTS_PER_SOL,
+      })
+    );
+    transferSolTx.add(
+      web3.SystemProgram.transfer({
+        fromPubkey: owner,
+        toPubkey: notOwner.publicKey,
+        lamports: web3.LAMPORTS_PER_SOL,
+      })
+    );
+    await anchor.getProvider().send(transferSolTx);
+
+    rewardToken0 = await Token.createMint(
+      connection,
+      mintAuthority,
+      mintAuthority.publicKey,
+      null,
+      8,
+      TOKEN_PROGRAM_ID
+    );
+    rewardToken1 = await Token.createMint(
+      connection,
+      mintAuthority,
+      mintAuthority.publicKey,
+      null,
+      8,
+      TOKEN_PROGRAM_ID
+    );
+    rewardToken2 = await Token.createMint(
+      connection,
+      mintAuthority,
+      mintAuthority.publicKey,
+      null,
+      8,
+      TOKEN_PROGRAM_ID
+    );
+
+    console.log("rewardToken0", rewardToken0.publicKey.toString());
+    console.log("rewardToken1", rewardToken1.publicKey.toString());
+    console.log("rewardToken2", rewardToken2.publicKey.toString());
+
+    [rewardVault0, _reward_bump0] = await PublicKey.findProgramAddress(
+      [
+        POOL_REWARD_VAULT_SEED,
+        poolAState.toBuffer(),
+        rewardToken0.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+    console.log("got poolA rewardVault0 address", rewardVault0.toString());
+    [rewardVault1, _reward_bump1] = await PublicKey.findProgramAddress(
+      [
+        POOL_REWARD_VAULT_SEED,
+        poolAState.toBuffer(),
+        rewardToken1.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+    console.log("got poolA rewardVault1 address", rewardVault1.toString());
+    [rewardVault2, _reward_bump2] = await PublicKey.findProgramAddress(
+      [
+        POOL_REWARD_VAULT_SEED,
+        poolAState.toBuffer(),
+        rewardToken2.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+    console.log("got poolA rewardVault2 address", rewardVault2.toString());
+  });
+
+  it("creates reward token accounts for reward founder and airdrops to them", async () => {
+    rewardFounderTokenAccount0 =
+      await rewardToken0.createAssociatedTokenAccount(rewardFounder.publicKey);
+    rewardFounderTokenAccount1 =
+      await rewardToken1.createAssociatedTokenAccount(rewardFounder.publicKey);
+    rewardFounderTokenAccount2 =
+      await rewardToken2.createAssociatedTokenAccount(rewardFounder.publicKey);
+    await rewardToken0.mintTo(
+      rewardFounderTokenAccount0,
+      mintAuthority,
+      [],
+      100_000_000
+    );
+    await rewardToken1.mintTo(
+      rewardFounderTokenAccount1,
+      mintAuthority,
+      [],
+      100_000_000
+    );
+    await rewardToken2.mintTo(
+      rewardFounderTokenAccount2,
+      mintAuthority,
+      [],
+      100_000_000
+    );
   });
 
   describe("#create_config", () => {
@@ -664,6 +797,7 @@ describe("amm-core", async () => {
         program.rpc.createPool(initialPriceX32, {
           accounts: {
             poolCreator: owner,
+            ammConfig: ammConfig,
             tokenMint0: token1.publicKey,
             tokenMint1: token0.publicKey,
             tokenVault0: vaultA0,
@@ -685,6 +819,7 @@ describe("amm-core", async () => {
         program.rpc.createPool(initialPriceX32, {
           accounts: {
             poolCreator: owner,
+            ammConfig: ammConfig,
             tokenMint0: token0.publicKey,
             tokenMint1: token0.publicKey,
             feeState,
@@ -710,6 +845,7 @@ describe("amm-core", async () => {
         program.rpc.createPool(initialPriceX32, {
           accounts: {
             poolCreator: owner,
+            ammConfig: ammConfig,
             tokenMint0: token0.publicKey,
             tokenMint1: token0.publicKey,
             feeState: uninitializedFeeState,
@@ -730,6 +866,7 @@ describe("amm-core", async () => {
         program.rpc.createPool(new BN(1), {
           accounts: {
             poolCreator: owner,
+            ammConfig: ammConfig,
             tokenMint0: token0.publicKey,
             tokenMint1: token1.publicKey,
             feeState,
@@ -748,6 +885,7 @@ describe("amm-core", async () => {
         program.rpc.createPool(MIN_SQRT_RATIO.subn(1), {
           accounts: {
             poolCreator: owner,
+            ammConfig: ammConfig,
             tokenMint0: token0.publicKey,
             tokenMint1: token1.publicKey,
             feeState,
@@ -768,6 +906,7 @@ describe("amm-core", async () => {
         program.rpc.createPool(MAX_SQRT_RATIO, {
           accounts: {
             poolCreator: owner,
+            ammConfig: ammConfig,
             tokenMint0: token0.publicKey,
             tokenMint1: token1.publicKey,
             feeState,
@@ -787,6 +926,7 @@ describe("amm-core", async () => {
           // u64::MAX
           accounts: {
             poolCreator: owner,
+            ammConfig: ammConfig,
             tokenMint0: token0.publicKey,
             tokenMint1: token1.publicKey,
             feeState,
@@ -844,6 +984,7 @@ describe("amm-core", async () => {
       await program.rpc.createPool(initialPriceX32, {
         accounts: {
           poolCreator: owner,
+          ammConfig: ammConfig,
           tokenMint0: token0.publicKey,
           tokenMint1: token1.publicKey,
           feeState,
@@ -899,6 +1040,7 @@ describe("amm-core", async () => {
         program.rpc.createPool(initialPriceX32, {
           accounts: {
             poolCreator: owner,
+            ammConfig: ammConfig,
             tokenMint0: token0.publicKey,
             tokenMint1: token1.publicKey,
             feeState,
@@ -1252,7 +1394,7 @@ describe("amm-core", async () => {
     });
   });
 
-  describe("#set_protocol_fee", () => {
+  describe("#set_protocol_fee_rate", () => {
     it("cannot be changed by addresses that are not owner", async () => {
       await expect(
         program.rpc.setProtocolFeeRate(6, {
@@ -1316,6 +1458,236 @@ describe("amm-core", async () => {
     });
   });
 
+  describe("#initialize_reward", () => {
+    it("fails if openTime greater than endTime", async () => {
+      await expect(
+        program.methods
+          .initializeReward({
+            rewardIndex: 0,
+            openTime: new BN(2),
+            endTime: new BN(1),
+            emissionsPerSecondX32: new BN(1),
+            amount: new BN(0),
+          })
+          .accounts({
+            rewardFunder: rewardFounder.publicKey,
+            funderTokenAccount: rewardFounderTokenAccount0,
+            poolState: poolAState,
+            rewardTokenMint: rewardToken0.publicKey,
+            rewardTokenVault: rewardVault0,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+            rent: web3.SYSVAR_RENT_PUBKEY,
+          })
+          .signers([rewardFounder])
+          .rpc()
+      ).to.be.rejectedWith(Error);
+    });
+    it("fails if endTime less than currentTime", async () => {
+      await expect(
+        program.methods
+          .initializeReward({
+            rewardIndex: 0,
+            openTime: new BN(1),
+            endTime: new BN(1),
+            emissionsPerSecondX32: new BN(1),
+            amount: new BN(0),
+          })
+          .accounts({
+            rewardFunder: rewardFounder.publicKey,
+            funderTokenAccount: rewardFounderTokenAccount0,
+            poolState: poolAState,
+            rewardTokenMint: rewardToken0.publicKey,
+            rewardTokenVault: rewardVault0,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+            rent: web3.SYSVAR_RENT_PUBKEY,
+          })
+          .signers([rewardFounder])
+          .rpc()
+      ).to.be.rejectedWith(Error);
+    });
+    it("fails if reward index overflow", async () => {
+      await expect(
+        program.methods
+          .initializeReward({
+            rewardIndex: 3,
+            openTime: new BN(1),
+            endTime: new BN(getUnixTs() + 100),
+            emissionsPerSecondX32: new BN(1),
+            amount: new BN(0),
+          })
+          .accounts({
+            rewardFunder: rewardFounder.publicKey,
+            funderTokenAccount: rewardFounderTokenAccount0,
+            poolState: poolAState,
+            rewardTokenMint: rewardToken0.publicKey,
+            rewardTokenVault: rewardVault0,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+            rent: web3.SYSVAR_RENT_PUBKEY,
+          })
+          .signers([rewardFounder])
+          .rpc()
+      ).to.be.rejectedWith(Error);
+    });
+
+    it("fails if rewardPerSecond is zero", async () => {
+      await expect(
+        program.methods
+          .initializeReward({
+            rewardIndex: 0,
+            openTime: new BN(1),
+            endTime: new BN(getUnixTs() + 100),
+            emissionsPerSecondX32: new BN(0),
+            amount: new BN(0),
+          })
+          .accounts({
+            rewardFunder: rewardFounder.publicKey,
+            funderTokenAccount: rewardFounderTokenAccount0,
+            poolState: poolAState,
+            rewardTokenMint: rewardToken0.publicKey,
+            rewardTokenVault: rewardVault0,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+            rent: web3.SYSVAR_RENT_PUBKEY,
+          })
+          .signers([rewardFounder])
+          .rpc()
+      ).to.be.rejectedWith(Error);
+    });
+
+    it("fails if rewardPerSecond is zero", async () => {
+      await expect(
+        program.methods
+          .initializeReward({
+            rewardIndex: 0,
+            openTime: new BN(1),
+            endTime: new BN(getUnixTs() + 100),
+            emissionsPerSecondX32: new BN(0),
+            amount: new BN(0),
+          })
+          .accounts({
+            rewardFunder: rewardFounder.publicKey,
+            funderTokenAccount: rewardFounderTokenAccount0,
+            poolState: poolAState,
+            rewardTokenMint: rewardToken0.publicKey,
+            rewardTokenVault: rewardVault0,
+            tokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+            rent: web3.SYSVAR_RENT_PUBKEY,
+          })
+          .signers([rewardFounder])
+          .rpc()
+      ).to.be.rejectedWith(Error);
+    });
+
+    it("init reward index 0 with rewardPerSecond 100, but not init vault", async () => {
+      const curr_timestamp = await getBlockTimestamp(connection);
+      console.log("reward index 0, open_time: ", curr_timestamp);
+      await program.methods
+        .initializeReward({
+          rewardIndex: 0,
+          openTime: new BN(curr_timestamp),
+          endTime: new BN(curr_timestamp + 3),
+          emissionsPerSecondX32: new BN(429496729600), // 100
+          amount: new BN(0),
+        })
+        .accounts({
+          rewardFunder: rewardFounder.publicKey,
+          funderTokenAccount: rewardFounderTokenAccount0,
+          poolState: poolAState,
+          rewardTokenMint: rewardToken0.publicKey,
+          rewardTokenVault: rewardVault0,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: web3.SYSVAR_RENT_PUBKEY,
+        })
+        .signers([rewardFounder])
+        .rpc();
+
+      const poolAStateData = await program.account.poolState.fetch(poolAState);
+
+      assert.equal(
+        poolAStateData.rewardInfos[0].rewardTokenVault.toString(),
+        rewardVault0.toString()
+      );
+      assert.equal(
+        poolAStateData.rewardInfos[0].rewardTokenMint.toString(),
+        rewardToken0.publicKey.toString()
+      );
+    });
+
+    it("init reward index 1 with rewardPerSecond 10 and init amount 100", async () => {
+      const curr_timestamp = await getBlockTimestamp(connection);
+      console.log("reward index 0, open_time: ", curr_timestamp);
+      await program.methods
+        .initializeReward({
+          rewardIndex: 1,
+          openTime: new BN(curr_timestamp),
+          endTime: new BN(curr_timestamp + 3),
+          emissionsPerSecondX32: new BN(42949672960), // 10
+          amount: new BN(100),
+        })
+        .accounts({
+          rewardFunder: rewardFounder.publicKey,
+          funderTokenAccount: rewardFounderTokenAccount1,
+          poolState: poolAState,
+          rewardTokenMint: rewardToken1.publicKey,
+          rewardTokenVault: rewardVault1,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: web3.SYSVAR_RENT_PUBKEY,
+        })
+        .signers([rewardFounder])
+        .rpc();
+      let poolAStateData = await program.account.poolState.fetch(poolAState);
+
+      assert.equal(
+        poolAStateData.rewardInfos[1].rewardTokenVault.toString(),
+        rewardVault1.toString()
+      );
+      assert.equal(
+        poolAStateData.rewardInfos[1].rewardTokenMint.toString(),
+        rewardToken1.publicKey.toString()
+      );
+    });
+
+    it("init reward index 2 with rewardPerSecond 100 and init amount 50", async () => {
+      const curr_timestamp = await getBlockTimestamp(connection);
+      await program.methods
+        .initializeReward({
+          rewardIndex: 2,
+          openTime: new BN(curr_timestamp),
+          endTime: new BN(curr_timestamp + 3),
+          emissionsPerSecondX32: new BN(4294967296), // 1
+          amount: new BN(50),
+        })
+        .accounts({
+          rewardFunder: rewardFounder.publicKey,
+          funderTokenAccount: rewardFounderTokenAccount2,
+          poolState: poolAState,
+          rewardTokenMint: rewardToken2.publicKey,
+          rewardTokenVault: rewardVault2,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: web3.SYSVAR_RENT_PUBKEY,
+        })
+        .signers([rewardFounder])
+        .rpc();
+      let poolAStateData = await program.account.poolState.fetch(poolAState);
+
+      assert.equal(
+        poolAStateData.rewardInfos[2].rewardTokenVault.toString(),
+        rewardVault2.toString()
+      );
+      assert.equal(
+        poolAStateData.rewardInfos[2].rewardTokenMint.toString(),
+        rewardToken2.publicKey.toString()
+      );
+    });
+  });
+
   describe("#collect_protocol_fee", () => {
     it("creates token accounts for recipient", async () => {
       feeRecipientWallet0 = await token0.createAssociatedTokenAccount(
@@ -1330,7 +1702,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.collectProtocolFee(MaxU64, MaxU64, {
           accounts: {
-            owner: notOwner,
+            owner: notOwner.publicKey,
             ammConfig,
             poolState: poolAState,
             tokenVault0: vaultA0,
@@ -1347,7 +1719,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.collectProtocolFee(MaxU64, MaxU64, {
           accounts: {
-            owner: notOwner,
+            owner: notOwner.publicKey,
             ammConfig,
             poolState: poolAState,
             tokenVault0: new Keypair().publicKey,
@@ -1364,7 +1736,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.collectProtocolFee(MaxU64, MaxU64, {
           accounts: {
-            owner: notOwner,
+            owner: notOwner.publicKey,
             ammConfig,
             poolState: poolAState,
             tokenVault0: vaultA0,
@@ -1775,7 +2147,7 @@ describe("amm-core", async () => {
     });
   });
 
-  describe("#init_position_account", () => {
+  describe("#create_protocol_position_account", () => {
     it("fails if tick lower is not less than tick upper", async () => {
       const [invalidPosition, invalidPositionBump] =
         await PublicKey.findProgramAddress(
@@ -2000,8 +2372,8 @@ describe("amm-core", async () => {
       assert.equal(tokenizedPositionData.tickUpper, tickUpper);
       assert(tokenizedPositionData.feeGrowthInside0Last.eqn(0));
       assert(tokenizedPositionData.feeGrowthInside1Last.eqn(0));
-      assert(tokenizedPositionData.tokensOwed0.eqn(0));
-      assert(tokenizedPositionData.tokensOwed1.eqn(0));
+      assert(tokenizedPositionData.tokenFeesOwed0.eqn(0));
+      assert(tokenizedPositionData.tokenFeesOwed1.eqn(0));
 
       const vault0State = await token0.getAccountInfo(vaultA0);
       // assert(vault0State.amount.eqn(0))
@@ -2358,7 +2730,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.decreaseLiquidity(liquidity, new BN(0), amount1Desired, {
           accounts: {
-            ownerOrDelegate: notOwner,
+            ownerOrDelegate: notOwner.publicKey,
             nftAccount: positionANftAccount,
             personalPositionState: tokenizedPositionAState,
             ammConfig,
@@ -2369,6 +2741,11 @@ describe("amm-core", async () => {
             bitmapLowerState: bitmapLowerAState,
             bitmapUpperState: bitmapUpperAState,
             lastObservationState: lastObservationAState,
+            tokenVault0: vaultA0,
+            tokenVault1: vaultA1,
+            recipientTokenAccount0: minterWallet0,
+            recipientTokenAccount1: minterWallet1,
+            tokenProgram: TOKEN_PROGRAM_ID,
           },
           remainingAccounts: [
             {
@@ -2400,6 +2777,11 @@ describe("amm-core", async () => {
               bitmapLowerState: bitmapLowerAState,
               bitmapUpperState: bitmapUpperAState,
               lastObservationState: lastObservationAState,
+              tokenVault0: vaultA0,
+              tokenVault1: vaultA1,
+              recipientTokenAccount0: minterWallet0,
+              recipientTokenAccount1: minterWallet1,
+              tokenProgram: TOKEN_PROGRAM_ID,
             },
             remainingAccounts: [
               {
@@ -2451,6 +2833,11 @@ describe("amm-core", async () => {
             bitmapLowerState: bitmapLowerAState,
             bitmapUpperState: bitmapUpperAState,
             lastObservationState: lastObservationAState,
+            tokenVault0: vaultA0,
+            tokenVault1: vaultA1,
+            recipientTokenAccount0: minterWallet0,
+            recipientTokenAccount1: minterWallet1,
+            tokenProgram: TOKEN_PROGRAM_ID,
           },
           remainingAccounts: [
             {
@@ -2522,6 +2909,12 @@ describe("amm-core", async () => {
       // });
       // await program.removeEventListener(listener);
 
+      const recipientWallet0BalanceBefer = await token0.getAccountInfo(
+        minterWallet0
+      );
+      const recipientWallet1BalanceBefer = await token1.getAccountInfo(
+        minterWallet1
+      );
       await program.rpc.decreaseLiquidity(
         liquidity,
         new BN(0),
@@ -2539,6 +2932,11 @@ describe("amm-core", async () => {
             bitmapLowerState: bitmapLowerAState,
             bitmapUpperState: bitmapUpperAState,
             lastObservationState: lastObservationAState,
+            tokenVault0: vaultA0,
+            tokenVault1: vaultA1,
+            recipientTokenAccount0: minterWallet0,
+            recipientTokenAccount1: minterWallet1,
+            tokenProgram: TOKEN_PROGRAM_ID,
           },
           remainingAccounts: [
             {
@@ -2554,8 +2952,30 @@ describe("amm-core", async () => {
         await program.account.personalPositionState.fetch(
           tokenizedPositionAState
         );
-      assert(tokenizedPositionData.tokensOwed0.eqn(0));
-      assert(tokenizedPositionData.tokensOwed1.eqn(999999));
+
+      const recipientWallet0BalanceAfter = await token0.getAccountInfo(
+        minterWallet0
+      );
+      const recipientWallet1BalanceAfter = await token1.getAccountInfo(
+        minterWallet1
+      );
+      assert(tokenizedPositionData.tokenFeesOwed0.eqn(0));
+      assert.equal(tokenizedPositionData.tokenFeesOwed1.toNumber(), 0);
+
+      assert.equal(
+        recipientWallet0BalanceAfter.amount.toNumber(),
+        recipientWallet0BalanceBefer.amount.toNumber()
+      );
+      assert.equal(
+        recipientWallet1BalanceAfter.amount.toNumber(),
+        recipientWallet1BalanceBefer.amount.toNumber() + 999999
+      );
+
+      const proctocolPositionData =
+        await program.account.procotolPositionState.fetch(corePositionAState);
+
+      assert.equal(proctocolPositionData.tokenFeesOwed0.toNumber(), 0);
+      assert.equal(proctocolPositionData.tokenFeesOwed1.toNumber(), 0);
 
       const tickLowerData = await program.account.tickState.fetch(
         tickLowerAState
@@ -2619,6 +3039,11 @@ describe("amm-core", async () => {
             bitmapLowerState: bitmapLowerAState,
             bitmapUpperState: bitmapUpperAState,
             lastObservationState: lastObservationAState,
+            tokenVault0: vaultA0,
+            tokenVault1: vaultA1,
+            recipientTokenAccount0: minterWallet0,
+            recipientTokenAccount1: minterWallet1,
+            tokenProgram: TOKEN_PROGRAM_ID,
           },
           remainingAccounts: [
             {
@@ -2652,6 +3077,13 @@ describe("amm-core", async () => {
       );
       await anchor.getProvider().send(approveTx);
 
+      const recipientWallet0BalanceBefore = await token0.getAccountInfo(
+        minterWallet0
+      );
+      const recipientWallet1BalanceBefore = await token1.getAccountInfo(
+        minterWallet1
+      );
+
       const tx = await program.transaction.decreaseLiquidity(
         new BN(1_000_000),
         new BN(0),
@@ -2669,6 +3101,11 @@ describe("amm-core", async () => {
             bitmapLowerState: bitmapLowerAState,
             bitmapUpperState: bitmapUpperAState,
             lastObservationState: lastObservationAState,
+            tokenVault0: vaultA0,
+            tokenVault1: vaultA1,
+            recipientTokenAccount0: minterWallet0,
+            recipientTokenAccount1: minterWallet1,
+            tokenProgram: TOKEN_PROGRAM_ID,
           },
           remainingAccounts: [
             {
@@ -2680,6 +3117,33 @@ describe("amm-core", async () => {
         }
       );
       connection.sendTransaction(tx, [mintAuthority]);
+
+      const tokenizedPositionData =
+        await program.account.personalPositionState.fetch(
+          tokenizedPositionAState
+        );
+
+      const recipientWallet0BalanceAfter = await token0.getAccountInfo(
+        minterWallet0
+      );
+      const recipientWallet1BalanceAfter = await token1.getAccountInfo(
+        minterWallet1
+      );
+      assert(tokenizedPositionData.tokenFeesOwed0.eqn(0));
+      assert.equal(tokenizedPositionData.tokenFeesOwed1.toNumber(), 0);
+
+      assert.equal(
+        recipientWallet0BalanceAfter.amount.toNumber(),
+        recipientWallet0BalanceBefore.amount.toNumber()
+      );
+      // assert.equal(recipientWallet1BalanceAfter.amount.toNumber(),recipientWallet1BalanceBefer.amount.toNumber()+490);
+      // assert.equal(recipientWallet1BalanceAfter.amount.toNumber(),recipientWallet1BalanceBefore.amount.toNumber()+500);
+
+      const proctocolPositionData =
+        await program.account.procotolPositionState.fetch(corePositionAState);
+
+      assert.equal(proctocolPositionData.tokenFeesOwed0.toNumber(), 0);
+      assert.equal(proctocolPositionData.tokenFeesOwed1.toNumber(), 0);
 
       // let listener: number;
       // let [_event, _slot] = await new Promise((resolve, _reject) => {
@@ -2755,6 +3219,11 @@ describe("amm-core", async () => {
             bitmapLowerState: bitmapLowerAState,
             bitmapUpperState: bitmapUpperAState,
             lastObservationState: lastObservationAState,
+            tokenVault0: vaultA0,
+            tokenVault1: vaultA1,
+            recipientTokenAccount0: minterWallet0,
+            recipientTokenAccount1: minterWallet1,
+            tokenProgram: TOKEN_PROGRAM_ID,
           },
           remainingAccounts: [
             {
@@ -2772,7 +3241,270 @@ describe("amm-core", async () => {
     });
   });
 
-  describe("#collect_from_tokenized", () => {
+  describe("#swap_base_input_single", () => {
+    // before swapping, current tick = 10 and price = 4297115210
+    // active ticks are 0 and 10
+    // entire liquidity is in token_1
+
+    it("fails if limit price is greater than current pool price", async () => {
+      const amountIn = new BN(100_000);
+      const amountOutMinimum = new BN(0);
+      const sqrtPriceLimitX32 = new BN(4297115220);
+
+      await expect(
+        program.rpc.swap(
+          // true,
+          amountIn,
+          amountOutMinimum,
+          sqrtPriceLimitX32,
+          true,
+          {
+            accounts: {
+              signer: owner,
+              ammConfig,
+              poolState: poolAState,
+              inputTokenAccount: minterWallet0,
+              outputTokenAccount: minterWallet1,
+              inputVault: vaultA0,
+              outputVault: vaultA1,
+              lastObservationState: lastObservationAState,
+              tokenProgram: TOKEN_PROGRAM_ID,
+            },
+            remainingAccounts: [
+              {
+                pubkey: nextObservationAState,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: bitmapLowerAState,
+                isSigner: false,
+                isWritable: true,
+              },
+              // price moves downwards in zero for one swap
+              {
+                pubkey: tickUpperAState,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: tickLowerAState,
+                isSigner: false,
+                isWritable: true,
+              },
+            ],
+          }
+        )
+      ).to.be.rejectedWith(Error);
+    });
+
+    it("swap upto a limit price for a zero to one swap", async () => {
+      const amountIn = new BN(100_000);
+      const amountOutMinimum = new BN(0);
+      const sqrtPriceLimitX32 = new BN(4297115200); // current price is 4297115210
+
+      const tickDataProvider = new SolanaTickDataProvider(program, {
+        token0: token0.publicKey,
+        token1: token1.publicKey,
+        fee,
+      });
+
+      const {
+        tick: currentTick,
+        sqrtPrice: currentSqrtPriceX32,
+        liquidity: currentLiquidity,
+      } = await program.account.poolState.fetch(poolAState);
+      await tickDataProvider.eagerLoadCache(currentTick, tickSpacing);
+      // output is one tick behind actual (8 instead of 9)
+      uniPoolA = new Pool(
+        uniToken0,
+        uniToken1,
+        fee,
+        JSBI.BigInt(currentSqrtPriceX32),
+        JSBI.BigInt(currentLiquidity),
+        currentTick,
+        tickDataProvider
+      );
+
+      const [expectedAmountOut, expectedNewPool, bitmapAndTickAccounts] =
+        await uniPoolA.getOutputAmount(
+          CurrencyAmount.fromRawAmount(uniToken0, amountIn.toNumber()),
+          JSBI.BigInt(sqrtPriceLimitX32)
+        );
+      assert.equal(
+        expectedNewPool.sqrtRatioX32.toString(),
+        sqrtPriceLimitX32.toString()
+      );
+
+      const tx = await program.rpc.swap(
+        amountIn,
+        amountOutMinimum,
+        sqrtPriceLimitX32,
+        true,
+        {
+          accounts: {
+            signer: owner,
+            ammConfig,
+            poolState: poolAState,
+            inputTokenAccount: minterWallet0,
+            outputTokenAccount: minterWallet1,
+            inputVault: vaultA0,
+            outputVault: vaultA1,
+            lastObservationState: lastObservationAState,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          },
+          remainingAccounts: [
+            ...bitmapAndTickAccounts,
+            {
+              pubkey: nextObservationAState,
+              isSigner: false,
+              isWritable: true,
+            },
+          ],
+        }
+      );
+      console.log("exactInputSingle, tx: ", tx);
+      let poolStateData = await program.account.poolState.fetch(poolAState);
+      console.log(
+        "poolStateData.tick:",
+        poolStateData.tick,
+        "poolStateData.sqrtPriceX32: ",
+        poolStateData.sqrtPrice.toNumber(),
+        "sqrtPriceLimitX32:",
+        sqrtPriceLimitX32.toNumber(),
+        "expectedAmountOut:",
+        JSBI.toNumber(expectedAmountOut.numerator)
+      );
+      assert(poolStateData.sqrtPrice.eq(sqrtPriceLimitX32));
+      assert.equal(poolStateData.tick, expectedNewPool.tickCurrent);
+      // assert.equal(expectedAmountOut)
+
+      console.log(
+        "tick after swap",
+        poolStateData.tick,
+        "price",
+        poolStateData.sqrtPrice.toString()
+      );
+      uniPoolA = expectedNewPool;
+      let poolAStateData = await program.account.poolState.fetch(poolAState);
+      assert.equal(poolAStateData.liquidity.toNumber(), 1998599283);
+
+      // console.log("---------------poolAStateData1: ", poolAStateData);
+    });
+
+    it("performs a zero for one swap without a limit price", async () => {
+      let poolStateDataBefore = await program.account.poolState.fetch(
+        poolAState
+      );
+      console.log("pool price", poolStateDataBefore.sqrtPrice.toNumber());
+      console.log("pool tick", poolStateDataBefore.tick);
+
+      const feeGrowthGlobalToken0Before =
+        poolStateDataBefore.protocolFeesToken0;
+      const vaultBalanceA1Befer = await token1.getAccountInfo(vaultA1);
+      const { observationIndex, observationCardinalityNext } =
+        await program.account.poolState.fetch(poolAState);
+
+      lastObservationAState = (
+        await PublicKey.findProgramAddress(
+          [
+            OBSERVATION_SEED,
+            token0.publicKey.toBuffer(),
+            token1.publicKey.toBuffer(),
+            u32ToSeed(fee),
+            u16ToSeed(observationIndex),
+          ],
+          program.programId
+        )
+      )[0];
+
+      nextObservationAState = (
+        await PublicKey.findProgramAddress(
+          [
+            OBSERVATION_SEED,
+            token0.publicKey.toBuffer(),
+            token1.publicKey.toBuffer(),
+            u32ToSeed(fee),
+            u16ToSeed((observationIndex + 1) % observationCardinalityNext),
+          ],
+          program.programId
+        )
+      )[0];
+
+      const amountIn = new BN(100_000);
+      const amountOutMinimum = new BN(0);
+      const sqrtPriceLimitX32 = new BN(0);
+
+      console.log(
+        "pool tick",
+        uniPoolA.tickCurrent,
+        "price",
+        uniPoolA.sqrtRatioX32.toString()
+      );
+      const [expectedAmountOut, expectedNewPool, bitmapAndTickAccounts] =
+        await uniPoolA.getOutputAmount(
+          CurrencyAmount.fromRawAmount(uniToken0, amountIn.toNumber())
+          // JSBI.BigInt(sqrtPriceLimitX32)
+        );
+      console.log("expected pool", expectedNewPool);
+
+      await program.methods
+        .swap(amountIn, amountOutMinimum, sqrtPriceLimitX32, true)
+        .accounts({
+          signer: owner,
+          ammConfig,
+          poolState: poolAState,
+          inputTokenAccount: minterWallet0,
+          outputTokenAccount: minterWallet1,
+          inputVault: vaultA0,
+          outputVault: vaultA1,
+          lastObservationState: lastObservationAState,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .remainingAccounts([
+          ...bitmapAndTickAccounts,
+          {
+            pubkey: nextObservationAState,
+            isSigner: false,
+            isWritable: true,
+          },
+        ])
+        .rpc();
+
+      const poolStateDataAfter = await program.account.poolState.fetch(
+        poolAState
+      );
+      console.log("---------------poolAStateData2: ", poolStateDataAfter);
+      console.log("pool price after", poolStateDataAfter.sqrtPrice.toNumber());
+      console.log("pool tick after", poolStateDataAfter.tick);
+
+      assert.equal(
+        poolStateDataAfter.sqrtPrice.toNumber(),
+        JSBI.toNumber(expectedNewPool.sqrtRatioX32)
+      );
+      assert.equal(poolStateDataAfter.tick, expectedNewPool.tickCurrent);
+
+      const feeGrowthGlobalToken0After = poolStateDataAfter.protocolFeesToken0;
+      const vaultBalanceA1After = await token1.getAccountInfo(vaultA1);
+
+      assert.equal(
+        feeGrowthGlobalToken0After.toNumber(),
+        feeGrowthGlobalToken0Before.toNumber() + 8
+      );
+      assert.equal(
+        vaultBalanceA1Befer.amount.toNumber() -
+          vaultBalanceA1After.amount.toNumber(),
+        JSBI.toNumber(expectedAmountOut.numerator)
+      );
+      console.log(
+        "expectedAmountOut: ",
+        JSBI.toNumber(expectedAmountOut.numerator)
+      );
+
+      uniPoolA = expectedNewPool;
+    });
+  });
+  describe("#collect_fee", () => {
     it("fails if both amounts are set as 0", async () => {
       await expect(
         program.rpc.collectFee(new BN(0), new BN(0), {
@@ -2978,15 +3710,15 @@ describe("amm-core", async () => {
 
       const corePositionData =
         await program.account.procotolPositionState.fetch(corePositionAState);
-      assert(corePositionData.tokensOwed0.eqn(0));
-      assert(corePositionData.tokensOwed1.eqn(1000489)); // minus 10
+      assert.equal(corePositionData.tokenFeesOwed0.toNumber(), 42);
+      assert.equal(corePositionData.tokenFeesOwed1.toNumber(), 0); // minus 10
 
       const tokenizedPositionData =
         await program.account.personalPositionState.fetch(
           tokenizedPositionAState
         );
-      assert(tokenizedPositionData.tokensOwed0.eqn(0));
-      assert(tokenizedPositionData.tokensOwed1.eqn(1000489));
+      assert.equal(tokenizedPositionData.tokenFeesOwed0.toNumber(),42);
+      assert.equal(tokenizedPositionData.tokenFeesOwed1.toNumber(),0);
 
       const recipientWallet0Info = await token0.getAccountInfo(
         feeRecipientWallet0
@@ -2995,12 +3727,13 @@ describe("amm-core", async () => {
         feeRecipientWallet1
       );
       assert(recipientWallet0Info.amount.eqn(0));
-      assert(recipientWallet1Info.amount.eqn(10));
+      // assert.equal(recipientWallet1Info.amount.toNumber(),10);
+      assert.equal(recipientWallet1Info.amount.toNumber(), 0);
 
       const vault0Info = await token0.getAccountInfo(vaultA0);
       const vault1Info = await token1.getAccountInfo(vaultA1);
-      assert(vault0Info.amount.eqn(0));
-      assert(vault1Info.amount.eqn(1999990)); // minus 10
+      assert.equal(vault0Info.amount.toNumber(),100006);
+      assert.equal(vault1Info.amount.toNumber(), 899453); // minus 10
     });
 
     it("collect a portion of owed tokens as the delegated authority", async () => {
@@ -3055,15 +3788,15 @@ describe("amm-core", async () => {
       const corePositionData =
         await program.account.procotolPositionState.fetch(corePositionAState);
       console.log("corePositionAState: ", corePositionData);
-      assert(corePositionData.tokensOwed0.eqn(0));
-      assert(corePositionData.tokensOwed1.eqn(1000479));
+      assert.equal(corePositionData.tokenFeesOwed0.toNumber(),42);
+      assert.equal(corePositionData.tokenFeesOwed1.toNumber(), 0);
 
       const tokenizedPositionData =
         await program.account.personalPositionState.fetch(
           tokenizedPositionAState
         );
-      assert(tokenizedPositionData.tokensOwed0.eqn(0));
-      assert(tokenizedPositionData.tokensOwed1.eqn(1000479));
+      assert.equal(tokenizedPositionData.tokenFeesOwed0.toNumber(),42);
+      assert.equal(tokenizedPositionData.tokenFeesOwed1.toNumber(), 0);
 
       const recipientWallet0Info = await token0.getAccountInfo(
         feeRecipientWallet0
@@ -3071,117 +3804,25 @@ describe("amm-core", async () => {
       const recipientWallet1Info = await token1.getAccountInfo(
         feeRecipientWallet1
       );
-      assert(recipientWallet0Info.amount.eqn(0));
-      assert(recipientWallet1Info.amount.eqn(20));
+      assert.equal(recipientWallet0Info.amount.toNumber(), 0);
+      // assert.equal(recipientWallet1Info.amount.toNumber(), 20);
+      assert.equal(recipientWallet1Info.amount.toNumber(), 0);
 
       const vault0Info = await token0.getAccountInfo(vaultA0);
       const vault1Info = await token1.getAccountInfo(vaultA1);
-      assert(vault0Info.amount.eqn(0));
-      assert(vault1Info.amount.eqn(1999980));
+      assert.equal(vault0Info.amount.toNumber(),100006);
+      assert.equal(vault1Info.amount.toNumber(), 899453);
     });
   });
 
-  describe("#swap_base_input_single", () => {
-    // before swapping, current tick = 10 and price = 4297115210
-    // active ticks are 0 and 10
-    // entire liquidity is in token_1
-
-    it("fails if limit price is greater than current pool price", async () => {
-      const amountIn = new BN(100_000);
-      const amountOutMinimum = new BN(0);
-      const sqrtPriceLimitX32 = new BN(4297115220);
+  describe("#swap_base_output_single", () => {
+    it("fails if amount_in is greater than amountInMaximum", async () => {
+      const amountInMaximum = new BN(100);
+      const amountOut = new BN(100_000);
+      const sqrtPriceLimitX32 = new BN(0);
 
       await expect(
-        program.rpc.swapSingle(
-          // true,
-          amountIn,
-          amountOutMinimum,
-          sqrtPriceLimitX32,
-          true,
-          {
-            accounts: {
-              signer: owner,
-              ammConfig,
-              poolState: poolAState,
-              inputTokenAccount: minterWallet0,
-              outputTokenAccount: minterWallet1,
-              inputVault: vaultA0,
-              outputVault: vaultA1,
-              lastObservationState: lastObservationAState,
-              tokenProgram: TOKEN_PROGRAM_ID,
-            },
-            remainingAccounts: [
-              {
-                pubkey: nextObservationAState,
-                isSigner: false,
-                isWritable: true,
-              },
-              {
-                pubkey: bitmapLowerAState,
-                isSigner: false,
-                isWritable: true,
-              },
-              // price moves downwards in zero for one swap
-              {
-                pubkey: tickUpperAState,
-                isSigner: false,
-                isWritable: true,
-              },
-              {
-                pubkey: tickLowerAState,
-                isSigner: false,
-                isWritable: true,
-              },
-            ],
-          }
-        )
-      ).to.be.rejectedWith(Error);
-    });
-
-    it("swap upto a limit price for a zero to one swap", async () => {
-      const amountIn = new BN(100_000);
-      const amountOutMinimum = new BN(0);
-      const sqrtPriceLimitX32 = new BN(4297115200); // current price is 4297115210
-
-      const tickDataProvider = new SolanaTickDataProvider(program, {
-        token0: token0.publicKey,
-        token1: token1.publicKey,
-        fee,
-      });
-
-      const {
-        tick: currentTick,
-        sqrtPrice: currentSqrtPriceX32,
-        liquidity: currentLiquidity,
-      } = await program.account.poolState.fetch(poolAState);
-      await tickDataProvider.eagerLoadCache(currentTick, tickSpacing);
-      // output is one tick behind actual (8 instead of 9)
-      uniPoolA = new Pool(
-        uniToken0,
-        uniToken1,
-        fee,
-        JSBI.BigInt(currentSqrtPriceX32),
-        JSBI.BigInt(currentLiquidity),
-        currentTick,
-        tickDataProvider
-      );
-
-      const [expectedAmountOut, expectedNewPool, bitmapAndTickAccounts] =
-        await uniPoolA.getOutputAmount(
-          CurrencyAmount.fromRawAmount(uniToken0, amountIn.toNumber()),
-          JSBI.BigInt(sqrtPriceLimitX32)
-        );
-      assert.equal(
-        expectedNewPool.sqrtRatioX32.toString(),
-        sqrtPriceLimitX32.toString()
-      );
-
-      const tx = await program.rpc.swapSingle(
-        amountIn,
-        amountOutMinimum,
-        sqrtPriceLimitX32,
-        true,
-        {
+        program.rpc.swap(amountOut, amountInMaximum, sqrtPriceLimitX32, false, {
           accounts: {
             signer: owner,
             ammConfig,
@@ -3194,194 +3835,18 @@ describe("amm-core", async () => {
             tokenProgram: TOKEN_PROGRAM_ID,
           },
           remainingAccounts: [
-            ...bitmapAndTickAccounts,
+            {
+              pubkey: bitmapLowerAState,
+              isSigner: false,
+              isWritable: true,
+            },
             {
               pubkey: nextObservationAState,
               isSigner: false,
               isWritable: true,
             },
           ],
-        }
-      );
-      console.log("exactInputSingle, tx: ", tx);
-      let poolStateData = await program.account.poolState.fetch(poolAState);
-      console.log(
-        "poolStateData.tick:",
-        poolStateData.tick,
-        "poolStateData.sqrtPriceX32: ",
-        poolStateData.sqrtPrice.toNumber(),
-        "sqrtPriceLimitX32:",
-        sqrtPriceLimitX32.toNumber(),
-        "expectedAmountOut:",
-        JSBI.toNumber(expectedAmountOut.numerator)
-      );
-      assert(poolStateData.sqrtPrice.eq(sqrtPriceLimitX32));
-      assert.equal(poolStateData.tick, expectedNewPool.tickCurrent);
-      // assert.equal(expectedAmountOut)
-
-      console.log(
-        "tick after swap",
-        poolStateData.tick,
-        "price",
-        poolStateData.sqrtPrice.toString()
-      );
-      uniPoolA = expectedNewPool;
-      let poolAStateData = await program.account.poolState.fetch(poolAState);
-      assert.equal(poolAStateData.liquidity.toNumber(), 1998599283);
-
-      // console.log("---------------poolAStateData1: ", poolAStateData);
-    });
-
-    it("performs a zero for one swap without a limit price", async () => {
-      let poolStateDataBefore = await program.account.poolState.fetch(
-        poolAState
-      );
-      console.log("pool price", poolStateDataBefore.sqrtPrice.toNumber());
-      console.log("pool tick", poolStateDataBefore.tick);
-
-      const feeGrowthGlobalToken0Before =
-        poolStateDataBefore.protocolFeesToken0;
-      const vaultBalanceA1Befer = await token1.getAccountInfo(vaultA1);
-      const { observationIndex, observationCardinalityNext } =
-        await program.account.poolState.fetch(poolAState);
-
-      lastObservationAState = (
-        await PublicKey.findProgramAddress(
-          [
-            OBSERVATION_SEED,
-            token0.publicKey.toBuffer(),
-            token1.publicKey.toBuffer(),
-            u32ToSeed(fee),
-            u16ToSeed(observationIndex),
-          ],
-          program.programId
-        )
-      )[0];
-
-      nextObservationAState = (
-        await PublicKey.findProgramAddress(
-          [
-            OBSERVATION_SEED,
-            token0.publicKey.toBuffer(),
-            token1.publicKey.toBuffer(),
-            u32ToSeed(fee),
-            u16ToSeed((observationIndex + 1) % observationCardinalityNext),
-          ],
-          program.programId
-        )
-      )[0];
-
-      const amountIn = new BN(100_000);
-      const amountOutMinimum = new BN(0);
-      const sqrtPriceLimitX32 = new BN(0);
-
-      console.log(
-        "pool tick",
-        uniPoolA.tickCurrent,
-        "price",
-        uniPoolA.sqrtRatioX32.toString()
-      );
-      const [expectedAmountOut, expectedNewPool, bitmapAndTickAccounts] =
-        await uniPoolA.getOutputAmount(
-          CurrencyAmount.fromRawAmount(uniToken0, amountIn.toNumber())
-          // JSBI.BigInt(sqrtPriceLimitX32)
-        );
-      console.log("expected pool", expectedNewPool);
-
-      await program.methods
-        .swapSingle(amountIn, amountOutMinimum, sqrtPriceLimitX32, true)
-        .accounts({
-          signer: owner,
-          ammConfig,
-          poolState: poolAState,
-          inputTokenAccount: minterWallet0,
-          outputTokenAccount: minterWallet1,
-          inputVault: vaultA0,
-          outputVault: vaultA1,
-          lastObservationState: lastObservationAState,
-          tokenProgram: TOKEN_PROGRAM_ID,
         })
-        .remainingAccounts([
-          ...bitmapAndTickAccounts,
-          {
-            pubkey: nextObservationAState,
-            isSigner: false,
-            isWritable: true,
-          },
-        ])
-        .rpc();
-
-      const poolStateDataAfter = await program.account.poolState.fetch(
-        poolAState
-      );
-      console.log("---------------poolAStateData2: ", poolStateDataAfter);
-      console.log("pool price after", poolStateDataAfter.sqrtPrice.toNumber());
-      console.log("pool tick after", poolStateDataAfter.tick);
-
-      assert.equal(
-        poolStateDataAfter.sqrtPrice.toNumber(),
-        JSBI.toNumber(expectedNewPool.sqrtRatioX32)
-      );
-      assert.equal(poolStateDataAfter.tick, expectedNewPool.tickCurrent);
-
-      const feeGrowthGlobalToken0After = poolStateDataAfter.protocolFeesToken0;
-      const vaultBalanceA1After = await token1.getAccountInfo(vaultA1);
-
-      assert.equal(
-        feeGrowthGlobalToken0After.toNumber(),
-        feeGrowthGlobalToken0Before.toNumber() + 8
-      );
-      assert.equal(
-        vaultBalanceA1Befer.amount.toNumber()- vaultBalanceA1After.amount.toNumber(),
-        JSBI.toNumber(expectedAmountOut.numerator)
-      );
-      console.log(
-        "expectedAmountOut: ",
-        JSBI.toNumber(expectedAmountOut.numerator)
-      );
-
-      uniPoolA = expectedNewPool;
-    });
-  });
-
-  describe("#swap_base_output_single", () => {
-    it("fails if amount_in is greater than amountInMaximum", async () => {
-      const amountInMaximum = new BN(100);
-      const amountOut = new BN(100_000);
-      const sqrtPriceLimitX32 = new BN(0);
-
-      await expect(
-        program.rpc.swapSingle(
-          amountOut,
-          amountInMaximum,
-          sqrtPriceLimitX32,
-          false,
-          {
-            accounts: {
-              signer: owner,
-              ammConfig,
-              poolState: poolAState,
-              inputTokenAccount: minterWallet0,
-              outputTokenAccount: minterWallet1,
-              inputVault: vaultA0,
-              outputVault: vaultA1,
-              lastObservationState: lastObservationAState,
-              tokenProgram: TOKEN_PROGRAM_ID,
-            },
-            remainingAccounts: [
-              {
-                pubkey: bitmapLowerAState,
-                isSigner: false,
-                isWritable: true,
-              },
-              {
-                pubkey: nextObservationAState,
-                isSigner: false,
-                isWritable: true,
-              },
-            ],
-          }
-        )
       ).to.be.rejectedWith(Error);
     });
 
@@ -3443,7 +3908,7 @@ describe("amm-core", async () => {
 
       let vaultBalanceA0Before = await token0.getAccountInfo(vaultA0);
       await program.methods
-        .swapSingle(amountOut, amountInMaximum, sqrtPriceLimitX32, false)
+        .swap(amountOut, amountInMaximum, sqrtPriceLimitX32, false)
         .accounts({
           signer: owner,
           ammConfig,
@@ -3539,7 +4004,7 @@ describe("amm-core", async () => {
       );
       console.log("expected pool", expectedNewPool);
 
-      await program.rpc.swapBaseIn(
+      await program.rpc.swapRouterBaseIn(
         amountIn,
         amountOutMinimum,
         Buffer.from([2]),
@@ -3599,6 +4064,7 @@ describe("amm-core", async () => {
       await program.rpc.createPool(initialPriceX32, {
         accounts: {
           poolCreator: owner,
+          ammConfig: ammConfig,
           tokenMint0: token1.publicKey,
           tokenMint1: token2.publicKey,
           feeState,
@@ -3835,7 +4301,7 @@ describe("amm-core", async () => {
       const amountIn = new BN(100_000);
       const amountOutMinimum = new BN(0);
       await program.methods
-        .swapBaseIn(amountIn, amountOutMinimum, Buffer.from([2, 2]))
+        .swapRouterBaseIn(amountIn, amountOutMinimum, Buffer.from([2, 2]))
         .accounts({
           signer: owner,
           ammConfig,
@@ -3952,6 +4418,177 @@ describe("amm-core", async () => {
     });
   });
 
+  describe("#collect_reward", () => {
+    let ownerRewardTokenAccount0;
+    let ownerRewardTokenAccount1;
+    let ownerRewardTokenAccount2;
+
+    it("update_reward_and_fee, fails if both amounts are set as 0", async () => {
+      await program.methods
+        .updateRewardInfos()
+        .accounts({
+          ammConfig,
+          poolState: poolAState,
+        })
+        .remainingAccounts([])
+        .rpc();
+    });
+
+    it("creates reward token accounts for owner", async () => {
+      ownerRewardTokenAccount0 =
+        await rewardToken0.createAssociatedTokenAccount(owner);
+
+      ownerRewardTokenAccount1 =
+        await rewardToken1.createAssociatedTokenAccount(owner);
+
+      ownerRewardTokenAccount2 =
+        await rewardToken2.createAssociatedTokenAccount(owner);
+    });
+
+    it("fails if not owner", async () => {
+      await expect(
+        program.methods
+          .collectRewards()
+          .accounts({
+            ownerOrDelegate: notOwner.publicKey,
+            nftAccount: positionANftAccount,
+            personalPositionState: tokenizedPositionAState,
+            poolState: poolAState,
+            tickLowerState: tickLowerAState,
+            tickUpperState: tickUpperAState,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .remainingAccounts([
+            {
+              pubkey: rewardVault0,
+              isSigner: false,
+              isWritable: true,
+            },
+            {
+              pubkey: ownerRewardTokenAccount0,
+              isSigner: false,
+              isWritable: true,
+            },
+            {
+              pubkey: rewardVault1,
+              isSigner: false,
+              isWritable: true,
+            },
+            {
+              pubkey: ownerRewardTokenAccount1,
+              isSigner: false,
+              isWritable: true,
+            },
+            {
+              pubkey: rewardVault2,
+              isSigner: false,
+              isWritable: true,
+            },
+            {
+              pubkey: ownerRewardTokenAccount2,
+              isSigner: false,
+              isWritable: true,
+            },
+          ])
+          .rpc()
+      ).to.be.rejectedWith(Error);
+    });
+
+    it("colect all reward amount", async () => {
+      await program.methods
+        .collectRewards()
+        .accounts({
+          ownerOrDelegate: owner,
+          nftAccount: positionANftAccount,
+          protocolPositionState: corePositionAState,
+          personalPositionState: tokenizedPositionAState,
+          poolState: poolAState,
+          tickLowerState: tickLowerAState,
+          tickUpperState: tickUpperAState,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .remainingAccounts([
+          {
+            pubkey: rewardVault0,
+            isSigner: false,
+            isWritable: true,
+          },
+          {
+            pubkey: ownerRewardTokenAccount0,
+            isSigner: false,
+            isWritable: true,
+          },
+          {
+            pubkey: rewardVault1,
+            isSigner: false,
+            isWritable: true,
+          },
+          {
+            pubkey: ownerRewardTokenAccount1,
+            isSigner: false,
+            isWritable: true,
+          },
+          {
+            pubkey: rewardVault2,
+            isSigner: false,
+            isWritable: true,
+          },
+          {
+            pubkey: ownerRewardTokenAccount2,
+            isSigner: false,
+            isWritable: true,
+          },
+        ])
+        .rpc();
+    });
+  });
+
+  describe("#set_reward_emissions", () => {
+    it("fails if not authority", async () => {
+      await expect(
+        program.methods
+          .setRewardEmissions(0, new BN(10))
+          .accounts({
+            authority: notOwner.publicKey,
+            ammConfig: ammConfig,
+            poolState: poolAState,
+          })
+          .remainingAccounts([])
+          .rpc()
+      ).to.be.rejectedWith(Error);
+    });
+
+    it("fails if index overflow", async () => {
+      await expect(
+        program.methods
+          .setRewardEmissions(3, new BN(10))
+          .accounts({
+            authority: owner,
+            ammConfig: ammConfig,
+            poolState: poolAState,
+          })
+          .remainingAccounts([])
+          .rpc()
+      ).to.be.rejectedWith(Error);
+    });
+
+    it("set reward index 0 emission", async () => {
+      await program.methods
+        .setRewardEmissions(0, new BN(1))
+        .accounts({
+          authority: owner,
+          ammConfig: ammConfig,
+          poolState: poolAState,
+        })
+        .remainingAccounts([])
+        .rpc();
+
+      const poolStateData = await program.account.poolState.fetch(poolAState);
+
+      assert.equal(poolStateData.rewardInfos[0].rewardEmissionPerSecondX32.toNumber(), 1);
+    });
+  });
+  return;
   describe("Completely close position and deallocate ticks", () => {
     it("update observation accounts", async () => {
       const { observationIndex, observationCardinalityNext } =
@@ -4020,6 +4657,11 @@ describe("amm-core", async () => {
             bitmapLowerState: bitmapLowerAState,
             bitmapUpperState: bitmapUpperAState,
             lastObservationState: lastObservationAState,
+            tokenVault0: vaultA0,
+            tokenVault1: vaultA1,
+            recipientTokenAccount0: feeRecipientWallet0,
+            recipientTokenAccount1: feeRecipientWallet1,
+            tokenProgram: TOKEN_PROGRAM_ID,
           },
           remainingAccounts: [
             {

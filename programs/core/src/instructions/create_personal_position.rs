@@ -236,7 +236,7 @@ pub fn create_personal_position<'a, 'b, 'c, 'info>(
     let updated_core_position = accounts.position_state;
     tokenized_position.fee_growth_inside_0_last = updated_core_position.fee_growth_inside_0_last;
     tokenized_position.fee_growth_inside_1_last = updated_core_position.fee_growth_inside_1_last;
-
+    tokenized_position.update_rewards(updated_core_position.reward_growth_inside)?;
     emit!(IncreaseLiquidityEvent {
         position_nft_mint: ctx.accounts.position_nft_mint.key(),
         liquidity,
@@ -539,6 +539,13 @@ pub fn _update_position<'info>(
     bitmap_lower: &AccountLoader<'info, TickBitmapState>,
     bitmap_upper: &AccountLoader<'info, TickBitmapState>,
 ) -> Result<()> {
+    let clock = Clock::get()?;
+    let updated_reward_infos = pool_state.update_reward_infos(clock.unix_timestamp as u64)?;
+    let reward_growths_outside = RewardInfo::to_reward_growths(&updated_reward_infos);
+    msg!(
+        "_update_position: update_rewared_info:{:?}",
+        reward_growths_outside
+    );
     let tick_lower = tick_lower_state.deref_mut();
     let tick_upper = tick_upper_state.deref_mut();
 
@@ -565,6 +572,7 @@ pub fn _update_position<'info>(
             time,
             false,
             max_liquidity_per_tick,
+            reward_growths_outside,
         )?;
         flipped_upper = tick_upper.update(
             pool_state.tick,
@@ -576,8 +584,13 @@ pub fn _update_position<'info>(
             time,
             true,
             max_liquidity_per_tick,
+            reward_growths_outside,
         )?;
-
+        msg!(
+            "tick_upper.reward_growths_outside:{:?}, tick_lower.reward_growths_outside:{:?}",
+            tick_upper.reward_growths_outside,
+            tick_lower.reward_growths_outside
+        );
         if flipped_lower {
             let bit_pos = ((tick_lower.tick / pool_state.tick_spacing as i32) % 256) as u8; // rightmost 8 bits
             bitmap_lower.load_mut()?.flip_bit(bit_pos);
@@ -599,10 +612,20 @@ pub fn _update_position<'info>(
         pool_state.fee_growth_global_0,
         pool_state.fee_growth_global_1,
     );
+
+    // Update reward accrued to the position
+    let reward_growths_inside = tick::get_reward_growths_inside(
+        tick_lower.deref(),
+        tick_upper.deref(),
+        pool_state.tick,
+        &updated_reward_infos,
+    );
+
     position_state.update(
         liquidity_delta,
         fee_growth_inside_0_x32,
         fee_growth_inside_1_x32,
+        reward_growths_inside,
     )?;
 
     // Deallocate the tick accounts if they get un-initialized

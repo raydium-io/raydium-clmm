@@ -13,7 +13,7 @@ pub struct CreateProtocolPosition<'info> {
     pub amm_config: UncheckedAccount<'info>,
 
     /// Create a position account for this pool
-    pub pool_state: Account<'info, PoolState>,
+    pub pool_state: Box<Account<'info, PoolState>>,
 
     /// The lower tick boundary of the position
     pub tick_lower_state: Account<'info, TickState>,
