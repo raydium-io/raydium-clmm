@@ -25,8 +25,10 @@ pub const NUM_REWARDS: usize = 3;
 pub struct PoolState {
     /// Bump to identify PDA
     pub bump: u8,
-    // which config the pool belongs
+    // Which config the pool belongs
     pub amm_config: Pubkey,
+    // Pool creator
+    pub owner: Pubkey,
 
     /// Token pair of the pool, where token_mint_0 address < token_mint_1 address
     pub token_mint_0: Pubkey,
@@ -100,6 +102,19 @@ impl PoolState {
         + RewardInfo::LEN * NUM_REWARDS
         + 512;
 
+    pub fn key(&self) -> Pubkey {
+        Pubkey::create_program_address(
+            &[
+                &POOL_SEED.as_bytes(),
+                self.token_mint_0.as_ref(),
+                self.token_mint_1.as_ref(),
+                &self.fee.to_be_bytes(),
+                &[self.bump],
+            ],
+            &crate::id(),
+        )
+        .unwrap()
+    }
     /// Returns the observation index after the currently active one in a liquidity pool
     ///
     /// # Arguments
@@ -124,15 +139,18 @@ impl PoolState {
         } else {
             self.observation_index
         };
-        let seeds = [
-            &OBSERVATION_SEED.as_bytes(),
-            self.token_mint_0.as_ref(),
-            self.token_mint_1.as_ref(),
-            &self.fee.to_be_bytes(),
-            &index.to_be_bytes(),
-            &[bump],
-        ];
-        assert!(*key == Pubkey::create_program_address(&seeds, &crate::id()).unwrap());
+        assert!(
+            *key == Pubkey::create_program_address(
+                &[
+                    &OBSERVATION_SEED.as_bytes(),
+                    self.key().as_ref(),
+                    &index.to_be_bytes(),
+                    &[bump],
+                ],
+                &crate::id()
+            )
+            .unwrap()
+        );
         Ok(())
     }
 
@@ -150,9 +168,7 @@ impl PoolState {
             *key == Pubkey::create_program_address(
                 &[
                     &TICK_SEED.as_bytes(),
-                    self.token_mint_0.as_ref(),
-                    self.token_mint_1.as_ref(),
-                    &self.fee.to_be_bytes(),
+                    self.key().as_ref(),
                     &tick.to_be_bytes(),
                     &[bump],
                 ],
@@ -177,9 +193,7 @@ impl PoolState {
             *key == Pubkey::create_program_address(
                 &[
                     &BITMAP_SEED.as_bytes(),
-                    self.token_mint_0.as_ref(),
-                    self.token_mint_1.as_ref(),
-                    &self.fee.to_be_bytes(),
+                    self.key().as_ref(),
                     &word_pos.to_be_bytes(),
                     &[bump],
                 ],
@@ -211,9 +225,7 @@ impl PoolState {
             *key == Pubkey::create_program_address(
                 &[
                     &POSITION_SEED.as_bytes(),
-                    self.token_mint_0.as_ref(),
-                    self.token_mint_1.as_ref(),
-                    &self.fee.to_be_bytes(),
+                    self.key().as_ref(),
                     position_owner.as_ref(),
                     &tick_lower.to_be_bytes(),
                     &tick_upper.to_be_bytes(),
@@ -293,6 +305,7 @@ impl PoolState {
         reward_per_second_x32: u64,
         token_mint: &Pubkey,
         token_vault: &Pubkey,
+        reward_funder: &Pubkey,
     ) -> Result<()> {
         if index >= NUM_REWARDS {
             return Err(ErrorCode::InvalidRewardIndex.into());
@@ -322,6 +335,7 @@ impl PoolState {
         self.reward_infos[index].reward_emission_per_second_x32 = reward_per_second_x32;
         self.reward_infos[index].reward_token_mint = *token_mint;
         self.reward_infos[index].reward_token_vault = *token_vault;
+        self.reward_infos[index].reward_authoruty = Pubkey::default();
 
         msg!(
             "reward_index:{},curr_timestamp:{}, reward_infos:{:?}",
@@ -452,6 +466,8 @@ pub struct RewardInfo {
     pub reward_token_mint: Pubkey,
     /// Reward vault token account.
     pub reward_token_vault: Pubkey,
+    /// The owner set reward param
+    pub reward_authoruty: Pubkey,
     /// Q32.32 number that tracks the total tokens earned per unit of liquidity since the reward
     /// emissions were turned on.
     pub reward_growth_global_x32: u64,

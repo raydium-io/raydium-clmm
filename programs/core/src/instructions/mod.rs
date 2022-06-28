@@ -63,3 +63,6 @@ pub use update_reward_info::*;
 
 pub mod set_reward_emissions;
 pub use set_reward_emissions::*;
+
+pub mod reset_sqrt_price;
+pub use reset_sqrt_price::*;

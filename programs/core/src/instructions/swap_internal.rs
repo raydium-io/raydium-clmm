@@ -199,9 +199,7 @@ pub fn swap_internal<'b, 'info>(
                 Pubkey::find_program_address(
                     &[
                         BITMAP_SEED.as_bytes(),
-                        ctx.pool_state.token_mint_0.as_ref(),
-                        ctx.pool_state.token_mint_1.as_ref(),
-                        &ctx.pool_state.fee.to_be_bytes(),
+                        ctx.pool_state.key().as_ref(),
                         &word_pos.to_be_bytes(),
                     ],
                     &crate::id()

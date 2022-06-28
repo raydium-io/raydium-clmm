@@ -7,7 +7,10 @@ use anchor_lang::prelude::*;
 #[derive(Accounts)]
 pub struct SetRewardEmissions<'info> {
     /// Address to be set as protocol owner. It pays to create factory state account.
-    #[account(mut)]
+    #[account(
+        mut,
+        address = amm_config.owner.key()
+    )]
     pub authority: Signer<'info>,
 
     #[account(mut)]

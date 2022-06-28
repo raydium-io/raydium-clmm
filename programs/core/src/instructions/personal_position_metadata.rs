@@ -22,9 +22,9 @@ pub struct PersonalPositionWithMetadata<'info> {
     /// Position state of the tokenized position
     #[account(
         seeds = [POSITION_SEED.as_bytes(), nft_mint.key().as_ref()],
-        bump = position_state.bump
+        bump = personal_position_state.bump
     )]
-    pub position_state: Account<'info, PersonalPositionState>,
+    pub personal_position_state: Account<'info, PersonalPositionState>,
 
     /// To store metaplex metadata
     /// CHECK: Safety check performed inside function body

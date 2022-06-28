@@ -92,17 +92,17 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
 ) -> Result<()> {
     assert!(liquidity > 0);
 
-    let mut core_position_owner = ctx.accounts.amm_config.to_account_info();
-    core_position_owner.is_signer = true;
+    let mut procotol_position_owner = ctx.accounts.amm_config.to_account_info();
+    procotol_position_owner.is_signer = true;
     let mut pool_state = ctx.accounts.pool_state.as_mut().clone();
     let mut accounts = BurnParam {
-        owner: &Signer::try_from(&core_position_owner)?,
+        owner: &Signer::try_from(&procotol_position_owner)?,
         pool_state: &mut pool_state,
         tick_lower_state: ctx.accounts.tick_lower_state.as_mut(),
         tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),
         bitmap_lower_state: &ctx.accounts.bitmap_lower_state,
         bitmap_upper_state: &ctx.accounts.bitmap_upper_state,
-        position_state: ctx.accounts.protocol_position_state.as_mut(),
+        procotol_position_state: ctx.accounts.protocol_position_state.as_mut(),
         last_observation_state: ctx.accounts.last_observation_state.as_mut(),
     };
 
@@ -143,39 +143,39 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     }
 
     // Update the tokenized position to the current transaction
-    let updated_core_position = accounts.position_state;
-    let fee_growth_inside_0_last_x32 = updated_core_position.fee_growth_inside_0_last;
-    let fee_growth_inside_1_last_x32 = updated_core_position.fee_growth_inside_1_last;
-    let tokenized_position = &mut ctx.accounts.personal_position_state;
+    let updated_procotol_position = accounts.procotol_position_state;
+    let fee_growth_inside_0_last_x32 = updated_procotol_position.fee_growth_inside_0_last;
+    let fee_growth_inside_1_last_x32 = updated_procotol_position.fee_growth_inside_1_last;
+    let personal_position = &mut ctx.accounts.personal_position_state;
 
-    tokenized_position.token_fees_owed_0 = tokenized_position
+    personal_position.token_fees_owed_0 = personal_position
         .token_fees_owed_0
         .checked_add(
             fee_growth_inside_0_last_x32
-                .saturating_sub(tokenized_position.fee_growth_inside_0_last)
-                .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
+                .saturating_sub(personal_position.fee_growth_inside_0_last)
+                .mul_div_floor(personal_position.liquidity, fixed_point_32::Q32)
                 .unwrap(),
         )
         .unwrap();
 
-    tokenized_position.token_fees_owed_1 = tokenized_position
+    personal_position.token_fees_owed_1 = personal_position
         .token_fees_owed_1
         .checked_add(
             fee_growth_inside_1_last_x32
-                .saturating_sub(tokenized_position.fee_growth_inside_1_last)
-                .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
+                .saturating_sub(personal_position.fee_growth_inside_1_last)
+                .mul_div_floor(personal_position.liquidity, fixed_point_32::Q32)
                 .unwrap(),
         )
         .unwrap();
-    tokenized_position.fee_growth_inside_0_last = fee_growth_inside_0_last_x32;
-    tokenized_position.fee_growth_inside_1_last = fee_growth_inside_1_last_x32;
+    personal_position.fee_growth_inside_0_last = fee_growth_inside_0_last_x32;
+    personal_position.fee_growth_inside_1_last = fee_growth_inside_1_last_x32;
 
     // update rewards, must update before decrease liquidity
-    tokenized_position.update_rewards(updated_core_position.reward_growth_inside)?;
-    tokenized_position.liquidity = tokenized_position.liquidity.checked_sub(liquidity).unwrap();
+    personal_position.update_rewards(updated_procotol_position.reward_growth_inside)?;
+    personal_position.liquidity = personal_position.liquidity.checked_sub(liquidity).unwrap();
 
     emit!(DecreaseLiquidityEvent {
-        position_nft_mint: tokenized_position.mint,
+        position_nft_mint: personal_position.mint,
         liquidity,
         amount_0: decrease_amount_0,
         amount_1: decrease_amount_1
@@ -204,7 +204,7 @@ pub struct BurnParam<'b, 'info> {
     pub bitmap_upper_state: &'b AccountLoader<'info, TickBitmapState>,
 
     /// Burn liquidity from this position
-    pub position_state: &'b mut Account<'info, ProcotolPositionState>,
+    pub procotol_position_state: &'b mut Account<'info, ProcotolPositionState>,
 
     /// The program account for the most recent oracle observation
     pub last_observation_state: &'b mut Account<'info, ObservationState>,
@@ -238,8 +238,8 @@ pub fn burn<'b, 'info>(
             .word_pos,
     )?;
     ctx.pool_state.validate_position_address(
-        &ctx.position_state.key(),
-        ctx.position_state.bump,
+        &ctx.procotol_position_state.key(),
+        ctx.procotol_position_state.bump,
         &ctx.owner.key(),
         ctx.tick_lower_state.tick,
         ctx.tick_upper_state.tick,
@@ -254,7 +254,7 @@ pub fn burn<'b, 'info>(
     let (amount_0_int, amount_1_int) = _modify_position(
         -i64::try_from(amount).unwrap(),
         ctx.pool_state,
-        ctx.position_state,
+        ctx.procotol_position_state,
         ctx.tick_lower_state,
         ctx.tick_upper_state,
         ctx.bitmap_lower_state,
