@@ -12,7 +12,7 @@ pub struct IncreaseObservationCardinalityNextCtx<'info> {
 
     /// Increase observation slots for this pool
     #[account(mut)]
-    pub pool_state: Account<'info, PoolState>,
+    pub pool_state: Box<Account<'info, PoolState>>,
 
     /// To create new program accounts
     pub system_program: Program<'info, System>,
@@ -23,14 +23,12 @@ pub fn increase_observation_cardinality_next<'a, 'b, 'c, 'info>(
     observation_account_bumps: Vec<u8>,
 ) -> Result<()> {
     let pool_state = ctx.accounts.pool_state.deref_mut();
-
+    let pool_key = pool_state.key();
     let mut i: usize = 0;
     while i < observation_account_bumps.len() {
         let observation_account_seeds = [
             &OBSERVATION_SEED.as_bytes(),
-            pool_state.token_mint_0.as_ref(),
-            pool_state.token_mint_1.as_ref(),
-            &pool_state.fee.to_be_bytes(),
+            pool_key.as_ref(),
             &(pool_state.observation_cardinality_next + i as u16).to_be_bytes(),
             &[observation_account_bumps[i]],
         ];

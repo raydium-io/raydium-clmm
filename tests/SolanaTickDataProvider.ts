@@ -2,7 +2,7 @@ import * as anchor from '@project-serum/anchor'
 import { PublicKey } from '@solana/web3.js'
 import JSBI from 'jsbi'
 import { BN } from '@project-serum/anchor'
-import { TickDataProvider, PoolVars, tickPosition, TickMath, generateBitmapWord, u32ToSeed, u16ToSeed, nextInitializedBit, buildTick } from '@cykura/sdk'
+import { TickDataProvider, tickPosition, TickMath, generateBitmapWord, u32ToSeed, u16ToSeed, nextInitializedBit, buildTick } from '@cykura/sdk'
 
 import {
   BITMAP_SEED,
@@ -17,6 +17,13 @@ interface Tick {
   tick: number
   liquidityNet: BN
 }
+
+export declare type PoolVars = {
+  key: PublicKey;
+  token0: PublicKey;
+  token1: PublicKey;
+  fee: number;
+};
 
 /**
  * Tick and bitmap data provider for a Cykura pool
@@ -114,9 +121,7 @@ interface Tick {
       await PublicKey.findProgramAddress(
         [
           TICK_SEED,
-          this.pool.token0.toBuffer(),
-          this.pool.token1.toBuffer(),
-          u32ToSeed(this.pool.fee),
+          this.pool.key.toBuffer(),
           u32ToSeed(tick),
         ],
         this.program.programId
@@ -129,9 +134,7 @@ interface Tick {
       await PublicKey.findProgramAddress(
         [
           BITMAP_SEED,
-          this.pool.token0.toBuffer(),
-          this.pool.token1.toBuffer(),
-          u32ToSeed(this.pool.fee),
+          this.pool.key.toBuffer(),
           u16ToSeed(wordPos),
         ],
         this.program.programId

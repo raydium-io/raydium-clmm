@@ -10,16 +10,14 @@ pub struct CreateBitmapAccount<'info> {
     pub signer: Signer<'info>,
 
     /// Create a new bitmap account for this pool
-    pub pool_state: Account<'info, PoolState>,
+    pub pool_state: Box<Account<'info, PoolState>>,
 
     /// The bitmap account to be initialized
     #[account(
         init,
         seeds = [
             BITMAP_SEED.as_bytes(),
-            pool_state.token_mint_0.as_ref(),
-            pool_state.token_mint_1.as_ref(),
-            &pool_state.fee.to_be_bytes(),
+            pool_state.key().as_ref(),
             &word_pos.to_be_bytes()
         ],
         bump,

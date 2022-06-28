@@ -10,6 +10,7 @@ pub struct CreateProtocolPosition<'info> {
 
     /// The address of the position owner
     /// CHECK: This is not dangerous because we don't read or write from this account
+    #[account(address = pool_state.amm_config)]
     pub amm_config: UncheckedAccount<'info>,
 
     /// Create a position account for this pool
@@ -29,9 +30,7 @@ pub struct CreateProtocolPosition<'info> {
         init,
         seeds = [
             POSITION_SEED.as_bytes(),
-            pool_state.token_mint_0.as_ref(),
-            pool_state.token_mint_1.as_ref(),
-            &pool_state.fee.to_be_bytes(),
+            pool_state.key().as_ref(),
             amm_config.key().as_ref(),
             &tick_lower_state.tick.to_be_bytes(),
             &tick_upper_state.tick.to_be_bytes(),
@@ -40,7 +39,7 @@ pub struct CreateProtocolPosition<'info> {
         payer = signer,
         space = ProcotolPositionState::LEN
     )]
-    pub position_state: Account<'info, ProcotolPositionState>,
+    pub procotol_position_state: Account<'info, ProcotolPositionState>,
 
     /// Program to initialize the position account
     pub system_program: Program<'info, System>,

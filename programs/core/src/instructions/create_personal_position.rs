@@ -43,7 +43,7 @@ pub struct MintParam<'b, 'info> {
     pub bitmap_upper_state: &'b AccountLoader<'info, TickBitmapState>,
 
     /// The position into which liquidity is minted
-    pub position_state: &'b mut Account<'info, ProcotolPositionState>,
+    pub procotol_position_state: &'b mut Account<'info, ProcotolPositionState>,
 
     /// The program account for the most recent oracle observation, at index = pool.observation_index
     pub last_observation_state: &'b mut Account<'info, ObservationState>,
@@ -193,7 +193,7 @@ pub fn create_personal_position<'a, 'b, 'c, 'info>(
         tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),
         bitmap_lower_state: &ctx.accounts.bitmap_lower_state,
         bitmap_upper_state: &ctx.accounts.bitmap_upper_state,
-        position_state: ctx.accounts.protocol_position_state.as_mut(),
+        procotol_position_state: ctx.accounts.protocol_position_state.as_mut(),
         last_observation_state: ctx.accounts.last_observation_state.as_mut(),
         token_program: ctx.accounts.token_program.clone(),
     };
@@ -224,19 +224,19 @@ pub fn create_personal_position<'a, 'b, 'c, 'info>(
     )?;
 
     // Write tokenized position metadata
-    let tokenized_position = &mut ctx.accounts.personal_position_state;
-    tokenized_position.bump = *ctx.bumps.get("personal_position_state").unwrap();
-    tokenized_position.mint = ctx.accounts.position_nft_mint.key();
-    tokenized_position.pool_id = pool_state_info.key();
+    let personal_position = &mut ctx.accounts.personal_position_state;
+    personal_position.bump = *ctx.bumps.get("personal_position_state").unwrap();
+    personal_position.mint = ctx.accounts.position_nft_mint.key();
+    personal_position.pool_id = pool_state_info.key();
 
-    tokenized_position.tick_lower = tick_lower; // can read from core position
-    tokenized_position.tick_upper = tick_upper;
-    tokenized_position.liquidity = liquidity;
+    personal_position.tick_lower = tick_lower; // can read from core position
+    personal_position.tick_upper = tick_upper;
+    personal_position.liquidity = liquidity;
 
-    let updated_core_position = accounts.position_state;
-    tokenized_position.fee_growth_inside_0_last = updated_core_position.fee_growth_inside_0_last;
-    tokenized_position.fee_growth_inside_1_last = updated_core_position.fee_growth_inside_1_last;
-    tokenized_position.update_rewards(updated_core_position.reward_growth_inside)?;
+    let updated_core_position = accounts.procotol_position_state;
+    personal_position.fee_growth_inside_0_last = updated_core_position.fee_growth_inside_0_last;
+    personal_position.fee_growth_inside_1_last = updated_core_position.fee_growth_inside_1_last;
+    personal_position.update_rewards(updated_core_position.reward_growth_inside)?;
     emit!(IncreaseLiquidityEvent {
         position_nft_mint: ctx.accounts.position_nft_mint.key(),
         liquidity,
@@ -331,8 +331,8 @@ pub fn mint<'b, 'info>(
     )?;
 
     ctx.pool_state.validate_position_address(
-        &ctx.position_state.key(),
-        ctx.position_state.bump,
+        &ctx.procotol_position_state.key(),
+        ctx.procotol_position_state.bump,
         &ctx.protocol_position_owner.key(),
         ctx.tick_lower_state.tick,
         ctx.tick_upper_state.tick,
@@ -348,7 +348,7 @@ pub fn mint<'b, 'info>(
     let (amount_0_int, amount_1_int) = _modify_position(
         i64::try_from(amount).unwrap(),
         ctx.pool_state,
-        ctx.position_state,
+        ctx.procotol_position_state,
         ctx.tick_lower_state,
         ctx.tick_upper_state,
         ctx.bitmap_lower_state,

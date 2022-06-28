@@ -1,4 +1,5 @@
 use crate::error::ErrorCode;
+use crate::libraries::{fixed_point_32, full_math::MulDiv};
 use crate::states::*;
 use crate::util::transfer_from_user_to_pool_vault;
 use anchor_lang::prelude::*;
@@ -7,6 +8,8 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount};
 #[derive(Accounts)]
 // #[instruction(reward_index: u8)]
 pub struct InitializeReward<'info> {
+    /// Which config the pool belongs to.
+    pub amm_config: Box<Account<'info, AmmConfig>>,
     /// the
     #[account(mut)]
     pub reward_funder: Signer<'info>,
@@ -50,8 +53,6 @@ pub struct InitializeRewardParam {
     pub end_time: u64,
     /// Token reward per second are earned per unit of liquidity
     pub emissions_per_second_x32: u64,
-    /// Initialize amount desposit to reward vault account
-    pub amount: u64,
 }
 
 impl InitializeRewardParam {
@@ -71,9 +72,23 @@ pub fn initialize_reward(
     ctx: Context<InitializeReward>,
     param: InitializeRewardParam,
 ) -> Result<()> {
+    require_keys_eq!(
+        ctx.accounts.reward_funder.key(),
+        ctx.accounts.amm_config.owner,
+        ErrorCode::NotApproved
+    );
     // Clock
     let clock = Clock::get()?;
     param.check(clock.unix_timestamp as u64)?;
+    let reward_amount = param
+        .end_time
+        .checked_sub(param.open_time)
+        .unwrap()
+        .mul_div_floor(param.emissions_per_second_x32, fixed_point_32::Q32)
+        .unwrap();
+
+    require_gte!(ctx.accounts.funder_token_account.amount, reward_amount);
+
     let pool_state = &mut ctx.accounts.pool_state;
     pool_state.initialize_reward(
         clock.unix_timestamp as u64,
@@ -83,17 +98,15 @@ pub fn initialize_reward(
         param.emissions_per_second_x32,
         &ctx.accounts.reward_token_mint.key(),
         &ctx.accounts.reward_token_vault.key(),
+        &ctx.accounts.reward_funder.key(),
     )?;
 
-    if param.amount > 0 {
-        transfer_from_user_to_pool_vault(
-            &ctx.accounts.reward_funder,
-            &ctx.accounts.funder_token_account,
-            &ctx.accounts.reward_token_vault,
-            &ctx.accounts.token_program,
-            param.amount,
-        )?;
-    }
-
+    transfer_from_user_to_pool_vault(
+        &ctx.accounts.reward_funder,
+        &ctx.accounts.funder_token_account,
+        &ctx.accounts.reward_token_vault,
+        &ctx.accounts.token_program,
+        reward_amount,
+    )?;
     Ok(())
 }

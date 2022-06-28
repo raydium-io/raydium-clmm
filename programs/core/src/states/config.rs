@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-
+use crate::error::ErrorCode;
 /// Holds the current owner of the factory
 ///
 /// # The owner can
@@ -27,6 +27,18 @@ pub struct AmmConfig {
 
 impl AmmConfig {
     pub const LEN: usize = 8 + 1 + 32 + 1 + 128;
+
+    pub fn is_authorized<'info>(
+        &self,
+        signer: &Signer<'info>,
+        expect_pubkey: Pubkey,
+    ) -> Result<()> {
+        require!(
+            signer.key() == self.owner || expect_pubkey == signer.key(),
+            ErrorCode::NotApproved
+        );
+        Ok(())
+    }
 }
 
 #[event]

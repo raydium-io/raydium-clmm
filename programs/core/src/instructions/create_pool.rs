@@ -25,6 +25,9 @@ pub struct CreatePool<'info> {
         space = PoolState::LEN
     )]
     pub pool_state: Box<Account<'info, PoolState>>,
+    #[account(
+        constraint = token_mint_0.key() < token_mint_1.key()
+    )]
     pub token_mint_0: Box<Account<'info, Mint>>,
     pub token_mint_1: Box<Account<'info, Mint>>,
     /// Token_0 vault
@@ -34,7 +37,6 @@ pub struct CreatePool<'info> {
             POOL_VAULT_SEED.as_bytes(),
             pool_state.key().as_ref(),
             token_mint_0.key().as_ref(),
-            &fee_state.fee.to_be_bytes(),
         ],
         bump,
         payer = pool_creator,
@@ -49,7 +51,6 @@ pub struct CreatePool<'info> {
             POOL_VAULT_SEED.as_bytes(),
             pool_state.key().as_ref(),
             token_mint_1.key().as_ref(),
-            &fee_state.fee.to_be_bytes(),
         ],
         bump,
         payer = pool_creator,
@@ -65,9 +66,7 @@ pub struct CreatePool<'info> {
         init,
         seeds = [
             &OBSERVATION_SEED.as_bytes(),
-            token_mint_0.key().as_ref(),
-            token_mint_1.key().as_ref(),
-            &fee_state.fee.to_be_bytes(),
+            pool_state.key().as_ref(),
             &0_u16.to_be_bytes(),
         ],
         bump,
@@ -89,6 +88,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price: u64) -> Result<()> {
 
     pool_state.bump = *ctx.bumps.get("pool_state").unwrap();
     pool_state.amm_config = ctx.accounts.amm_config.key();
+    pool_state.owner = ctx.accounts.pool_creator.key();
     pool_state.token_mint_0 = ctx.accounts.token_mint_0.key();
     pool_state.token_mint_1 = ctx.accounts.token_mint_1.key();
     pool_state.token_vault_0 = ctx.accounts.token_vault_0.key();

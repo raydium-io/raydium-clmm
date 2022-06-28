@@ -99,7 +99,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),
         bitmap_lower_state: &ctx.accounts.bitmap_lower_state,
         bitmap_upper_state: &ctx.accounts.bitmap_upper_state,
-        position_state: ctx.accounts.protocol_position_state.as_mut(),
+        procotol_position_state: ctx.accounts.protocol_position_state.as_mut(),
         last_observation_state: ctx.accounts.last_observation_state.as_mut(),
         token_program: ctx.accounts.token_program.clone(),
     };
@@ -115,41 +115,41 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         tick_upper,
     )?;
 
-    let updated_core_position = accounts.position_state;
-    let fee_growth_inside_0_last_x32 = updated_core_position.fee_growth_inside_0_last;
-    let fee_growth_inside_1_last_x32 = updated_core_position.fee_growth_inside_1_last;
+    let updated_procotol_position = accounts.procotol_position_state;
+    let fee_growth_inside_0_last_x32 = updated_procotol_position.fee_growth_inside_0_last;
+    let fee_growth_inside_1_last_x32 = updated_procotol_position.fee_growth_inside_1_last;
 
     // Update tokenized position metadata
-    let position = ctx.accounts.personal_position_state.as_mut();
-    position.token_fees_owed_0 = position
+    let personal_position = ctx.accounts.personal_position_state.as_mut();
+    personal_position.token_fees_owed_0 = personal_position
         .token_fees_owed_0
         .checked_add(
             fee_growth_inside_0_last_x32
-                .saturating_sub(position.fee_growth_inside_0_last)
-                .mul_div_floor(position.liquidity, fixed_point_32::Q32)
+                .saturating_sub(personal_position.fee_growth_inside_0_last)
+                .mul_div_floor(personal_position.liquidity, fixed_point_32::Q32)
                 .unwrap(),
         )
         .unwrap();
 
-    position.token_fees_owed_1 = position
+    personal_position.token_fees_owed_1 = personal_position
         .token_fees_owed_1
         .checked_add(
             fee_growth_inside_1_last_x32
-                .saturating_sub(position.fee_growth_inside_1_last)
-                .mul_div_floor(position.liquidity, fixed_point_32::Q32)
+                .saturating_sub(personal_position.fee_growth_inside_1_last)
+                .mul_div_floor(personal_position.liquidity, fixed_point_32::Q32)
                 .unwrap(),
         )
         .unwrap();
 
-    position.fee_growth_inside_0_last = fee_growth_inside_0_last_x32;
-    position.fee_growth_inside_1_last = fee_growth_inside_1_last_x32;
+    personal_position.fee_growth_inside_0_last = fee_growth_inside_0_last_x32;
+    personal_position.fee_growth_inside_1_last = fee_growth_inside_1_last_x32;
     
     // update rewards, must update before increase liquidity
-    position.update_rewards(updated_core_position.reward_growth_inside)?;
-    position.liquidity = position.liquidity.checked_add(liquidity).unwrap();
+    personal_position.update_rewards(updated_procotol_position.reward_growth_inside)?;
+    personal_position.liquidity = personal_position.liquidity.checked_add(liquidity).unwrap();
 
     emit!(IncreaseLiquidityEvent {
-        position_nft_mint: position.mint,
+        position_nft_mint: personal_position.mint,
         liquidity,
         amount_0,
         amount_1

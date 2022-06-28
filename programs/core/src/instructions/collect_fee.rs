@@ -132,13 +132,13 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
             tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),
             bitmap_lower_state: &ctx.accounts.bitmap_lower_state,
             bitmap_upper_state: &ctx.accounts.bitmap_upper_state,
-            position_state: ctx.accounts.protocol_position_state.as_mut(),
+            procotol_position_state: ctx.accounts.protocol_position_state.as_mut(),
             last_observation_state: ctx.accounts.last_observation_state.as_mut(),
         };
         // update fee inside
         burn(&mut burn_accounts, ctx.remaining_accounts, 0)?;
 
-        let updated_core_position = burn_accounts.position_state.deref();
+        let updated_core_position = burn_accounts.procotol_position_state.deref();
 
         token_fees_owed_0 = token_fees_owed_0
             .checked_add(

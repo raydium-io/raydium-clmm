@@ -1,12 +1,12 @@
 use crate::states::*;
 use anchor_lang::prelude::*;
+use crate::error::ErrorCode;
 
 #[derive(Accounts)]
 pub struct SetNewOwner<'info> {
     /// Current protocol owner
-    #[account(address = amm_config.owner)]
+    // #[account(mut)]
     pub owner: Signer<'info>,
-
     /// Address to be designated as new protocol owner
     /// CHECK: This is not dangerous because we don't read or write from this account
     pub new_owner: UncheckedAccount<'info>,
@@ -18,6 +18,11 @@ pub struct SetNewOwner<'info> {
 
 pub fn set_new_owner(ctx: Context<SetNewOwner>) -> Result<()> {
     let amm_config = &mut ctx.accounts.amm_config;
+    require!(
+        ctx.accounts.owner.key() == amm_config.owner || ctx.accounts.owner.key() == crate::admin::ID,
+        ErrorCode::NotApproved
+    );
+
     amm_config.owner = ctx.accounts.new_owner.key();
 
     emit!(OwnerChangedEvent {

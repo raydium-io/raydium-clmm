@@ -12,7 +12,12 @@ use anchor_lang::prelude::*;
 use instructions::*;
 use states::*;
 
-declare_id!("CKq5ceybhfHqywrQG7sgNi8bHthG64dCpsVRs9dKzeEd");
+declare_id!("E1CjPgJodwDyAzvHEvHGcGqNeJc2ZLSe8kdJC3affmZf");
+
+pub mod admin {
+    use anchor_lang::prelude::declare_id;
+    declare_id!("E1CjPgJodwDyAzvHEvHGcGqNeJc2ZLSe8kdJC3affmZf");
+}
 
 #[program]
 pub mod amm_core {
@@ -82,10 +87,21 @@ pub mod amm_core {
     /// * `observation_state_bump` - Bump to validate Observation State address
     /// * `sqrt_price_x32` - the initial sqrt price (amount_token_1 / amount_token_0) of the pool as a Q32.32
     ///
-    pub fn create_pool(ctx: Context<CreatePool>, sqrt_price: u64) -> Result<()> {
-        instructions::create_pool(ctx, sqrt_price)
+    pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x32: u64) -> Result<()> {
+        instructions::create_pool(ctx, sqrt_price_x32)
     }
 
+    /// Reset a pool sqrt price
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`- Validates token addresses and fee state. Initializes pool, observation and
+    /// token accounts
+    /// * `sqrt_price_x32` - the initial sqrt price (amount_token_1 / amount_token_0) of the pool as a Q32.32
+    ///
+    pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price_x32: u64) -> Result<()> {
+        instructions::reset_sqrt_price(ctx, sqrt_price_x32)
+    }
     /// Initialize a reward info for a given pool and reward index
     ///
     ///
@@ -273,8 +289,8 @@ pub mod amm_core {
     /// the account is derived using most significant 16 bits of the tick
     ///
     pub fn create_procotol_position(ctx: Context<CreateProtocolPosition>) -> Result<()> {
-        let position_account = &mut ctx.accounts.position_state;
-        position_account.bump = *ctx.bumps.get("position_state").unwrap();
+        let position_account = &mut ctx.accounts.procotol_position_state;
+        position_account.bump = *ctx.bumps.get("procotol_position_state").unwrap();
         Ok(())
     }
 
