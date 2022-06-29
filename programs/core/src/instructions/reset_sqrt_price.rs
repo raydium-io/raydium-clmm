@@ -1,9 +1,9 @@
+use crate::error::ErrorCode;
 use crate::libraries::tick_math;
 use crate::states::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::TokenAccount;
 use std::ops::DerefMut;
-use crate::error::ErrorCode;
 
 #[derive(Accounts)]
 pub struct ResetSqrtPrice<'info> {
@@ -23,10 +23,12 @@ pub struct ResetSqrtPrice<'info> {
 pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price: u64) -> Result<()> {
     let pool_state = ctx.accounts.pool_state.deref_mut();
 
-    ctx.accounts.amm_config.is_authorized(&ctx.accounts.owner, pool_state.owner)?;
-   
+    ctx.accounts
+        .amm_config
+        .is_authorized(&ctx.accounts.owner, pool_state.owner)?;
+
     if ctx.accounts.token_vault_0.amount > 0 || ctx.accounts.token_vault_1.amount > 0 {
-        return err!(ErrorCode::NotApproved)
+        return err!(ErrorCode::NotApproved);
     }
     let tick = tick_math::get_tick_at_sqrt_ratio(sqrt_price)?;
     pool_state.sqrt_price = sqrt_price;

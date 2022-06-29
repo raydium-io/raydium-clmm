@@ -1,7 +1,7 @@
 ///! Contains functions for managing tick processes and relevant calculations
 ///!
 use crate::libraries::{liquidity_math, tick_math};
-use crate::pool::{RewardInfo, NUM_REWARDS};
+use crate::pool::{RewardInfo, REWARD_NUM};
 use anchor_lang::prelude::*;
 
 /// Seed to derive account address and signature
@@ -42,7 +42,7 @@ pub struct TickState {
     pub seconds_outside: u32,
 
     // Array of Q32.32
-    pub reward_growths_outside: [u64; NUM_REWARDS],
+    pub reward_growths_outside: [u64; REWARD_NUM],
     // padding space for upgrade
     // pub padding: [u64; 8],
 }
@@ -79,7 +79,7 @@ impl TickState {
         time: u32,
         upper: bool,
         max_liquidity: u64,
-        reward_growths_outside: [u64; NUM_REWARDS],
+        reward_growths_outside: [u64; REWARD_NUM],
     ) -> Result<bool> {
         let liquidity_gross_before = self.liquidity_gross;
         let liquidity_gross_after =
@@ -138,7 +138,7 @@ impl TickState {
         seconds_per_liquidity_cumulative_x32: u64,
         tick_cumulative: i64,
         time: u32,
-        reward_infos: &[RewardInfo; NUM_REWARDS],
+        reward_infos: &[RewardInfo; REWARD_NUM],
     ) -> i64 {
         self.fee_growth_outside_0_x32 = fee_growth_global_0_x32
             .checked_sub(self.fee_growth_outside_0_x32)
@@ -154,7 +154,7 @@ impl TickState {
             .unwrap();
         self.seconds_outside = time.checked_sub(self.seconds_outside).unwrap();
 
-        for i in 0..NUM_REWARDS {
+        for i in 0..REWARD_NUM {
             if !reward_infos[i].initialized() {
                 continue;
             }
@@ -268,11 +268,11 @@ pub fn get_reward_growths_inside(
     tick_lower: &TickState,
     tick_upper: &TickState,
     tick_current_index: i32,
-    reward_infos: &[RewardInfo; NUM_REWARDS],
-) -> ([u64; NUM_REWARDS]) {
-    let mut reward_growths_inside = [0; NUM_REWARDS];
+    reward_infos: &[RewardInfo; REWARD_NUM],
+) -> ([u64; REWARD_NUM]) {
+    let mut reward_growths_inside = [0; REWARD_NUM];
 
-    for i in 0..NUM_REWARDS {
+    for i in 0..REWARD_NUM {
         if !reward_infos[i].initialized() {
             continue;
         }
@@ -433,7 +433,7 @@ mod test {
                 tick_cumulative_outside: 0,
                 seconds_per_liquidity_outside_x32: 0,
                 seconds_outside: 0,
-                reward_growths_outside: [0; NUM_REWARDS],
+                reward_growths_outside: [0; REWARD_NUM],
             };
             assert_eq!(
                 get_fee_growth_inside(&tick_lower, &tick_upper, 0, 15, 15),
@@ -453,7 +453,7 @@ mod test {
                 tick_cumulative_outside: 0,
                 seconds_per_liquidity_outside_x32: 0,
                 seconds_outside: 0,
-                reward_growths_outside: [0; NUM_REWARDS],
+                reward_growths_outside: [0; REWARD_NUM],
             };
             let mut tick_upper = TickState::default();
             tick_upper.tick = 2;
@@ -475,7 +475,7 @@ mod test {
                 tick_cumulative_outside: 0,
                 seconds_per_liquidity_outside_x32: 0,
                 seconds_outside: 0,
-                reward_growths_outside: [0; NUM_REWARDS],
+                reward_growths_outside: [0; REWARD_NUM],
             };
             let tick_upper = TickState {
                 bump: 0,
@@ -487,7 +487,7 @@ mod test {
                 tick_cumulative_outside: 0,
                 seconds_per_liquidity_outside_x32: 0,
                 seconds_outside: 0,
-                reward_growths_outside: [0; NUM_REWARDS],
+                reward_growths_outside: [0; REWARD_NUM],
             };
             assert_eq!(
                 get_fee_growth_inside(&tick_lower, &tick_upper, 0, 15, 15),
@@ -508,7 +508,7 @@ mod test {
                 tick_cumulative_outside: 0,
                 seconds_per_liquidity_outside_x32: 0,
                 seconds_outside: 0,
-                reward_growths_outside: [0; NUM_REWARDS],
+                reward_growths_outside: [0; REWARD_NUM],
             };
             let tick_upper = TickState {
                 bump: 0,
@@ -520,7 +520,7 @@ mod test {
                 tick_cumulative_outside: 0,
                 seconds_per_liquidity_outside_x32: 0,
                 seconds_outside: 0,
-                reward_growths_outside: [0; NUM_REWARDS],
+                reward_growths_outside: [0; REWARD_NUM],
             };
             assert_eq!(
                 get_fee_growth_inside(&tick_lower, &tick_upper, 0, 15, 15),
@@ -536,37 +536,37 @@ mod test {
         fn flips_from_zero_to_non_zero() {
             let mut tick = TickState::default();
             assert!(tick
-                .update(0, 1, 0, 0, 0, 0, 0, false, 3, [0; NUM_REWARDS])
+                .update(0, 1, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
                 .unwrap());
         }
 
         #[test]
         fn does_not_flip_from_nonzero_to_greater_nonzero() {
             let mut tick = TickState::default();
-            tick.update(0, 1, 0, 0, 0, 0, 0, false, 3, [0; NUM_REWARDS])
+            tick.update(0, 1, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
                 .unwrap();
             assert!(!tick
-                .update(0, 1, 0, 0, 0, 0, 0, false, 3, [0; NUM_REWARDS])
+                .update(0, 1, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
                 .unwrap());
         }
 
         #[test]
         fn flips_from_nonzero_to_zero() {
             let mut tick = TickState::default();
-            tick.update(0, 1, 0, 0, 0, 0, 0, false, 3, [0; NUM_REWARDS])
+            tick.update(0, 1, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
                 .unwrap();
             assert!(tick
-                .update(0, -1, 0, 0, 0, 0, 0, false, 3, [0; NUM_REWARDS])
+                .update(0, -1, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
                 .unwrap());
         }
 
         #[test]
         fn does_not_flip_from_nonzero_to_lesser_nonzero() {
             let mut tick = TickState::default();
-            tick.update(0, 2, 0, 0, 0, 0, 0, false, 3, [0; NUM_REWARDS])
+            tick.update(0, 2, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
                 .unwrap();
             assert!(!tick
-                .update(0, -1, 0, 0, 0, 0, 0, false, 3, [0; NUM_REWARDS])
+                .update(0, -1, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
                 .unwrap());
         }
 
@@ -574,24 +574,24 @@ mod test {
         #[should_panic(expected = "LO")]
         fn reverts_if_total_liquidity_gross_is_greater_than_max() {
             let mut tick = TickState::default();
-            tick.update(0, 2, 0, 0, 0, 0, 0, false, 3, [0; NUM_REWARDS])
+            tick.update(0, 2, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
                 .unwrap();
-            tick.update(0, 2, 0, 0, 0, 0, 0, false, 3, [0; NUM_REWARDS])
+            tick.update(0, 2, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
                 .unwrap();
-            tick.update(0, 1, 0, 0, 0, 0, 0, false, 3, [0; NUM_REWARDS])
+            tick.update(0, 1, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
                 .unwrap();
         }
 
         #[test]
         fn nets_the_liquidity_based_on_upper_flag() {
             let mut tick = TickState::default();
-            tick.update(0, 2, 0, 0, 0, 0, 0, false, 3, [0; NUM_REWARDS])
+            tick.update(0, 2, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
                 .unwrap();
-            tick.update(0, 1, 0, 0, 0, 0, 0, true, 10, [0; NUM_REWARDS])
+            tick.update(0, 1, 0, 0, 0, 0, 0, true, 10, [0; REWARD_NUM])
                 .unwrap();
-            tick.update(0, 3, 0, 0, 0, 0, 0, true, 10, [0; NUM_REWARDS])
+            tick.update(0, 3, 0, 0, 0, 0, 0, true, 10, [0; REWARD_NUM])
                 .unwrap();
-            tick.update(0, 1, 0, 0, 0, 0, 0, false, 10, [0; NUM_REWARDS])
+            tick.update(0, 1, 0, 0, 0, 0, 0, false, 10, [0; REWARD_NUM])
                 .unwrap();
 
             assert!(tick.liquidity_gross == 2 + 1 + 3 + 1);
@@ -612,7 +612,7 @@ mod test {
                 0,
                 false,
                 u64::MAX,
-                [0; NUM_REWARDS],
+                [0; REWARD_NUM],
             )
             .unwrap();
             tick.update(
@@ -625,7 +625,7 @@ mod test {
                 0,
                 false,
                 u64::MAX,
-                [0; NUM_REWARDS],
+                [0; REWARD_NUM],
             )
             .unwrap();
         }
@@ -634,7 +634,7 @@ mod test {
         fn assume_all_growth_happens_below_ticks_lte_current_tick() {
             let mut tick = TickState::default();
             tick.tick = 1;
-            tick.update(1, 1, 1, 2, 3, 4, 5, false, u64::MAX, [0; NUM_REWARDS])
+            tick.update(1, 1, 1, 2, 3, 4, 5, false, u64::MAX, [0; REWARD_NUM])
                 .unwrap();
 
             assert!(tick.fee_growth_outside_0_x32 == 1);
@@ -648,7 +648,7 @@ mod test {
         fn does_not_set_any_growth_fields_for_ticks_gt_current_tick() {
             let mut tick = TickState::default();
             tick.tick = 2;
-            tick.update(1, 1, 1, 2, 3, 4, 5, false, u64::MAX, [0; NUM_REWARDS])
+            tick.update(1, 1, 1, 2, 3, 4, 5, false, u64::MAX, [0; REWARD_NUM])
                 .unwrap();
 
             assert!(tick.fee_growth_outside_0_x32 == 0);
@@ -674,7 +674,7 @@ mod test {
                 tick_cumulative_outside: 6,
                 seconds_per_liquidity_outside_x32: 5,
                 seconds_outside: 7,
-                reward_growths_outside: [0; NUM_REWARDS],
+                reward_growths_outside: [0; REWARD_NUM],
             };
             tick.clear();
             assert!(tick.bump == 255);
@@ -703,7 +703,7 @@ mod test {
                 tick_cumulative_outside: 6,
                 seconds_per_liquidity_outside_x32: 5,
                 seconds_outside: 7,
-                reward_growths_outside: [0; NUM_REWARDS],
+                reward_growths_outside: [0; REWARD_NUM],
             };
             tick.cross(7, 9, 8, 15, 10);
 
@@ -726,7 +726,7 @@ mod test {
                 tick_cumulative_outside: 6,
                 seconds_per_liquidity_outside_x32: 5,
                 seconds_outside: 7,
-                reward_growths_outside: [0; NUM_REWARDS],
+                reward_growths_outside: [0; REWARD_NUM],
             };
             tick.cross(7, 9, 8, 15, 10);
             tick.cross(7, 9, 8, 15, 10);

@@ -99,7 +99,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price: u64) -> Result<()> {
     pool_state.tick = tick;
     pool_state.observation_cardinality = 1;
     pool_state.observation_cardinality_next = 1;
-    pool_state.reward_infos = [RewardInfo::new(); NUM_REWARDS];
+    pool_state.reward_infos = [RewardInfo::new(ctx.accounts.pool_creator.key()); REWARD_NUM];
 
     let initial_observation_state = ctx.accounts.initial_observation_state.deref_mut();
     initial_observation_state.bump = *ctx.bumps.get("initial_observation_state").unwrap();

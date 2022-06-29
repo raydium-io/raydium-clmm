@@ -155,8 +155,8 @@ pub mod amm_core {
     /// * `reward_index` - The index of reward token in the pool.
     /// * `emissions_per_second_x32` - The per second emission reward
     ///
-    pub fn set_reward_emissions(
-        ctx: Context<SetRewardEmissions>,
+    pub fn set_reward_emissions<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info,SetRewardEmissions<'info>>,
         reward_index: u8,
         emissions_per_second_x32: u64,
     ) -> Result<()> {

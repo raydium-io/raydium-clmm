@@ -143,7 +143,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
 
     personal_position.fee_growth_inside_0_last = fee_growth_inside_0_last_x32;
     personal_position.fee_growth_inside_1_last = fee_growth_inside_1_last_x32;
-    
+
     // update rewards, must update before increase liquidity
     personal_position.update_rewards(updated_procotol_position.reward_growth_inside)?;
     personal_position.liquidity = personal_position.liquidity.checked_add(liquidity).unwrap();

@@ -60,7 +60,7 @@ impl InitializeRewardParam {
         if self.open_time >= self.end_time
             || self.end_time < curr_timestamp
             || self.emissions_per_second_x32 == 0
-            || self.reward_index >= NUM_REWARDS as u8
+            || self.reward_index >= REWARD_NUM as u8
         {
             return Err(ErrorCode::InvalidRewardInitParam.into());
         }
@@ -98,7 +98,6 @@ pub fn initialize_reward(
         param.emissions_per_second_x32,
         &ctx.accounts.reward_token_mint.key(),
         &ctx.accounts.reward_token_vault.key(),
-        &ctx.accounts.reward_funder.key(),
     )?;
 
     transfer_from_user_to_pool_vault(

@@ -1,5 +1,5 @@
 use crate::libraries::full_math::MulDiv;
-use crate::pool::NUM_REWARDS;
+use crate::pool::REWARD_NUM;
 use crate::{
     error::ErrorCode,
     libraries::{fixed_point_32, liquidity_math},
@@ -38,13 +38,13 @@ pub struct ProcotolPositionState {
     pub token_fees_owed_1: u64,
 
     /// The reward growth per unit of liquidity as of the last update to liquidity
-    pub reward_growth_inside: [u64; NUM_REWARDS], // 24
-                                                  // padding space for upgrade
-                                                  // pub padding: [u64; 8],
+    pub reward_growth_inside: [u64; REWARD_NUM], // 24
+                                                 // padding space for upgrade
+                                                 // pub padding: [u64; 8],
 }
 
 impl ProcotolPositionState {
-    pub const LEN: usize = 8 + 1 + 8 + 8 + 8 + 8 + 8 + 8 * NUM_REWARDS + 64;
+    pub const LEN: usize = 8 + 1 + 8 + 8 + 8 + 8 + 8 + 8 * REWARD_NUM + 64;
     /// Credits accumulated fees to a user's position
     ///
     /// # Arguments
@@ -61,7 +61,7 @@ impl ProcotolPositionState {
         liquidity_delta: i64,
         fee_growth_inside_0_x32: u64,
         fee_growth_inside_1_x32: u64,
-        reward_growths_inside: [u64; NUM_REWARDS],
+        reward_growths_inside: [u64; REWARD_NUM],
     ) -> Result<()> {
         let liquidity_next = if liquidity_delta == 0 {
             require!(self.liquidity > 0, ErrorCode::InvaildLiquidity); // disallow pokes for 0 liquidity positions
@@ -96,7 +96,7 @@ impl ProcotolPositionState {
         Ok(())
     }
 
-    pub fn update_reward_growths_inside(&mut self, reward_growths_inside: [u64; NUM_REWARDS]) {
+    pub fn update_reward_growths_inside(&mut self, reward_growths_inside: [u64; REWARD_NUM]) {
         // just record, calculate reward owed in persional position
         self.reward_growth_inside = reward_growths_inside;
     }

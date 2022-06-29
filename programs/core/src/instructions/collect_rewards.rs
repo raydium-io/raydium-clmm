@@ -46,7 +46,7 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
     let remaining_accounts_len = ctx.remaining_accounts.len();
     if remaining_accounts_len < 2
         || remaining_accounts_len % 2 != 0
-        || remaining_accounts_len > NUM_REWARDS * 2
+        || remaining_accounts_len > REWARD_NUM * 2
     {
         return err!(ErrorCode::InvalidRewardInputAccountNumber);
     }
@@ -74,7 +74,7 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
         require_keys_eq!(reward_token_vault.mint, recipient_token_account.mint);
         require_keys_eq!(
             reward_token_vault.key(),
-            pool_state.reward_infos[i].reward_token_vault
+            pool_state.reward_infos[i].token_vault
         );
 
         let reward_amount_owed = tokenized_position.reward_infos[i].reward_amount_owed;
@@ -118,8 +118,8 @@ fn get_updated_reward_growths_inside<'info>(
     tick_lower_state: &Account<'info, TickState>,
     tick_upper_state: &Account<'info, TickState>,
     current_tick: i32,
-    updated_reward_infos: &[RewardInfo; NUM_REWARDS],
-) -> ([u64; NUM_REWARDS]) {
+    updated_reward_infos: &[RewardInfo; REWARD_NUM],
+) -> ([u64; REWARD_NUM]) {
     // Update reward accrued to the position
     let reward_growths_inside = tick::get_reward_growths_inside(
         tick_lower_state.deref(),

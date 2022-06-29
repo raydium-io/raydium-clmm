@@ -93,6 +93,11 @@ export type AmmCore = {
           "isSigner": true
         },
         {
+          "name": "ammConfig",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
           "name": "poolState",
           "isMut": true,
           "isSigner": false
@@ -145,7 +150,193 @@ export type AmmCore = {
       ],
       "args": [
         {
-          "name": "sqrtPrice",
+          "name": "sqrtPriceX32",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "resetSqrtPrice",
+      "accounts": [
+        {
+          "name": "owner",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "ammConfig",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenVault0",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenVault1",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "sqrtPriceX32",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initializeReward",
+      "accounts": [
+        {
+          "name": "ammConfig",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "rewardFunder",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "funderTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "rewardTokenMint",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "rewardTokenVault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "rent",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "param",
+          "type": {
+            "defined": "InitializeRewardParam"
+          }
+        }
+      ]
+    },
+    {
+      "name": "updateRewardInfos",
+      "accounts": [
+        {
+          "name": "ammConfig",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "collectRewards",
+      "accounts": [
+        {
+          "name": "ownerOrDelegate",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "nftAccount",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "protocolPositionState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "personalPositionState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tickLowerState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tickUpperState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "setRewardEmissions",
+      "accounts": [
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "ammConfig",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "rewardIndex",
+          "type": "u8"
+        },
+        {
+          "name": "emissionsPerSecondX32",
           "type": "u64"
         }
       ]
@@ -343,7 +534,7 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "positionState",
+          "name": "procotolPositionState",
           "isMut": true,
           "isSigner": false
         },
@@ -499,11 +690,6 @@ export type AmmCore = {
         {
           "name": "nftMint",
           "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "positionState",
-          "isMut": false,
           "isSigner": false
         },
         {
@@ -666,6 +852,16 @@ export type AmmCore = {
           "isSigner": false
         },
         {
+          "name": "tokenVault0",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenVault1",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "tickLowerState",
           "isMut": true,
           "isSigner": false
@@ -688,6 +884,21 @@ export type AmmCore = {
         {
           "name": "lastObservationState",
           "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "recipientTokenAccount0",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "recipientTokenAccount1",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
           "isSigner": false
         }
       ],
@@ -802,7 +1013,7 @@ export type AmmCore = {
       ]
     },
     {
-      "name": "swapSingle",
+      "name": "swap",
       "accounts": [
         {
           "name": "signer",
@@ -870,7 +1081,7 @@ export type AmmCore = {
       ]
     },
     {
-      "name": "swapBaseIn",
+      "name": "swapRouterBaseIn",
       "accounts": [
         {
           "name": "signer",
@@ -992,6 +1203,14 @@ export type AmmCore = {
             "type": "u8"
           },
           {
+            "name": "ammConfig",
+            "type": "publicKey"
+          },
+          {
+            "name": "owner",
+            "type": "publicKey"
+          },
+          {
             "name": "tokenMint0",
             "type": "publicKey"
           },
@@ -1054,6 +1273,21 @@ export type AmmCore = {
           {
             "name": "protocolFeesToken1",
             "type": "u64"
+          },
+          {
+            "name": "rewardLastUpdatedTimestamp",
+            "type": "u64"
+          },
+          {
+            "name": "rewardInfos",
+            "type": {
+              "array": [
+                {
+                  "defined": "RewardInfo"
+                },
+                3
+              ]
+            }
           }
         ]
       }
@@ -1080,12 +1314,21 @@ export type AmmCore = {
             "type": "u64"
           },
           {
-            "name": "tokensOwed0",
+            "name": "tokenFeesOwed0",
             "type": "u64"
           },
           {
-            "name": "tokensOwed1",
+            "name": "tokenFeesOwed1",
             "type": "u64"
+          },
+          {
+            "name": "rewardGrowthInside",
+            "type": {
+              "array": [
+                "u64",
+                3
+              ]
+            }
           }
         ]
       }
@@ -1155,6 +1398,15 @@ export type AmmCore = {
           {
             "name": "secondsOutside",
             "type": "u32"
+          },
+          {
+            "name": "rewardGrowthsOutside",
+            "type": {
+              "array": [
+                "u64",
+                3
+              ]
+            }
           }
         ]
       }
@@ -1197,12 +1449,137 @@ export type AmmCore = {
             "type": "u64"
           },
           {
-            "name": "tokensOwed0",
+            "name": "tokenFeesOwed0",
             "type": "u64"
           },
           {
-            "name": "tokensOwed1",
+            "name": "tokenFeesOwed1",
             "type": "u64"
+          },
+          {
+            "name": "rewardInfos",
+            "type": {
+              "array": [
+                {
+                  "defined": "PositionRewardInfo"
+                },
+                3
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "InitializeRewardParam",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rewardIndex",
+            "type": "u8"
+          },
+          {
+            "name": "openTime",
+            "type": "u64"
+          },
+          {
+            "name": "endTime",
+            "type": "u64"
+          },
+          {
+            "name": "emissionsPerSecondX32",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RewardInfo",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rewardState",
+            "type": "u8"
+          },
+          {
+            "name": "openTime",
+            "type": "u64"
+          },
+          {
+            "name": "endTime",
+            "type": "u64"
+          },
+          {
+            "name": "lastUpdateTime",
+            "type": "u64"
+          },
+          {
+            "name": "emissionPerSecondX32",
+            "type": "u64"
+          },
+          {
+            "name": "rewardTotalEmissioned",
+            "type": "u64"
+          },
+          {
+            "name": "rewardClaimed",
+            "type": "u64"
+          },
+          {
+            "name": "tokenMint",
+            "type": "publicKey"
+          },
+          {
+            "name": "tokenVault",
+            "type": "publicKey"
+          },
+          {
+            "name": "authority",
+            "type": "publicKey"
+          },
+          {
+            "name": "rewardGrowthGlobalX32",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PositionRewardInfo",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "growthInsideLast",
+            "type": "u64"
+          },
+          {
+            "name": "rewardAmountOwed",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RewardState",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Uninitialized"
+          },
+          {
+            "name": "Initialized"
+          },
+          {
+            "name": "Opening"
+          },
+          {
+            "name": "Ended"
           }
         ]
       }
@@ -1613,6 +1990,23 @@ export type AmmCore = {
           "index": false
         }
       ]
+    },
+    {
+      "name": "UpdateRewardInfosEvent",
+      "fields": [
+        {
+          "name": "rewardInfos",
+          "type": {
+            "array": [
+              {
+                "defined": "RewardInfo"
+              },
+              3
+            ]
+          },
+          "index": false
+        }
+      ]
     }
   ],
   "errors": [
@@ -1623,88 +2017,113 @@ export type AmmCore = {
     },
     {
       "code": 6001,
-      "name": "ZeroMintAmount",
-      "msg": "Minting amount should be greater than 0"
-    },
-    {
-      "code": 6002,
-      "name": "TickInvaildOrder",
-      "msg": "The lower tick must be below the upper tick"
-    },
-    {
-      "code": 6003,
-      "name": "TickLowerOverflow",
-      "msg": "The tick must be greater, or equal to the minimum tick(-221818)"
-    },
-    {
-      "code": 6004,
-      "name": "TickUpperOverflow",
-      "msg": "The tick must be lesser than, or equal to the maximum tick(221818)"
-    },
-    {
-      "code": 6005,
-      "name": "TickAndSpacingNotMatch",
-      "msg": "tick % tick_spacing must be zero"
-    },
-    {
-      "code": 6006,
-      "name": "SqrtPriceLimitOverflow",
-      "msg": "Square root price limit overflow"
-    },
-    {
-      "code": 6007,
-      "name": "SqrtPriceX32",
-      "msg": "sqrt_price_x32 out of range"
-    },
-    {
-      "code": 6008,
-      "name": "LiquiditySubValueErr",
-      "msg": "Liquidity sub delta L must be smaller than before"
-    },
-    {
-      "code": 6009,
-      "name": "LiquidityAddValueErr",
-      "msg": "Liquidity add delta L must be greater, or equal to before"
-    },
-    {
-      "code": 6010,
-      "name": "TransactionTooOld",
-      "msg": "Transaction too old"
-    },
-    {
-      "code": 6011,
-      "name": "PriceSlippageCheck",
-      "msg": "Price slippage check"
-    },
-    {
-      "code": 6012,
       "name": "NotApproved",
       "msg": "Not approved"
     },
     {
-      "code": 6013,
-      "name": "TooLittleOutputReceived",
-      "msg": "Too little output received"
+      "code": 6002,
+      "name": "ZeroMintAmount",
+      "msg": "Minting amount should be greater than 0"
     },
     {
-      "code": 6014,
-      "name": "TooMuchInputPaid",
-      "msg": "Too much input paid"
-    },
-    {
-      "code": 6015,
-      "name": "InvaildSwapAmountSpecified",
-      "msg": "Swap special amount can not be zero"
-    },
-    {
-      "code": 6016,
+      "code": 6003,
       "name": "InvaildTickIndex",
       "msg": "Tick index of lower must be smaller than upper"
     },
     {
-      "code": 6017,
+      "code": 6004,
+      "name": "TickInvaildOrder",
+      "msg": "The lower tick must be below the upper tick"
+    },
+    {
+      "code": 6005,
+      "name": "TickLowerOverflow",
+      "msg": "The tick must be greater, or equal to the minimum tick(-221818)"
+    },
+    {
+      "code": 6006,
+      "name": "TickUpperOverflow",
+      "msg": "The tick must be lesser than, or equal to the maximum tick(221818)"
+    },
+    {
+      "code": 6007,
+      "name": "TickAndSpacingNotMatch",
+      "msg": "tick % tick_spacing must be zero"
+    },
+    {
+      "code": 6008,
+      "name": "SqrtPriceLimitOverflow",
+      "msg": "Square root price limit overflow"
+    },
+    {
+      "code": 6009,
+      "name": "SqrtPriceX32",
+      "msg": "sqrt_price_x32 out of range"
+    },
+    {
+      "code": 6010,
+      "name": "LiquiditySubValueErr",
+      "msg": "Liquidity sub delta L must be smaller than before"
+    },
+    {
+      "code": 6011,
+      "name": "LiquidityAddValueErr",
+      "msg": "Liquidity add delta L must be greater, or equal to before"
+    },
+    {
+      "code": 6012,
       "name": "InvaildLiquidity",
       "msg": "Invaild liquidity when update position"
+    },
+    {
+      "code": 6013,
+      "name": "TransactionTooOld",
+      "msg": "Transaction too old"
+    },
+    {
+      "code": 6014,
+      "name": "PriceSlippageCheck",
+      "msg": "Price slippage check"
+    },
+    {
+      "code": 6015,
+      "name": "TooLittleOutputReceived",
+      "msg": "Too little output received"
+    },
+    {
+      "code": 6016,
+      "name": "TooMuchInputPaid",
+      "msg": "Too much input paid"
+    },
+    {
+      "code": 6017,
+      "name": "InvaildSwapAmountSpecified",
+      "msg": "Swap special amount can not be zero"
+    },
+    {
+      "code": 6018,
+      "name": "InvalidRewardIndex",
+      "msg": "Invalid reward index"
+    },
+    {
+      "code": 6019,
+      "name": "InvalidRewardInitParam",
+      "msg": "Invalid reward init param"
+    },
+    {
+      "code": 6020,
+      "name": "InvalidRewardDesiredAmount",
+      "msg": "Invalid collect reward desired amount"
+    },
+    {
+      "code": 6021,
+      "name": "InvalidRewardInputAccountNumber",
+      "msg": "Invalid collect reward input account number"
+    },
+    {
+      "code": 6022,
+      "name": "UnInitializedRewardInfo",
+      "msg": "uninitialized reward info"
     }
   ]
 };
@@ -1804,6 +2223,11 @@ export const IDL: AmmCore = {
           "isSigner": true
         },
         {
+          "name": "ammConfig",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
           "name": "poolState",
           "isMut": true,
           "isSigner": false
@@ -1856,7 +2280,193 @@ export const IDL: AmmCore = {
       ],
       "args": [
         {
-          "name": "sqrtPrice",
+          "name": "sqrtPriceX32",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "resetSqrtPrice",
+      "accounts": [
+        {
+          "name": "owner",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "ammConfig",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenVault0",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenVault1",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "sqrtPriceX32",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initializeReward",
+      "accounts": [
+        {
+          "name": "ammConfig",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "rewardFunder",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "funderTokenAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "rewardTokenMint",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "rewardTokenVault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "rent",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "param",
+          "type": {
+            "defined": "InitializeRewardParam"
+          }
+        }
+      ]
+    },
+    {
+      "name": "updateRewardInfos",
+      "accounts": [
+        {
+          "name": "ammConfig",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "collectRewards",
+      "accounts": [
+        {
+          "name": "ownerOrDelegate",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "nftAccount",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "protocolPositionState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "personalPositionState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tickLowerState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tickUpperState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "setRewardEmissions",
+      "accounts": [
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "ammConfig",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "rewardIndex",
+          "type": "u8"
+        },
+        {
+          "name": "emissionsPerSecondX32",
           "type": "u64"
         }
       ]
@@ -2054,7 +2664,7 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "positionState",
+          "name": "procotolPositionState",
           "isMut": true,
           "isSigner": false
         },
@@ -2210,11 +2820,6 @@ export const IDL: AmmCore = {
         {
           "name": "nftMint",
           "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "positionState",
-          "isMut": false,
           "isSigner": false
         },
         {
@@ -2377,6 +2982,16 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
+          "name": "tokenVault0",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenVault1",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "tickLowerState",
           "isMut": true,
           "isSigner": false
@@ -2399,6 +3014,21 @@ export const IDL: AmmCore = {
         {
           "name": "lastObservationState",
           "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "recipientTokenAccount0",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "recipientTokenAccount1",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
           "isSigner": false
         }
       ],
@@ -2513,7 +3143,7 @@ export const IDL: AmmCore = {
       ]
     },
     {
-      "name": "swapSingle",
+      "name": "swap",
       "accounts": [
         {
           "name": "signer",
@@ -2581,7 +3211,7 @@ export const IDL: AmmCore = {
       ]
     },
     {
-      "name": "swapBaseIn",
+      "name": "swapRouterBaseIn",
       "accounts": [
         {
           "name": "signer",
@@ -2703,6 +3333,14 @@ export const IDL: AmmCore = {
             "type": "u8"
           },
           {
+            "name": "ammConfig",
+            "type": "publicKey"
+          },
+          {
+            "name": "owner",
+            "type": "publicKey"
+          },
+          {
             "name": "tokenMint0",
             "type": "publicKey"
           },
@@ -2765,6 +3403,21 @@ export const IDL: AmmCore = {
           {
             "name": "protocolFeesToken1",
             "type": "u64"
+          },
+          {
+            "name": "rewardLastUpdatedTimestamp",
+            "type": "u64"
+          },
+          {
+            "name": "rewardInfos",
+            "type": {
+              "array": [
+                {
+                  "defined": "RewardInfo"
+                },
+                3
+              ]
+            }
           }
         ]
       }
@@ -2791,12 +3444,21 @@ export const IDL: AmmCore = {
             "type": "u64"
           },
           {
-            "name": "tokensOwed0",
+            "name": "tokenFeesOwed0",
             "type": "u64"
           },
           {
-            "name": "tokensOwed1",
+            "name": "tokenFeesOwed1",
             "type": "u64"
+          },
+          {
+            "name": "rewardGrowthInside",
+            "type": {
+              "array": [
+                "u64",
+                3
+              ]
+            }
           }
         ]
       }
@@ -2866,6 +3528,15 @@ export const IDL: AmmCore = {
           {
             "name": "secondsOutside",
             "type": "u32"
+          },
+          {
+            "name": "rewardGrowthsOutside",
+            "type": {
+              "array": [
+                "u64",
+                3
+              ]
+            }
           }
         ]
       }
@@ -2908,12 +3579,137 @@ export const IDL: AmmCore = {
             "type": "u64"
           },
           {
-            "name": "tokensOwed0",
+            "name": "tokenFeesOwed0",
             "type": "u64"
           },
           {
-            "name": "tokensOwed1",
+            "name": "tokenFeesOwed1",
             "type": "u64"
+          },
+          {
+            "name": "rewardInfos",
+            "type": {
+              "array": [
+                {
+                  "defined": "PositionRewardInfo"
+                },
+                3
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "InitializeRewardParam",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rewardIndex",
+            "type": "u8"
+          },
+          {
+            "name": "openTime",
+            "type": "u64"
+          },
+          {
+            "name": "endTime",
+            "type": "u64"
+          },
+          {
+            "name": "emissionsPerSecondX32",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RewardInfo",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rewardState",
+            "type": "u8"
+          },
+          {
+            "name": "openTime",
+            "type": "u64"
+          },
+          {
+            "name": "endTime",
+            "type": "u64"
+          },
+          {
+            "name": "lastUpdateTime",
+            "type": "u64"
+          },
+          {
+            "name": "emissionPerSecondX32",
+            "type": "u64"
+          },
+          {
+            "name": "rewardTotalEmissioned",
+            "type": "u64"
+          },
+          {
+            "name": "rewardClaimed",
+            "type": "u64"
+          },
+          {
+            "name": "tokenMint",
+            "type": "publicKey"
+          },
+          {
+            "name": "tokenVault",
+            "type": "publicKey"
+          },
+          {
+            "name": "authority",
+            "type": "publicKey"
+          },
+          {
+            "name": "rewardGrowthGlobalX32",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PositionRewardInfo",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "growthInsideLast",
+            "type": "u64"
+          },
+          {
+            "name": "rewardAmountOwed",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RewardState",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Uninitialized"
+          },
+          {
+            "name": "Initialized"
+          },
+          {
+            "name": "Opening"
+          },
+          {
+            "name": "Ended"
           }
         ]
       }
@@ -3324,6 +4120,23 @@ export const IDL: AmmCore = {
           "index": false
         }
       ]
+    },
+    {
+      "name": "UpdateRewardInfosEvent",
+      "fields": [
+        {
+          "name": "rewardInfos",
+          "type": {
+            "array": [
+              {
+                "defined": "RewardInfo"
+              },
+              3
+            ]
+          },
+          "index": false
+        }
+      ]
     }
   ],
   "errors": [
@@ -3334,88 +4147,113 @@ export const IDL: AmmCore = {
     },
     {
       "code": 6001,
-      "name": "ZeroMintAmount",
-      "msg": "Minting amount should be greater than 0"
-    },
-    {
-      "code": 6002,
-      "name": "TickInvaildOrder",
-      "msg": "The lower tick must be below the upper tick"
-    },
-    {
-      "code": 6003,
-      "name": "TickLowerOverflow",
-      "msg": "The tick must be greater, or equal to the minimum tick(-221818)"
-    },
-    {
-      "code": 6004,
-      "name": "TickUpperOverflow",
-      "msg": "The tick must be lesser than, or equal to the maximum tick(221818)"
-    },
-    {
-      "code": 6005,
-      "name": "TickAndSpacingNotMatch",
-      "msg": "tick % tick_spacing must be zero"
-    },
-    {
-      "code": 6006,
-      "name": "SqrtPriceLimitOverflow",
-      "msg": "Square root price limit overflow"
-    },
-    {
-      "code": 6007,
-      "name": "SqrtPriceX32",
-      "msg": "sqrt_price_x32 out of range"
-    },
-    {
-      "code": 6008,
-      "name": "LiquiditySubValueErr",
-      "msg": "Liquidity sub delta L must be smaller than before"
-    },
-    {
-      "code": 6009,
-      "name": "LiquidityAddValueErr",
-      "msg": "Liquidity add delta L must be greater, or equal to before"
-    },
-    {
-      "code": 6010,
-      "name": "TransactionTooOld",
-      "msg": "Transaction too old"
-    },
-    {
-      "code": 6011,
-      "name": "PriceSlippageCheck",
-      "msg": "Price slippage check"
-    },
-    {
-      "code": 6012,
       "name": "NotApproved",
       "msg": "Not approved"
     },
     {
-      "code": 6013,
-      "name": "TooLittleOutputReceived",
-      "msg": "Too little output received"
+      "code": 6002,
+      "name": "ZeroMintAmount",
+      "msg": "Minting amount should be greater than 0"
     },
     {
-      "code": 6014,
-      "name": "TooMuchInputPaid",
-      "msg": "Too much input paid"
-    },
-    {
-      "code": 6015,
-      "name": "InvaildSwapAmountSpecified",
-      "msg": "Swap special amount can not be zero"
-    },
-    {
-      "code": 6016,
+      "code": 6003,
       "name": "InvaildTickIndex",
       "msg": "Tick index of lower must be smaller than upper"
     },
     {
-      "code": 6017,
+      "code": 6004,
+      "name": "TickInvaildOrder",
+      "msg": "The lower tick must be below the upper tick"
+    },
+    {
+      "code": 6005,
+      "name": "TickLowerOverflow",
+      "msg": "The tick must be greater, or equal to the minimum tick(-221818)"
+    },
+    {
+      "code": 6006,
+      "name": "TickUpperOverflow",
+      "msg": "The tick must be lesser than, or equal to the maximum tick(221818)"
+    },
+    {
+      "code": 6007,
+      "name": "TickAndSpacingNotMatch",
+      "msg": "tick % tick_spacing must be zero"
+    },
+    {
+      "code": 6008,
+      "name": "SqrtPriceLimitOverflow",
+      "msg": "Square root price limit overflow"
+    },
+    {
+      "code": 6009,
+      "name": "SqrtPriceX32",
+      "msg": "sqrt_price_x32 out of range"
+    },
+    {
+      "code": 6010,
+      "name": "LiquiditySubValueErr",
+      "msg": "Liquidity sub delta L must be smaller than before"
+    },
+    {
+      "code": 6011,
+      "name": "LiquidityAddValueErr",
+      "msg": "Liquidity add delta L must be greater, or equal to before"
+    },
+    {
+      "code": 6012,
       "name": "InvaildLiquidity",
       "msg": "Invaild liquidity when update position"
+    },
+    {
+      "code": 6013,
+      "name": "TransactionTooOld",
+      "msg": "Transaction too old"
+    },
+    {
+      "code": 6014,
+      "name": "PriceSlippageCheck",
+      "msg": "Price slippage check"
+    },
+    {
+      "code": 6015,
+      "name": "TooLittleOutputReceived",
+      "msg": "Too little output received"
+    },
+    {
+      "code": 6016,
+      "name": "TooMuchInputPaid",
+      "msg": "Too much input paid"
+    },
+    {
+      "code": 6017,
+      "name": "InvaildSwapAmountSpecified",
+      "msg": "Swap special amount can not be zero"
+    },
+    {
+      "code": 6018,
+      "name": "InvalidRewardIndex",
+      "msg": "Invalid reward index"
+    },
+    {
+      "code": 6019,
+      "name": "InvalidRewardInitParam",
+      "msg": "Invalid reward init param"
+    },
+    {
+      "code": 6020,
+      "name": "InvalidRewardDesiredAmount",
+      "msg": "Invalid collect reward desired amount"
+    },
+    {
+      "code": 6021,
+      "name": "InvalidRewardInputAccountNumber",
+      "msg": "Invalid collect reward input account number"
+    },
+    {
+      "code": 6022,
+      "name": "UnInitializedRewardInfo",
+      "msg": "uninitialized reward info"
     }
   ]
 };

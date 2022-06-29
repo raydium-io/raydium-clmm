@@ -196,9 +196,9 @@ describe("amm-core", async () => {
   let bitmapUpperBState: web3.PublicKey;
   let bitmapUpperBBump: number;
   let personalPositionAState: web3.PublicKey;
-  let tokenizedPositionABump: number;
-  let tokenizedPositionBState: web3.PublicKey;
-  let tokenizedPositionBBump: number;
+  let personalPositionABump: number;
+  let personalPositionBState: web3.PublicKey;
+  let personalPositionBBump: number;
   let positionANftAccount: web3.PublicKey;
   let positionBNftAccount: web3.PublicKey;
   let metadataAccount: web3.PublicKey;
@@ -486,6 +486,7 @@ describe("amm-core", async () => {
       if (await accountExist(connection, ammConfig)) {
         return;
       }
+      console.log("to create amm config account")
       // let listener: number;
       // let [_event, _slot] = await new Promise((resolve, _reject) => {
       //   listener = program.addEventListener(
@@ -1624,11 +1625,11 @@ describe("amm-core", async () => {
       const poolAStateData = await program.account.poolState.fetch(poolAState);
 
       assert.equal(
-        poolAStateData.rewardInfos[0].rewardTokenVault.toString(),
+        poolAStateData.rewardInfos[0].tokenVault.toString(),
         rewardVault0.toString()
       );
       assert.equal(
-        poolAStateData.rewardInfos[0].rewardTokenMint.toString(),
+        poolAStateData.rewardInfos[0].tokenMint.toString(),
         rewardToken0.publicKey.toString()
       );
     });
@@ -1659,11 +1660,11 @@ describe("amm-core", async () => {
       let poolAStateData = await program.account.poolState.fetch(poolAState);
 
       assert.equal(
-        poolAStateData.rewardInfos[1].rewardTokenVault.toString(),
+        poolAStateData.rewardInfos[1].tokenVault.toString(),
         rewardVault1.toString()
       );
       assert.equal(
-        poolAStateData.rewardInfos[1].rewardTokenMint.toString(),
+        poolAStateData.rewardInfos[1].tokenMint.toString(),
         rewardToken1.publicKey.toString()
       );
     });
@@ -1693,11 +1694,11 @@ describe("amm-core", async () => {
       let poolAStateData = await program.account.poolState.fetch(poolAState);
 
       assert.equal(
-        poolAStateData.rewardInfos[2].rewardTokenVault.toString(),
+        poolAStateData.rewardInfos[2].tokenVault.toString(),
         rewardVault2.toString()
       );
       assert.equal(
-        poolAStateData.rewardInfos[2].rewardTokenMint.toString(),
+        poolAStateData.rewardInfos[2].tokenMint.toString(),
         rewardToken2.publicKey.toString()
       );
     });
@@ -1915,12 +1916,12 @@ describe("amm-core", async () => {
       )
     )[0];
 
-    [personalPositionAState, tokenizedPositionABump] =
+    [personalPositionAState, personalPositionABump] =
       await PublicKey.findProgramAddress(
         [POSITION_SEED, nftMintAKeypair.publicKey.toBuffer()],
         program.programId
       );
-    [tokenizedPositionBState, tokenizedPositionBBump] =
+    [personalPositionBState, personalPositionBBump] =
       await PublicKey.findProgramAddress(
         [POSITION_SEED, nftMintBKeypair.publicKey.toBuffer()],
         program.programId
@@ -2291,7 +2292,7 @@ describe("amm-core", async () => {
         expectLiquity
       );
 
-      assert.equal(tokenizedPositionData.bump, tokenizedPositionABump);
+      assert.equal(tokenizedPositionData.bump, personalPositionABump);
       assert(tokenizedPositionData.poolId.equals(poolAState));
       assert(tokenizedPositionData.mint.equals(nftMintAKeypair.publicKey));
       assert.equal(tokenizedPositionData.tickLower, tickLower);
@@ -2382,7 +2383,6 @@ describe("amm-core", async () => {
           payer: owner,
           ammConfig,
           nftMint: nftMintAKeypair.publicKey,
-          personalPositionState: personalPositionAState,
           metadataAccount,
           systemProgram: SystemProgram.programId,
           rent: web3.SYSVAR_RENT_PUBKEY,
@@ -2419,7 +2419,6 @@ describe("amm-core", async () => {
             payer: owner,
             ammConfig,
             nftMint: nftMintAKeypair.publicKey,
-            personalPositionState: personalPositionAState,
             metadataAccount,
             systemProgram: SystemProgram.programId,
             rent: web3.SYSVAR_RENT_PUBKEY,
@@ -4095,7 +4094,7 @@ describe("amm-core", async () => {
             tokenVault0: vaultB1,
             tokenVault1: vaultB2,
             lastObservationState: latestObservationBState,
-            personalPositionState: tokenizedPositionBState,
+            personalPositionState: personalPositionBState,
 
             systemProgram: SystemProgram.programId,
             rent: web3.SYSVAR_RENT_PUBKEY,
@@ -4478,7 +4477,7 @@ describe("amm-core", async () => {
       ).to.be.rejectedWith(Error);
     });
 
-    it("set reward index 0 emission", async () => {
+    it("set reward index 0 emission less than before", async () => {
       await program.methods
         .setRewardEmissions(0, new BN(1))
         .accounts({
@@ -4492,10 +4491,45 @@ describe("amm-core", async () => {
       const poolStateData = await program.account.poolState.fetch(poolAState);
 
       assert.equal(
-        poolStateData.rewardInfos[0].rewardEmissionPerSecondX32.toNumber(),
+        poolStateData.rewardInfos[0].emissionPerSecondX32.toNumber(),
         1
       );
     });
+
+    // it("set reward index 0 emission grater than before", async () => {
+    //   await program.methods
+    //     .setRewardEmissions(0, new BN(1000000000000000))
+    //     .accounts({
+    //       authority: owner,
+    //       ammConfig: ammConfig,
+    //       poolState: poolAState,
+    //     })
+    //     .remainingAccounts([
+    //       {
+    //         pubkey: rewardVault0,
+    //         isSigner: false,
+    //         isWritable: true,
+    //       },
+    //       {
+    //         pubkey: ownerRewardTokenAccount0,
+    //         isSigner: false,
+    //         isWritable: true,
+    //       },
+    //       {
+    //         pubkey: TOKEN_PROGRAM_ID,
+    //         isSigner: false,
+    //         isWritable: false,
+    //       },
+    //     ])
+    //     .rpc();
+
+    //   const poolStateData = await program.account.poolState.fetch(poolAState);
+
+    //   assert.equal(
+    //     poolStateData.rewardInfos[0].emissionPerSecondX32.toNumber(),
+    //     1000000000000000
+    //   );
+    // });
   });
 
   describe("Completely close position and deallocate ticks", () => {

@@ -19,13 +19,6 @@ pub struct PersonalPositionWithMetadata<'info> {
     #[account(mut)]
     pub nft_mint: Box<Account<'info, Mint>>,
 
-    /// Position state of the tokenized position
-    #[account(
-        seeds = [POSITION_SEED.as_bytes(), nft_mint.key().as_ref()],
-        bump = personal_position_state.bump
-    )]
-    pub personal_position_state: Account<'info, PersonalPositionState>,
-
     /// To store metaplex metadata
     /// CHECK: Safety check performed inside function body
     #[account(mut)]

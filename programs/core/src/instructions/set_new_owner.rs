@@ -1,6 +1,6 @@
+use crate::error::ErrorCode;
 use crate::states::*;
 use anchor_lang::prelude::*;
-use crate::error::ErrorCode;
 
 #[derive(Accounts)]
 pub struct SetNewOwner<'info> {
@@ -19,7 +19,8 @@ pub struct SetNewOwner<'info> {
 pub fn set_new_owner(ctx: Context<SetNewOwner>) -> Result<()> {
     let amm_config = &mut ctx.accounts.amm_config;
     require!(
-        ctx.accounts.owner.key() == amm_config.owner || ctx.accounts.owner.key() == crate::admin::ID,
+        ctx.accounts.owner.key() == amm_config.owner
+            || ctx.accounts.owner.key() == crate::admin::ID,
         ErrorCode::NotApproved
     );
 

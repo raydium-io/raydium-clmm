@@ -1,9 +1,12 @@
+use crate::error::ErrorCode;
+use crate::libraries::{fixed_point_32, full_math::MulDiv};
+use crate::states::config::AmmConfig;
+use crate::states::pool::{PoolState, REWARD_NUM};
+use crate::util::transfer_from_user_to_pool_vault;
+use anchor_lang::prelude::*;
+use anchor_spl::token::{Token, TokenAccount};
 use std::ops::DerefMut;
 
-use crate::error::ErrorCode;
-use crate::states::config::AmmConfig;
-use crate::states::pool::PoolState;
-use anchor_lang::prelude::*;
 #[derive(Accounts)]
 pub struct SetRewardEmissions<'info> {
     /// Address to be set as protocol owner. It pays to create factory state account.
@@ -23,19 +26,59 @@ pub struct SetRewardEmissions<'info> {
     pub pool_state: Box<Account<'info, PoolState>>,
 }
 
-pub fn set_reward_emissions(
-    ctx: Context<SetRewardEmissions>,
+pub fn set_reward_emissions<'a, 'b, 'c, 'info>(
+    ctx: Context<'a, 'b, 'c, 'info, SetRewardEmissions<'info>>,
     reward_index: u8,
     emissions_per_second_x32: u64,
 ) -> Result<()> {
-    let pool_state = ctx.accounts.pool_state.deref_mut();
+    assert!((reward_index as usize) < REWARD_NUM);
     let clock = Clock::get()?;
+
+    let pool_state = ctx.accounts.pool_state.deref_mut();
     pool_state.update_reward_infos(clock.unix_timestamp as u64)?;
-    if !pool_state.reward_infos[reward_index as usize].initialized() {
+
+    let reward_info = pool_state.reward_infos[reward_index as usize];
+
+    if !reward_info.initialized() {
         return err!(ErrorCode::UnInitializedRewardInfo);
     }
 
-    pool_state.reward_infos[reward_index as usize].reward_emission_per_second_x32 =
+    // if emissions_per_second_x32 > reward_info.emission_per_second_x32 {
+    //     let emission_diff = emissions_per_second_x32
+    //         .checked_sub(reward_info.emission_per_second_x32)
+    //         .unwrap();
+    //     let mut remaining_accounts = ctx.remaining_accounts.iter();
+
+    //     let reward_token_vault =
+    //         Account::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
+    //     let authority_token_account =
+    //         Account::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
+    //     let token_program = Program::<Token>::try_from(remaining_accounts.next().unwrap())?;
+
+    //     require_keys_eq!(reward_token_vault.mint, authority_token_account.mint);
+    //     require_keys_eq!(reward_token_vault.key(), reward_info.token_vault);
+
+    //     if pool_state.reward_infos[reward_index as usize].end_time > clock.unix_timestamp as u64 {
+    //         let time_delta = pool_state.reward_infos[reward_index as usize]
+    //             .end_time
+    //             .checked_sub(clock.unix_timestamp as u64)
+    //             .unwrap();
+
+    //         let desposit_amount = time_delta
+    //             .mul_div_floor(emission_diff, fixed_point_32::Q32)
+    //             .unwrap();
+
+    //         transfer_from_user_to_pool_vault(
+    //             &ctx.accounts.authority,
+    //             &authority_token_account,
+    //             &reward_token_vault,
+    //             &token_program,
+    //             desposit_amount,
+    //         )?;
+    //     }
+    // }
+
+    pool_state.reward_infos[reward_index as usize].emission_per_second_x32 =
         emissions_per_second_x32;
 
     Ok(())

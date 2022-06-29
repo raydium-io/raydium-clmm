@@ -1,5 +1,5 @@
 use crate::libraries::{fixed_point_32, full_math::MulDiv};
-use crate::pool::NUM_REWARDS;
+use crate::pool::REWARD_NUM;
 use anchor_lang::prelude::*;
 
 use super::pool::RewardInfo;
@@ -41,16 +41,16 @@ pub struct PersonalPositionState {
     pub token_fees_owed_1: u64,
 
     // Position reward info
-    pub reward_infos: [PositionRewardInfo; NUM_REWARDS],
+    pub reward_infos: [PositionRewardInfo; REWARD_NUM],
     // padding space for upgrade
     // pub padding: [u64; 8],
 }
 
 impl PersonalPositionState {
-    pub const LEN: usize = 8 + 1 + 32 + 32 + 4 + 4 + 8 + 8 + 8 + 8 + 8 + 16 * NUM_REWARDS + 64;
+    pub const LEN: usize = 8 + 1 + 32 + 32 + 4 + 4 + 8 + 8 + 8 + 8 + 8 + 16 * REWARD_NUM + 64;
 
-    pub fn update_rewards(&mut self, reward_growths_inside: [u64; NUM_REWARDS]) -> Result<()> {
-        for i in 0..NUM_REWARDS {
+    pub fn update_rewards(&mut self, reward_growths_inside: [u64; REWARD_NUM]) -> Result<()> {
+        for i in 0..REWARD_NUM {
             let reward_growth_inside = reward_growths_inside[i];
             let curr_reward_info = self.reward_infos[i];
 
@@ -145,5 +145,5 @@ pub struct CollectPersonalFeeEvent {
 #[event]
 pub struct UpdateRewardInfosEvent {
     /// Reward info
-    pub reward_infos: [RewardInfo; NUM_REWARDS],
+    pub reward_infos: [RewardInfo; REWARD_NUM],
 }
