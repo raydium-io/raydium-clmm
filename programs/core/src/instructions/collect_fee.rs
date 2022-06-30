@@ -138,11 +138,11 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
         // update fee inside
         burn(&mut burn_accounts, ctx.remaining_accounts, 0)?;
 
-        let updated_core_position = burn_accounts.procotol_position_state.deref();
+        let updated_protocol_position = burn_accounts.procotol_position_state.deref();
 
         token_fees_owed_0 = token_fees_owed_0
             .checked_add(
-                (updated_core_position.fee_growth_inside_0_last
+                (updated_protocol_position.fee_growth_inside_0_last
                     - tokenized_position.fee_growth_inside_0_last)
                     .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
                     .unwrap(),
@@ -150,7 +150,7 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
             .unwrap();
         token_fees_owed_1 = token_fees_owed_1
             .checked_add(
-                (updated_core_position.fee_growth_inside_1_last
+                (updated_protocol_position.fee_growth_inside_1_last
                     - tokenized_position.fee_growth_inside_1_last)
                     .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
                     .unwrap(),
@@ -158,18 +158,18 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
             .unwrap();
 
         tokenized_position.fee_growth_inside_0_last =
-            updated_core_position.fee_growth_inside_0_last;
+            updated_protocol_position.fee_growth_inside_0_last;
         tokenized_position.fee_growth_inside_1_last =
-            updated_core_position.fee_growth_inside_1_last;
+            updated_protocol_position.fee_growth_inside_1_last;
 
-        tokenized_position.update_rewards(updated_core_position.reward_growth_inside)?;
+        tokenized_position.update_rewards(updated_protocol_position.reward_growth_inside)?;
     }
 
     // adjust amounts to the max for the position
     let amount_0 = amount_0_max.min(token_fees_owed_0);
     let amount_1 = amount_1_max.min(token_fees_owed_1);
 
-    msg!("withdrawing amount_0: {}, amount_1: {}", amount_0, amount_1);
+    msg!("collect amount_0: {}, amount_1: {}", amount_0, amount_1);
 
     let mut accounts = CollectParam {
         owner: &Signer::try_from(&protocol_position_owner)?,

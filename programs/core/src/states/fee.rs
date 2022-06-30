@@ -2,6 +2,8 @@ use anchor_lang::prelude::*;
 
 pub const FEE_SEED: &str = "fee";
 
+pub const FEE_RATE_DENOMINATOR_VALUE: u32 = 1_000_000;
+
 /// Stores a fee amount and tick spacing pair enabled by the protocol owner
 ///
 /// A fee amount can never be removed, so this value should be hard coded

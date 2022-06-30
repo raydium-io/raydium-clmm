@@ -114,10 +114,12 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     );
 
     if decrease_amount_0 > 0 {
+        #[cfg(feature = "enable-log")]
         msg!(
-            "decrease_amount_0 transfer before:{}, tranafer amount:{}",
+            "decrease_amount_0, vault_0 balance: {}, recipient_token_account balance before transfer:{}, tranafer amount:{}",
+            ctx.accounts.token_vault_0.amount,
             ctx.accounts.recipient_token_account_0.amount,
-            decrease_amount_0
+            decrease_amount_0,
         );
         transfer_from_pool_vault_to_user(
             ctx.accounts.pool_state.clone().as_mut(),
@@ -128,10 +130,12 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         )?;
     }
     if decrease_amount_1 > 0 {
+        #[cfg(feature = "enable-log")]
         msg!(
-            "decrease_amount_1 transfer before:{}, tranafer amount:{}",
+            "decrease_amount_1, vault_1 balance: {}, recipient_token_account balance before transfer:{}, tranafer amount:{}",
+            ctx.accounts.token_vault_1.amount,
             ctx.accounts.recipient_token_account_1.amount,
-            decrease_amount_1
+            decrease_amount_1,
         );
         transfer_from_pool_vault_to_user(
             ctx.accounts.pool_state.clone().as_mut(),

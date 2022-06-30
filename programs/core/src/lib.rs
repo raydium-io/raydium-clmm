@@ -12,7 +12,7 @@ use anchor_lang::prelude::*;
 use instructions::*;
 use states::*;
 
-declare_id!("E1CjPgJodwDyAzvHEvHGcGqNeJc2ZLSe8kdJC3affmZf");
+declare_id!("EwgWHHfU1rbczvaJzZR8J3hB4J6yup3ZY6uCP5FCgxKU");
 
 pub mod admin {
     use anchor_lang::prelude::declare_id;
@@ -36,8 +36,8 @@ pub mod amm_core {
     /// * `ctx`- Initializes the factory state account
     /// * `amm_config_bump` - Bump to validate factory state address
     ///
-    pub fn create_amm_config(ctx: Context<CreateAmmConfig>, protocol_fee_rate: u8) -> Result<()> {
-        assert!(protocol_fee_rate >= 2 && protocol_fee_rate <= 10);
+    pub fn create_amm_config(ctx: Context<CreateAmmConfig>, protocol_fee_rate: u32) -> Result<()> {
+        assert!(protocol_fee_rate > 0 && protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
         instructions::create_amm_config(ctx, protocol_fee_rate)
     }
 
@@ -156,7 +156,7 @@ pub mod amm_core {
     /// * `emissions_per_second_x32` - The per second emission reward
     ///
     pub fn set_reward_emissions<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info,SetRewardEmissions<'info>>,
+        ctx: Context<'a, 'b, 'c, 'info, SetRewardEmissions<'info>>,
         reward_index: u8,
         emissions_per_second_x32: u64,
     ) -> Result<()> {
@@ -199,16 +199,16 @@ pub mod amm_core {
     ///
     pub fn set_protocol_fee_rate(
         ctx: Context<SetProtocolFeeRate>,
-        protocol_fee_rate: u8,
+        protocol_fee_rate: u32,
     ) -> Result<()> {
-        assert!(protocol_fee_rate >= 2 && protocol_fee_rate <= 10);
+        assert!(protocol_fee_rate > 0 && protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
         let amm_config = &mut ctx.accounts.amm_config;
         let protocol_fee_rate_old = amm_config.protocol_fee_rate;
         amm_config.protocol_fee_rate = protocol_fee_rate;
 
         emit!(SetProtocolFeeRateEvent {
             protocol_fee_rate_old,
-            protocol_fee_rate
+            protocol_fee_rate_new: protocol_fee_rate
         });
 
         Ok(())
@@ -231,68 +231,6 @@ pub mod amm_core {
     ) -> Result<()> {
         instructions::collect_protocol_fee(ctx, amount_0_requested, amount_1_requested)
     }
-    /// ---------------------------------------------------------------------
-    /// Account init instructions
-    ///
-    /// Having separate instructions to initialize instructions saves compute units
-    /// and reduces code in downstream instructions
-    ///
-
-    /// Initializes an empty program account for a price tick
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - Contains accounts to initialize an empty tick account
-    /// * `tick_account_bump` - Bump to validate tick account PDA
-    /// * `tick` - The tick for which the account is created
-    ///
-    pub fn create_tick_account(ctx: Context<CreateTickAccount>, tick: i32) -> Result<()> {
-        let pool_state = &mut ctx.accounts.pool_state;
-        check_tick(tick, pool_state.tick_spacing)?;
-        let tick_state = &mut ctx.accounts.tick_state;
-        tick_state.bump = *ctx.bumps.get("tick_state").unwrap();
-        tick_state.tick = tick;
-        Ok(())
-    }
-
-    /// Initializes an empty program account for a tick bitmap
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - Contains accounts to initialize an empty bitmap account
-    /// * `bitmap_account_bump` - Bump to validate the bitmap account PDA
-    /// * `word_pos` - The bitmap key for which to create account. To find word position from a tick,
-    /// divide the tick by tick spacing to get a 24 bit compressed result, then right shift to obtain the
-    /// most significant 16 bits.
-    ///
-    pub fn create_bitmap_account(ctx: Context<CreateBitmapAccount>, word_pos: i16) -> Result<()> {
-        let max_word_pos =
-            ((tick_math::MAX_TICK / ctx.accounts.pool_state.tick_spacing as i32) >> 8) as i16;
-        let min_word_pos =
-            ((tick_math::MIN_TICK / ctx.accounts.pool_state.tick_spacing as i32) >> 8) as i16;
-        require!(word_pos >= min_word_pos, ErrorCode::TickLowerOverflow);
-        require!(word_pos <= max_word_pos, ErrorCode::TickUpperOverflow);
-
-        let mut bitmap_account = ctx.accounts.bitmap_state.load_init()?;
-        bitmap_account.bump = *ctx.bumps.get("bitmap_state").unwrap();
-        bitmap_account.word_pos = word_pos;
-        Ok(())
-    }
-
-    /// Initializes an empty program account for a position
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - Contains accounts to initialize an empty position account
-    /// * `bump` - Bump to validate the position account PDA
-    /// * `tick` - The tick for which the bitmap account is created. Program address of
-    /// the account is derived using most significant 16 bits of the tick
-    ///
-    pub fn create_procotol_position(ctx: Context<CreateProtocolPosition>) -> Result<()> {
-        let position_account = &mut ctx.accounts.procotol_position_state;
-        position_account.bump = *ctx.bumps.get("procotol_position_state").unwrap();
-        Ok(())
-    }
 
     // ---------------------------------------------------------------------
     // Position instructions
@@ -310,34 +248,30 @@ pub mod amm_core {
     /// * `amount_1_min` - The minimum amount of token_1 to spend, which serves as a slippage check
     /// * `deadline` - The time by which the transaction must be included to effect the change
     ///
-    pub fn create_personal_position<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, CreatePersonalPosition<'info>>,
+    pub fn create_position<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, CreatePosition<'info>>,
+        tick_lower: i32,
+        tick_upper: i32,
+        word_pos_lower: i16,
+        word_pos_upper: i16,
         amount_0_desired: u64,
         amount_1_desired: u64,
         amount_0_min: u64,
         amount_1_min: u64,
     ) -> Result<()> {
-        instructions::create_personal_position(
+        instructions::create_position(
             ctx,
             amount_0_desired,
             amount_1_desired,
             amount_0_min,
             amount_1_min,
+            tick_lower,
+            tick_upper,
+            word_pos_lower,
+            word_pos_upper,
         )
     }
-    /// Attach metaplex metadata to a tokenized position. Permissionless to call.
-    /// Optional and cosmetic in nature.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - Holds validated metadata account and tokenized position addresses
-    ///
-    pub fn personal_position_with_metadata(
-        ctx: Context<PersonalPositionWithMetadata>,
-    ) -> Result<()> {
-        instructions::personal_position_with_metadata(ctx)
-    }
-
+   
     /// Increases liquidity in a tokenized position, with amount paid by `payer`
     ///
     /// # Arguments

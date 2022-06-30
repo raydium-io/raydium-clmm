@@ -8,7 +8,7 @@ use super::pool::RewardInfo;
 /// PDA of `[POSITION_SEED, mint_address]`
 ///
 #[account]
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct PersonalPositionState {
     /// Bump to identify PDA
     pub bump: u8,
@@ -71,7 +71,7 @@ impl PersonalPositionState {
                 .reward_amount_owed
                 .checked_add(amount_owed_delta)
                 .unwrap();
-
+            #[cfg(feature = "enable-log")]
             msg!("update personal reward, index:{}, owed_before:{:?}, amount_owed_delta:{}, owed_after:{}, reward_growth_delta:{}, self.liquidity:{}", i, curr_reward_info.reward_amount_owed,amount_owed_delta, self.reward_infos[i].reward_amount_owed,reward_growth_delta,self.liquidity );
         }
         Ok(())

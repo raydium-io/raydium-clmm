@@ -1,7 +1,9 @@
-// Helper library to find result of a swap within a single tick range, i.e. a single tick
+// Helper library to find result of a swap within a single tick range,& i.e. a single tick
 
 use super::full_math::MulDiv;
 use super::sqrt_price_math;
+use crate::states::fee::FEE_RATE_DENOMINATOR_VALUE;
+
 /// Result of a swap step
 #[derive(Default, Debug)]
 pub struct SwapStep {
@@ -46,7 +48,10 @@ pub fn compute_swap_step(
         // round up amount_in
         // In exact input case, amount_remaining is positive
         let amount_remaining_less_fee = (amount_remaining as u64)
-            .mul_div_floor((1_000_000 - fee_pips).into(), 1_000_000)
+            .mul_div_floor(
+                (FEE_RATE_DENOMINATOR_VALUE - fee_pips).into(),
+                FEE_RATE_DENOMINATOR_VALUE as u64,
+            )
             .unwrap();
         swap_step.amount_in = if zero_for_one {
             sqrt_price_math::get_amount_0_delta_unsigned(
@@ -55,6 +60,7 @@ pub fn compute_swap_step(
                 liquidity,
                 true,
             )
+          
         } else {
             sqrt_price_math::get_amount_1_delta_unsigned(
                 sqrt_ratio_current_x32,
@@ -63,6 +69,7 @@ pub fn compute_swap_step(
                 true,
             )
         };
+        // msg!("swap_step.amount_in: {}, sqrt_ratio_target_x32:{}, sqrt_ratio_current_x32:{},liquidity:{}", swap_step.amount_in,sqrt_ratio_target_x32,sqrt_ratio_current_x32,liquidity);
         swap_step.sqrt_ratio_next_x32 = if amount_remaining_less_fee >= swap_step.amount_in {
             sqrt_ratio_target_x32
         } else {
@@ -124,7 +131,8 @@ pub fn compute_swap_step(
                 sqrt_ratio_current_x32,
                 liquidity,
                 false,
-            )
+            );
+            // msg!("swap_step.amount_in: {}, swap_step.amount_out: {}, wap_step.sqrt_ratio_next_x32:{}, sqrt_ratio_current_x32:{},liquidity:{}", swap_step.amount_in, swap_step.amount_out,swap_step.sqrt_ratio_next_x32, sqrt_ratio_current_x32,liquidity);
         };
     } else {
         if !(max && exact_in) {
@@ -160,7 +168,10 @@ pub fn compute_swap_step(
         // take pip percentage as fee
         swap_step
             .amount_in
-            .mul_div_ceil(fee_pips.into(), (1_000_000 - fee_pips).into())
+            .mul_div_ceil(
+                fee_pips.into(),
+                (FEE_RATE_DENOMINATOR_VALUE - fee_pips).into(),
+            )
             .unwrap()
     };
 

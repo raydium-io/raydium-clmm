@@ -3,10 +3,14 @@ use crate::libraries::{liquidity_amounts, liquidity_math, sqrt_price_math, tick_
 use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token;
 use anchor_spl::token::{Mint, Token, TokenAccount};
+use metaplex_token_metadata::{instruction::create_metadata_accounts, state::Creator};
+use spl_token::instruction::AuthorityType;
 use std::ops::{Deref, DerefMut};
+
 pub struct MintParam<'b, 'info> {
     /// Pays to mint liquidity
     pub minter: &'b Signer<'info>,
@@ -53,7 +57,8 @@ pub struct MintParam<'b, 'info> {
 }
 
 #[derive(Accounts)]
-pub struct CreatePersonalPosition<'info> {
+#[instruction(tick_lower: i32, tick_upper: i32,word_pos_lower:i16,word_pos_upper:i16)]
+pub struct CreatePosition<'info> {
     /// Pays to mint the position
     #[account(mut)]
     pub minter: Signer<'info>,
@@ -84,29 +89,66 @@ pub struct CreatePersonalPosition<'info> {
     )]
     pub position_nft_account: Box<Account<'info, TokenAccount>>,
 
+    /// To store metaplex metadata
+    /// CHECK: Safety check performed inside function body
+    #[account(mut)]
+    pub metadata_account: UncheckedAccount<'info>,
+
     /// Mint liquidity for this pool
     #[account(mut)]
     pub pool_state: Box<Account<'info, PoolState>>,
 
     /// Core program account to store position data
-    #[account(mut)]
+    #[account(
+        init_if_needed,
+        seeds = [
+            POSITION_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+            amm_config.key().as_ref(),
+            &tick_lower.to_be_bytes(),
+            &tick_upper.to_be_bytes(),
+        ],
+        bump,
+        payer = minter,
+        space = ProcotolPositionState::LEN
+    )]
     pub protocol_position_state: Box<Account<'info, ProcotolPositionState>>,
 
     /// Account to store data for the position's lower tick
-    #[account(mut)]
+    #[account(
+        init_if_needed,
+        seeds = [
+            TICK_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+            &tick_lower.to_be_bytes()
+        ],
+        bump,
+        payer = minter,
+        space = TickState::LEN
+    )]
     pub tick_lower_state: Box<Account<'info, TickState>>,
 
     /// Account to store data for the position's upper tick
-    #[account(mut)]
+    #[account(
+        init_if_needed,
+        seeds = [
+            TICK_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+            &tick_upper.to_be_bytes()
+        ],
+        bump,
+        payer = minter,
+        space = TickState::LEN
+    )]
     pub tick_upper_state: Box<Account<'info, TickState>>,
 
-    /// Account to mark the lower tick as initialized
+    /// CHECK: Account to mark the lower tick as initialized
     #[account(mut)]
-    pub bitmap_lower_state: AccountLoader<'info, TickBitmapState>, // remove
+    pub bitmap_lower_state: UncheckedAccount<'info>,
 
-    /// Account to mark the upper tick as initialized
+    /// CHECK:Account to store data for the position's upper tick
     #[account(mut)]
-    pub bitmap_upper_state: AccountLoader<'info, TickBitmapState>, // remove
+    pub bitmap_upper_state: UncheckedAccount<'info>,
 
     /// Metadata for the tokenized position
     #[account(
@@ -161,15 +203,73 @@ pub struct CreatePersonalPosition<'info> {
 
     /// Program to create an ATA for receiving position NFT
     pub associated_token_program: Program<'info, AssociatedToken>,
+
+    /// Program to create NFT metadata
+    /// CHECK: Metadata program address constraint applied
+    #[account(address = metaplex_token_metadata::ID)]
+    pub metadata_program: UncheckedAccount<'info>,
 }
 
-pub fn create_personal_position<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, CreatePersonalPosition<'info>>,
+pub fn create_position<'a, 'b, 'c, 'info>(
+    ctx: Context<'a, 'b, 'c, 'info, CreatePosition<'info>>,
     amount_0_desired: u64,
     amount_1_desired: u64,
     amount_0_min: u64,
     amount_1_min: u64,
+    tick_lower: i32,
+    tick_upper: i32,
+    word_pos_lower: i16,
+    word_pos_upper: i16,
 ) -> Result<()> {
+    assert!(tick_lower < tick_upper);
+    assert!(word_pos_lower <= word_pos_upper);
+    if ctx.accounts.protocol_position_state.bump == 0 {
+        let position_account = &mut ctx.accounts.protocol_position_state;
+        position_account.bump = *ctx.bumps.get("protocol_position_state").unwrap();
+    }
+
+    if ctx.accounts.tick_lower_state.bump == 0 {
+        let tick_state = ctx.accounts.tick_lower_state.as_mut();
+        tick_state.initialize(
+            *ctx.bumps.get("tick_lower_state").unwrap(),
+            tick_lower,
+            ctx.accounts.pool_state.tick_spacing,
+        )?;
+    }
+
+    if ctx.accounts.tick_upper_state.bump == 0 {
+        let tick_state = ctx.accounts.tick_upper_state.as_mut();
+        tick_state.initialize(
+            *ctx.bumps.get("tick_upper_state").unwrap(),
+            tick_upper,
+            ctx.accounts.pool_state.tick_spacing,
+        )?;
+    }
+
+    let bitmap_lower_state = TickBitmapState::get_or_create_tick_bitmap(
+        ctx.accounts.minter.to_account_info(),
+        ctx.accounts.bitmap_lower_state.to_account_info(),
+        ctx.accounts.system_program.to_account_info(),
+        ctx.accounts.pool_state.key(),
+        word_pos_lower,
+        ctx.accounts.pool_state.tick_spacing,
+    )?;
+
+    let bitmap_upper_state = if word_pos_lower == word_pos_upper {
+        AccountLoader::<TickBitmapState>::try_from(
+            &ctx.accounts.bitmap_upper_state.to_account_info(),
+        )?
+    } else {
+        TickBitmapState::get_or_create_tick_bitmap(
+            ctx.accounts.minter.to_account_info(),
+            ctx.accounts.bitmap_upper_state.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+            ctx.accounts.pool_state.key(),
+            word_pos_upper,
+            ctx.accounts.pool_state.tick_spacing,
+        )?
+    };
+
     // Validate addresses manually, as constraint checks are not applied to internal calls
     let pool_state_info = ctx.accounts.pool_state.to_account_info();
     let tick_lower = ctx.accounts.tick_lower_state.tick;
@@ -178,6 +278,7 @@ pub fn create_personal_position<'a, 'b, 'c, 'info>(
         *ctx.accounts.bitmap_lower_state.to_account_info().owner,
         crate::id()
     );
+
     // let aa = ctx.accounts.bitmap_lower_state.load_mut()?;
     let mut accounts = MintParam {
         minter: &ctx.accounts.minter,
@@ -191,8 +292,10 @@ pub fn create_personal_position<'a, 'b, 'c, 'info>(
         pool_state: ctx.accounts.pool_state.as_mut(),
         tick_lower_state: ctx.accounts.tick_lower_state.as_mut(),
         tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),
-        bitmap_lower_state: &ctx.accounts.bitmap_lower_state,
-        bitmap_upper_state: &ctx.accounts.bitmap_upper_state,
+        // bitmap_lower_state: &ctx.accounts.bitmap_lower_state,
+        // bitmap_upper_state: &ctx.accounts.bitmap_upper_state,
+        bitmap_lower_state: &bitmap_lower_state,
+        bitmap_upper_state: &bitmap_upper_state,
         procotol_position_state: ctx.accounts.protocol_position_state.as_mut(),
         last_observation_state: ctx.accounts.last_observation_state.as_mut(),
         token_program: ctx.accounts.token_program.clone(),
@@ -221,6 +324,53 @@ pub fn create_personal_position<'a, 'b, 'c, 'info>(
             &[&[&[ctx.accounts.amm_config.bump] as &[u8]]],
         ),
         1,
+    )?;
+
+    let seeds = [&[ctx.accounts.amm_config.bump] as &[u8]];
+    let create_metadata_ix = create_metadata_accounts(
+        ctx.accounts.metadata_program.key(),
+        ctx.accounts.metadata_account.key(),
+        ctx.accounts.position_nft_mint.key(),
+        ctx.accounts.amm_config.key(),
+        ctx.accounts.minter.key(),
+        ctx.accounts.amm_config.key(),
+        String::from("Raydium AMM V3 Positions"),
+        String::from(""),
+        String::from(""),
+        Some(vec![Creator {
+            address: ctx.accounts.amm_config.key(),
+            verified: true,
+            share: 100,
+        }]),
+        0,
+        true,
+        false,
+    );
+    solana_program::program::invoke_signed(
+        &create_metadata_ix,
+        &[
+            ctx.accounts.metadata_account.to_account_info().clone(),
+            ctx.accounts.position_nft_mint.to_account_info().clone(),
+            ctx.accounts.minter.to_account_info().clone(),
+            ctx.accounts.amm_config.to_account_info().clone(), // mint and update authority
+            ctx.accounts.system_program.to_account_info().clone(),
+            ctx.accounts.rent.to_account_info().clone(),
+        ],
+        &[&seeds[..]],
+    )?;
+
+    // Disable minting
+    token::set_authority(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info().clone(),
+            token::SetAuthority {
+                current_authority: ctx.accounts.amm_config.to_account_info().clone(),
+                account_or_mint: ctx.accounts.position_nft_mint.to_account_info().clone(),
+            },
+            &[&seeds[..]],
+        ),
+        AuthorityType::MintTokens,
+        None,
     )?;
 
     // Write tokenized position metadata
@@ -357,7 +507,7 @@ pub fn mint<'b, 'info>(
         remaining_accounts,
     )?;
     // msg!(
-    //     "amount_0_int:{},amount_1_int:{}",
+    //     "amount_0_init:{},amount_1_init:{}",
     //     amount_0_int,
     //     amount_1_int
     // );
@@ -542,6 +692,7 @@ pub fn _update_position<'info>(
     let clock = Clock::get()?;
     let updated_reward_infos = pool_state.update_reward_infos(clock.unix_timestamp as u64)?;
     let reward_growths_outside = RewardInfo::to_reward_growths(&updated_reward_infos);
+    #[cfg(feature = "enable-log")]
     msg!(
         "_update_position: update_rewared_info:{:?}",
         reward_growths_outside
@@ -586,6 +737,7 @@ pub fn _update_position<'info>(
             max_liquidity_per_tick,
             reward_growths_outside,
         )?;
+        #[cfg(feature = "enable-log")]
         msg!(
             "tick_upper.reward_growths_outside:{:?}, tick_lower.reward_growths_outside:{:?}",
             tick_upper.reward_growths_outside,

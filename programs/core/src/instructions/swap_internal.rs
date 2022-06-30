@@ -39,7 +39,7 @@ pub struct SwapContext<'b, 'info> {
 
 pub struct SwapCache {
     // the protocol fee for the input token
-    pub protocol_fee_rate: u8,
+    pub protocol_fee_rate: u32,
     // liquidity at the beginning of the swap
     pub liquidity_start: u64,
     // the timestamp of the current block
@@ -254,9 +254,8 @@ pub fn swap_internal<'b, 'info>(
             target_price,
             state.liquidity,
             state.amount_specified_remaining,
-            ctx.pool_state.fee,
+            ctx.pool_state.fee_rate,
         );
-        // msg!("compute_swap_step, swap_step: {:?}", swap_step);
         state.sqrt_price_x32 = swap_step.sqrt_ratio_next_x32;
         step.amount_in = swap_step.amount_in;
         step.amount_out = swap_step.amount_out;
@@ -279,7 +278,12 @@ pub fn swap_internal<'b, 'info>(
 
         // if the protocol fee is on, calculate how much is owed, decrement fee_amount, and increment protocol_fee
         if cache.protocol_fee_rate > 0 {
-            let delta = step.fee_amount / cache.protocol_fee_rate as u64;
+            let delta = step
+                .fee_amount
+                .checked_mul(cache.protocol_fee_rate as u64)
+                .unwrap()
+                .checked_div((FEE_RATE_DENOMINATOR_VALUE) as u64)
+                .unwrap();
             step.fee_amount -= delta;
             state.protocol_fee += delta;
         }
@@ -291,7 +295,17 @@ pub fn swap_internal<'b, 'info>(
                 .mul_div_floor(fixed_point_32::Q32, state.liquidity)
                 .unwrap();
         }
-
+        #[cfg(feature = "enable-log")]
+        msg!(
+            "exact_input:{},step_amount_in:{}, step_amount_out:{}, step_fee_amount:{},fee_growth_global_x32:{}, state.protocol_fee:{},cache.protocol_fee_rate:{}",
+            exact_input,
+            step.amount_in,
+            step.amount_out,
+            step.fee_amount,
+            state.fee_growth_global_x32,
+            state.protocol_fee,
+            cache.protocol_fee_rate
+        );
         // shift tick if we reached the next price
         if state.sqrt_price_x32 == step.sqrt_price_next_x32 {
             // if the tick is initialized, run the tick transition
@@ -308,7 +322,7 @@ pub fn swap_internal<'b, 'info>(
                     cache.seconds_per_liquidity_cumulative_x32 = new_observation.1;
                     cache.computed_latest_observation = true;
                 }
-
+                #[cfg(feature = "enable-log")]
                 msg!("loading next tick {}", step.tick_next);
                 let mut tick_state =
                     Account::<TickState>::try_from(remaining_accounts_iter.next().unwrap())?;
@@ -414,11 +428,7 @@ pub fn swap_internal<'b, 'info>(
             amount_specified.saturating_sub(state.amount_specified_remaining),
         )
     };
-    // msg!(
-    //     "vault balances before: {} {}",
-    //     vault_0.amount,
-    //     vault_1.amount
-    // );
+
     if zero_for_one {
         //  x -> y, deposit x token from user to pool vault.
         if amount_0 > 0 {

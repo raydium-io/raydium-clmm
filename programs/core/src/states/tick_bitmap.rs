@@ -1,3 +1,4 @@
+use crate::error::ErrorCode;
 ///! Packed tick initialized state library
 ///! Stores a packed mapping of tick index to its initialized state
 ///
@@ -6,7 +7,9 @@
 ///!
 use crate::libraries::big_num::U256;
 use crate::libraries::bit_math;
-use anchor_lang::prelude::*;
+use crate::libraries::tick_math;
+use crate::util::*;
+use anchor_lang::{prelude::*, system_program};
 use std::ops::BitXor;
 
 /// Seed to derive account address and signature
@@ -20,7 +23,7 @@ pub const BITMAP_SEED: &str = "tick_bitmap";
 /// PDA of `[BITMAP_SEED, token_0, token_1, fee, word_pos]`
 ///
 #[account(zero_copy)]
-#[derive(Default)]
+#[derive(Default, Debug)]
 #[repr(packed)]
 pub struct TickBitmapState {
     /// Bump to identify PDA
@@ -32,6 +35,74 @@ pub struct TickBitmapState {
 
     /// Packed initialized state
     pub word: [u64; 4],
+}
+
+impl TickBitmapState {
+    pub const LEN: usize = 8 + 1 + 2 + 8 * 4;
+
+    pub fn get_or_create_tick_bitmap<'info>(
+        payer: AccountInfo<'info>,
+        bitmap_account_info: AccountInfo<'info>,
+        system_program: AccountInfo<'info>,
+        pool_key: Pubkey,
+        word_pos: i16,
+        tick_spacing: u16,
+    ) -> Result<AccountLoader<'info, TickBitmapState>> {
+        let mut is_create = false;
+        let mut pda_bump: u8 = 0;
+        let bitmap_state = if bitmap_account_info.owner == &system_program::ID {
+            let (expect_pda_address, bump) = Pubkey::find_program_address(
+                &[
+                    BITMAP_SEED.as_bytes(),
+                    pool_key.as_ref(),
+                    &word_pos.to_be_bytes(),
+                ],
+                &crate::id(),
+            );
+            require_keys_eq!(expect_pda_address, bitmap_account_info.key());
+            create_or_allocate_account(
+                &crate::id(),
+                payer,
+                system_program,
+                bitmap_account_info.clone(),
+                &[
+                    BITMAP_SEED.as_bytes(),
+                    pool_key.as_ref(),
+                    &word_pos.to_be_bytes(),
+                    &[bump],
+                ],
+                TickBitmapState::LEN,
+            )?;
+            is_create = true;
+            pda_bump = bump;
+            AccountLoader::<TickBitmapState>::try_from_unchecked(
+                &crate::id(),
+                &bitmap_account_info,
+            )?
+        } else {
+            AccountLoader::<TickBitmapState>::try_from(&bitmap_account_info)?
+        };
+
+        if is_create {
+            {
+                let mut bitmap_account = bitmap_state.load_init()?;
+                bitmap_account.initialize(pda_bump, word_pos, tick_spacing)?;
+            }
+            bitmap_state.exit(&crate::id())?;
+        }
+        Ok(bitmap_state)
+    }
+
+    pub fn initialize(&mut self, bump: u8, word_pos: i16, tick_spacing: u16) -> Result<()> {
+        let max_word_pos = ((tick_math::MAX_TICK / tick_spacing as i32) >> 8) as i16;
+        let min_word_pos = ((tick_math::MIN_TICK / tick_spacing as i32) >> 8) as i16;
+        require!(word_pos >= min_word_pos, ErrorCode::TickLowerOverflow);
+        require!(word_pos <= max_word_pos, ErrorCode::TickUpperOverflow);
+
+        self.bump = bump;
+        self.word_pos = word_pos;
+        Ok(())
+    }
 }
 
 /// The position in the mapping where the initialized bit for a tick lives
