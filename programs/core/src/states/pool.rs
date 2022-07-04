@@ -39,7 +39,7 @@ pub struct PoolState {
     pub token_vault_1: Pubkey,
 
     /// Fee amount for swaps, denominated in hundredths of a bip (i.e. 1e-6)
-    pub fee: u32,
+    pub fee_rate: u32,
 
     /// The minimum number of ticks between initialized ticks
     pub tick_spacing: u16,
@@ -96,7 +96,7 @@ impl PoolState {
                 &POOL_SEED.as_bytes(),
                 self.token_mint_0.as_ref(),
                 self.token_mint_1.as_ref(),
-                &self.fee.to_be_bytes(),
+                &self.fee_rate.to_be_bytes(),
                 &[self.bump],
             ],
             &crate::id(),
@@ -319,10 +319,10 @@ impl PoolState {
         }
         self.reward_infos[index].open_time = open_time;
         self.reward_infos[index].end_time = end_time;
-        self.reward_infos[index].emission_per_second_x32 = reward_per_second_x32;
+        self.reward_infos[index].emissions_per_second_x32 = reward_per_second_x32;
         self.reward_infos[index].token_mint = *token_mint;
         self.reward_infos[index].token_vault = *token_vault;
-
+        #[cfg(feature = "enable-log")]
         msg!(
             "reward_index:{},curr_timestamp:{}, reward_infos:{:?}",
             index,
@@ -352,9 +352,7 @@ impl PoolState {
             }
             let mut latest_update_timestamp = curr_timestamp;
             if latest_update_timestamp > next_reward_infos[i].end_time {
-                if next_reward_infos[i].last_update_time
-                    < next_reward_infos[i].end_time
-                {
+                if next_reward_infos[i].last_update_time < next_reward_infos[i].end_time {
                     latest_update_timestamp = next_reward_infos[i].end_time
                 } else {
                     continue;
@@ -367,7 +365,7 @@ impl PoolState {
             // If the calculation overflows, set the delta value to zero.
             // This will halt reward distributions for this reward.
             let reward_growth_delta = time_delta
-                .mul_div_floor(reward_info.emission_per_second_x32, self.liquidity)
+                .mul_div_floor(reward_info.emissions_per_second_x32, self.liquidity)
                 .unwrap();
 
             // Add the reward growth delta to the global reward growth.
@@ -380,14 +378,11 @@ impl PoolState {
                 .reward_total_emissioned
                 .checked_add(
                     time_delta
-                        .mul_div_floor(
-                            reward_info.emission_per_second_x32,
-                            fixed_point_32::Q32,
-                        )
+                        .mul_div_floor(reward_info.emissions_per_second_x32, fixed_point_32::Q32)
                         .unwrap(),
                 )
                 .unwrap();
-
+            #[cfg(feature = "enable-log")]
             msg!(
                 "reward_index:{}, currency timestamp:{},latest_update_timestamp:{},reward_info.reward_last_update_time:{},time_delta:{},reward_emission_per_second_x32:{},reward_growth_delta:{},reward_info.reward_growth_global_x32:{}",
                 i,
@@ -395,7 +390,7 @@ impl PoolState {
                 latest_update_timestamp,
                 reward_info.last_update_time,
                 time_delta,
-                reward_info.emission_per_second_x32,
+                reward_info.emissions_per_second_x32,
                 reward_growth_delta,
                 reward_info.reward_growth_global_x32
             );
@@ -403,6 +398,7 @@ impl PoolState {
         }
         self.reward_infos = next_reward_infos;
         self.reward_last_updated_timestamp = curr_timestamp;
+        #[cfg(feature = "enable-log")]
         msg!("update pool reward info, reward_0_emissioned:{}, reward_1_emissioned:{},reward_2_emissioned:{},pool.liquidity:{}", 
         self.reward_infos[0].reward_total_emissioned,self.reward_infos[1].reward_total_emissioned,self.reward_infos[2].reward_total_emissioned, self.liquidity);
 
@@ -443,7 +439,7 @@ pub struct RewardInfo {
     /// Reward last update time
     pub last_update_time: u64,
     /// Q32.32 number indicates how many tokens per second are earned per unit of liquidity.
-    pub emission_per_second_x32: u64,
+    pub emissions_per_second_x32: u64,
     /// The total amount of reward emissioned
     pub reward_total_emissioned: u64,
     /// The total amount of claimed reward
@@ -520,7 +516,7 @@ pub struct PoolCreatedEvent {
     pub pool_state: Pubkey,
 
     /// The initial sqrt price of the pool, as a Q32.32
-    pub sqrt_price: u64,
+    pub sqrt_price_x32: u64,
 
     /// The initial tick of the pool, i.e. log base 1.0001 of the starting price of the pool
     pub tick: i32,

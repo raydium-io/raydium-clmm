@@ -49,6 +49,13 @@ pub struct TickState {
 
 impl TickState {
     pub const LEN: usize = 8 + 1 + 4 + 8 + 8 + 8 + 8 + 8 + 8 + 4 + 24 + 64;
+
+    pub fn initialize(&mut self, bump: u8, tick: i32, tick_spacing: u16) -> Result<()> {
+        crate::check_tick(tick, tick_spacing)?;
+        self.bump = bump;
+        self.tick = tick;
+        Ok(())
+    }
 }
 
 impl TickState {

@@ -11,7 +11,7 @@ use anchor_lang::prelude::*;
 /// PDA of `[]`
 ///
 #[account]
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct AmmConfig {
     /// Bump to identify PDA
     pub bump: u8,
@@ -20,7 +20,7 @@ pub struct AmmConfig {
     pub owner: Pubkey,
 
     /// The global protocol fee
-    pub protocol_fee_rate: u8,
+    pub protocol_fee_rate: u32,
     // padding space for upgrade
     // pub padding: [u64; 16],
 }
@@ -47,7 +47,7 @@ pub struct CreateConfigEvent {
     #[index]
     pub owner: Pubkey,
 
-    pub protocol_fee: u8,
+    pub protocol_fee_rate: u32,
 }
 
 /// Emitted when the owner of the factory is changed
@@ -66,8 +66,8 @@ pub struct OwnerChangedEvent {
 #[event]
 pub struct SetProtocolFeeRateEvent {
     /// The previous value of the protocol fee
-    pub protocol_fee_rate_old: u8,
+    pub protocol_fee_rate_old: u32,
 
     /// The updated value of the protocol fee
-    pub protocol_fee_rate: u8,
+    pub protocol_fee_rate_new: u32,
 }

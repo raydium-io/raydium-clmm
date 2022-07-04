@@ -19,23 +19,11 @@ pub use set_protocol_fee_rate::*;
 pub mod collect_protocol_fee;
 pub use collect_protocol_fee::*;
 
-pub mod create_tick_account;
-pub use create_tick_account::*;
-
-pub mod create_bitmap_account;
-pub use create_bitmap_account::*;
-
-pub mod create_protocol_position;
-pub use create_protocol_position::*;
-
 pub mod swap_internal;
 pub use swap_internal::*;
 
-pub mod create_personal_position;
-pub use create_personal_position::*;
-
-pub mod personal_position_metadata;
-pub use personal_position_metadata::*;
+pub mod create_position;
+pub use create_position::*;
 
 pub mod increase_liquidity;
 pub use increase_liquidity::*;

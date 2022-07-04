@@ -22,7 +22,7 @@ pub struct CreateAmmConfig<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn create_amm_config(ctx: Context<CreateAmmConfig>, protocol_fee_rate: u8) -> Result<()> {
+pub fn create_amm_config(ctx: Context<CreateAmmConfig>, protocol_fee_rate: u32) -> Result<()> {
     let amm_config = ctx.accounts.amm_config.deref_mut();
     amm_config.bump = *ctx.bumps.get("amm_config").unwrap();
     amm_config.owner = ctx.accounts.owner.key();
@@ -30,7 +30,7 @@ pub fn create_amm_config(ctx: Context<CreateAmmConfig>, protocol_fee_rate: u8) -
 
     emit!(CreateConfigEvent {
         owner: ctx.accounts.owner.key(),
-        protocol_fee: amm_config.protocol_fee_rate,
+        protocol_fee_rate: amm_config.protocol_fee_rate,
     });
 
     Ok(())

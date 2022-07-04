@@ -121,12 +121,13 @@ pub fn exact_internal<'b, 'info>(
 
     accounts.input_vault.reload()?;
     accounts.output_vault.reload()?;
-    // msg!(
-    //     "exact_swap_internal, is_base_input:{}, amount_in: {}, amount_out: {}",
-    //     is_base_input,
-    //     accounts.input_vault.amount - input_balance_before,
-    //     output_balance_before - accounts.output_vault.amount
-    // );
+    #[cfg(feature = "enable-log")]
+    msg!(
+        "exact_swap_internal, is_base_input:{}, amount_in: {}, amount_out: {}",
+        is_base_input,
+        accounts.input_vault.amount - input_balance_before,
+        output_balance_before - accounts.output_vault.amount
+    );
     if is_base_input {
         Ok(output_balance_before
             .checked_sub(accounts.output_vault.amount)

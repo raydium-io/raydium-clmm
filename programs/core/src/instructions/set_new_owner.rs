@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 pub struct SetNewOwner<'info> {
-    /// Current protocol owner
+    /// Current pro&tocol owner
     // #[account(mut)]
     pub owner: Signer<'info>,
     /// Address to be designated as new protocol owner
@@ -18,6 +18,13 @@ pub struct SetNewOwner<'info> {
 
 pub fn set_new_owner(ctx: Context<SetNewOwner>) -> Result<()> {
     let amm_config = &mut ctx.accounts.amm_config;
+    #[cfg(feature = "enable-log")]
+    msg!(
+        "amm_config.owner:{}, signer:{}, new_owner:{}",
+        amm_config.owner.to_string(),
+        ctx.accounts.owner.key().to_string(),
+        ctx.accounts.new_owner.key().to_string()
+    );
     require!(
         ctx.accounts.owner.key() == amm_config.owner
             || ctx.accounts.owner.key() == crate::admin::ID,

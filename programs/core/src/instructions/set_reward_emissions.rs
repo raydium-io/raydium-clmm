@@ -1,10 +1,10 @@
 use crate::error::ErrorCode;
-use crate::libraries::{fixed_point_32, full_math::MulDiv};
+// use crate::libraries::{fixed_point_32, full_math::MulDiv};
 use crate::states::config::AmmConfig;
 use crate::states::pool::{PoolState, REWARD_NUM};
-use crate::util::transfer_from_user_to_pool_vault;
+// use crate::util::transfer_from_user_to_pool_vault;
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount};
+// use anchor_spl::token::{Token, TokenAccount};
 use std::ops::DerefMut;
 
 #[derive(Accounts)]
@@ -78,7 +78,7 @@ pub fn set_reward_emissions<'a, 'b, 'c, 'info>(
     //     }
     // }
 
-    pool_state.reward_infos[reward_index as usize].emission_per_second_x32 =
+    pool_state.reward_infos[reward_index as usize].emissions_per_second_x32 =
         emissions_per_second_x32;
 
     Ok(())

@@ -22,7 +22,7 @@ pub const OBSERVATION_SEED: &str = "observation";
 /// PDA of `[OBSERVATION_SEED, token_0, token_1, fee, index]`
 ///
 #[account]
-#[derive(Default, Copy)]
+#[derive(Default, Copy, Debug)]
 pub struct ObservationState {
     /// Bump to identify PDA
     pub bump: u8,

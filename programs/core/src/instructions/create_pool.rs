@@ -82,10 +82,15 @@ pub struct CreatePool<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn create_pool(ctx: Context<CreatePool>, sqrt_price: u64) -> Result<()> {
+pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x32: u64) -> Result<()> {
     let pool_state = ctx.accounts.pool_state.deref_mut();
-    let tick = tick_math::get_tick_at_sqrt_ratio(sqrt_price)?;
-
+    let tick = tick_math::get_tick_at_sqrt_ratio(sqrt_price_x32)?;
+    #[cfg(feature = "enable-log")]
+    msg!(
+        "create pool, init_price: {}, init_tick:{}",
+        sqrt_price_x32,
+        tick
+    );
     pool_state.bump = *ctx.bumps.get("pool_state").unwrap();
     pool_state.amm_config = ctx.accounts.amm_config.key();
     pool_state.owner = ctx.accounts.pool_creator.key();
@@ -93,9 +98,9 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price: u64) -> Result<()> {
     pool_state.token_mint_1 = ctx.accounts.token_mint_1.key();
     pool_state.token_vault_0 = ctx.accounts.token_vault_0.key();
     pool_state.token_vault_1 = ctx.accounts.token_vault_1.key();
-    pool_state.fee = ctx.accounts.fee_state.fee;
+    pool_state.fee_rate = ctx.accounts.fee_state.fee;
     pool_state.tick_spacing = ctx.accounts.fee_state.tick_spacing;
-    pool_state.sqrt_price = sqrt_price;
+    pool_state.sqrt_price = sqrt_price_x32;
     pool_state.tick = tick;
     pool_state.observation_cardinality = 1;
     pool_state.observation_cardinality_next = 1;
@@ -112,7 +117,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price: u64) -> Result<()> {
         fee: ctx.accounts.fee_state.fee,
         tick_spacing: ctx.accounts.fee_state.tick_spacing,
         pool_state: ctx.accounts.pool_state.key(),
-        sqrt_price,
+        sqrt_price_x32,
         tick,
         token_vault_0: ctx.accounts.token_vault_0.key(),
         token_vault_1: ctx.accounts.token_vault_1.key(),
