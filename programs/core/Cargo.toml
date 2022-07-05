@@ -26,7 +26,7 @@ anchor-spl = "0.24.2"
 solana-program = "~1.9.13"
 # pinned since Solana needs Rust v1.56.0, while the latest uint crate mandates a newer version
 uint = "=0.9.1"
-metaplex-token-metadata = { version = "0.0.1", features = ["no-entrypoint"] }
+mpl-token-metadata = { version = "1.2.7", features = ["no-entrypoint"] }
 spl-token = { version = "3.2.0", features = ["no-entrypoint"] }
 
 [dev-dependencies]

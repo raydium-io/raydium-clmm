@@ -24,7 +24,7 @@ pub enum ErrorCode {
     #[msg("Square root price limit overflow")]
     SqrtPriceLimitOverflow,
     // second inequality must be < because the price can never reach the price at the max tick
-    #[msg("sqrt_price_x32 out of range")]
+    #[msg("sqrt_price_x64 out of range")]
     SqrtPriceX32,
 
     // Liquidity Sub

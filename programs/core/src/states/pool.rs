@@ -1,6 +1,6 @@
 use super::{oracle::ObservationState, tick::TickState};
 use crate::error::ErrorCode;
-use crate::libraries::{fixed_point_32, full_math::MulDiv};
+use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::states::{
     oracle::{self, OBSERVATION_SEED},
     position::POSITION_SEED,
@@ -46,10 +46,10 @@ pub struct PoolState {
 
     /// The currently in range liquidity available to the pool.
     /// This value has no relationship to the total liquidity across all ticks.
-    pub liquidity: u64,
+    pub liquidity: u128,
 
     /// The current price of the pool as a sqrt(token_1/token_0) Q32.32 value
-    pub sqrt_price: u64,
+    pub sqrt_price_x64: u128,
 
     /// The current tick of the pool, i.e. according to the last tick transition that was run.
     /// This value may not always be equal to SqrtTickMath.getTickAtSqrtRatio(sqrtPriceX96) if the
@@ -69,8 +69,8 @@ pub struct PoolState {
     /// The fee growth as a Q32.32 number, i.e. fees of token_0 and token_1 collected per
     /// unit of liquidity for the entire life of the pool.
     /// These values can overflow u64
-    pub fee_growth_global_0: u64,
-    pub fee_growth_global_1: u64,
+    pub fee_growth_global_0: u128,
+    pub fee_growth_global_1: u128,
 
     /// The amounts of token_0 and token_1 that are owed to the protocol.
     /// Protocol fees will never exceed u64::MAX in either token
@@ -87,8 +87,24 @@ pub struct PoolState {
 }
 
 impl PoolState {
-    pub const LEN: usize =
-        8 + 1 + 32 * 4 + 4 + 2 + 8 + 8 + 4 + 2 + 2 + 2 + 8 * 5 + RewardInfo::LEN * REWARD_NUM + 512;
+    pub const LEN: usize = 8
+        + 1
+        + 32 * 6
+        + 4
+        + 2
+        + 16
+        + 16
+        + 4
+        + 2
+        + 2
+        + 2
+        + 16
+        + 16
+        + 8
+        + 8
+        + 8
+        + RewardInfo::LEN * REWARD_NUM
+        + 512;
 
     pub fn key(&self) -> Pubkey {
         Pubkey::create_program_address(
@@ -247,15 +263,15 @@ impl PoolState {
             SnapshotCumulative {
                 tick_cumulative_inside: lower.tick_cumulative_outside
                     - upper.tick_cumulative_outside,
-                seconds_per_liquidity_inside_x32: lower.seconds_per_liquidity_outside_x32
-                    - upper.seconds_per_liquidity_outside_x32,
+                seconds_per_liquidity_inside_x64: lower.seconds_per_liquidity_outside_x64
+                    - upper.seconds_per_liquidity_outside_x64,
                 seconds_inside: lower.seconds_outside - upper.seconds_outside,
             }
         } else if self.tick < upper.tick {
             let time = oracle::_block_timestamp();
             let ObservationState {
                 tick_cumulative,
-                liquidity_cumulative: seconds_per_liquidity_cumulative_x32,
+                seconds_per_liquidity_cumulative_x64,
                 ..
             } = if latest_observation.block_timestamp == time {
                 *latest_observation
@@ -267,17 +283,17 @@ impl PoolState {
                 tick_cumulative_inside: tick_cumulative
                     - lower.tick_cumulative_outside
                     - upper.tick_cumulative_outside,
-                seconds_per_liquidity_inside_x32: seconds_per_liquidity_cumulative_x32
-                    - lower.seconds_per_liquidity_outside_x32
-                    - upper.seconds_per_liquidity_outside_x32,
+                seconds_per_liquidity_inside_x64: seconds_per_liquidity_cumulative_x64
+                    - lower.seconds_per_liquidity_outside_x64
+                    - upper.seconds_per_liquidity_outside_x64,
                 seconds_inside: time - lower.seconds_outside - upper.seconds_outside,
             }
         } else {
             SnapshotCumulative {
                 tick_cumulative_inside: upper.tick_cumulative_outside
                     - lower.tick_cumulative_outside,
-                seconds_per_liquidity_inside_x32: upper.seconds_per_liquidity_outside_x32
-                    - lower.seconds_per_liquidity_outside_x32,
+                seconds_per_liquidity_inside_x64: upper.seconds_per_liquidity_outside_x64
+                    - lower.seconds_per_liquidity_outside_x64,
                 seconds_inside: upper.seconds_outside - lower.seconds_outside,
             }
         }
@@ -289,7 +305,7 @@ impl PoolState {
         index: usize,
         open_time: u64,
         end_time: u64,
-        reward_per_second_x32: u64,
+        reward_per_second_x64: u128,
         token_mint: &Pubkey,
         token_vault: &Pubkey,
     ) -> Result<()> {
@@ -318,7 +334,7 @@ impl PoolState {
         }
         self.reward_infos[index].open_time = open_time;
         self.reward_infos[index].end_time = end_time;
-        self.reward_infos[index].emissions_per_second_x32 = reward_per_second_x32;
+        self.reward_infos[index].emissions_per_second_x64 = reward_per_second_x64;
         self.reward_infos[index].token_mint = *token_mint;
         self.reward_infos[index].token_vault = *token_vault;
         #[cfg(feature = "enable-log")]
@@ -363,35 +379,42 @@ impl PoolState {
             // Calculate the new reward growth delta.
             // If the calculation overflows, set the delta value to zero.
             // This will halt reward distributions for this reward.
-            let reward_growth_delta = time_delta
-                .mul_div_floor(reward_info.emissions_per_second_x32, self.liquidity)
+            let reward_growth_delta = U128::from(time_delta)
+                .mul_div_floor(
+                    U128::from(reward_info.emissions_per_second_x64),
+                    U128::from(self.liquidity),
+                )
                 .unwrap();
 
             // Add the reward growth delta to the global reward growth.
-            reward_info.reward_growth_global_x32 = reward_info
-                .reward_growth_global_x32
-                .checked_add(reward_growth_delta)
+            reward_info.reward_growth_global_x64 = reward_info
+                .reward_growth_global_x64
+                .checked_add(reward_growth_delta.as_u128())
                 .unwrap();
 
             reward_info.reward_total_emissioned = reward_info
                 .reward_total_emissioned
                 .checked_add(
-                    time_delta
-                        .mul_div_floor(reward_info.emissions_per_second_x32, fixed_point_32::Q32)
-                        .unwrap(),
+                    U128::from(time_delta)
+                        .mul_div_floor(
+                            U128::from(reward_info.emissions_per_second_x64),
+                            U128::from(fixed_point_64::Q64),
+                        )
+                        .unwrap()
+                        .as_u64(),
                 )
                 .unwrap();
             #[cfg(feature = "enable-log")]
             msg!(
-                "reward_index:{}, currency timestamp:{},latest_update_timestamp:{},reward_info.reward_last_update_time:{},time_delta:{},reward_emission_per_second_x32:{},reward_growth_delta:{},reward_info.reward_growth_global_x32:{}",
+                "reward_index:{}, currency timestamp:{},latest_update_timestamp:{},reward_info.reward_last_update_time:{},time_delta:{},reward_emission_per_second_x64:{},reward_growth_delta:{},reward_info.reward_growth_global_x64:{}",
                 i,
                 curr_timestamp,
                 latest_update_timestamp,
                 reward_info.last_update_time,
                 time_delta,
-                reward_info.emissions_per_second_x32,
+                reward_info.emissions_per_second_x64,
                 reward_growth_delta,
-                reward_info.reward_growth_global_x32
+                reward_info.reward_growth_global_x64
             );
             reward_info.last_update_time = latest_update_timestamp;
         }
@@ -438,7 +461,7 @@ pub struct RewardInfo {
     /// Reward last update time
     pub last_update_time: u64,
     /// Q32.32 number indicates how many tokens per second are earned per unit of liquidity.
-    pub emissions_per_second_x32: u64,
+    pub emissions_per_second_x64: u128,
     /// The total amount of reward emissioned
     pub reward_total_emissioned: u64,
     /// The total amount of claimed reward
@@ -451,11 +474,11 @@ pub struct RewardInfo {
     pub authority: Pubkey,
     /// Q32.32 number that tracks the total tokens earned per unit of liquidity since the reward
     /// emissions were turned on.
-    pub reward_growth_global_x32: u64,
+    pub reward_growth_global_x64: u128,
 }
 
 impl RewardInfo {
-    pub const LEN: usize = 1 + 8 + 8 + 8 + 8 + 16 + 16 + 32 + 32 + 8; // 137
+    pub const LEN: usize = 1 + 8 + 8 + 8 + 16 + 8 + 8 + 32 + 32 + 32 + 16; 
     /// Creates a new RewardInfo
     pub fn new(authority: Pubkey) -> Self {
         Self {
@@ -471,10 +494,10 @@ impl RewardInfo {
     }
 
     /// Maps all reward data to only the reward growth accumulators
-    pub fn to_reward_growths(reward_infos: &[RewardInfo; REWARD_NUM]) -> [u64; REWARD_NUM] {
-        let mut reward_growths = [0u64; REWARD_NUM];
+    pub fn to_reward_growths(reward_infos: &[RewardInfo; REWARD_NUM]) -> [u128; REWARD_NUM] {
+        let mut reward_growths = [0u128; REWARD_NUM];
         for i in 0..REWARD_NUM {
-            reward_growths[i] = reward_infos[i].reward_growth_global_x32;
+            reward_growths[i] = reward_infos[i].reward_growth_global_x64;
         }
         reward_growths
     }
@@ -486,7 +509,7 @@ pub struct SnapshotCumulative {
     pub tick_cumulative_inside: i64,
 
     /// The snapshot of seconds per liquidity for the range.
-    pub seconds_per_liquidity_inside_x32: u64,
+    pub seconds_per_liquidity_inside_x64: u128,
 
     /// The snapshot of seconds per liquidity for the range.
     pub seconds_inside: u32,
@@ -514,8 +537,8 @@ pub struct PoolCreatedEvent {
     /// The address of the created pool
     pub pool_state: Pubkey,
 
-    /// The initial sqrt price of the pool, as a Q32.32
-    pub sqrt_price_x32: u64,
+    /// The initial sqrt price of the pool, as a Q64.64
+    pub sqrt_price_x64: u128,
 
     /// The initial tick of the pool, i.e. log base 1.0001 of the starting price of the pool
     pub tick: i32,
@@ -574,10 +597,10 @@ pub struct SwapEvent {
     pub amount_1: i64,
 
     /// The sqrt(price) of the pool after the swap, as a Q32.32
-    pub sqrt_price_x32: u64,
+    pub sqrt_price_x64: u128,
 
     /// The liquidity of the pool after the swap
-    pub liquidity: u64,
+    pub liquidity: u128,
 
     /// The log base 1.0001 of price of the pool after the swap
     pub tick: i32,

@@ -85,10 +85,10 @@ pub mod amm_core {
     /// token accounts
     /// * `pool_state_bump` - Bump to validate Pool State address
     /// * `observation_state_bump` - Bump to validate Observation State address
-    /// * `sqrt_price_x32` - the initial sqrt price (amount_token_1 / amount_token_0) of the pool as a Q32.32
+    /// * `sqrt_price_x64` - the initial sqrt price (amount_token_1 / amount_token_0) of the pool as a Q32.32
     ///
-    pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x32: u64) -> Result<()> {
-        instructions::create_pool(ctx, sqrt_price_x32)
+    pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()> {
+        instructions::create_pool(ctx, sqrt_price_x64)
     }
 
     /// Reset a pool sqrt price
@@ -97,10 +97,10 @@ pub mod amm_core {
     ///
     /// * `ctx`- Validates token addresses and fee state. Initializes pool, observation and
     /// token accounts
-    /// * `sqrt_price_x32` - the initial sqrt price (amount_token_1 / amount_token_0) of the pool as a Q32.32
+    /// * `sqrt_price_x64` - the initial sqrt price (amount_token_1 / amount_token_0) of the pool as a Q32.32
     ///
-    pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price_x32: u64) -> Result<()> {
-        instructions::reset_sqrt_price(ctx, sqrt_price_x32)
+    pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price_x64: u128) -> Result<()> {
+        instructions::reset_sqrt_price(ctx, sqrt_price_x64)
     }
     /// Initialize a reward info for a given pool and reward index
     ///
@@ -153,14 +153,14 @@ pub mod amm_core {
     /// * `ctx` - Validated addresses of the tokenized position and token accounts. Reward can be sent
     /// to third parties
     /// * `reward_index` - The index of reward token in the pool.
-    /// * `emissions_per_second_x32` - The per second emission reward
+    /// * `emissions_per_second_x64` - The per second emission reward
     ///
     pub fn set_reward_emissions<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, SetRewardEmissions<'info>>,
         reward_index: u8,
-        emissions_per_second_x32: u64,
+        emissions_per_second_x64: u128,
     ) -> Result<()> {
-        instructions::set_reward_emissions(ctx, reward_index, emissions_per_second_x32)
+        instructions::set_reward_emissions(ctx, reward_index, emissions_per_second_x64)
     }
     // ---------------------------------------------------------------------
     // Oracle
@@ -311,7 +311,7 @@ pub mod amm_core {
     #[access_control(is_authorized_for_token(&ctx.accounts.owner_or_delegate, &ctx.accounts.nft_account))]
     pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, DecreaseLiquidity<'info>>,
-        liquidity: u64,
+        liquidity: u128,
         amount_0_min: u64,
         amount_1_min: u64,
     ) -> Result<()> {
@@ -353,14 +353,14 @@ pub mod amm_core {
         ctx: Context<'a, 'b, 'c, 'info, SwapSingle<'info>>,
         amount: u64,
         other_amount_threshold: u64,
-        sqrt_price_limit: u64,
+        sqrt_price_limit_x64: u128,
         is_base_input: bool,
     ) -> Result<()> {
         instructions::swap(
             ctx,
             amount,
             other_amount_threshold,
-            sqrt_price_limit,
+            sqrt_price_limit_x64,
             is_base_input,
         )
     }

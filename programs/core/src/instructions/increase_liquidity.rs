@@ -1,5 +1,5 @@
 use super::{add_liquidity, MintParam};
-use crate::libraries::{fixed_point_32, full_math::MulDiv};
+use crate::libraries::{fixed_point_64, full_math::MulDiv, big_num::U128};
 use crate::states::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
@@ -116,33 +116,33 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     )?;
 
     let updated_procotol_position = accounts.procotol_position_state;
-    let fee_growth_inside_0_last_x32 = updated_procotol_position.fee_growth_inside_0_last;
-    let fee_growth_inside_1_last_x32 = updated_procotol_position.fee_growth_inside_1_last;
+    let fee_growth_inside_0_last_x64 = updated_procotol_position.fee_growth_inside_0_last;
+    let fee_growth_inside_1_last_x64 = updated_procotol_position.fee_growth_inside_1_last;
 
     // Update tokenized position metadata
     let personal_position = ctx.accounts.personal_position_state.as_mut();
     personal_position.token_fees_owed_0 = personal_position
         .token_fees_owed_0
         .checked_add(
-            fee_growth_inside_0_last_x32
-                .saturating_sub(personal_position.fee_growth_inside_0_last)
-                .mul_div_floor(personal_position.liquidity, fixed_point_32::Q32)
-                .unwrap(),
+            U128::from(fee_growth_inside_0_last_x64
+                .saturating_sub(personal_position.fee_growth_inside_0_last))
+                .mul_div_floor( U128::from(personal_position.liquidity),  U128::from(fixed_point_64::Q64))
+                .unwrap().as_u64(),
         )
         .unwrap();
 
     personal_position.token_fees_owed_1 = personal_position
         .token_fees_owed_1
         .checked_add(
-            fee_growth_inside_1_last_x32
-                .saturating_sub(personal_position.fee_growth_inside_1_last)
-                .mul_div_floor(personal_position.liquidity, fixed_point_32::Q32)
-                .unwrap(),
+            U128::from(fee_growth_inside_1_last_x64
+                .saturating_sub(personal_position.fee_growth_inside_1_last))
+                .mul_div_floor( U128::from(personal_position.liquidity),  U128::from(fixed_point_64::Q64))
+                .unwrap().as_u64(),
         )
         .unwrap();
 
-    personal_position.fee_growth_inside_0_last = fee_growth_inside_0_last_x32;
-    personal_position.fee_growth_inside_1_last = fee_growth_inside_1_last_x32;
+    personal_position.fee_growth_inside_0_last = fee_growth_inside_0_last_x64;
+    personal_position.fee_growth_inside_1_last = fee_growth_inside_1_last_x64;
 
     // update rewards, must update before increase liquidity
     personal_position.update_rewards(updated_procotol_position.reward_growth_inside)?;

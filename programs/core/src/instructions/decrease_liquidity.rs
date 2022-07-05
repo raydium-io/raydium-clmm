@@ -1,6 +1,6 @@
 use super::_modify_position;
 use crate::error::ErrorCode;
-use crate::libraries::{fixed_point_32, full_math::MulDiv};
+use crate::libraries::{fixed_point_64, full_math::MulDiv,big_num::U128};
 use crate::states::*;
 use crate::util::transfer_from_pool_vault_to_user;
 use anchor_lang::prelude::*;
@@ -86,7 +86,7 @@ pub struct DecreaseLiquidity<'info> {
 
 pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, DecreaseLiquidity<'info>>,
-    liquidity: u64,
+    liquidity: u128,
     amount_0_min: u64,
     amount_1_min: u64,
 ) -> Result<()> {
@@ -148,31 +148,31 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
 
     // Update the tokenized position to the current transaction
     let updated_procotol_position = accounts.procotol_position_state;
-    let fee_growth_inside_0_last_x32 = updated_procotol_position.fee_growth_inside_0_last;
-    let fee_growth_inside_1_last_x32 = updated_procotol_position.fee_growth_inside_1_last;
+    let fee_growth_inside_0_last_x64 = updated_procotol_position.fee_growth_inside_0_last;
+    let fee_growth_inside_1_last_x64 = updated_procotol_position.fee_growth_inside_1_last;
     let personal_position = &mut ctx.accounts.personal_position_state;
 
     personal_position.token_fees_owed_0 = personal_position
         .token_fees_owed_0
         .checked_add(
-            fee_growth_inside_0_last_x32
-                .saturating_sub(personal_position.fee_growth_inside_0_last)
-                .mul_div_floor(personal_position.liquidity, fixed_point_32::Q32)
-                .unwrap(),
+            U128::from(fee_growth_inside_0_last_x64
+                .saturating_sub(personal_position.fee_growth_inside_0_last))
+                .mul_div_floor( U128::from(personal_position.liquidity),  U128::from(fixed_point_64::Q64))
+                .unwrap().as_u64(),
         )
         .unwrap();
 
     personal_position.token_fees_owed_1 = personal_position
         .token_fees_owed_1
         .checked_add(
-            fee_growth_inside_1_last_x32
-                .saturating_sub(personal_position.fee_growth_inside_1_last)
-                .mul_div_floor(personal_position.liquidity, fixed_point_32::Q32)
-                .unwrap(),
+            U128::from(fee_growth_inside_1_last_x64
+                .saturating_sub(personal_position.fee_growth_inside_1_last))
+                .mul_div_floor( U128::from(personal_position.liquidity),  U128::from(fixed_point_64::Q64))
+                .unwrap().as_u64(),
         )
         .unwrap();
-    personal_position.fee_growth_inside_0_last = fee_growth_inside_0_last_x32;
-    personal_position.fee_growth_inside_1_last = fee_growth_inside_1_last_x32;
+    personal_position.fee_growth_inside_0_last = fee_growth_inside_0_last_x64;
+    personal_position.fee_growth_inside_1_last = fee_growth_inside_1_last_x64;
 
     // update rewards, must update before decrease liquidity
     personal_position.update_rewards(updated_procotol_position.reward_growth_inside)?;
@@ -217,7 +217,7 @@ pub struct BurnParam<'b, 'info> {
 pub fn burn<'b, 'info>(
     ctx: &mut BurnParam<'b, 'info>,
     remaining_accounts: &[AccountInfo<'info>],
-    amount: u64,
+    liquidity: u128,
 ) -> Result<(u64, u64)> {
     ctx.pool_state.validate_tick_address(
         &ctx.tick_lower_state.key(),
@@ -255,7 +255,7 @@ pub fn burn<'b, 'info>(
     )?;
 
     let (amount_0_int, amount_1_int) = _modify_position(
-        -i64::try_from(amount).unwrap(),
+        -i128::try_from(liquidity).unwrap(),
         ctx.pool_state,
         ctx.procotol_position_state,
         ctx.tick_lower_state,

@@ -20,7 +20,7 @@ pub struct ResetSqrtPrice<'info> {
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
 }
 
-pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price: u64) -> Result<()> {
+pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price_x64: u128) -> Result<()> {
     let pool_state = ctx.accounts.pool_state.deref_mut();
 
     ctx.accounts
@@ -30,8 +30,8 @@ pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price: u64) -> Result
     if ctx.accounts.token_vault_0.amount > 0 || ctx.accounts.token_vault_1.amount > 0 {
         return err!(ErrorCode::NotApproved);
     }
-    let tick = tick_math::get_tick_at_sqrt_ratio(sqrt_price)?;
-    pool_state.sqrt_price = sqrt_price;
+    let tick = tick_math::get_tick_at_sqrt_ratio(sqrt_price_x64)?;
+    pool_state.sqrt_price_x64 = sqrt_price_x64;
     pool_state.tick = tick;
 
     Ok(())

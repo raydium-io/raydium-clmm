@@ -1,5 +1,7 @@
 use crate::error::ErrorCode;
-use crate::libraries::{fixed_point_32, full_math::MulDiv, liquidity_math, swap_math, tick_math};
+use crate::libraries::{
+    big_num::U128, fixed_point_64, full_math::MulDiv, liquidity_math, swap_math, tick_math,
+};
 use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
@@ -41,13 +43,13 @@ pub struct SwapCache {
     // the protocol fee for the input token
     pub protocol_fee_rate: u32,
     // liquidity at the beginning of the swap
-    pub liquidity_start: u64,
+    pub liquidity_start: u128,
     // the timestamp of the current block
     pub block_timestamp: u32,
     // the current value of the tick accumulator, computed only if we cross an initialized tick
     pub tick_cumulative: i64,
     // the current value of seconds per liquidity accumulator, computed only if we cross an initialized tick
-    pub seconds_per_liquidity_cumulative_x32: u64,
+    pub seconds_per_liquidity_cumulative_x64: u128,
     // whether we've computed and cached the above two accumulators
     pub computed_latest_observation: bool,
 }
@@ -60,27 +62,27 @@ pub struct SwapState {
     // the amount already swapped out/in of the output/input asset
     pub amount_calculated: i64,
     // current sqrt(price)
-    pub sqrt_price_x32: u64,
+    pub sqrt_price_x64: u128,
     // the tick associated with the current price
     pub tick: i32,
     // the global fee growth of the input token
-    pub fee_growth_global_x32: u64,
+    pub fee_growth_global_x64: u128,
     // amount of input token paid as protocol fee
     pub protocol_fee: u64,
     // the current liquidity in range
-    pub liquidity: u64,
+    pub liquidity: u128,
 }
 
 #[derive(Default)]
 struct StepComputations {
     // the price at the beginning of the step
-    sqrt_price_start_x32: u64,
+    sqrt_price_start_x64: u128,
     // the next tick to swap to from the current tick in the swap direction
     tick_next: i32,
     // whether tick_next is initialized or not
     initialized: bool,
     // sqrt(price) for the next tick (1/0)
-    sqrt_price_next_x32: u64,
+    sqrt_price_next_x64: u128,
     // how much is being swapped in in this step
     amount_in: u64,
     // how much is being swapped out
@@ -93,17 +95,17 @@ pub fn swap_internal<'b, 'info>(
     ctx: &mut SwapContext<'b, 'info>,
     remaining_accounts: &[AccountInfo<'info>],
     amount_specified: i64,
-    sqrt_price_limit_x32: u64,
+    sqrt_price_limit_x64: u128,
     zero_for_one: bool,
 ) -> Result<()> {
     require!(amount_specified != 0, ErrorCode::InvaildSwapAmountSpecified);
     require!(
         if zero_for_one {
-            sqrt_price_limit_x32 < ctx.pool_state.sqrt_price
-                && sqrt_price_limit_x32 > tick_math::MIN_SQRT_RATIO
+            sqrt_price_limit_x64 < ctx.pool_state.sqrt_price_x64
+                && sqrt_price_limit_x64 > tick_math::MIN_SQRT_RATIO_X64
         } else {
-            sqrt_price_limit_x32 > ctx.pool_state.sqrt_price
-                && sqrt_price_limit_x32 < tick_math::MAX_SQRT_RATIO
+            sqrt_price_limit_x64 > ctx.pool_state.sqrt_price_x64
+                && sqrt_price_limit_x64 < tick_math::MAX_SQRT_RATIO_X64
         },
         ErrorCode::SqrtPriceLimitOverflow
     );
@@ -139,7 +141,7 @@ pub fn swap_internal<'b, 'info>(
         liquidity_start: ctx.pool_state.liquidity,
         block_timestamp: oracle::_block_timestamp(),
         protocol_fee_rate: amm_config.protocol_fee_rate,
-        seconds_per_liquidity_cumulative_x32: 0,
+        seconds_per_liquidity_cumulative_x64: 0,
         tick_cumulative: 0,
         computed_latest_observation: false,
     };
@@ -153,9 +155,9 @@ pub fn swap_internal<'b, 'info>(
     let mut state = SwapState {
         amount_specified_remaining: amount_specified,
         amount_calculated: 0,
-        sqrt_price_x32: ctx.pool_state.sqrt_price,
+        sqrt_price_x64: ctx.pool_state.sqrt_price_x64,
         tick: ctx.pool_state.tick,
-        fee_growth_global_x32: if zero_for_one {
+        fee_growth_global_x64: if zero_for_one {
             ctx.pool_state.fee_growth_global_0
         } else {
             ctx.pool_state.fee_growth_global_1
@@ -172,9 +174,9 @@ pub fn swap_internal<'b, 'info>(
 
     // continue swapping as long as we haven't used the entire input/output and haven't
     // reached the price limit
-    while state.amount_specified_remaining != 0 && state.sqrt_price_x32 != sqrt_price_limit_x32 {
+    while state.amount_specified_remaining != 0 && state.sqrt_price_x64 != sqrt_price_limit_x64 {
         let mut step = StepComputations::default();
-        step.sqrt_price_start_x32 = state.sqrt_price_x32;
+        step.sqrt_price_start_x64 = state.sqrt_price_x64;
 
         let mut compressed = state.tick / ctx.pool_state.tick_spacing as i32;
 
@@ -241,22 +243,22 @@ pub fn swap_internal<'b, 'info>(
             step.tick_next = tick_math::MAX_TICK;
         }
 
-        step.sqrt_price_next_x32 = tick_math::get_sqrt_ratio_at_tick(step.tick_next)?;
-        let target_price = if (zero_for_one && step.sqrt_price_next_x32 < sqrt_price_limit_x32)
-            || (!zero_for_one && step.sqrt_price_next_x32 > sqrt_price_limit_x32)
+        step.sqrt_price_next_x64 = tick_math::get_sqrt_ratio_at_tick(step.tick_next)?;
+        let target_price = if (zero_for_one && step.sqrt_price_next_x64 < sqrt_price_limit_x64)
+            || (!zero_for_one && step.sqrt_price_next_x64 > sqrt_price_limit_x64)
         {
-            sqrt_price_limit_x32
+            sqrt_price_limit_x64
         } else {
-            step.sqrt_price_next_x32
+            step.sqrt_price_next_x64
         };
         let swap_step = swap_math::compute_swap_step(
-            state.sqrt_price_x32,
+            state.sqrt_price_x64,
             target_price,
             state.liquidity,
             state.amount_specified_remaining,
             ctx.pool_state.fee_rate,
         );
-        state.sqrt_price_x32 = swap_step.sqrt_ratio_next_x32;
+        state.sqrt_price_x64 = swap_step.sqrt_ratio_next_x64;
         step.amount_in = swap_step.amount_in;
         step.amount_out = swap_step.amount_out;
         step.fee_amount = swap_step.fee_amount;
@@ -290,10 +292,15 @@ pub fn swap_internal<'b, 'info>(
 
         // update global fee tracker
         if state.liquidity > 0 {
-            state.fee_growth_global_x32 += step
-                .fee_amount
-                .mul_div_floor(fixed_point_32::Q32, state.liquidity)
-                .unwrap();
+            msg!(
+                "step.fee_amount:{}, state.liquidity:{}",
+                step.fee_amount,
+                state.liquidity
+            );
+            state.fee_growth_global_x64 += U128::from(step.fee_amount)
+                .mul_div_floor(U128::from(fixed_point_64::Q64), U128::from(state.liquidity))
+                .unwrap()
+                .as_u128();
         }
         #[cfg(feature = "enable-log")]
         msg!(
@@ -307,7 +314,7 @@ pub fn swap_internal<'b, 'info>(
             cache.protocol_fee_rate
         );
         // shift tick if we reached the next price
-        if state.sqrt_price_x32 == step.sqrt_price_next_x32 {
+        if state.sqrt_price_x64 == step.sqrt_price_next_x64 {
             // if the tick is initialized, run the tick transition
             if step.initialized {
                 // check for the placeholder value for the oracle observation, which we replace with the
@@ -319,7 +326,7 @@ pub fn swap_internal<'b, 'info>(
                         ctx.pool_state.liquidity,
                     );
                     cache.tick_cumulative = new_observation.0;
-                    cache.seconds_per_liquidity_cumulative_x32 = new_observation.1;
+                    cache.seconds_per_liquidity_cumulative_x64 = new_observation.1;
                     cache.computed_latest_observation = true;
                 }
                 #[cfg(feature = "enable-log")]
@@ -333,16 +340,16 @@ pub fn swap_internal<'b, 'info>(
                 )?;
                 let mut liquidity_net = tick_state.deref_mut().cross(
                     if zero_for_one {
-                        state.fee_growth_global_x32
+                        state.fee_growth_global_x64
                     } else {
                         ctx.pool_state.fee_growth_global_0
                     },
                     if zero_for_one {
                         ctx.pool_state.fee_growth_global_1
                     } else {
-                        state.fee_growth_global_x32
+                        state.fee_growth_global_x64
                     },
-                    cache.seconds_per_liquidity_cumulative_x32,
+                    cache.seconds_per_liquidity_cumulative_x64,
                     cache.tick_cumulative,
                     cache.block_timestamp,
                     &updated_reward_infos,
@@ -362,9 +369,9 @@ pub fn swap_internal<'b, 'info>(
             } else {
                 step.tick_next
             };
-        } else if state.sqrt_price_x32 != step.sqrt_price_start_x32 {
+        } else if state.sqrt_price_x64 != step.sqrt_price_start_x64 {
             // recompute unless we're on a lower tick boundary (i.e. already transitioned ticks), and haven't moved
-            state.tick = tick_math::get_tick_at_sqrt_ratio(state.sqrt_price_x32)?;
+            state.tick = tick_math::get_tick_at_sqrt_ratio(state.sqrt_price_x64)?;
         }
     }
     let partition_current_timestamp = cache.block_timestamp / 14;
@@ -396,7 +403,7 @@ pub fn swap_internal<'b, 'info>(
             ctx.pool_state.observation_cardinality_next,
         );
     }
-    ctx.pool_state.sqrt_price = state.sqrt_price_x32;
+    ctx.pool_state.sqrt_price_x64 = state.sqrt_price_x64;
 
     // update liquidity if it changed
     if cache.liquidity_start != state.liquidity {
@@ -406,12 +413,12 @@ pub fn swap_internal<'b, 'info>(
     // update fee growth global and, if necessary, protocol fees
     // overflow is acceptable, protocol has to withdraw before it hit u64::MAX fees
     if zero_for_one {
-        ctx.pool_state.fee_growth_global_0 = state.fee_growth_global_x32;
+        ctx.pool_state.fee_growth_global_0 = state.fee_growth_global_x64;
         if state.protocol_fee > 0 {
             ctx.pool_state.protocol_fees_token_0 += state.protocol_fee;
         }
     } else {
-        ctx.pool_state.fee_growth_global_1 = state.fee_growth_global_x32;
+        ctx.pool_state.fee_growth_global_1 = state.fee_growth_global_x64;
         if state.protocol_fee > 0 {
             ctx.pool_state.protocol_fees_token_1 += state.protocol_fee;
         }
@@ -478,7 +485,7 @@ pub fn swap_internal<'b, 'info>(
         token_account_1: token_account_1.key(),
         amount_0,
         amount_1,
-        sqrt_price_x32: state.sqrt_price_x32,
+        sqrt_price_x64: state.sqrt_price_x64,
         liquidity: state.liquidity,
         tick: state.tick
     });

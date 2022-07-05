@@ -13,7 +13,7 @@
 /// by passing 0 as the index seed.
 ///
 use anchor_lang::prelude::*;
-
+use crate::libraries::fixed_point_64;
 /// Seed to derive account address and signature
 pub const OBSERVATION_SEED: &str = "observation";
 
@@ -37,7 +37,7 @@ pub struct ObservationState {
     pub tick_cumulative: i64,
 
     /// The seconds per in range liquidity for the life of the pool as of the observation timestamp
-    pub liquidity_cumulative: u64,
+    pub seconds_per_liquidity_cumulative_x64: u128,
 
     /// Whether the observation has been initialized and the values are safe to use
     pub initialized: bool,
@@ -55,15 +55,15 @@ impl ObservationState {
     /// * `tick` - The active tick at the time of the new observation
     /// * `liquidity` - The total in-range liquidity at the time of the new observation
     ///
-    pub fn transform(self, block_timestamp: u32, tick: i32, liquidity: u64) -> ObservationState {
+    pub fn transform(self, block_timestamp: u32, tick: i32, liquidity: u128) -> ObservationState {
         let delta = block_timestamp.saturating_sub(self.block_timestamp);
         ObservationState {
             bump: self.bump,
             index: self.index,
             block_timestamp,
             tick_cumulative: self.tick_cumulative + tick as i64 * delta as i64,
-            liquidity_cumulative: self.liquidity_cumulative
-                + ((delta as u64) << 32) / if liquidity > 0 { liquidity } else { 1 },
+            seconds_per_liquidity_cumulative_x64: self.seconds_per_liquidity_cumulative_x64
+                + ((delta as u128) << fixed_point_64::RESOLUTION) / if liquidity > 0 { liquidity } else { 1 },
             initialized: true,
         }
     }
@@ -88,7 +88,7 @@ impl ObservationState {
         &mut self,
         block_timestamp: u32,
         tick: i32,
-        liquidity: u64,
+        liquidity: u128,
         cardinality: u16,
         cardinality_next: u16,
     ) -> u16 {
@@ -113,12 +113,12 @@ impl ObservationState {
     /// * `time` - The current block timestamp
     /// * `liquidity` - The current in-range pool liquidity
     ///
-    pub fn observe_latest(self, time: u32, tick: i32, liquidity: u64) -> (i64, u64) {
+    pub fn observe_latest(self, time: u32, tick: i32, liquidity: u128) -> (i64, u128) {
         let mut last = self;
         if self.block_timestamp != time {
             last = self.transform(time, tick, liquidity);
         }
-        (last.tick_cumulative, last.liquidity_cumulative)
+        (last.tick_cumulative, last.seconds_per_liquidity_cumulative_x64)
     }
 }
 

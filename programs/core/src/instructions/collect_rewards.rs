@@ -119,7 +119,7 @@ fn get_updated_reward_growths_inside<'info>(
     tick_upper_state: &Account<'info, TickState>,
     current_tick: i32,
     updated_reward_infos: &[RewardInfo; REWARD_NUM],
-) -> ([u64; REWARD_NUM]) {
+) -> ([u128; REWARD_NUM]) {
     // Update reward accrued to the position
     let reward_growths_inside = tick::get_reward_growths_inside(
         tick_lower_state.deref(),

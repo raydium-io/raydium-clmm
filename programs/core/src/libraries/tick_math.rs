@@ -12,18 +12,20 @@ use crate::{error::ErrorCode, libraries::big_num::U128};
 ///!
 use anchor_lang::require;
 
-/// The minimum tick that may be passed to #get_sqrt_ratio_at_tick computed from log base 1.0001 of 2**-32
-pub const MIN_TICK: i32 = -221818;
-/// The minimum tick that may be passed to #get_sqrt_ratio_at_tick computed from log base 1.0001 of 2**32
+/// The minimum tick that may be passed to #get_sqrt_ratio_at_tick computed from log base 1.0001 of 2**-64
+pub const MIN_TICK: i32 = -443636;
+/// The minimum tick that may be passed to #get_sqrt_ratio_at_tick computed from log base 1.0001 of 2**64
 pub const MAX_TICK: i32 = -MIN_TICK;
 
 /// The minimum value that can be returned from #get_sqrt_ratio_at_tick. Equivalent to get_sqrt_ratio_at_tick(MIN_TICK)
-pub const MIN_SQRT_RATIO: u64 = 65537;
+pub const MIN_SQRT_RATIO_X64: u128 = 4295048016;
 /// The maximum value that can be returned from #get_sqrt_ratio_at_tick. Equivalent to get_sqrt_ratio_at_tick(MAX_TICK)
-pub const MAX_SQRT_RATIO: u64 = 281472331703918;
+pub const MAX_SQRT_RATIO_X64: u128 = 79226673521066979257578248091;
 
 // Number 64, encoded as a U128
 const NUM_64: U128 = U128([64, 0]);
+
+const BIT_PRECISION: u32 = 16;
 
 /// Calculates 1.0001^(tick/2) as a U32.32 number representing
 /// the square root of the ratio of the two assets (token_1/token_0)
@@ -38,7 +40,7 @@ const NUM_64: U128 = U128([64, 0]);
 /// # Arguments
 /// * `tick` - Price tick
 ///
-pub fn get_sqrt_ratio_at_tick(tick: i32) -> Result<u64, anchor_lang::error::Error> {
+pub fn get_sqrt_ratio_at_tick(tick: i32) -> Result<u128, anchor_lang::error::Error> {
     let abs_tick = tick.abs() as u32;
     require!(abs_tick <= MAX_TICK as u32, ErrorCode::TickUpperOverflow);
 
@@ -117,6 +119,10 @@ pub fn get_sqrt_ratio_at_tick(tick: i32) -> Result<u64, anchor_lang::error::Erro
     if abs_tick & 0x20000 != 0 {
         ratio = (ratio * U128([0x5d6af8dedc582c, 0])) >> NUM_64
     };
+    // i = 18
+    if abs_tick & 0x40000 != 0 {
+        ratio = (ratio * U128([0x2216e584f5fa, 0])) >> NUM_64
+    }
 
     // Divide to obtain 1.0001^(2^(i - 1)) * 2^32 in numerator
     if tick > 0 {
@@ -124,157 +130,73 @@ pub fn get_sqrt_ratio_at_tick(tick: i32) -> Result<u64, anchor_lang::error::Erro
     }
 
     // Rounding up and convert to U32.32
-    let sqrt_price_x32 = (ratio >> U128([32, 0])).as_u64()
-        + ((ratio % U128([1_u64 << 32, 0]) != U128::default()) as u64);
+    // let sqrt_price_x32 = (ratio >> U128([32, 0])).as_u64()
+    //     + ((ratio % U128([1_u64 << 32, 0]) != U128::default()) as u64);
 
-    Ok(sqrt_price_x32)
+    Ok(ratio.as_u128())
 }
 
 /// Calculates the greatest tick value such that get_sqrt_ratio_at_tick(tick) <= ratio
-/// Throws if sqrt_price_x32 < MIN_SQRT_RATIO or sqrt_price_x32 > MAX_SQRT_RATIO
+/// Throws if sqrt_price_x64 < MIN_SQRT_RATIO or sqrt_price_x64 > MAX_SQRT_RATIO
 ///
 /// Formula: `i = log base(√1.0001) (√P)`
 ///
 /// # Arguments
 ///
-/// * `sqrt_price_x32`- The sqrt ratio for which to compute the tick as a U32.32
+/// * `sqrt_price_x64`- The sqrt ratio for which to compute the tick as a U32.32
 ///
-pub fn get_tick_at_sqrt_ratio(sqrt_price_x32: u64) -> Result<i32, anchor_lang::error::Error> {
+pub fn get_tick_at_sqrt_ratio(sqrt_price_x64: u128) -> Result<i32, anchor_lang::error::Error> {
     // second inequality must be < because the price can never reach the price at the max tick
     require!(
-        sqrt_price_x32 >= MIN_SQRT_RATIO && sqrt_price_x32 < MAX_SQRT_RATIO,
+        sqrt_price_x64 >= MIN_SQRT_RATIO_X64 && sqrt_price_x64 < MAX_SQRT_RATIO_X64,
         ErrorCode::SqrtPriceX32
     );
 
-    let mut r = sqrt_price_x32;
-    let mut msb = 0; // in [1, 64)
+    // Determine log_b(sqrt_ratio). First by calculating integer portion (msb)
+    let msb: u32 = 128 - sqrt_price_x64.leading_zeros() - 1;
+    let log2p_integer_x32 = (msb as i128 - 64) << 32;
 
-    // ------------------------------------------------------
-    // Decimal part of logarithm = MSB
-    // Binary search method: 2^32, 2^16, 2^8, 2^4, 2^2 and 2^1 for U32.32
+    // get fractional value (r/2^msb), msb always > 128
+    // We begin the iteration from bit 63 (0.5 in Q64.64)
+    let mut bit: i128 = 0x8000_0000_0000_0000i128;
+    let mut precision = 0;
+    let mut log2p_fraction_x64 = 0;
 
-    let mut f: u8 = ((r >= 0x100000000) as u8) << 5; // If r >= 2^32, f = 32 else 0
-    msb |= f; // Add f to MSB
-    r >>= f; // Right shift by f
-
-    f = ((r >= 0x10000) as u8) << 4; // 2^16
-    msb |= f;
-    r >>= f;
-
-    f = ((r >= 0x100) as u8) << 3; // 2^8
-    msb |= f;
-    r >>= f;
-
-    f = ((r >= 0x10) as u8) << 2; // 2^4
-    msb |= f;
-    r >>= f;
-
-    f = ((r >= 0x4) as u8) << 1; // 2^2
-    msb |= f;
-    r >>= f;
-
-    f = ((r >= 0x2) as u8) << 0; // 2^0
-    msb |= f;
-
-    // log2 (m x 2^e) = log2 (m) + e
-    // For U32.32, e = -32. Subtract by 32 to remove x32 notation.
-    // Then left shift by 16 bits to convert into U48.16 form
-    let mut log_2_x16 = (msb as i64 - 32) << 16;
-
-    // ------------------------------------------------------
-    // Fractional part of logarithm
-
-    // Set r = r / 2^n as a Q33.31 number, where n stands for msb
-    r = if msb >= 32 {
-        sqrt_price_x32 >> (msb - 31)
+    // Log2 iterative approximation for the fractional part
+    // Go through each 2^(j) bit where j < 64 in a Q64.64 number
+    // Append current bit value to fraction result if r^2 Q2.126 is more than 2
+    let mut r = if msb >= 64 {
+        sqrt_price_x64 >> (msb - 63)
     } else {
-        sqrt_price_x32 << (31 - msb)
+        sqrt_price_x64 << (63 - msb)
     };
 
-    r = (r * r) >> 31; // r^2 as U33.31
-    f = (r >> 32) as u8; // MSB of r^2 (0 or 1)
-    log_2_x16 |= (f as i64) << 15; // Add f at 1st fractional place
-    r >>= f; // Divide r by 2 if MSB of f is non-zero
-
-    r = (r * r) >> 31;
-    f = (r >> 32) as u8;
-    log_2_x16 |= (f as i64) << 14;
-    r >>= f;
-
-    r = (r * r) >> 31;
-    f = (r >> 32) as u8;
-    log_2_x16 |= (f as i64) << 13;
-    r >>= f;
-
-    r = (r * r) >> 31;
-    f = (r >> 32) as u8;
-    log_2_x16 |= (f as i64) << 12;
-    r >>= f;
-
-    r = (r * r) >> 31;
-    f = (r >> 32) as u8;
-    log_2_x16 |= (f as i64) << 11;
-    r >>= f;
-
-    r = (r * r) >> 31;
-    f = (r >> 32) as u8;
-    log_2_x16 |= (f as i64) << 10;
-    r >>= f;
-
-    r = (r * r) >> 31;
-    f = (r >> 32) as u8;
-    log_2_x16 |= (f as i64) << 9;
-    r >>= f;
-
-    r = (r * r) >> 31;
-    f = (r >> 32) as u8;
-    log_2_x16 |= (f as i64) << 8;
-    r >>= f;
-
-    r = (r * r) >> 31;
-    f = (r >> 32) as u8;
-    log_2_x16 |= (f as i64) << 7;
-    r >>= f;
-
-    r = (r * r) >> 31;
-    f = (r >> 32) as u8;
-    log_2_x16 |= (f as i64) << 6;
-    r >>= f;
-
-    r = (r * r) >> 31;
-    f = (r >> 32) as u8;
-    log_2_x16 |= (f as i64) << 5;
-    r >>= f;
-
-    r = (r * r) >> 31;
-    f = (r >> 32) as u8;
-    log_2_x16 |= (f as i64) << 4;
-    r >>= f;
-
-    r = (r * r) >> 31;
-    f = (r >> 32) as u8;
-    log_2_x16 |= (f as i64) << 3;
-    r >>= f;
-
-    r = (r * r) >> 31;
-    f = (r >> 32) as u8;
-    log_2_x16 |= (f as i64) << 2;
+    while bit > 0 && precision < BIT_PRECISION {
+        r *= r;
+        let is_r_more_than_two = r >> 127 as u32;
+        r >>= 63 + is_r_more_than_two;
+        log2p_fraction_x64 += bit * is_r_more_than_two as i128;
+        bit >>= 1;
+        precision += 1;
+    }
+    let log2p_fraction_x32 = log2p_fraction_x64 >> 32;
+    let log2p_x32 = log2p_integer_x32 + log2p_fraction_x32;
 
     // 14 bit refinement gives an error margin of 2^-14 / log2 (√1.0001) = 0.8461 < 1
     // Since tick is a decimal, an error under 1 is acceptable
 
     // Change of base rule: multiply with 2^16 / log2 (√1.0001)
-    let log_sqrt_10001_x32 = log_2_x16 * 908567298;
+    let log_sqrt_10001_x64 = log2p_x32 * 59543866431248i128;
 
     // tick - 0.01
-    let tick_low = ((log_sqrt_10001_x32 - 42949672) >> 32) as i32;
+    let tick_low = ((log_sqrt_10001_x64 - 184467440737095516i128) >> 64) as i32;
 
     // tick + (2^-14 / log2(√1.001)) + 0.01
-    let tick_high = ((log_sqrt_10001_x32 + 3677218864) >> 32) as i32;
+    let tick_high = ((log_sqrt_10001_x64 + 15793534762490258745i128) >> 64) as i32;
 
     Ok(if tick_low == tick_high {
         tick_low
-    } else if get_sqrt_ratio_at_tick(tick_high).unwrap() <= sqrt_price_x32 {
+    } else if get_sqrt_ratio_at_tick(tick_high).unwrap() <= sqrt_price_x64 {
         tick_high
     } else {
         tick_low
@@ -304,7 +226,10 @@ mod tests {
 
         #[test]
         fn min_tick() {
-            assert_eq!(get_sqrt_ratio_at_tick(MIN_TICK).unwrap(), MIN_SQRT_RATIO);
+            assert_eq!(
+                get_sqrt_ratio_at_tick(MIN_TICK).unwrap(),
+                MIN_SQRT_RATIO_X64
+            );
         }
 
         #[test]
@@ -314,7 +239,10 @@ mod tests {
 
         #[test]
         fn max_tick() {
-            assert_eq!(get_sqrt_ratio_at_tick(MAX_TICK).unwrap(), MAX_SQRT_RATIO);
+            assert_eq!(
+                get_sqrt_ratio_at_tick(MAX_TICK).unwrap(),
+                MAX_SQRT_RATIO_X64
+            );
         }
 
         #[test]
@@ -364,7 +292,7 @@ mod tests {
         fn original_tick_can_be_retrieved_from_sqrt_ratio() {
             for tick in MIN_TICK..=MAX_TICK {
                 let sqrt_price_x32 = get_sqrt_ratio_at_tick(tick).unwrap();
-                if sqrt_price_x32 < MAX_SQRT_RATIO {
+                if sqrt_price_x32 < MAX_SQRT_RATIO_X64 {
                     let obtained_tick = get_tick_at_sqrt_ratio(sqrt_price_x32).unwrap();
                     assert_eq!(tick, obtained_tick);
                 }
@@ -393,18 +321,21 @@ mod tests {
         #[test]
         #[should_panic(expected = "R")]
         fn throws_for_too_low() {
-            get_tick_at_sqrt_ratio(MIN_SQRT_RATIO - 1).unwrap();
+            get_tick_at_sqrt_ratio(MIN_SQRT_RATIO_X64 - 1).unwrap();
         }
 
         #[test]
         #[should_panic(expected = "R")]
         fn throws_for_too_high() {
-            get_tick_at_sqrt_ratio(MAX_SQRT_RATIO).unwrap();
+            get_tick_at_sqrt_ratio(MAX_SQRT_RATIO_X64).unwrap();
         }
 
         #[test]
         fn ratio_of_min_tick() {
-            assert_eq!(get_tick_at_sqrt_ratio(MIN_SQRT_RATIO).unwrap(), MIN_TICK);
+            assert_eq!(
+                get_tick_at_sqrt_ratio(MIN_SQRT_RATIO_X64).unwrap(),
+                MIN_TICK
+            );
         }
 
         #[test]
@@ -423,7 +354,7 @@ mod tests {
         #[test]
         fn ratio_closest_to_max_tick() {
             assert_eq!(
-                get_tick_at_sqrt_ratio(MAX_SQRT_RATIO - 1).unwrap(),
+                get_tick_at_sqrt_ratio(MAX_SQRT_RATIO_X64 - 1).unwrap(),
                 MAX_TICK - 1
             );
         }

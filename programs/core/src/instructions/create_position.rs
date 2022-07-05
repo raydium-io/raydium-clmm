@@ -7,7 +7,7 @@ use anchor_lang::solana_program;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token;
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use metaplex_token_metadata::{instruction::create_metadata_accounts, state::Creator};
+use mpl_token_metadata::{instruction::create_metadata_accounts, state::Creator};
 use spl_token::instruction::AuthorityType;
 use std::ops::{Deref, DerefMut};
 
@@ -205,7 +205,7 @@ pub struct CreatePosition<'info> {
 
     /// Program to create NFT metadata
     /// CHECK: Metadata program address constraint applied
-    #[account(address = metaplex_token_metadata::ID)]
+    #[account(address = mpl_token_metadata::ID)]
     pub metadata_program: UncheckedAccount<'info>,
 }
 
@@ -417,15 +417,15 @@ pub fn add_liquidity<'b, 'info>(
     amount_1_min: u64,
     tick_lower: i32,
     tick_upper: i32,
-) -> Result<(u64, u64, u64)> {
-    let sqrt_price_x32 = accounts.pool_state.sqrt_price;
+) -> Result<(u128, u64, u64)> {
+    let sqrt_price_x64 = accounts.pool_state.sqrt_price_x64;
 
-    let sqrt_ratio_a_x32 = tick_math::get_sqrt_ratio_at_tick(tick_lower)?;
-    let sqrt_ratio_b_x32 = tick_math::get_sqrt_ratio_at_tick(tick_upper)?;
+    let sqrt_ratio_a_x64 = tick_math::get_sqrt_ratio_at_tick(tick_lower)?;
+    let sqrt_ratio_b_x64 = tick_math::get_sqrt_ratio_at_tick(tick_upper)?;
     let liquidity = liquidity_amounts::get_liquidity_for_amounts(
-        sqrt_price_x32,
-        sqrt_ratio_a_x32,
-        sqrt_ratio_b_x32,
+        sqrt_price_x64,
+        sqrt_ratio_a_x64,
+        sqrt_ratio_b_x64,
         amount_0_desired,
         amount_1_desired,
     );
@@ -450,7 +450,7 @@ pub fn add_liquidity<'b, 'info>(
 pub fn mint<'b, 'info>(
     ctx: &mut MintParam<'b, 'info>,
     remaining_accounts: &[AccountInfo<'info>],
-    amount: u64,
+    liquidity: u128,
 ) -> Result<()> {
     let pool_state_info = ctx.pool_state.to_account_info();
 
@@ -491,10 +491,10 @@ pub fn mint<'b, 'info>(
         false,
     )?;
 
-    assert!(amount > 0);
+    assert!(liquidity > 0);
 
     let (amount_0_int, amount_1_int) = _modify_position(
-        i64::try_from(amount).unwrap(),
+        i128::try_from(liquidity).unwrap(),
         ctx.pool_state,
         ctx.procotol_position_state,
         ctx.tick_lower_state,
@@ -536,7 +536,7 @@ pub fn mint<'b, 'info>(
         nft_owner: ctx.protocol_position_owner.key(),
         tick_lower: ctx.tick_lower_state.tick,
         tick_upper: ctx.tick_upper_state.tick,
-        liquidity: amount,
+        liquidity: liquidity,
         deposit_amount_0: amount_0,
         deposit_amount_1: amount_1,
     });
@@ -565,7 +565,7 @@ pub fn mint<'b, 'info>(
 /// * `liquidity_delta` - The change in liquidity. Can be 0 to perform a poke.
 ///
 pub fn _modify_position<'info>(
-    liquidity_delta: i64,
+    liquidity_delta: i128,
     pool_state: &mut Account<'info, PoolState>,
     position_state: &mut Account<'info, ProcotolPositionState>,
     tick_lower_state: &mut Account<'info, TickState>,
@@ -637,13 +637,13 @@ pub fn _modify_position<'info>(
 
             // Both Δtoken_0 and Δtoken_1 will be needed in current price
             amount_0 = sqrt_price_math::get_amount_0_delta_signed(
-                pool_state.sqrt_price,
+                pool_state.sqrt_price_x64,
                 tick_math::get_sqrt_ratio_at_tick(tick_upper)?,
                 liquidity_delta,
             );
             amount_1 = sqrt_price_math::get_amount_1_delta_signed(
                 tick_math::get_sqrt_ratio_at_tick(tick_lower)?,
-                pool_state.sqrt_price,
+                pool_state.sqrt_price_x64,
                 liquidity_delta,
             );
             pool_state.liquidity =
@@ -678,7 +678,7 @@ pub fn _modify_position<'info>(
 /// * `liquidity_delta` - The change in liquidity. Can be 0 to perform a poke.
 ///
 pub fn _update_position<'info>(
-    liquidity_delta: i64,
+    liquidity_delta: i128,
     pool_state: &mut Account<'info, PoolState>,
     last_observation_state: &mut Account<ObservationState>,
     position_state: &mut Account<'info, ProcotolPositionState>,
@@ -704,7 +704,7 @@ pub fn _update_position<'info>(
     // update the ticks if liquidity delta is non-zero
     if liquidity_delta != 0 {
         let time = oracle::_block_timestamp();
-        let (tick_cumulative, seconds_per_liquidity_cumulative_x32) =
+        let (tick_cumulative, seconds_per_liquidity_cumulative_x64) =
             last_observation_state.observe_latest(time, pool_state.tick, pool_state.liquidity);
 
         let max_liquidity_per_tick =
@@ -716,7 +716,7 @@ pub fn _update_position<'info>(
             liquidity_delta,
             pool_state.fee_growth_global_0,
             pool_state.fee_growth_global_1,
-            seconds_per_liquidity_cumulative_x32,
+            seconds_per_liquidity_cumulative_x64,
             tick_cumulative,
             time,
             false,
@@ -728,7 +728,7 @@ pub fn _update_position<'info>(
             liquidity_delta,
             pool_state.fee_growth_global_0,
             pool_state.fee_growth_global_1,
-            seconds_per_liquidity_cumulative_x32,
+            seconds_per_liquidity_cumulative_x64,
             tick_cumulative,
             time,
             true,
@@ -755,7 +755,7 @@ pub fn _update_position<'info>(
         }
     }
     // Update fees accrued to the position
-    let (fee_growth_inside_0_x32, fee_growth_inside_1_x32) = tick::get_fee_growth_inside(
+    let (fee_growth_inside_0_x64, fee_growth_inside_1_x64) = tick::get_fee_growth_inside(
         tick_lower.deref(),
         tick_upper.deref(),
         pool_state.tick,
@@ -773,8 +773,8 @@ pub fn _update_position<'info>(
 
     position_state.update(
         liquidity_delta,
-        fee_growth_inside_0_x32,
-        fee_growth_inside_1_x32,
+        fee_growth_inside_0_x64,
+        fee_growth_inside_1_x64,
         reward_growths_inside,
     )?;
 

@@ -1,6 +1,6 @@
 pub mod big_num;
 pub mod bit_math;
-pub mod fixed_point_32;
+pub mod fixed_point_64;
 pub mod full_math;
 pub mod liquidity_amounts;
 pub mod liquidity_math;
@@ -13,7 +13,7 @@ pub mod unsafe_math;
 
 pub use big_num::*;
 pub use bit_math::*;
-pub use fixed_point_32::*;
+pub use fixed_point_64::*;
 pub use full_math::*;
 pub use liquidity_amounts::*;
 pub use liquidity_math::*;
