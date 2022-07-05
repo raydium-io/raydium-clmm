@@ -310,6 +310,7 @@ describe("amm-core", async () => {
     [poolAState, poolAStateBump] = await PublicKey.findProgramAddress(
       [
         POOL_SEED,
+        ammConfig.toBuffer(),
         token0.publicKey.toBuffer(),
         token1.publicKey.toBuffer(),
         u32ToSeed(fee),
@@ -321,6 +322,7 @@ describe("amm-core", async () => {
     [poolBState, poolBStateBump] = await PublicKey.findProgramAddress(
       [
         POOL_SEED,
+        ammConfig.toBuffer(),
         token1.publicKey.toBuffer(),
         token2.publicKey.toBuffer(),
         u32ToSeed(fee),
@@ -1886,7 +1888,6 @@ describe("amm-core", async () => {
         [
           POSITION_SEED,
           poolAState.toBuffer(),
-          ammConfig.toBuffer(),
           u32ToSeed(tickLower),
           u32ToSeed(tickUpper),
         ],
@@ -1905,7 +1906,6 @@ describe("amm-core", async () => {
         [
           POSITION_SEED,
           poolBState.toBuffer(),
-          ammConfig.toBuffer(),
           u32ToSeed(tickLower),
           u32ToSeed(tickUpper),
         ],
@@ -2236,7 +2236,7 @@ describe("amm-core", async () => {
     TOKEN_PROGRAM_ID,
     notOwner
   );
-
+  
   describe("#increase_liquidity", () => {
     it("update observation accounts", async () => {
       const { observationIndex, observationCardinalityNext } =

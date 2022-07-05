@@ -33,6 +33,7 @@ pub fn transfer_from_pool_vault_to_user<'info>(
     msg!("withdraw from vault, amount: {}", amount);
     let pool_state_seeds = [
         &POOL_SEED.as_bytes(),
+        &pool.amm_config.as_ref(),
         &pool.token_mint_0.to_bytes() as &[u8],
         &pool.token_mint_1.to_bytes() as &[u8],
         &pool.fee_rate.to_be_bytes(),

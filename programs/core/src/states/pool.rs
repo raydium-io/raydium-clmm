@@ -94,6 +94,7 @@ impl PoolState {
         Pubkey::create_program_address(
             &[
                 &POOL_SEED.as_bytes(),
+                self.amm_config.as_ref(),
                 self.token_mint_0.as_ref(),
                 self.token_mint_1.as_ref(),
                 &self.fee_rate.to_be_bytes(),
@@ -201,11 +202,10 @@ impl PoolState {
     /// * `bump` - The PDA bump for the address
     /// * `tick` - The tick from which the address should be derived
     ///
-    pub fn validate_position_address(
+    pub fn validate_protocol_position_address(
         &self,
         key: &Pubkey,
         bump: u8,
-        position_owner: &Pubkey,
         tick_lower: i32,
         tick_upper: i32,
     ) -> Result<()> {
@@ -214,7 +214,6 @@ impl PoolState {
                 &[
                     &POSITION_SEED.as_bytes(),
                     self.key().as_ref(),
-                    position_owner.as_ref(),
                     &tick_lower.to_be_bytes(),
                     &tick_upper.to_be_bytes(),
                     &[bump],

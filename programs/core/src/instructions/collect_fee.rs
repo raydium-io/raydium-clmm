@@ -221,10 +221,9 @@ pub fn collect<'b, 'info>(
         ctx.tick_upper_state.tick,
     )?;
 
-    ctx.pool_state.validate_position_address(
+    ctx.pool_state.validate_protocol_position_address(
         &ctx.position_state.key(),
         ctx.position_state.bump,
-        &ctx.owner.key(),
         ctx.tick_lower_state.tick,
         ctx.tick_upper_state.tick,
     )?;

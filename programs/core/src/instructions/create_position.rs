@@ -104,7 +104,6 @@ pub struct CreatePosition<'info> {
         seeds = [
             POSITION_SEED.as_bytes(),
             pool_state.key().as_ref(),
-            amm_config.key().as_ref(),
             &tick_lower.to_be_bytes(),
             &tick_upper.to_be_bytes(),
         ],
@@ -480,10 +479,9 @@ pub fn mint<'b, 'info>(
             .word_pos,
     )?;
 
-    ctx.pool_state.validate_position_address(
+    ctx.pool_state.validate_protocol_position_address(
         &ctx.procotol_position_state.key(),
         ctx.procotol_position_state.bump,
-        &ctx.protocol_position_owner.key(),
         ctx.tick_lower_state.tick,
         ctx.tick_upper_state.tick,
     )?;

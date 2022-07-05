@@ -241,10 +241,9 @@ pub fn burn<'b, 'info>(
         tick_bitmap::position(ctx.tick_upper_state.tick / ctx.pool_state.tick_spacing as i32)
             .word_pos,
     )?;
-    ctx.pool_state.validate_position_address(
+    ctx.pool_state.validate_protocol_position_address(
         &ctx.procotol_position_state.key(),
         ctx.procotol_position_state.bump,
-        &ctx.owner.key(),
         ctx.tick_lower_state.tick,
         ctx.tick_upper_state.tick,
     )?;
@@ -269,18 +268,6 @@ pub fn burn<'b, 'info>(
 
     let amount_0 = (-amount_0_int) as u64;
     let amount_1 = (-amount_1_int) as u64;
-    // if amount_0 > 0 || amount_1 > 0 {
-    //     ctx.position_state.tokens_owed_0 = ctx
-    //         .position_state
-    //         .tokens_owed_0
-    //         .checked_add(amount_0)
-    //         .unwrap();
-    //     ctx.position_state.tokens_owed_1 = ctx
-    //         .position_state
-    //         .tokens_owed_1
-    //         .checked_add(amount_1)
-    //         .unwrap();
-    // }
 
     Ok((amount_0, amount_1))
 }

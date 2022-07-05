@@ -16,6 +16,7 @@ pub struct CreatePool<'info> {
         init,
         seeds = [
             POOL_SEED.as_bytes(),
+            amm_config.key().as_ref(),
             token_mint_0.key().as_ref(),
             token_mint_1.key().as_ref(),
             &fee_state.fee.to_be_bytes()
