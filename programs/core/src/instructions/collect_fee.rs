@@ -1,5 +1,5 @@
 use super::{burn, BurnParam};
-use crate::libraries::{fixed_point_32, full_math::MulDiv};
+use crate::libraries::{fixed_point_64, full_math::MulDiv, big_num::U128};
 use crate::states::*;
 use crate::util::transfer_from_pool_vault_to_user;
 use anchor_lang::prelude::*;
@@ -45,13 +45,13 @@ pub struct CollectFee<'info> {
 
     /// The token account for the tokenized position
     #[account(
-        constraint = nft_account.mint == personal_position_state.mint
+        constraint = nft_account.mint == personal_position.mint
     )]
     pub nft_account: Box<Account<'info, TokenAccount>>,
 
     /// The program account of the NFT for which tokens are being collected
     #[account(mut)]
-    pub personal_position_state: Box<Account<'info, PersonalPositionState>>,
+    pub personal_position: Box<Account<'info, PersonalPositionState>>,
 
     /// The program account acting as the core liquidity custodian for token holder
     pub amm_config: Box<Account<'info, AmmConfig>>,
@@ -62,27 +62,27 @@ pub struct CollectFee<'info> {
 
     /// The program account to access the core program position state
     #[account(mut)]
-    pub protocol_position_state: Box<Account<'info, ProcotolPositionState>>,
+    pub protocol_position: Box<Account<'info, ProcotolPositionState>>,
 
     /// The program account for the position's lower tick
     #[account(mut)]
-    pub tick_lower_state: Box<Account<'info, TickState>>,
+    pub tick_lower: Box<Account<'info, TickState>>,
 
     /// The program account for the position's upper tick
     #[account(mut)]
-    pub tick_upper_state: Box<Account<'info, TickState>>,
+    pub tick_upper: Box<Account<'info, TickState>>,
 
     /// The bitmap program account for the init state of the lower tick
     #[account(mut)]
-    pub bitmap_lower_state: AccountLoader<'info, TickBitmapState>,
+    pub bitmap_lower: AccountLoader<'info, TickBitmapState>,
 
     /// Stores init state for the upper tick
     #[account(mut)]
-    pub bitmap_upper_state: AccountLoader<'info, TickBitmapState>,
+    pub bitmap_upper: AccountLoader<'info, TickBitmapState>,
 
     /// The latest observation state
     #[account(mut)]
-    pub last_observation_state: Box<Account<'info, ObservationState>>,
+    pub last_observation: Box<Account<'info, ObservationState>>,
 
     /// The pool's token account for token_0
     #[account(mut)]
@@ -117,7 +117,7 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
 ) -> Result<()> {
     assert!(amount_0_max > 0 || amount_1_max > 0);
 
-    let tokenized_position = ctx.accounts.personal_position_state.as_mut();
+    let tokenized_position = ctx.accounts.personal_position.as_mut();
     let mut token_fees_owed_0 = tokenized_position.token_fees_owed_0;
     let mut token_fees_owed_1 = tokenized_position.token_fees_owed_1;
 
@@ -128,12 +128,12 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
         let mut burn_accounts = BurnParam {
             owner: &Signer::try_from(&protocol_position_owner)?,
             pool_state: ctx.accounts.pool_state.as_mut(),
-            tick_lower_state: ctx.accounts.tick_lower_state.as_mut(),
-            tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),
-            bitmap_lower_state: &ctx.accounts.bitmap_lower_state,
-            bitmap_upper_state: &ctx.accounts.bitmap_upper_state,
-            procotol_position_state: ctx.accounts.protocol_position_state.as_mut(),
-            last_observation_state: ctx.accounts.last_observation_state.as_mut(),
+            tick_lower_state: ctx.accounts.tick_lower.as_mut(),
+            tick_upper_state: ctx.accounts.tick_upper.as_mut(),
+            bitmap_lower_state: &ctx.accounts.bitmap_lower,
+            bitmap_upper_state: &ctx.accounts.bitmap_upper,
+            procotol_position_state: ctx.accounts.protocol_position.as_mut(),
+            last_observation_state: ctx.accounts.last_observation.as_mut(),
         };
         // update fee inside
         burn(&mut burn_accounts, ctx.remaining_accounts, 0)?;
@@ -142,18 +142,18 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
 
         token_fees_owed_0 = token_fees_owed_0
             .checked_add(
-                (updated_protocol_position.fee_growth_inside_0_last
+                U128::from(updated_protocol_position.fee_growth_inside_0_last
                     - tokenized_position.fee_growth_inside_0_last)
-                    .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
-                    .unwrap(),
+                    .mul_div_floor(U128::from(tokenized_position.liquidity),  U128::from(fixed_point_64::Q64))
+                    .unwrap().as_u64(),
             )
             .unwrap();
         token_fees_owed_1 = token_fees_owed_1
             .checked_add(
-                (updated_protocol_position.fee_growth_inside_1_last
+                U128::from(updated_protocol_position.fee_growth_inside_1_last
                     - tokenized_position.fee_growth_inside_1_last)
-                    .mul_div_floor(tokenized_position.liquidity, fixed_point_32::Q32)
-                    .unwrap(),
+                    .mul_div_floor(U128::from(tokenized_position.liquidity),  U128::from(fixed_point_64::Q64))
+                    .unwrap().as_u64(),
             )
             .unwrap();
 
@@ -174,9 +174,9 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
     let mut accounts = CollectParam {
         owner: &Signer::try_from(&protocol_position_owner)?,
         pool_state: ctx.accounts.pool_state.as_mut(),
-        tick_lower_state: ctx.accounts.tick_lower_state.as_mut(),
-        tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),
-        position_state: ctx.accounts.protocol_position_state.as_mut(),
+        tick_lower_state: ctx.accounts.tick_lower.as_mut(),
+        tick_upper_state: ctx.accounts.tick_upper.as_mut(),
+        position_state: ctx.accounts.protocol_position.as_mut(),
         vault_0: &mut ctx.accounts.token_vault_0,
         vault_1: &mut ctx.accounts.token_vault_1,
         recipient_wallet_0: &mut ctx.accounts.recipient_token_account_0,

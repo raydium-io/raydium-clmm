@@ -50,7 +50,7 @@ pub fn swap<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, SwapSingle<'info>>,
     amount: u64,
     other_amount_threshold: u64,
-    sqrt_price_limit_x32: u64,
+    sqrt_price_limit_x64: u128,
     is_base_input: bool,
 ) -> Result<()> {
     let amount = exact_internal(
@@ -67,7 +67,7 @@ pub fn swap<'a, 'b, 'c, 'info>(
         },
         ctx.remaining_accounts,
         amount,
-        sqrt_price_limit_x32,
+        sqrt_price_limit_x64,
         is_base_input,
     )?;
     if is_base_input {
@@ -91,7 +91,7 @@ pub fn exact_internal<'b, 'info>(
     accounts: &mut SwapContext<'b, 'info>,
     remaining_accounts: &[AccountInfo<'info>],
     amount_specified: u64,
-    sqrt_price_limit_x32: u64,
+    sqrt_price_limit_x64: u128,
     is_base_input: bool,
 ) -> Result<u64> {
     let zero_for_one = accounts.input_vault.mint == accounts.pool_state.token_mint_0;
@@ -107,14 +107,14 @@ pub fn exact_internal<'b, 'info>(
         accounts,
         remaining_accounts,
         amount_specified,
-        if sqrt_price_limit_x32 == 0 {
+        if sqrt_price_limit_x64 == 0 {
             if zero_for_one {
-                tick_math::MIN_SQRT_RATIO + 1
+                tick_math::MIN_SQRT_RATIO_X64 + 1
             } else {
-                tick_math::MAX_SQRT_RATIO - 1
+                tick_math::MAX_SQRT_RATIO_X64 - 1
             }
         } else {
-            sqrt_price_limit_x32
+            sqrt_price_limit_x64
         },
         zero_for_one,
     )?;

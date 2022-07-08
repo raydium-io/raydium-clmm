@@ -1,4 +1,4 @@
-use crate::libraries::{fixed_point_32, full_math::MulDiv};
+use crate::libraries::{fixed_point_64, full_math::MulDiv,big_num::U128};
 use crate::pool::REWARD_NUM;
 use anchor_lang::prelude::*;
 
@@ -26,13 +26,13 @@ pub struct PersonalPositionState {
     pub tick_upper: i32,
 
     /// The amount of liquidity owned by this position
-    pub liquidity: u64,
+    pub liquidity: u128,
 
     /// The token_0 fee growth of the aggregate position as of the last action on the individual position
-    pub fee_growth_inside_0_last: u64,
+    pub fee_growth_inside_0_last: u128,
 
     /// The token_0 fee growth of the aggregate position as of the last action on the individual position
-    pub fee_growth_inside_1_last: u64,
+    pub fee_growth_inside_1_last: u128,
 
     /// The fees owed to the position owner in token_0, as of the last computation
     pub token_fees_owed_0: u64,
@@ -47,9 +47,9 @@ pub struct PersonalPositionState {
 }
 
 impl PersonalPositionState {
-    pub const LEN: usize = 8 + 1 + 32 + 32 + 4 + 4 + 8 + 8 + 8 + 8 + 8 + 16 * REWARD_NUM + 64;
+    pub const LEN: usize = 8 + 1 + 32 + 32 + 4 + 4 + 16 + 16 +16 + 8 + 8 + PositionRewardInfo::LEN * REWARD_NUM + 64;
 
-    pub fn update_rewards(&mut self, reward_growths_inside: [u64; REWARD_NUM]) -> Result<()> {
+    pub fn update_rewards(&mut self, reward_growths_inside: [u128; REWARD_NUM]) -> Result<()> {
         for i in 0..REWARD_NUM {
             let reward_growth_inside = reward_growths_inside[i];
             let curr_reward_info = self.reward_infos[i];
@@ -61,9 +61,9 @@ impl PersonalPositionState {
                 .checked_sub(curr_reward_info.growth_inside_last)
                 .unwrap_or(0);
 
-            let amount_owed_delta = reward_growth_delta
-                .mul_div_floor(self.liquidity as u64, fixed_point_32::Q32)
-                .unwrap();
+            let amount_owed_delta = U128::from(reward_growth_delta)
+                .mul_div_floor(U128::from(self.liquidity),  U128::from(fixed_point_64::Q64))
+                .unwrap().as_u64();
             self.reward_infos[i].growth_inside_last = reward_growth_inside;
 
             // Overflows allowed. Must collect rewards owed before overflow.
@@ -80,9 +80,13 @@ impl PersonalPositionState {
 
 #[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Default, Debug, PartialEq)]
 pub struct PositionRewardInfo {
-    // Q32.32
-    pub growth_inside_last: u64,
+    // Q64.64
+    pub growth_inside_last: u128,
     pub reward_amount_owed: u64,
+}
+
+impl PositionRewardInfo {
+    pub const LEN: usize = 16 + 8;
 }
 
 /// Emitted when liquidity is increased for a position NFT.
@@ -94,7 +98,7 @@ pub struct IncreaseLiquidityEvent {
     pub position_nft_mint: Pubkey,
 
     /// The amount by which liquidity for the NFT position was increased
-    pub liquidity: u64,
+    pub liquidity: u128,
 
     /// The amount of token_0 that was paid for the increase in liquidity
     pub amount_0: u64,
@@ -111,7 +115,7 @@ pub struct DecreaseLiquidityEvent {
     pub position_nft_mint: Pubkey,
 
     /// The amount by which liquidity for the NFT position was decreased
-    pub liquidity: u64,
+    pub liquidity: u128,
 
     /// The amount of token_0 that was accounted for the decrease in liquidity
     pub amount_0: u64,

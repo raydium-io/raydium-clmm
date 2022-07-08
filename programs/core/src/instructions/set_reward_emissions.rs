@@ -29,7 +29,7 @@ pub struct SetRewardEmissions<'info> {
 pub fn set_reward_emissions<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, SetRewardEmissions<'info>>,
     reward_index: u8,
-    emissions_per_second_x32: u64,
+    emissions_per_second_x64: u128,
 ) -> Result<()> {
     assert!((reward_index as usize) < REWARD_NUM);
     let clock = Clock::get()?;
@@ -78,8 +78,8 @@ pub fn set_reward_emissions<'a, 'b, 'c, 'info>(
     //     }
     // }
 
-    pool_state.reward_infos[reward_index as usize].emissions_per_second_x32 =
-        emissions_per_second_x32;
+    pool_state.reward_infos[reward_index as usize].emissions_per_second_x64 =
+        emissions_per_second_x64;
 
     Ok(())
 }

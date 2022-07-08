@@ -1,5 +1,5 @@
 /// A library for handling Q32.32 fixed point numbers
 /// Used in sqrt_price_math.rs and position.rs
 
-pub const Q32: u64 = (u32::MAX as u64) + 1; // 2^32
-pub const RESOLUTION: u8 = 32;
+pub const Q64: u128 =(u64::MAX as u128) + 1; // 2^64
+pub const RESOLUTION: u8 = 64;

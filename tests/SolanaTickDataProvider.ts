@@ -2,12 +2,22 @@ import * as anchor from '@project-serum/anchor'
 import { PublicKey } from '@solana/web3.js'
 import JSBI from 'jsbi'
 import { BN } from '@project-serum/anchor'
-import { TickDataProvider, tickPosition, TickMath, generateBitmapWord, u32ToSeed, u16ToSeed, nextInitializedBit, buildTick } from '@cykura/sdk'
+import {tickPosition, generateBitmapWord, nextInitializedBit, buildTick } from '@cykura/sdk'
 
 import {
   BITMAP_SEED,
   TICK_SEED,
+  u32ToBytes,
+  u16ToBytes,
 } from "./utils";
+
+import{
+  TickMath
+} from "./math";
+
+import{
+  TickDataProvider
+} from "./entities";
 
 interface TickBitmap {
   word: BN[]
@@ -78,11 +88,10 @@ export declare type PoolVars = {
       for (let i = minWord; i < maxWord; i++) {
         bitmapsToFetch.push(await this.getBitmapAddress(i))
       }
-
       const fetchedBitmaps = (await this.program.account.tickBitmapState.fetchMultiple(
         bitmapsToFetch
       )) as (TickBitmap | null)[]
-
+      console.log("fetchedBitmaps: ", fetchedBitmaps)
       const tickAddresses = []
       for (let i = 0; i < maxWord - minWord; i++) {
         const currentWordPos = i + minWord
@@ -111,6 +120,7 @@ export declare type PoolVars = {
           liquidityNet: JSBI.BigInt(liquidityNet),
         })
       }
+      console.log("fetchedTicks: ", fetchedTicks)
     } catch (error) {
       console.log(error)
     }
@@ -122,7 +132,7 @@ export declare type PoolVars = {
         [
           TICK_SEED,
           this.pool.key.toBuffer(),
-          u32ToSeed(tick),
+          u32ToBytes(tick),
         ],
         this.program.programId
       )
@@ -135,7 +145,7 @@ export declare type PoolVars = {
         [
           BITMAP_SEED,
           this.pool.key.toBuffer(),
-          u16ToSeed(wordPos),
+          u16ToBytes(wordPos),
         ],
         this.program.programId
       )
@@ -165,6 +175,7 @@ export declare type PoolVars = {
     address: anchor.web3.PublicKey;
     word: anchor.BN;
   } {
+    console.log("getBitmap, word:", wordPos)
     let savedBitmap = this.bitmapCache.get(wordPos)
     if (!savedBitmap) {
       throw new Error('Bitmap not cached')

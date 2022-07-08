@@ -270,7 +270,7 @@ mod muldiv_u128_tests {
 #[cfg(test)]
 mod uniswap_tests {
     use super::*;
-    use crate::libraries::fixed_point_32;
+    use crate::libraries::fixed_point_64;
 
     mod mul_div {
         use super::*;
@@ -278,20 +278,20 @@ mod uniswap_tests {
         #[test]
         #[should_panic]
         fn reverts_if_denominator_is_zero() {
-            fixed_point_32::Q32.mul_div_floor(5, 0);
+            fixed_point_64::Q32.mul_div_floor(5, 0);
         }
 
         #[test]
         #[should_panic]
         fn reverts_if_denominator_is_zero_and_numerator_overflows() {
-            fixed_point_32::Q32.mul_div_floor(fixed_point_32::Q32, 0);
+            fixed_point_64::Q32.mul_div_floor(fixed_point_64::Q32, 0);
         }
 
         #[test]
         #[should_panic]
         fn reverts_if_output_overflows_u64() {
-            fixed_point_32::Q32
-                .mul_div_floor(fixed_point_32::Q32, 1)
+            fixed_point_64::Q32
+                .mul_div_floor(fixed_point_64::Q32, 1)
                 .unwrap();
         }
 
@@ -311,12 +311,12 @@ mod uniswap_tests {
 
         #[test]
         fn accurate_without_phantom_overflow() {
-            let result = fixed_point_32::Q32 / 3;
+            let result = fixed_point_64::Q32 / 3;
             assert_eq!(
-                fixed_point_32::Q32
+                fixed_point_64::Q32
                     .mul_div_floor(
-                        50 * fixed_point_32::Q32 / 100,
-                        150 * fixed_point_32::Q32 / 100
+                        50 * fixed_point_64::Q32 / 100,
+                        150 * fixed_point_64::Q32 / 100
                     )
                     .unwrap(),
                 result
@@ -325,10 +325,10 @@ mod uniswap_tests {
 
         #[test]
         fn accurate_with_phantom_overflow() {
-            let result = 4375 * fixed_point_32::Q32 / 1000;
+            let result = 4375 * fixed_point_64::Q32 / 1000;
             assert_eq!(
-                fixed_point_32::Q32
-                    .mul_div_floor(35 * fixed_point_32::Q32, 8 * fixed_point_32::Q32)
+                fixed_point_64::Q32
+                    .mul_div_floor(35 * fixed_point_64::Q32, 8 * fixed_point_64::Q32)
                     .unwrap(),
                 result
             );
@@ -336,10 +336,10 @@ mod uniswap_tests {
 
         #[test]
         fn accurate_with_phantom_overflow_and_repeating_decimal() {
-            let result = fixed_point_32::Q32 / 3;
+            let result = fixed_point_64::Q32 / 3;
             assert_eq!(
-                fixed_point_32::Q32
-                    .mul_div_floor(1000 * fixed_point_32::Q32, 3000 * fixed_point_32::Q32)
+                fixed_point_64::Q32
+                    .mul_div_floor(1000 * fixed_point_64::Q32, 3000 * fixed_point_64::Q32)
                     .unwrap(),
                 result
             );
@@ -352,20 +352,20 @@ mod uniswap_tests {
         #[test]
         #[should_panic]
         fn reverts_if_denominator_is_zero() {
-            fixed_point_32::Q32.mul_div_ceil(5, 0);
+            fixed_point_64::Q32.mul_div_ceil(5, 0);
         }
 
         #[test]
         #[should_panic]
         fn reverts_if_denominator_is_zero_and_numerator_overflows() {
-            fixed_point_32::Q32.mul_div_ceil(fixed_point_32::Q32, 0);
+            fixed_point_64::Q32.mul_div_ceil(fixed_point_64::Q32, 0);
         }
 
         #[test]
         #[should_panic]
         fn reverts_if_output_overflows_u64() {
-            fixed_point_32::Q32
-                .mul_div_ceil(fixed_point_32::Q32, 1)
+            fixed_point_64::Q32
+                .mul_div_ceil(fixed_point_64::Q32, 1)
                 .unwrap();
         }
 
@@ -398,12 +398,12 @@ mod uniswap_tests {
 
         #[test]
         fn accurate_without_phantom_overflow() {
-            let result = fixed_point_32::Q32 / 3 + 1;
+            let result = fixed_point_64::Q32 / 3 + 1;
             assert_eq!(
-                fixed_point_32::Q32
+                fixed_point_64::Q32
                     .mul_div_ceil(
-                        50 * fixed_point_32::Q32 / 100,
-                        150 * fixed_point_32::Q32 / 100
+                        50 * fixed_point_64::Q32 / 100,
+                        150 * fixed_point_64::Q32 / 100
                     )
                     .unwrap(),
                 result
@@ -412,10 +412,10 @@ mod uniswap_tests {
 
         #[test]
         fn accurate_with_phantom_overflow() {
-            let result = 4375 * fixed_point_32::Q32 / 1000;
+            let result = 4375 * fixed_point_64::Q32 / 1000;
             assert_eq!(
-                fixed_point_32::Q32
-                    .mul_div_ceil(35 * fixed_point_32::Q32, 8 * fixed_point_32::Q32)
+                fixed_point_64::Q32
+                    .mul_div_ceil(35 * fixed_point_64::Q32, 8 * fixed_point_64::Q32)
                     .unwrap(),
                 result
             );
@@ -423,10 +423,10 @@ mod uniswap_tests {
 
         #[test]
         fn accurate_with_phantom_overflow_and_repeating_decimal() {
-            let result = fixed_point_32::Q32 / 3 + 1;
+            let result = fixed_point_64::Q32 / 3 + 1;
             assert_eq!(
-                fixed_point_32::Q32
-                    .mul_div_ceil(1000 * fixed_point_32::Q32, 3000 * fixed_point_32::Q32)
+                fixed_point_64::Q32
+                    .mul_div_ceil(1000 * fixed_point_64::Q32, 3000 * fixed_point_64::Q32)
                     .unwrap(),
                 result
             );
