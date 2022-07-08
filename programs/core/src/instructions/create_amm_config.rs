@@ -11,7 +11,9 @@ pub struct CreateAmmConfig<'info> {
     /// Initialize factory state account to store protocol owner address
     #[account(
         init,
-        seeds = [],
+        seeds = [
+            AMM_CONFIG_SEED.as_bytes()
+        ],
         bump,
         payer = owner,
         space = AmmConfig::LEN

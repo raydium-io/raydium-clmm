@@ -13,16 +13,16 @@ pub struct CollectRewards<'info> {
 
     /// The token account for the tokenized position
     #[account(
-        constraint = nft_account.mint == personal_position_state.mint
+        constraint = nft_account.mint == personal_position.nft_mint
     )]
     pub nft_account: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub protocol_position_state: Box<Account<'info, ProcotolPositionState>>,
+    pub protocol_position: Box<Account<'info, ProcotolPositionState>>,
 
     /// The program account of the NFT for which tokens are being collected
     #[account(mut)]
-    pub personal_position_state: Box<Account<'info, PersonalPositionState>>,
+    pub personal_position: Box<Account<'info, PersonalPositionState>>,
 
     /// The program account for the liquidity pool from which fees are collected
     #[account(mut)]
@@ -30,11 +30,11 @@ pub struct CollectRewards<'info> {
 
     /// Account to store data for the position's lower tick
     #[account(mut)]
-    pub tick_lower_state: Box<Account<'info, TickState>>,
+    pub tick_lower: Box<Account<'info, TickState>>,
 
     /// Account to store data for the position's upper tick
     #[account(mut)]
-    pub tick_upper_state: Box<Account<'info, TickState>>,
+    pub tick_upper: Box<Account<'info, TickState>>,
 
     /// SPL program to transfer out tokens
     pub token_program: Program<'info, Token>,
@@ -56,14 +56,14 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
     // update global reward info
     let updated_reward_infos = pool_state.update_reward_infos(clock.unix_timestamp as u64)?;
     let reward_growths_inside = get_updated_reward_growths_inside(
-        &mut &mut ctx.accounts.protocol_position_state,
-        &ctx.accounts.tick_lower_state,
-        &ctx.accounts.tick_upper_state,
+        &mut &mut ctx.accounts.protocol_position,
+        &ctx.accounts.tick_lower,
+        &ctx.accounts.tick_upper,
         pool_state.tick,
         &updated_reward_infos,
     );
-    let tokenized_position = &mut ctx.accounts.personal_position_state;
-    tokenized_position.update_rewards(reward_growths_inside)?;
+    let personal_position = &mut ctx.accounts.personal_position;
+    personal_position.update_rewards(reward_growths_inside)?;
 
     let mut remaining_accounts = ctx.remaining_accounts.iter();
     for i in 0..remaining_accounts_len / 2 {
@@ -77,7 +77,7 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
             pool_state.reward_infos[i].token_vault
         );
 
-        let reward_amount_owed = tokenized_position.reward_infos[i].reward_amount_owed;
+        let reward_amount_owed = personal_position.reward_infos[i].reward_amount_owed;
         if reward_amount_owed == 0 {
             continue;
         }
@@ -95,7 +95,7 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
                 transfer_amount,
                 reward_amount_owed
             );
-            tokenized_position.reward_infos[i].reward_amount_owed =
+            personal_position.reward_infos[i].reward_amount_owed =
                 reward_amount_owed.checked_sub(transfer_amount).unwrap();
 
             transfer_from_pool_vault_to_user(

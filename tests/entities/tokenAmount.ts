@@ -1,6 +1,7 @@
 
-import { Token } from '@cykura/sdk-core'
+import { Token } from '@raydium-io/raydium-sdk';
 import JSBI from 'jsbi'
+// import { Currency } from '../base';
 
 export class TokenAmount{
     public readonly currency: Token

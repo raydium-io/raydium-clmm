@@ -8,7 +8,7 @@ use anchor_spl::token::{Token, TokenAccount};
 #[derive(Accounts)]
 pub struct SwapSingle<'info> {
     /// The user performing the swap
-    pub signer: Signer<'info>,
+    pub payer: Signer<'info>,
 
     /// The factory state to read protocol fees
     /// CHECK: Safety check performed inside function body
@@ -40,7 +40,7 @@ pub struct SwapSingle<'info> {
     /// The program account for the most recent oracle observation
     /// CHECK: Safety check performed inside function body
     #[account(mut)]
-    pub last_observation_state: Box<Account<'info, ObservationState>>,
+    pub last_observation: Box<Account<'info, ObservationState>>,
 
     /// SPL program for token transfers
     pub token_program: Program<'info, Token>,
@@ -55,7 +55,7 @@ pub fn swap<'a, 'b, 'c, 'info>(
 ) -> Result<()> {
     let amount = exact_internal(
         &mut SwapContext {
-            signer: ctx.accounts.signer.clone(),
+            signer: ctx.accounts.payer.clone(),
             amm_config: ctx.accounts.amm_config.as_mut(),
             input_token_account: ctx.accounts.input_token_account.clone(),
             output_token_account: ctx.accounts.output_token_account.clone(),
@@ -63,7 +63,7 @@ pub fn swap<'a, 'b, 'c, 'info>(
             output_vault: ctx.accounts.output_vault.clone(),
             token_program: ctx.accounts.token_program.clone(),
             pool_state: ctx.accounts.pool_state.as_mut(),
-            last_observation_state: &mut ctx.accounts.last_observation_state,
+            last_observation_state: &mut ctx.accounts.last_observation,
         },
         ctx.remaining_accounts,
         amount,

@@ -1,5 +1,6 @@
 import * as anchor from "@project-serum/anchor";
 
+export const AMM_CONFIG_SEED = Buffer.from(anchor.utils.bytes.utf8.encode("amm_config"));
 export const POOL_SEED = Buffer.from(anchor.utils.bytes.utf8.encode("pool"));
 export const POOL_VAULT_SEED = Buffer.from(
   anchor.utils.bytes.utf8.encode("pool_vault")

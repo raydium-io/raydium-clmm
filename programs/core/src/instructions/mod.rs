@@ -22,8 +22,11 @@ pub use collect_protocol_fee::*;
 pub mod swap_internal;
 pub use swap_internal::*;
 
-pub mod create_position;
-pub use create_position::*;
+pub mod open_position;
+pub use open_position::*;
+
+pub mod close_position;
+pub use close_position::*;
 
 pub mod increase_liquidity;
 pub use increase_liquidity::*;

@@ -1,7 +1,6 @@
-import { MaxUint128 } from '@cykura/sdk-core'
 import JSBI from 'jsbi'
 import invariant from 'tiny-invariant'
-import { ONE, ZERO, Q64, U64Resolution } from '../constants'
+import { ONE, ZERO, Q64, U64Resolution,MaxUint128 } from './constants'
 import { FullMath } from './fullMath'
 
 function multiplyIn128(x: JSBI, y: JSBI): JSBI {

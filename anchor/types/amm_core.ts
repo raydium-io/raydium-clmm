@@ -128,7 +128,7 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "initialObservationState",
+          "name": "initialFirstObservation",
           "isMut": true,
           "isSigner": false
         },
@@ -150,8 +150,8 @@ export type AmmCore = {
       ],
       "args": [
         {
-          "name": "sqrtPriceX32",
-          "type": "u64"
+          "name": "sqrtPriceX64",
+          "type": "u128"
         }
       ]
     },
@@ -186,19 +186,14 @@ export type AmmCore = {
       ],
       "args": [
         {
-          "name": "sqrtPriceX32",
-          "type": "u64"
+          "name": "sqrtPriceX64",
+          "type": "u128"
         }
       ]
     },
     {
       "name": "initializeReward",
       "accounts": [
-        {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
         {
           "name": "rewardFunder",
           "isMut": true,
@@ -207,6 +202,11 @@ export type AmmCore = {
         {
           "name": "funderTokenAccount",
           "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "ammConfig",
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -279,12 +279,12 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "protocolPositionState",
+          "name": "protocolPosition",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "personalPositionState",
+          "name": "personalPosition",
           "isMut": true,
           "isSigner": false
         },
@@ -294,12 +294,12 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "tickLowerState",
+          "name": "tickLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpperState",
+          "name": "tickUpper",
           "isMut": true,
           "isSigner": false
         },
@@ -336,13 +336,13 @@ export type AmmCore = {
           "type": "u8"
         },
         {
-          "name": "emissionsPerSecondX32",
-          "type": "u64"
+          "name": "emissionsPerSecondX64",
+          "type": "u128"
         }
       ]
     },
     {
-      "name": "increaseObservationCardinalityNext",
+      "name": "increaseObservation",
       "accounts": [
         {
           "name": "payer",
@@ -444,7 +444,7 @@ export type AmmCore = {
       ]
     },
     {
-      "name": "createPosition",
+      "name": "openPosition",
       "accounts": [
         {
           "name": "minter",
@@ -482,32 +482,32 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "protocolPositionState",
+          "name": "protocolPosition",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickLowerState",
+          "name": "tickLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpperState",
+          "name": "tickUpper",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "bitmapLowerState",
+          "name": "bitmapLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "bitmapUpperState",
+          "name": "bitmapUpper",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "personalPositionState",
+          "name": "personalPosition",
           "isMut": true,
           "isSigner": false
         },
@@ -532,7 +532,7 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "lastObservationState",
+          "name": "lastObservation",
           "isMut": true,
           "isSigner": false
         },
@@ -564,19 +564,19 @@ export type AmmCore = {
       ],
       "args": [
         {
-          "name": "tickLower",
+          "name": "tickLowerIndex",
           "type": "i32"
         },
         {
-          "name": "tickUpper",
+          "name": "tickUpperIndex",
           "type": "i32"
         },
         {
-          "name": "wordPosLower",
+          "name": "wordLowerIndex",
           "type": "i16"
         },
         {
-          "name": "wordPosUpper",
+          "name": "wordUpperIndex",
           "type": "i16"
         },
         {
@@ -611,37 +611,37 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "personalPositionState",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
           "name": "poolState",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "protocolPositionState",
+          "name": "protocolPosition",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickLowerState",
+          "name": "personalPosition",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpperState",
+          "name": "tickLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "bitmapLowerState",
+          "name": "tickUpper",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "bitmapUpperState",
+          "name": "bitmapLower",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "bitmapUpper",
           "isMut": true,
           "isSigner": false
         },
@@ -666,7 +666,7 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "lastObservationState",
+          "name": "lastObservation",
           "isMut": true,
           "isSigner": false
         },
@@ -709,7 +709,7 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "personalPositionState",
+          "name": "personalPosition",
           "isMut": true,
           "isSigner": false
         },
@@ -724,7 +724,7 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "protocolPositionState",
+          "name": "protocolPosition",
           "isMut": true,
           "isSigner": false
         },
@@ -739,27 +739,27 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "tickLowerState",
+          "name": "tickLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpperState",
+          "name": "tickUpper",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "bitmapLowerState",
+          "name": "bitmapLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "bitmapUpperState",
+          "name": "bitmapUpper",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "lastObservationState",
+          "name": "lastObservation",
           "isMut": true,
           "isSigner": false
         },
@@ -782,7 +782,7 @@ export type AmmCore = {
       "args": [
         {
           "name": "liquidity",
-          "type": "u64"
+          "type": "u128"
         },
         {
           "name": "amount0Min",
@@ -808,7 +808,7 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "personalPositionState",
+          "name": "personalPosition",
           "isMut": true,
           "isSigner": false
         },
@@ -823,32 +823,32 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "protocolPositionState",
+          "name": "protocolPosition",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickLowerState",
+          "name": "tickLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpperState",
+          "name": "tickUpper",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "bitmapLowerState",
+          "name": "bitmapLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "bitmapUpperState",
+          "name": "bitmapUpper",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "lastObservationState",
+          "name": "lastObservation",
           "isMut": true,
           "isSigner": false
         },
@@ -893,7 +893,7 @@ export type AmmCore = {
       "name": "swap",
       "accounts": [
         {
-          "name": "signer",
+          "name": "payer",
           "isMut": false,
           "isSigner": true
         },
@@ -928,7 +928,7 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "lastObservationState",
+          "name": "lastObservation",
           "isMut": true,
           "isSigner": false
         },
@@ -948,8 +948,8 @@ export type AmmCore = {
           "type": "u64"
         },
         {
-          "name": "sqrtPriceLimit",
-          "type": "u64"
+          "name": "sqrtPriceLimitX64",
+          "type": "u128"
         },
         {
           "name": "isBaseInput",
@@ -961,7 +961,7 @@ export type AmmCore = {
       "name": "swapRouterBaseIn",
       "accounts": [
         {
-          "name": "signer",
+          "name": "payer",
           "isMut": false,
           "isSigner": true
         },
@@ -1060,8 +1060,8 @@ export type AmmCore = {
             "type": "i64"
           },
           {
-            "name": "liquidityCumulative",
-            "type": "u64"
+            "name": "secondsPerLiquidityCumulativeX64",
+            "type": "u128"
           },
           {
             "name": "initialized",
@@ -1080,7 +1080,7 @@ export type AmmCore = {
             "type": "u8"
           },
           {
-            "name": "mint",
+            "name": "nftMint",
             "type": "publicKey"
           },
           {
@@ -1097,15 +1097,15 @@ export type AmmCore = {
           },
           {
             "name": "liquidity",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "feeGrowthInside0Last",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "feeGrowthInside1Last",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "tokenFeesOwed0",
@@ -1172,11 +1172,11 @@ export type AmmCore = {
           },
           {
             "name": "liquidity",
-            "type": "u64"
+            "type": "u128"
           },
           {
-            "name": "sqrtPrice",
-            "type": "u64"
+            "name": "sqrtPriceX64",
+            "type": "u128"
           },
           {
             "name": "tick",
@@ -1196,11 +1196,11 @@ export type AmmCore = {
           },
           {
             "name": "feeGrowthGlobal0",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "feeGrowthGlobal1",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "protocolFeesToken0",
@@ -1239,15 +1239,15 @@ export type AmmCore = {
           },
           {
             "name": "liquidity",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "feeGrowthInside0Last",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "feeGrowthInside1Last",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "tokenFeesOwed0",
@@ -1261,7 +1261,7 @@ export type AmmCore = {
             "name": "rewardGrowthInside",
             "type": {
               "array": [
-                "u64",
+                "u128",
                 3
               ]
             }
@@ -1309,27 +1309,27 @@ export type AmmCore = {
           },
           {
             "name": "liquidityNet",
-            "type": "i64"
+            "type": "i128"
           },
           {
             "name": "liquidityGross",
-            "type": "u64"
+            "type": "u128"
           },
           {
-            "name": "feeGrowthOutside0X32",
-            "type": "u64"
+            "name": "feeGrowthOutside0X64",
+            "type": "u128"
           },
           {
-            "name": "feeGrowthOutside1X32",
-            "type": "u64"
+            "name": "feeGrowthOutside1X64",
+            "type": "u128"
           },
           {
             "name": "tickCumulativeOutside",
             "type": "i64"
           },
           {
-            "name": "secondsPerLiquidityOutsideX32",
-            "type": "u64"
+            "name": "secondsPerLiquidityOutsideX64",
+            "type": "u128"
           },
           {
             "name": "secondsOutside",
@@ -1339,7 +1339,7 @@ export type AmmCore = {
             "name": "rewardGrowthsOutside",
             "type": {
               "array": [
-                "u64",
+                "u128",
                 3
               ]
             }
@@ -1367,8 +1367,8 @@ export type AmmCore = {
             "type": "u64"
           },
           {
-            "name": "emissionsPerSecondX32",
-            "type": "u64"
+            "name": "emissionsPerSecondX64",
+            "type": "u128"
           }
         ]
       }
@@ -1380,7 +1380,7 @@ export type AmmCore = {
         "fields": [
           {
             "name": "growthInsideLast",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "rewardAmountOwed",
@@ -1411,8 +1411,8 @@ export type AmmCore = {
             "type": "u64"
           },
           {
-            "name": "emissionsPerSecondX32",
-            "type": "u64"
+            "name": "emissionsPerSecondX64",
+            "type": "u128"
           },
           {
             "name": "rewardTotalEmissioned",
@@ -1435,8 +1435,8 @@ export type AmmCore = {
             "type": "publicKey"
           },
           {
-            "name": "rewardGrowthGlobalX32",
-            "type": "u64"
+            "name": "rewardGrowthGlobalX64",
+            "type": "u128"
           }
         ]
       }
@@ -1548,7 +1548,7 @@ export type AmmCore = {
         },
         {
           "name": "liquidity",
-          "type": "u64",
+          "type": "u128",
           "index": false
         },
         {
@@ -1573,7 +1573,7 @@ export type AmmCore = {
         },
         {
           "name": "liquidity",
-          "type": "u64",
+          "type": "u128",
           "index": false
         },
         {
@@ -1664,8 +1664,8 @@ export type AmmCore = {
           "index": false
         },
         {
-          "name": "sqrtPriceX32",
-          "type": "u64",
+          "name": "sqrtPriceX64",
+          "type": "u128",
           "index": false
         },
         {
@@ -1749,13 +1749,13 @@ export type AmmCore = {
           "index": false
         },
         {
-          "name": "sqrtPriceX32",
-          "type": "u64",
+          "name": "sqrtPriceX64",
+          "type": "u128",
           "index": false
         },
         {
           "name": "liquidity",
-          "type": "u64",
+          "type": "u128",
           "index": false
         },
         {
@@ -1795,7 +1795,7 @@ export type AmmCore = {
         },
         {
           "name": "liquidity",
-          "type": "u64",
+          "type": "u128",
           "index": false
         },
         {
@@ -1899,106 +1899,111 @@ export type AmmCore = {
     },
     {
       "code": 6002,
+      "name": "ClosePositionErr",
+      "msg": "Remove liquitity, collect fees owed and reward then you can close position account"
+    },
+    {
+      "code": 6003,
       "name": "ZeroMintAmount",
       "msg": "Minting amount should be greater than 0"
     },
     {
-      "code": 6003,
+      "code": 6004,
       "name": "InvaildTickIndex",
       "msg": "Tick index of lower must be smaller than upper"
     },
     {
-      "code": 6004,
+      "code": 6005,
       "name": "TickInvaildOrder",
       "msg": "The lower tick must be below the upper tick"
     },
     {
-      "code": 6005,
+      "code": 6006,
       "name": "TickLowerOverflow",
       "msg": "The tick must be greater, or equal to the minimum tick(-221818)"
     },
     {
-      "code": 6006,
+      "code": 6007,
       "name": "TickUpperOverflow",
       "msg": "The tick must be lesser than, or equal to the maximum tick(221818)"
     },
     {
-      "code": 6007,
+      "code": 6008,
       "name": "TickAndSpacingNotMatch",
       "msg": "tick % tick_spacing must be zero"
     },
     {
-      "code": 6008,
+      "code": 6009,
       "name": "SqrtPriceLimitOverflow",
       "msg": "Square root price limit overflow"
     },
     {
-      "code": 6009,
-      "name": "SqrtPriceX32",
-      "msg": "sqrt_price_x32 out of range"
+      "code": 6010,
+      "name": "SqrtPriceX64",
+      "msg": "sqrt_price_x64 out of range"
     },
     {
-      "code": 6010,
+      "code": 6011,
       "name": "LiquiditySubValueErr",
       "msg": "Liquidity sub delta L must be smaller than before"
     },
     {
-      "code": 6011,
+      "code": 6012,
       "name": "LiquidityAddValueErr",
       "msg": "Liquidity add delta L must be greater, or equal to before"
     },
     {
-      "code": 6012,
+      "code": 6013,
       "name": "InvaildLiquidity",
       "msg": "Invaild liquidity when update position"
     },
     {
-      "code": 6013,
+      "code": 6014,
       "name": "TransactionTooOld",
       "msg": "Transaction too old"
     },
     {
-      "code": 6014,
+      "code": 6015,
       "name": "PriceSlippageCheck",
       "msg": "Price slippage check"
     },
     {
-      "code": 6015,
+      "code": 6016,
       "name": "TooLittleOutputReceived",
       "msg": "Too little output received"
     },
     {
-      "code": 6016,
+      "code": 6017,
       "name": "TooMuchInputPaid",
       "msg": "Too much input paid"
     },
     {
-      "code": 6017,
+      "code": 6018,
       "name": "InvaildSwapAmountSpecified",
       "msg": "Swap special amount can not be zero"
     },
     {
-      "code": 6018,
+      "code": 6019,
       "name": "InvalidRewardIndex",
       "msg": "Invalid reward index"
     },
     {
-      "code": 6019,
+      "code": 6020,
       "name": "InvalidRewardInitParam",
       "msg": "Invalid reward init param"
     },
     {
-      "code": 6020,
+      "code": 6021,
       "name": "InvalidRewardDesiredAmount",
       "msg": "Invalid collect reward desired amount"
     },
     {
-      "code": 6021,
+      "code": 6022,
       "name": "InvalidRewardInputAccountNumber",
       "msg": "Invalid collect reward input account number"
     },
     {
-      "code": 6022,
+      "code": 6023,
       "name": "UnInitializedRewardInfo",
       "msg": "uninitialized reward info"
     }
@@ -2135,7 +2140,7 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "initialObservationState",
+          "name": "initialFirstObservation",
           "isMut": true,
           "isSigner": false
         },
@@ -2157,8 +2162,8 @@ export const IDL: AmmCore = {
       ],
       "args": [
         {
-          "name": "sqrtPriceX32",
-          "type": "u64"
+          "name": "sqrtPriceX64",
+          "type": "u128"
         }
       ]
     },
@@ -2193,19 +2198,14 @@ export const IDL: AmmCore = {
       ],
       "args": [
         {
-          "name": "sqrtPriceX32",
-          "type": "u64"
+          "name": "sqrtPriceX64",
+          "type": "u128"
         }
       ]
     },
     {
       "name": "initializeReward",
       "accounts": [
-        {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
         {
           "name": "rewardFunder",
           "isMut": true,
@@ -2214,6 +2214,11 @@ export const IDL: AmmCore = {
         {
           "name": "funderTokenAccount",
           "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "ammConfig",
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -2286,12 +2291,12 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "protocolPositionState",
+          "name": "protocolPosition",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "personalPositionState",
+          "name": "personalPosition",
           "isMut": true,
           "isSigner": false
         },
@@ -2301,12 +2306,12 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "tickLowerState",
+          "name": "tickLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpperState",
+          "name": "tickUpper",
           "isMut": true,
           "isSigner": false
         },
@@ -2343,13 +2348,13 @@ export const IDL: AmmCore = {
           "type": "u8"
         },
         {
-          "name": "emissionsPerSecondX32",
-          "type": "u64"
+          "name": "emissionsPerSecondX64",
+          "type": "u128"
         }
       ]
     },
     {
-      "name": "increaseObservationCardinalityNext",
+      "name": "increaseObservation",
       "accounts": [
         {
           "name": "payer",
@@ -2451,7 +2456,7 @@ export const IDL: AmmCore = {
       ]
     },
     {
-      "name": "createPosition",
+      "name": "openPosition",
       "accounts": [
         {
           "name": "minter",
@@ -2489,32 +2494,32 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "protocolPositionState",
+          "name": "protocolPosition",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickLowerState",
+          "name": "tickLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpperState",
+          "name": "tickUpper",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "bitmapLowerState",
+          "name": "bitmapLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "bitmapUpperState",
+          "name": "bitmapUpper",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "personalPositionState",
+          "name": "personalPosition",
           "isMut": true,
           "isSigner": false
         },
@@ -2539,7 +2544,7 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "lastObservationState",
+          "name": "lastObservation",
           "isMut": true,
           "isSigner": false
         },
@@ -2571,19 +2576,19 @@ export const IDL: AmmCore = {
       ],
       "args": [
         {
-          "name": "tickLower",
+          "name": "tickLowerIndex",
           "type": "i32"
         },
         {
-          "name": "tickUpper",
+          "name": "tickUpperIndex",
           "type": "i32"
         },
         {
-          "name": "wordPosLower",
+          "name": "wordLowerIndex",
           "type": "i16"
         },
         {
-          "name": "wordPosUpper",
+          "name": "wordUpperIndex",
           "type": "i16"
         },
         {
@@ -2618,37 +2623,37 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "personalPositionState",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
           "name": "poolState",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "protocolPositionState",
+          "name": "protocolPosition",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickLowerState",
+          "name": "personalPosition",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpperState",
+          "name": "tickLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "bitmapLowerState",
+          "name": "tickUpper",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "bitmapUpperState",
+          "name": "bitmapLower",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "bitmapUpper",
           "isMut": true,
           "isSigner": false
         },
@@ -2673,7 +2678,7 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "lastObservationState",
+          "name": "lastObservation",
           "isMut": true,
           "isSigner": false
         },
@@ -2716,7 +2721,7 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "personalPositionState",
+          "name": "personalPosition",
           "isMut": true,
           "isSigner": false
         },
@@ -2731,7 +2736,7 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "protocolPositionState",
+          "name": "protocolPosition",
           "isMut": true,
           "isSigner": false
         },
@@ -2746,27 +2751,27 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "tickLowerState",
+          "name": "tickLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpperState",
+          "name": "tickUpper",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "bitmapLowerState",
+          "name": "bitmapLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "bitmapUpperState",
+          "name": "bitmapUpper",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "lastObservationState",
+          "name": "lastObservation",
           "isMut": true,
           "isSigner": false
         },
@@ -2789,7 +2794,7 @@ export const IDL: AmmCore = {
       "args": [
         {
           "name": "liquidity",
-          "type": "u64"
+          "type": "u128"
         },
         {
           "name": "amount0Min",
@@ -2815,7 +2820,7 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "personalPositionState",
+          "name": "personalPosition",
           "isMut": true,
           "isSigner": false
         },
@@ -2830,32 +2835,32 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "protocolPositionState",
+          "name": "protocolPosition",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickLowerState",
+          "name": "tickLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpperState",
+          "name": "tickUpper",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "bitmapLowerState",
+          "name": "bitmapLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "bitmapUpperState",
+          "name": "bitmapUpper",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "lastObservationState",
+          "name": "lastObservation",
           "isMut": true,
           "isSigner": false
         },
@@ -2900,7 +2905,7 @@ export const IDL: AmmCore = {
       "name": "swap",
       "accounts": [
         {
-          "name": "signer",
+          "name": "payer",
           "isMut": false,
           "isSigner": true
         },
@@ -2935,7 +2940,7 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "lastObservationState",
+          "name": "lastObservation",
           "isMut": true,
           "isSigner": false
         },
@@ -2955,8 +2960,8 @@ export const IDL: AmmCore = {
           "type": "u64"
         },
         {
-          "name": "sqrtPriceLimit",
-          "type": "u64"
+          "name": "sqrtPriceLimitX64",
+          "type": "u128"
         },
         {
           "name": "isBaseInput",
@@ -2968,7 +2973,7 @@ export const IDL: AmmCore = {
       "name": "swapRouterBaseIn",
       "accounts": [
         {
-          "name": "signer",
+          "name": "payer",
           "isMut": false,
           "isSigner": true
         },
@@ -3067,8 +3072,8 @@ export const IDL: AmmCore = {
             "type": "i64"
           },
           {
-            "name": "liquidityCumulative",
-            "type": "u64"
+            "name": "secondsPerLiquidityCumulativeX64",
+            "type": "u128"
           },
           {
             "name": "initialized",
@@ -3087,7 +3092,7 @@ export const IDL: AmmCore = {
             "type": "u8"
           },
           {
-            "name": "mint",
+            "name": "nftMint",
             "type": "publicKey"
           },
           {
@@ -3104,15 +3109,15 @@ export const IDL: AmmCore = {
           },
           {
             "name": "liquidity",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "feeGrowthInside0Last",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "feeGrowthInside1Last",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "tokenFeesOwed0",
@@ -3179,11 +3184,11 @@ export const IDL: AmmCore = {
           },
           {
             "name": "liquidity",
-            "type": "u64"
+            "type": "u128"
           },
           {
-            "name": "sqrtPrice",
-            "type": "u64"
+            "name": "sqrtPriceX64",
+            "type": "u128"
           },
           {
             "name": "tick",
@@ -3203,11 +3208,11 @@ export const IDL: AmmCore = {
           },
           {
             "name": "feeGrowthGlobal0",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "feeGrowthGlobal1",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "protocolFeesToken0",
@@ -3246,15 +3251,15 @@ export const IDL: AmmCore = {
           },
           {
             "name": "liquidity",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "feeGrowthInside0Last",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "feeGrowthInside1Last",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "tokenFeesOwed0",
@@ -3268,7 +3273,7 @@ export const IDL: AmmCore = {
             "name": "rewardGrowthInside",
             "type": {
               "array": [
-                "u64",
+                "u128",
                 3
               ]
             }
@@ -3316,27 +3321,27 @@ export const IDL: AmmCore = {
           },
           {
             "name": "liquidityNet",
-            "type": "i64"
+            "type": "i128"
           },
           {
             "name": "liquidityGross",
-            "type": "u64"
+            "type": "u128"
           },
           {
-            "name": "feeGrowthOutside0X32",
-            "type": "u64"
+            "name": "feeGrowthOutside0X64",
+            "type": "u128"
           },
           {
-            "name": "feeGrowthOutside1X32",
-            "type": "u64"
+            "name": "feeGrowthOutside1X64",
+            "type": "u128"
           },
           {
             "name": "tickCumulativeOutside",
             "type": "i64"
           },
           {
-            "name": "secondsPerLiquidityOutsideX32",
-            "type": "u64"
+            "name": "secondsPerLiquidityOutsideX64",
+            "type": "u128"
           },
           {
             "name": "secondsOutside",
@@ -3346,7 +3351,7 @@ export const IDL: AmmCore = {
             "name": "rewardGrowthsOutside",
             "type": {
               "array": [
-                "u64",
+                "u128",
                 3
               ]
             }
@@ -3374,8 +3379,8 @@ export const IDL: AmmCore = {
             "type": "u64"
           },
           {
-            "name": "emissionsPerSecondX32",
-            "type": "u64"
+            "name": "emissionsPerSecondX64",
+            "type": "u128"
           }
         ]
       }
@@ -3387,7 +3392,7 @@ export const IDL: AmmCore = {
         "fields": [
           {
             "name": "growthInsideLast",
-            "type": "u64"
+            "type": "u128"
           },
           {
             "name": "rewardAmountOwed",
@@ -3418,8 +3423,8 @@ export const IDL: AmmCore = {
             "type": "u64"
           },
           {
-            "name": "emissionsPerSecondX32",
-            "type": "u64"
+            "name": "emissionsPerSecondX64",
+            "type": "u128"
           },
           {
             "name": "rewardTotalEmissioned",
@@ -3442,8 +3447,8 @@ export const IDL: AmmCore = {
             "type": "publicKey"
           },
           {
-            "name": "rewardGrowthGlobalX32",
-            "type": "u64"
+            "name": "rewardGrowthGlobalX64",
+            "type": "u128"
           }
         ]
       }
@@ -3555,7 +3560,7 @@ export const IDL: AmmCore = {
         },
         {
           "name": "liquidity",
-          "type": "u64",
+          "type": "u128",
           "index": false
         },
         {
@@ -3580,7 +3585,7 @@ export const IDL: AmmCore = {
         },
         {
           "name": "liquidity",
-          "type": "u64",
+          "type": "u128",
           "index": false
         },
         {
@@ -3671,8 +3676,8 @@ export const IDL: AmmCore = {
           "index": false
         },
         {
-          "name": "sqrtPriceX32",
-          "type": "u64",
+          "name": "sqrtPriceX64",
+          "type": "u128",
           "index": false
         },
         {
@@ -3756,13 +3761,13 @@ export const IDL: AmmCore = {
           "index": false
         },
         {
-          "name": "sqrtPriceX32",
-          "type": "u64",
+          "name": "sqrtPriceX64",
+          "type": "u128",
           "index": false
         },
         {
           "name": "liquidity",
-          "type": "u64",
+          "type": "u128",
           "index": false
         },
         {
@@ -3802,7 +3807,7 @@ export const IDL: AmmCore = {
         },
         {
           "name": "liquidity",
-          "type": "u64",
+          "type": "u128",
           "index": false
         },
         {
@@ -3906,106 +3911,111 @@ export const IDL: AmmCore = {
     },
     {
       "code": 6002,
+      "name": "ClosePositionErr",
+      "msg": "Remove liquitity, collect fees owed and reward then you can close position account"
+    },
+    {
+      "code": 6003,
       "name": "ZeroMintAmount",
       "msg": "Minting amount should be greater than 0"
     },
     {
-      "code": 6003,
+      "code": 6004,
       "name": "InvaildTickIndex",
       "msg": "Tick index of lower must be smaller than upper"
     },
     {
-      "code": 6004,
+      "code": 6005,
       "name": "TickInvaildOrder",
       "msg": "The lower tick must be below the upper tick"
     },
     {
-      "code": 6005,
+      "code": 6006,
       "name": "TickLowerOverflow",
       "msg": "The tick must be greater, or equal to the minimum tick(-221818)"
     },
     {
-      "code": 6006,
+      "code": 6007,
       "name": "TickUpperOverflow",
       "msg": "The tick must be lesser than, or equal to the maximum tick(221818)"
     },
     {
-      "code": 6007,
+      "code": 6008,
       "name": "TickAndSpacingNotMatch",
       "msg": "tick % tick_spacing must be zero"
     },
     {
-      "code": 6008,
+      "code": 6009,
       "name": "SqrtPriceLimitOverflow",
       "msg": "Square root price limit overflow"
     },
     {
-      "code": 6009,
-      "name": "SqrtPriceX32",
-      "msg": "sqrt_price_x32 out of range"
+      "code": 6010,
+      "name": "SqrtPriceX64",
+      "msg": "sqrt_price_x64 out of range"
     },
     {
-      "code": 6010,
+      "code": 6011,
       "name": "LiquiditySubValueErr",
       "msg": "Liquidity sub delta L must be smaller than before"
     },
     {
-      "code": 6011,
+      "code": 6012,
       "name": "LiquidityAddValueErr",
       "msg": "Liquidity add delta L must be greater, or equal to before"
     },
     {
-      "code": 6012,
+      "code": 6013,
       "name": "InvaildLiquidity",
       "msg": "Invaild liquidity when update position"
     },
     {
-      "code": 6013,
+      "code": 6014,
       "name": "TransactionTooOld",
       "msg": "Transaction too old"
     },
     {
-      "code": 6014,
+      "code": 6015,
       "name": "PriceSlippageCheck",
       "msg": "Price slippage check"
     },
     {
-      "code": 6015,
+      "code": 6016,
       "name": "TooLittleOutputReceived",
       "msg": "Too little output received"
     },
     {
-      "code": 6016,
+      "code": 6017,
       "name": "TooMuchInputPaid",
       "msg": "Too much input paid"
     },
     {
-      "code": 6017,
+      "code": 6018,
       "name": "InvaildSwapAmountSpecified",
       "msg": "Swap special amount can not be zero"
     },
     {
-      "code": 6018,
+      "code": 6019,
       "name": "InvalidRewardIndex",
       "msg": "Invalid reward index"
     },
     {
-      "code": 6019,
+      "code": 6020,
       "name": "InvalidRewardInitParam",
       "msg": "Invalid reward init param"
     },
     {
-      "code": 6020,
+      "code": 6021,
       "name": "InvalidRewardDesiredAmount",
       "msg": "Invalid collect reward desired amount"
     },
     {
-      "code": 6021,
+      "code": 6022,
       "name": "InvalidRewardInputAccountNumber",
       "msg": "Invalid collect reward input account number"
     },
     {
-      "code": 6022,
+      "code": 6023,
       "name": "UnInitializedRewardInfo",
       "msg": "uninitialized reward info"
     }

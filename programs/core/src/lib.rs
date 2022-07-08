@@ -176,8 +176,8 @@ pub mod amm_core {
     /// observation accounts which will be initialized
     /// * `observation_account_bumps` - Vector of bumps to initialize the observation state PDAs
     ///
-    pub fn increase_observation_cardinality_next<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, IncreaseObservationCardinalityNextCtx<'info>>,
+    pub fn increase_observation<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, IncreaseObservation<'info>>,
         observation_account_bumps: Vec<u8>,
     ) -> Result<()> {
         instructions::increase_observation_cardinality_next(ctx, observation_account_bumps)
@@ -248,28 +248,40 @@ pub mod amm_core {
     /// * `amount_1_min` - The minimum amount of token_1 to spend, which serves as a slippage check
     /// * `deadline` - The time by which the transaction must be included to effect the change
     ///
-    pub fn create_position<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, CreatePosition<'info>>,
-        tick_lower: i32,
-        tick_upper: i32,
-        word_pos_lower: i16,
-        word_pos_upper: i16,
+    pub fn open_position<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, OpenPosition<'info>>,
+        tick_lower_index: i32,
+        tick_upper_index: i32,
+        word_lower_index: i16,
+        word_upper_index: i16,
         amount_0_desired: u64,
         amount_1_desired: u64,
         amount_0_min: u64,
         amount_1_min: u64,
     ) -> Result<()> {
-        instructions::create_position(
+        instructions::open_position(
             ctx,
             amount_0_desired,
             amount_1_desired,
             amount_0_min,
             amount_1_min,
-            tick_lower,
-            tick_upper,
-            word_pos_lower,
-            word_pos_upper,
+            tick_lower_index,
+            tick_upper_index,
+            word_lower_index,
+            word_upper_index,
         )
+    }
+
+     /// Close a position 
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - Holds pool, position and token accountsx
+    ///
+    pub fn close_position<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, ClosePosition<'info>>,
+    ) -> Result<()> {
+        instructions::close_position(ctx)
     }
    
     /// Increases liquidity in a tokenized position, with amount paid by `payer`
@@ -376,7 +388,7 @@ pub mod amm_core {
     /// * `additional_accounts_per_pool` - Additional observation, bitmap and tick accounts per pool
     ///
     pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, SwapBaseIn<'info>>,
+        ctx: Context<'a, 'b, 'c, 'info, SwapRouterBaseIn<'info>>,
         amount_in: u64,
         amount_out_minimum: u64,
         additional_accounts_per_pool: Vec<u8>,

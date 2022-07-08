@@ -149,7 +149,7 @@ pub fn get_tick_at_sqrt_ratio(sqrt_price_x64: u128) -> Result<i32, anchor_lang::
     // second inequality must be < because the price can never reach the price at the max tick
     require!(
         sqrt_price_x64 >= MIN_SQRT_RATIO_X64 && sqrt_price_x64 < MAX_SQRT_RATIO_X64,
-        ErrorCode::SqrtPriceX32
+        ErrorCode::SqrtPriceX64
     );
 
     // Determine log_b(sqrt_ratio). First by calculating integer portion (msb)

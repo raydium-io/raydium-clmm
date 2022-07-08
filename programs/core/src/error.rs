@@ -7,6 +7,9 @@ pub enum ErrorCode {
     #[msg("Not approved")]
     NotApproved,
 
+    #[msg("Remove liquitity, collect fees owed and reward then you can close position account")]
+    ClosePositionErr,
+
     #[msg("Minting amount should be greater than 0")]
     ZeroMintAmount,
 
@@ -25,7 +28,7 @@ pub enum ErrorCode {
     SqrtPriceLimitOverflow,
     // second inequality must be < because the price can never reach the price at the max tick
     #[msg("sqrt_price_x64 out of range")]
-    SqrtPriceX32,
+    SqrtPriceX64,
 
     // Liquidity Sub
     #[msg("Liquidity sub delta L must be smaller than before")]

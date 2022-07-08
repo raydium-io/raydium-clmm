@@ -6,7 +6,7 @@ use std::mem::size_of;
 use std::ops::DerefMut;
 
 #[derive(Accounts)]
-pub struct IncreaseObservationCardinalityNextCtx<'info> {
+pub struct IncreaseObservation<'info> {
     /// Pays to increase storage slots for oracle observations
     pub payer: Signer<'info>,
 
@@ -19,7 +19,7 @@ pub struct IncreaseObservationCardinalityNextCtx<'info> {
 }
 
 pub fn increase_observation_cardinality_next<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, IncreaseObservationCardinalityNextCtx<'info>>,
+    ctx: Context<'a, 'b, 'c, 'info, IncreaseObservation<'info>>,
     observation_account_bumps: Vec<u8>,
 ) -> Result<()> {
     let pool_state = ctx.accounts.pool_state.deref_mut();

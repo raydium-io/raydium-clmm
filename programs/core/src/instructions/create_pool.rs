@@ -74,7 +74,7 @@ pub struct CreatePool<'info> {
         payer = pool_creator,
         space = 8 + size_of::<ObservationState>()
     )]
-    pub initial_observation_state: Account<'info, ObservationState>,
+    pub initial_first_observation: Account<'info, ObservationState>,
     /// Spl token program
     pub token_program: Program<'info, Token>,
     /// To create a new program account
@@ -108,8 +108,8 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
     pool_state.observation_cardinality_next = 1;
     pool_state.reward_infos = [RewardInfo::new(ctx.accounts.pool_creator.key()); REWARD_NUM];
 
-    let initial_observation_state = ctx.accounts.initial_observation_state.deref_mut();
-    initial_observation_state.bump = *ctx.bumps.get("initial_observation_state").unwrap();
+    let initial_observation_state = ctx.accounts.initial_first_observation.deref_mut();
+    initial_observation_state.bump = *ctx.bumps.get("initial_first_observation").unwrap();
     initial_observation_state.block_timestamp = oracle::_block_timestamp();
     initial_observation_state.initialized = true;
 
