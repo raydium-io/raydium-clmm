@@ -5,9 +5,9 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
 
 #[derive(Accounts)]
-pub struct SwapBaseIn<'info> {
+pub struct SwapRouterBaseIn<'info> {
     /// The user performing the swap
-    pub signer: Signer<'info>,
+    pub payer: Signer<'info>,
 
     /// The factory state to read protocol fees
     /// CHECK: Safety check performed inside function body
@@ -23,7 +23,7 @@ pub struct SwapBaseIn<'info> {
 }
 
 pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, SwapBaseIn<'info>>,
+    ctx: Context<'a, 'b, 'c, 'info, SwapRouterBaseIn<'info>>,
     amount_in: u64,
     amount_out_minimum: u64,
     additional_accounts_per_pool: Vec<u8>,
@@ -46,7 +46,7 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
         solana_program::log::sol_log_compute_units();
         amount_in_internal = exact_internal(
             &mut SwapContext {
-                signer: ctx.accounts.signer.clone(),
+                signer: ctx.accounts.payer.clone(),
                 amm_config: ctx.accounts.amm_config.as_mut(),
                 input_token_account: input_token_account.clone(),
                 pool_state: pool_state.as_mut(),

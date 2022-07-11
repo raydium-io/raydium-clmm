@@ -2,8 +2,8 @@
 import {
     SwapMath,
     SqrtPriceMath
-} from "./math"
-import { FeeAmount } from './entities/fee'
+} from "."
+import { FeeAmount } from '../entities/fee'
 
 import JSBI from 'jsbi'
 

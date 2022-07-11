@@ -8,16 +8,18 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount};
 #[derive(Accounts)]
 // #[instruction(reward_index: u8)]
 pub struct InitializeReward<'info> {
-    /// Which config the pool belongs to.
-    pub amm_config: Box<Account<'info, AmmConfig>>,
     /// the
     #[account(mut)]
     pub reward_funder: Signer<'info>,
     #[account(
-        mut,
-        token::mint = reward_token_mint
+    mut,
+    token::mint = reward_token_mint
     )]
     pub funder_token_account: Box<Account<'info, TokenAccount>>,
+
+    /// Which config the pool belongs to.
+    pub amm_config: Box<Account<'info, AmmConfig>>,
+
     /// Set reward for this pool
     #[account(mut)]
     pub pool_state: Box<Account<'info, PoolState>>,

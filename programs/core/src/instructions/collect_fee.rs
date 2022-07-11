@@ -45,7 +45,7 @@ pub struct CollectFee<'info> {
 
     /// The token account for the tokenized position
     #[account(
-        constraint = nft_account.mint == personal_position.mint
+        constraint = nft_account.mint == personal_position.nft_mint
     )]
     pub nft_account: Box<Account<'info, TokenAccount>>,
 
@@ -74,11 +74,11 @@ pub struct CollectFee<'info> {
 
     /// The bitmap program account for the init state of the lower tick
     #[account(mut)]
-    pub bitmap_lower: AccountLoader<'info, TickBitmapState>,
+    pub tick_bitmap_lower: AccountLoader<'info, TickBitmapState>,
 
     /// Stores init state for the upper tick
     #[account(mut)]
-    pub bitmap_upper: AccountLoader<'info, TickBitmapState>,
+    pub tick_bitmap_upper: AccountLoader<'info, TickBitmapState>,
 
     /// The latest observation state
     #[account(mut)]
@@ -117,21 +117,21 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
 ) -> Result<()> {
     assert!(amount_0_max > 0 || amount_1_max > 0);
 
-    let tokenized_position = ctx.accounts.personal_position.as_mut();
-    let mut token_fees_owed_0 = tokenized_position.token_fees_owed_0;
-    let mut token_fees_owed_1 = tokenized_position.token_fees_owed_1;
+    let personal_position = ctx.accounts.personal_position.as_mut();
+    let mut token_fees_owed_0 = personal_position.token_fees_owed_0;
+    let mut token_fees_owed_1 = personal_position.token_fees_owed_1;
 
     let mut protocol_position_owner = ctx.accounts.amm_config.to_account_info();
     protocol_position_owner.is_signer = true;
     // trigger an update of the position fees owed and fee growth snapshots if it has any liquidity
-    if tokenized_position.liquidity > 0 {
+    if personal_position.liquidity > 0 {
         let mut burn_accounts = BurnParam {
             owner: &Signer::try_from(&protocol_position_owner)?,
             pool_state: ctx.accounts.pool_state.as_mut(),
             tick_lower_state: ctx.accounts.tick_lower.as_mut(),
             tick_upper_state: ctx.accounts.tick_upper.as_mut(),
-            bitmap_lower_state: &ctx.accounts.bitmap_lower,
-            bitmap_upper_state: &ctx.accounts.bitmap_upper,
+            bitmap_lower_state: &ctx.accounts.tick_bitmap_lower,
+            bitmap_upper_state: &ctx.accounts.tick_bitmap_upper,
             procotol_position_state: ctx.accounts.protocol_position.as_mut(),
             last_observation_state: ctx.accounts.last_observation.as_mut(),
         };
@@ -143,26 +143,26 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
         token_fees_owed_0 = token_fees_owed_0
             .checked_add(
                 U128::from(updated_protocol_position.fee_growth_inside_0_last
-                    - tokenized_position.fee_growth_inside_0_last)
-                    .mul_div_floor(U128::from(tokenized_position.liquidity),  U128::from(fixed_point_64::Q64))
+                    - personal_position.fee_growth_inside_0_last)
+                    .mul_div_floor(U128::from(personal_position.liquidity),  U128::from(fixed_point_64::Q64))
                     .unwrap().as_u64(),
             )
             .unwrap();
         token_fees_owed_1 = token_fees_owed_1
             .checked_add(
                 U128::from(updated_protocol_position.fee_growth_inside_1_last
-                    - tokenized_position.fee_growth_inside_1_last)
-                    .mul_div_floor(U128::from(tokenized_position.liquidity),  U128::from(fixed_point_64::Q64))
+                    - personal_position.fee_growth_inside_1_last)
+                    .mul_div_floor(U128::from(personal_position.liquidity),  U128::from(fixed_point_64::Q64))
                     .unwrap().as_u64(),
             )
             .unwrap();
 
-        tokenized_position.fee_growth_inside_0_last =
+        personal_position.fee_growth_inside_0_last =
             updated_protocol_position.fee_growth_inside_0_last;
-        tokenized_position.fee_growth_inside_1_last =
+        personal_position.fee_growth_inside_1_last =
             updated_protocol_position.fee_growth_inside_1_last;
 
-        tokenized_position.update_rewards(updated_protocol_position.reward_growth_inside)?;
+        personal_position.update_rewards(updated_protocol_position.reward_growth_inside)?;
     }
 
     // adjust amounts to the max for the position
@@ -188,11 +188,11 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
     // sometimes there will be a few less wei than expected due to rounding down in core, but
     // we just subtract the full amount expected
     // instead of the actual amount so we can burn the token
-    tokenized_position.token_fees_owed_0 = token_fees_owed_0 - amount_0;
-    tokenized_position.token_fees_owed_1 = token_fees_owed_1 - amount_1;
+    personal_position.token_fees_owed_0 = token_fees_owed_0 - amount_0;
+    personal_position.token_fees_owed_1 = token_fees_owed_1 - amount_1;
 
     emit!(CollectPersonalFeeEvent {
-        position_nft_mint: tokenized_position.mint,
+        position_nft_mint: personal_position.nft_mint,
         recipient_token_account_0: ctx.accounts.recipient_token_account_0.key(),
         recipient_token_account_1: ctx.accounts.recipient_token_account_1.key(),
         amount_0,

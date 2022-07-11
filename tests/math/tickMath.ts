@@ -1,11 +1,9 @@
-import { MaxUint128 } from '@cykura/sdk-core'
+import { MaxUint128 } from './constants'
 import { BN } from '@project-serum/anchor'
 import JSBI from 'jsbi'
 import invariant from 'tiny-invariant'
-import { ONE, ZERO } from '../constants'
-import { msb as mostSignificantBit } from '../entities/bitmap'
 
-const BIT_PRECISION = 16;
+const BIT_PRECISION = 14;
 const LOG_B_2_X32 = "59543866431248";
 const LOG_B_P_ERR_MARGIN_LOWER_X64 = "184467440737095516";
 const LOG_B_P_ERR_MARGIN_UPPER_X64 = "15793534762490258745";
@@ -13,8 +11,6 @@ const LOG_B_P_ERR_MARGIN_UPPER_X64 = "15793534762490258745";
 function mulShift(val: JSBI, mulBy: string): JSBI {
   return JSBI.signedRightShift(JSBI.multiply(val, JSBI.BigInt(mulBy)), JSBI.BigInt(64))
 }
-
-const Q32 = JSBI.exponentiate(JSBI.BigInt(2), JSBI.BigInt(32))
 
 export abstract class TickMath {
   /**
@@ -40,11 +36,7 @@ export abstract class TickMath {
    */
   public static MAX_SQRT_RATIO: JSBI = JSBI.BigInt('79226673521066979257578248091')
 
-  /**
-   * Returns the sqrt ratio as a Q32.32 for the given tick. The sqrt ratio is computed as sqrt(1.0001)^tick
-   * @param tick the tick for which to compute the sqrt ratio
-   */
-  public static getSqrtRatioAtTick(tick: number): JSBI {
+  public static getSqrtPriceX64FromTick(tick: number): JSBI {
     invariant(tick >= TickMath.MIN_TICK && tick <= TickMath.MAX_TICK && Number.isInteger(tick), 'TICK')
     const absTick: number = tick < 0 ? tick * -1 : tick
 
@@ -69,20 +61,10 @@ export abstract class TickMath {
     if ((absTick & 0x40000) != 0) ratio = mulShift(ratio, '0x2216e584f5fa')
 
     if (tick > 0) ratio = JSBI.divide(MaxUint128, ratio)
-    console.log("getSqrtRatioAtTick, tick: ",tick, "price: ", ratio.toString())
     return ratio
-    // // back to Q32
-    // return JSBI.greaterThan(JSBI.remainder(ratio, Q32), ZERO)
-    //   ? JSBI.add(JSBI.divide(ratio, Q32), ONE)
-    //   : JSBI.divide(ratio, Q32)
   }
 
-  /**
-   * Returns the tick corresponding to a given sqrt ratio, s.t. #getSqrtRatioAtTick(tick) <= sqrtRatioX32
-   * and #getSqrtRatioAtTick(tick + 1) > sqrtRatioX32
-   * @param sqrtRatioX64 the sqrt ratio as a Q64.64 for which to compute the tick
-   */
-  public static getTickAtSqrtRatio(sqrtRatioX64: JSBI): number {
+  public static getTickFromSqrtPriceX64(sqrtRatioX64: JSBI): number {
     invariant(
       JSBI.greaterThanOrEqual(sqrtRatioX64, TickMath.MIN_SQRT_RATIO) &&
         JSBI.lessThan(sqrtRatioX64, TickMath.MAX_SQRT_RATIO),
@@ -90,7 +72,6 @@ export abstract class TickMath {
     )
     
     const sqrtPriceX64 = new BN(sqrtRatioX64.toString())
-    console.log("getTickAtSqrtRatio sqrtPriceX64:",sqrtPriceX64.toString(), "new BN(TickMath.MAX_SQRT_RATIO): ", new BN(TickMath.MAX_SQRT_RATIO.toString()))
     if (sqrtPriceX64.gt(new BN(TickMath.MAX_SQRT_RATIO.toString())) || sqrtPriceX64.lt(new BN(TickMath.MIN_SQRT_RATIO.toString()))) {
       throw new Error("Provided sqrtPrice is not within the supported sqrtPrice range.");
     }
@@ -133,8 +114,7 @@ export abstract class TickMath {
     if (tickLow == tickHigh) {
       return tickLow;
     } else {
-      const derivedTickHighSqrtPriceX64 = new BN(TickMath.getSqrtRatioAtTick(tickHigh).toString());
-      console.log("tickLow:",tickLow,"tickHigh:",tickHigh,"derivedTickHighSqrtPriceX64:",derivedTickHighSqrtPriceX64.toString())
+      const derivedTickHighSqrtPriceX64 = new BN(TickMath.getSqrtPriceX64FromTick(tickHigh).toString());
       if (derivedTickHighSqrtPriceX64.lte(sqrtPriceX64)) {
         return tickHigh;
       } else {

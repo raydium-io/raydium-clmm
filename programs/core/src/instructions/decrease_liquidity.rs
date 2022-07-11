@@ -13,13 +13,13 @@ pub struct DecreaseLiquidity<'info> {
 
     /// The token account for the tokenized position
     #[account(
-        constraint = nft_account.mint == personal_position_state.mint
+        constraint = nft_account.mint == personal_position.nft_mint
     )]
     pub nft_account: Box<Account<'info, TokenAccount>>,
 
     /// Decrease liquidity for this position
     #[account(mut)]
-    pub personal_position_state: Account<'info, PersonalPositionState>,
+    pub personal_position: Account<'info, PersonalPositionState>,
 
     /// The program account acting as the core liquidity custodian for token holder
     pub amm_config: Account<'info, AmmConfig>,
@@ -30,7 +30,7 @@ pub struct DecreaseLiquidity<'info> {
 
     /// Core program account to store position data
     #[account(mut)]
-    pub protocol_position_state: Box<Account<'info, ProcotolPositionState>>,
+    pub protocol_position: Box<Account<'info, ProcotolPositionState>>,
 
     /// Token_0 vault
     #[account(
@@ -48,23 +48,23 @@ pub struct DecreaseLiquidity<'info> {
 
     /// Account to store data for the position's lower tick
     #[account(mut)]
-    pub tick_lower_state: Box<Account<'info, TickState>>,
+    pub tick_lower: Box<Account<'info, TickState>>,
 
     /// Account to store data for the position's upper tick
     #[account(mut)]
-    pub tick_upper_state: Box<Account<'info, TickState>>,
+    pub tick_upper: Box<Account<'info, TickState>>,
 
     /// Stores init state for the lower tick
     #[account(mut)]
-    pub bitmap_lower_state: AccountLoader<'info, TickBitmapState>,
+    pub tick_bitmap_lower: AccountLoader<'info, TickBitmapState>,
 
     /// Stores init state for the upper tick
     #[account(mut)]
-    pub bitmap_upper_state: AccountLoader<'info, TickBitmapState>,
+    pub tick_bitmap_upper: AccountLoader<'info, TickBitmapState>,
 
     /// The latest observation state
     #[account(mut)]
-    pub last_observation_state: Box<Account<'info, ObservationState>>,
+    pub last_observation: Box<Account<'info, ObservationState>>,
 
     /// The destination token account for the collected amount_0
     #[account(
@@ -98,12 +98,12 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     let mut accounts = BurnParam {
         owner: &Signer::try_from(&procotol_position_owner)?,
         pool_state: &mut pool_state,
-        tick_lower_state: ctx.accounts.tick_lower_state.as_mut(),
-        tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),
-        bitmap_lower_state: &ctx.accounts.bitmap_lower_state,
-        bitmap_upper_state: &ctx.accounts.bitmap_upper_state,
-        procotol_position_state: ctx.accounts.protocol_position_state.as_mut(),
-        last_observation_state: ctx.accounts.last_observation_state.as_mut(),
+        tick_lower_state: ctx.accounts.tick_lower.as_mut(),
+        tick_upper_state: ctx.accounts.tick_upper.as_mut(),
+        bitmap_lower_state: &ctx.accounts.tick_bitmap_lower,
+        bitmap_upper_state: &ctx.accounts.tick_bitmap_upper,
+        procotol_position_state: ctx.accounts.protocol_position.as_mut(),
+        last_observation_state: ctx.accounts.last_observation.as_mut(),
     };
 
     let (decrease_amount_0, decrease_amount_1) =
@@ -150,7 +150,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     let updated_procotol_position = accounts.procotol_position_state;
     let fee_growth_inside_0_last_x64 = updated_procotol_position.fee_growth_inside_0_last;
     let fee_growth_inside_1_last_x64 = updated_procotol_position.fee_growth_inside_1_last;
-    let personal_position = &mut ctx.accounts.personal_position_state;
+    let personal_position = &mut ctx.accounts.personal_position;
 
     personal_position.token_fees_owed_0 = personal_position
         .token_fees_owed_0
@@ -179,7 +179,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     personal_position.liquidity = personal_position.liquidity.checked_sub(liquidity).unwrap();
 
     emit!(DecreaseLiquidityEvent {
-        position_nft_mint: personal_position.mint,
+        position_nft_mint: personal_position.nft_mint,
         liquidity,
         amount_0: decrease_amount_0,
         amount_1: decrease_amount_1

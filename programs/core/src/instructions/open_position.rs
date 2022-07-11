@@ -7,13 +7,14 @@ use anchor_lang::solana_program;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token;
 use anchor_spl::token::{Mint, Token, TokenAccount};
+use mpl_token_metadata::instruction::create_metadata_accounts_v2;
 use mpl_token_metadata::{instruction::create_metadata_accounts, state::Creator};
 use spl_token::instruction::AuthorityType;
 use std::ops::{Deref, DerefMut};
 
 pub struct MintParam<'b, 'info> {
     /// Pays to mint liquidity
-    pub minter: &'b Signer<'info>,
+    pub payer: &'b Signer<'info>,
 
     /// The token account spending token_0 to mint the position
     pub token_account_0: &'b mut Account<'info, TokenAccount>,
@@ -35,33 +36,33 @@ pub struct MintParam<'b, 'info> {
     pub pool_state: &'b mut Account<'info, PoolState>,
 
     /// The lower tick boundary of the position
-    pub tick_lower_state: &'b mut Account<'info, TickState>,
+    pub tick_lower: &'b mut Account<'info, TickState>,
 
     /// The upper tick boundary of the position
-    pub tick_upper_state: &'b mut Account<'info, TickState>,
+    pub tick_upper: &'b mut Account<'info, TickState>,
 
     /// The bitmap storing initialization state of the lower tick
-    pub bitmap_lower_state: &'b AccountLoader<'info, TickBitmapState>,
+    pub bitmap_lower: &'b AccountLoader<'info, TickBitmapState>,
 
     /// The bitmap storing initialization state of the upper tick
-    pub bitmap_upper_state: &'b AccountLoader<'info, TickBitmapState>,
+    pub bitmap_upper: &'b AccountLoader<'info, TickBitmapState>,
 
     /// The position into which liquidity is minted
-    pub procotol_position_state: &'b mut Account<'info, ProcotolPositionState>,
+    pub protocol_position: &'b mut Account<'info, ProcotolPositionState>,
 
     /// The program account for the most recent oracle observation, at index = pool.observation_index
-    pub last_observation_state: &'b mut Account<'info, ObservationState>,
+    pub last_observation: &'b mut Account<'info, ObservationState>,
 
     /// The SPL program to perform token transfers
     pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
-#[instruction(tick_lower: i32, tick_upper: i32,word_pos_lower:i16,word_pos_upper:i16)]
-pub struct CreatePosition<'info> {
+#[instruction(tick_lower_index: i32, tick_upper_index: i32,word_lower_index:i16,word_upper_index:i16)]
+pub struct OpenPosition<'info> {
     /// Pays to mint the position
     #[account(mut)]
-    pub minter: Signer<'info>,
+    pub payer: Signer<'info>,
 
     /// Receives the position NFT
     /// CHECK: This is not dangerous because we don't read or write from this account
@@ -76,7 +77,7 @@ pub struct CreatePosition<'info> {
         init,
         mint::decimals = 0,
         mint::authority = amm_config,
-        payer = minter
+        payer = payer
     )]
     pub position_nft_mint: Box<Account<'info, Mint>>,
 
@@ -85,7 +86,7 @@ pub struct CreatePosition<'info> {
         init,
         associated_token::mint = position_nft_mint,
         associated_token::authority = position_nft_owner,
-        payer = minter
+        payer = payer
     )]
     pub position_nft_account: Box<Account<'info, TokenAccount>>,
 
@@ -104,14 +105,14 @@ pub struct CreatePosition<'info> {
         seeds = [
             POSITION_SEED.as_bytes(),
             pool_state.key().as_ref(),
-            &tick_lower.to_be_bytes(),
-            &tick_upper.to_be_bytes(),
+            &tick_lower_index.to_be_bytes(),
+            &tick_upper_index.to_be_bytes(),
         ],
         bump,
-        payer = minter,
+        payer = payer,
         space = ProcotolPositionState::LEN
     )]
-    pub protocol_position_state: Box<Account<'info, ProcotolPositionState>>,
+    pub protocol_position: Box<Account<'info, ProcotolPositionState>>,
 
     /// Account to store data for the position's lower tick
     #[account(
@@ -119,13 +120,13 @@ pub struct CreatePosition<'info> {
         seeds = [
             TICK_SEED.as_bytes(),
             pool_state.key().as_ref(),
-            &tick_lower.to_be_bytes()
+            &tick_lower_index.to_be_bytes()
         ],
         bump,
-        payer = minter,
+        payer = payer,
         space = TickState::LEN
     )]
-    pub tick_lower_state: Box<Account<'info, TickState>>,
+    pub tick_lower: Box<Account<'info, TickState>>,
 
     /// Account to store data for the position's upper tick
     #[account(
@@ -133,31 +134,31 @@ pub struct CreatePosition<'info> {
         seeds = [
             TICK_SEED.as_bytes(),
             pool_state.key().as_ref(),
-            &tick_upper.to_be_bytes()
+            &tick_upper_index.to_be_bytes()
         ],
         bump,
-        payer = minter,
+        payer = payer,
         space = TickState::LEN
     )]
-    pub tick_upper_state: Box<Account<'info, TickState>>,
+    pub tick_upper: Box<Account<'info, TickState>>,
 
     /// CHECK: Account to mark the lower tick as initialized
     #[account(mut)]
-    pub bitmap_lower_state: UncheckedAccount<'info>,
+    pub tick_bitmap_lower: UncheckedAccount<'info>,
 
     /// CHECK:Account to store data for the position's upper tick
     #[account(mut)]
-    pub bitmap_upper_state: UncheckedAccount<'info>,
+    pub tick_bitmap_upper: UncheckedAccount<'info>,
 
     /// Metadata for the tokenized position
     #[account(
         init,
         seeds = [POSITION_SEED.as_bytes(), position_nft_mint.key().as_ref()],
         bump,
-        payer = minter,
+        payer = payer,
         space = PersonalPositionState::LEN
     )]
-    pub personal_position_state: Box<Account<'info, PersonalPositionState>>,
+    pub personal_position: Box<Account<'info, PersonalPositionState>>,
 
     /// The token account spending token_0 to mint the position
     #[account(
@@ -189,7 +190,7 @@ pub struct CreatePosition<'info> {
 
     /// The latest observation state
     #[account(mut)]
-    pub last_observation_state: Box<Account<'info, ObservationState>>,
+    pub last_observation: Box<Account<'info, ObservationState>>,
 
     /// Sysvar for token mint and ATA creation
     pub rent: Sysvar<'info, Rent>,
@@ -209,8 +210,8 @@ pub struct CreatePosition<'info> {
     pub metadata_program: UncheckedAccount<'info>,
 }
 
-pub fn create_position<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, CreatePosition<'info>>,
+pub fn open_position<'a, 'b, 'c, 'info>(
+    ctx: Context<'a, 'b, 'c, 'info, OpenPosition<'info>>,
     amount_0_desired: u64,
     amount_1_desired: u64,
     amount_0_min: u64,
@@ -222,32 +223,32 @@ pub fn create_position<'a, 'b, 'c, 'info>(
 ) -> Result<()> {
     assert!(tick_lower < tick_upper);
     assert!(word_pos_lower <= word_pos_upper);
-    if ctx.accounts.protocol_position_state.bump == 0 {
-        let position_account = &mut ctx.accounts.protocol_position_state;
-        position_account.bump = *ctx.bumps.get("protocol_position_state").unwrap();
+    if ctx.accounts.protocol_position.bump == 0 {
+        let position_account = &mut ctx.accounts.protocol_position;
+        position_account.bump = *ctx.bumps.get("protocol_position").unwrap();
     }
 
-    if ctx.accounts.tick_lower_state.bump == 0 {
-        let tick_state = ctx.accounts.tick_lower_state.as_mut();
+    if ctx.accounts.tick_lower.bump == 0 {
+        let tick_state = ctx.accounts.tick_lower.as_mut();
         tick_state.initialize(
-            *ctx.bumps.get("tick_lower_state").unwrap(),
+            *ctx.bumps.get("tick_lower").unwrap(),
             tick_lower,
             ctx.accounts.pool_state.tick_spacing,
         )?;
     }
 
-    if ctx.accounts.tick_upper_state.bump == 0 {
-        let tick_state = ctx.accounts.tick_upper_state.as_mut();
+    if ctx.accounts.tick_upper.bump == 0 {
+        let tick_state = ctx.accounts.tick_upper.as_mut();
         tick_state.initialize(
-            *ctx.bumps.get("tick_upper_state").unwrap(),
+            *ctx.bumps.get("tick_upper").unwrap(),
             tick_upper,
             ctx.accounts.pool_state.tick_spacing,
         )?;
     }
 
     let bitmap_lower_state = TickBitmapState::get_or_create_tick_bitmap(
-        ctx.accounts.minter.to_account_info(),
-        ctx.accounts.bitmap_lower_state.to_account_info(),
+        ctx.accounts.payer.to_account_info(),
+        ctx.accounts.tick_bitmap_lower.to_account_info(),
         ctx.accounts.system_program.to_account_info(),
         ctx.accounts.pool_state.key(),
         word_pos_lower,
@@ -256,12 +257,12 @@ pub fn create_position<'a, 'b, 'c, 'info>(
 
     let bitmap_upper_state = if word_pos_lower == word_pos_upper {
         AccountLoader::<TickBitmapState>::try_from(
-            &ctx.accounts.bitmap_upper_state.to_account_info(),
+            &ctx.accounts.tick_bitmap_upper.to_account_info(),
         )?
     } else {
         TickBitmapState::get_or_create_tick_bitmap(
-            ctx.accounts.minter.to_account_info(),
-            ctx.accounts.bitmap_upper_state.to_account_info(),
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.tick_bitmap_upper.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
             ctx.accounts.pool_state.key(),
             word_pos_upper,
@@ -271,16 +272,16 @@ pub fn create_position<'a, 'b, 'c, 'info>(
 
     // Validate addresses manually, as constraint checks are not applied to internal calls
     let pool_state_info = ctx.accounts.pool_state.to_account_info();
-    let tick_lower = ctx.accounts.tick_lower_state.tick;
-    let tick_upper = ctx.accounts.tick_upper_state.tick;
+    let tick_lower = ctx.accounts.tick_lower.tick;
+    let tick_upper = ctx.accounts.tick_upper.tick;
     require_keys_eq!(
-        *ctx.accounts.bitmap_lower_state.to_account_info().owner,
+        *ctx.accounts.tick_bitmap_lower.to_account_info().owner,
         crate::id()
     );
 
     // let aa = ctx.accounts.bitmap_lower_state.load_mut()?;
     let mut accounts = MintParam {
-        minter: &ctx.accounts.minter,
+        payer: &ctx.accounts.payer,
         token_account_0: ctx.accounts.token_account_0.as_mut(),
         token_account_1: ctx.accounts.token_account_1.as_mut(),
         token_vault_0: ctx.accounts.token_vault_0.as_mut(),
@@ -289,14 +290,14 @@ pub fn create_position<'a, 'b, 'c, 'info>(
             ctx.accounts.amm_config.to_account_info(),
         ),
         pool_state: ctx.accounts.pool_state.as_mut(),
-        tick_lower_state: ctx.accounts.tick_lower_state.as_mut(),
-        tick_upper_state: ctx.accounts.tick_upper_state.as_mut(),
+        tick_lower: ctx.accounts.tick_lower.as_mut(),
+        tick_upper: ctx.accounts.tick_upper.as_mut(),
         // bitmap_lower_state: &ctx.accounts.bitmap_lower_state,
         // bitmap_upper_state: &ctx.accounts.bitmap_upper_state,
-        bitmap_lower_state: &bitmap_lower_state,
-        bitmap_upper_state: &bitmap_upper_state,
-        procotol_position_state: ctx.accounts.protocol_position_state.as_mut(),
-        last_observation_state: ctx.accounts.last_observation_state.as_mut(),
+        bitmap_lower: &bitmap_lower_state,
+        bitmap_upper: &bitmap_upper_state,
+        protocol_position: ctx.accounts.protocol_position.as_mut(),
+        last_observation: ctx.accounts.last_observation.as_mut(),
         token_program: ctx.accounts.token_program.clone(),
     };
 
@@ -311,6 +312,10 @@ pub fn create_position<'a, 'b, 'c, 'info>(
         tick_upper,
     )?;
 
+    let seeds = [
+        &AMM_CONFIG_SEED.as_bytes(),
+        &[ctx.accounts.amm_config.bump] as &[u8],
+    ];
     // Mint the NFT
     token::mint_to(
         CpiContext::new_with_signer(
@@ -320,18 +325,17 @@ pub fn create_position<'a, 'b, 'c, 'info>(
                 to: ctx.accounts.position_nft_account.to_account_info().clone(),
                 authority: ctx.accounts.amm_config.to_account_info().clone(),
             },
-            &[&[&[ctx.accounts.amm_config.bump] as &[u8]]],
+            &[&seeds[..]],
         ),
         1,
     )?;
 
-    let seeds = [&[ctx.accounts.amm_config.bump] as &[u8]];
     let create_metadata_ix = create_metadata_accounts(
         ctx.accounts.metadata_program.key(),
         ctx.accounts.metadata_account.key(),
         ctx.accounts.position_nft_mint.key(),
         ctx.accounts.amm_config.key(),
-        ctx.accounts.minter.key(),
+        ctx.accounts.payer.key(),
         ctx.accounts.amm_config.key(),
         String::from("Raydium AMM V3 Positions"),
         String::from(""),
@@ -344,13 +348,15 @@ pub fn create_position<'a, 'b, 'c, 'info>(
         0,
         true,
         false,
+        // None,
+        // None
     );
     solana_program::program::invoke_signed(
         &create_metadata_ix,
         &[
             ctx.accounts.metadata_account.to_account_info().clone(),
             ctx.accounts.position_nft_mint.to_account_info().clone(),
-            ctx.accounts.minter.to_account_info().clone(),
+            ctx.accounts.payer.to_account_info().clone(),
             ctx.accounts.amm_config.to_account_info().clone(), // mint and update authority
             ctx.accounts.system_program.to_account_info().clone(),
             ctx.accounts.rent.to_account_info().clone(),
@@ -373,16 +379,16 @@ pub fn create_position<'a, 'b, 'c, 'info>(
     )?;
 
     // Write tokenized position metadata
-    let personal_position = &mut ctx.accounts.personal_position_state;
-    personal_position.bump = *ctx.bumps.get("personal_position_state").unwrap();
-    personal_position.mint = ctx.accounts.position_nft_mint.key();
+    let personal_position = &mut ctx.accounts.personal_position;
+    personal_position.bump = *ctx.bumps.get("personal_position").unwrap();
+    personal_position.nft_mint = ctx.accounts.position_nft_mint.key();
     personal_position.pool_id = pool_state_info.key();
 
     personal_position.tick_lower = tick_lower; // can read from core position
     personal_position.tick_upper = tick_upper;
     personal_position.liquidity = liquidity;
 
-    let updated_core_position = accounts.procotol_position_state;
+    let updated_core_position = accounts.protocol_position;
     personal_position.fee_growth_inside_0_last = updated_core_position.fee_growth_inside_0_last;
     personal_position.fee_growth_inside_1_last = updated_core_position.fee_growth_inside_1_last;
     personal_position.update_rewards(updated_core_position.reward_growth_inside)?;
@@ -457,37 +463,35 @@ pub fn mint<'b, 'info>(
     assert!(ctx.token_vault_0.key() == ctx.pool_state.token_vault_0);
     assert!(ctx.token_vault_1.key() == ctx.pool_state.token_vault_1);
     ctx.pool_state.validate_tick_address(
-        &ctx.tick_lower_state.key(),
-        ctx.tick_lower_state.bump,
-        ctx.tick_lower_state.tick,
+        &ctx.tick_lower.key(),
+        ctx.tick_lower.bump,
+        ctx.tick_lower.tick,
     )?;
     ctx.pool_state.validate_tick_address(
-        &ctx.tick_upper_state.key(),
-        ctx.tick_upper_state.bump,
-        ctx.tick_upper_state.tick,
+        &ctx.tick_upper.key(),
+        ctx.tick_upper.bump,
+        ctx.tick_upper.tick,
     )?;
     ctx.pool_state.validate_bitmap_address(
-        &ctx.bitmap_lower_state.key(),
-        ctx.bitmap_lower_state.load()?.bump,
-        tick_bitmap::position(ctx.tick_lower_state.tick / ctx.pool_state.tick_spacing as i32)
-            .word_pos,
+        &ctx.bitmap_lower.key(),
+        ctx.bitmap_lower.load()?.bump,
+        tick_bitmap::position(ctx.tick_lower.tick / ctx.pool_state.tick_spacing as i32).word_pos,
     )?;
     ctx.pool_state.validate_bitmap_address(
-        &ctx.bitmap_upper_state.key(),
-        ctx.bitmap_upper_state.load()?.bump,
-        tick_bitmap::position(ctx.tick_upper_state.tick / ctx.pool_state.tick_spacing as i32)
-            .word_pos,
+        &ctx.bitmap_upper.key(),
+        ctx.bitmap_upper.load()?.bump,
+        tick_bitmap::position(ctx.tick_upper.tick / ctx.pool_state.tick_spacing as i32).word_pos,
     )?;
 
     ctx.pool_state.validate_protocol_position_address(
-        &ctx.procotol_position_state.key(),
-        ctx.procotol_position_state.bump,
-        ctx.tick_lower_state.tick,
-        ctx.tick_upper_state.tick,
+        &ctx.protocol_position.key(),
+        ctx.protocol_position.bump,
+        ctx.tick_lower.tick,
+        ctx.tick_upper.tick,
     )?;
     ctx.pool_state.validate_observation_address(
-        &ctx.last_observation_state.key(),
-        ctx.last_observation_state.bump,
+        &ctx.last_observation.key(),
+        ctx.last_observation.bump,
         false,
     )?;
 
@@ -496,12 +500,12 @@ pub fn mint<'b, 'info>(
     let (amount_0_int, amount_1_int) = _modify_position(
         i128::try_from(liquidity).unwrap(),
         ctx.pool_state,
-        ctx.procotol_position_state,
-        ctx.tick_lower_state,
-        ctx.tick_upper_state,
-        ctx.bitmap_lower_state,
-        ctx.bitmap_upper_state,
-        ctx.last_observation_state,
+        ctx.protocol_position,
+        ctx.tick_lower,
+        ctx.tick_upper,
+        ctx.bitmap_lower,
+        ctx.bitmap_upper,
+        ctx.last_observation,
         remaining_accounts,
     )?;
     // msg!(
@@ -514,7 +518,7 @@ pub fn mint<'b, 'info>(
 
     if amount_0 > 0 {
         transfer_from_user_to_pool_vault(
-            &ctx.minter,
+            &ctx.payer,
             &ctx.token_account_0,
             &ctx.token_vault_0,
             &ctx.token_program,
@@ -523,7 +527,7 @@ pub fn mint<'b, 'info>(
     }
     if amount_1 > 0 {
         transfer_from_user_to_pool_vault(
-            &ctx.minter,
+            &ctx.payer,
             &ctx.token_account_1,
             &ctx.token_vault_1,
             &ctx.token_program,
@@ -532,10 +536,10 @@ pub fn mint<'b, 'info>(
     }
     emit!(CreatePersonalPositionEvent {
         pool_state: pool_state_info.key(),
-        minter: ctx.minter.key(),
+        minter: ctx.payer.key(),
         nft_owner: ctx.protocol_position_owner.key(),
-        tick_lower: ctx.tick_lower_state.tick,
-        tick_upper: ctx.tick_upper_state.tick,
+        tick_lower: ctx.tick_lower.tick,
+        tick_upper: ctx.tick_upper.tick,
         liquidity: liquidity,
         deposit_amount_0: amount_0,
         deposit_amount_1: amount_1,

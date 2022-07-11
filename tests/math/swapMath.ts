@@ -1,6 +1,6 @@
 import JSBI from 'jsbi'
 import { FeeAmount } from '../entities/fee'
-import { NEGATIVE_ONE, ZERO } from '../constants'
+import { NEGATIVE_ONE, ZERO } from './constants'
 import { FullMath } from './fullMath'
 import { SqrtPriceMath } from './sqrtPriceMath'
 

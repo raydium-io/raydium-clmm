@@ -1,5 +1,9 @@
 use crate::error::ErrorCode;
 use anchor_lang::prelude::*;
+
+
+pub const AMM_CONFIG_SEED: &str = "amm_config";
+
 /// Holds the current owner of the factory
 ///
 /// # The owner can

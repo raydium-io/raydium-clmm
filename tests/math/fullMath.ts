@@ -1,6 +1,7 @@
+import { BN } from '@project-serum/anchor'
 import JSBI from 'jsbi'
 import invariant from 'tiny-invariant'
-import { ONE, ZERO } from '../constants'
+import { ONE, Q64, ZERO } from './constants'
 
 export abstract class FullMath {
   /**
@@ -25,5 +26,11 @@ export abstract class FullMath {
     invariant(JSBI.notEqual(denominator, ZERO), 'DIVISION_BY_0')
     const product = JSBI.multiply(a, b)
     return JSBI.divide(JSBI.add(product, JSBI.subtract(denominator, ONE)), denominator)
+  }
+
+  public static x64ToNumber(num: BN): number {
+      const baseX64 = new BN(1).shln(64)
+      let a = num.shrn(64)
+      (num % baseX64) /  baseX64
   }
 }
