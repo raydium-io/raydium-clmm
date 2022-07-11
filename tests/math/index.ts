@@ -1,5 +1,4 @@
-export * from './fullMath'
-export * from './tickMath'
+export * from './math'
 export * from './liquidityMath'
 export * from './swapMath'
 export * from './sqrtPriceMath'

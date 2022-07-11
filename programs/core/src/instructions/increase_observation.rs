@@ -8,6 +8,7 @@ use std::ops::DerefMut;
 #[derive(Accounts)]
 pub struct IncreaseObservation<'info> {
     /// Pays to increase storage slots for oracle observations
+    #[account(mut)]
     pub payer: Signer<'info>,
 
     /// Increase observation slots for this pool
@@ -38,7 +39,9 @@ pub fn increase_observation_cardinality_next<'a, 'b, 'c, 'info>(
             Pubkey::create_program_address(&observation_account_seeds[..], &ctx.program_id)
                 .unwrap()
         );
-
+        msg!("ctx.remaining_accounts[i].key():{}, Pubkey::create_program_address(&observation_account_seeds[..], &ctx.program_id)
+        .unwrap():{} ",ctx.remaining_accounts[i].key(), Pubkey::create_program_address(&observation_account_seeds[..], &ctx.program_id)
+        .unwrap());
         let space = 8 + size_of::<ObservationState>();
         let rent = Rent::get()?;
         let lamports = rent.minimum_balance(space);

@@ -8,6 +8,7 @@ use std::ops::DerefMut;
 #[derive(Accounts)]
 pub struct ResetSqrtPrice<'info> {
     /// Address paying to create the pool
+    #[account(address = crate::admin::id())]
     pub owner: Signer<'info>,
     /// Which config the pool belongs to
     pub amm_config: Box<Account<'info, AmmConfig>>,
@@ -22,10 +23,6 @@ pub struct ResetSqrtPrice<'info> {
 
 pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price_x64: u128) -> Result<()> {
     let pool_state = ctx.accounts.pool_state.deref_mut();
-
-    ctx.accounts
-        .amm_config
-        .is_authorized(&ctx.accounts.owner, pool_state.owner)?;
 
     if ctx.accounts.token_vault_0.amount > 0 || ctx.accounts.token_vault_1.amount > 0 {
         return err!(ErrorCode::NotApproved);

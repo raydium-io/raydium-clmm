@@ -318,7 +318,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         tick_lower,
         tick_upper,
     )?;
-
+    msg!("ctx.accounts.amm_config:{}, bump {}", ctx.accounts.amm_config.key(), ctx.accounts.amm_config.bump);
     let seeds = [
         &AMM_CONFIG_SEED.as_bytes(),
         &[ctx.accounts.amm_config.bump] as &[u8],
