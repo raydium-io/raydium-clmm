@@ -4,13 +4,13 @@ anchor_version = "0.24.2"
 seeds = false
 
 [programs.localnet]
-amm_core = "EwgWHHfU1rbczvaJzZR8J3hB4J6yup3ZY6uCP5FCgxKU"
+amm_core = "Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3"
 
 [programs.devnet]
-amm_core = "EwgWHHfU1rbczvaJzZR8J3hB4J6yup3ZY6uCP5FCgxKU"
+amm_core = "Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3"
 
 [programs.mainnet]
-amm_core = "EwgWHHfU1rbczvaJzZR8J3hB4J6yup3ZY6uCP5FCgxKU"
+amm_core = "Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3"
 
 [registry]
 url = "https://github.com/raydium-io/raydium-amm-v3"

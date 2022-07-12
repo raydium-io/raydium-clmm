@@ -60,7 +60,7 @@ pub struct CreatePool<'info> {
     )]
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
     /// Stores the desired fee for the pool
-    pub fee_state: Account<'info, FeeState>,
+    pub fee_state:  Box<Account<'info, FeeState>>,
 
     /// Initialize an account to store oracle observations
     #[account(
@@ -74,7 +74,7 @@ pub struct CreatePool<'info> {
         payer = pool_creator,
         space = 8 + size_of::<ObservationState>()
     )]
-    pub initial_first_observation: Account<'info, ObservationState>,
+    pub initial_first_observation:  Box<Account<'info, ObservationState>>,
     /// Spl token program
     pub token_program: Program<'info, Token>,
     /// To create a new program account

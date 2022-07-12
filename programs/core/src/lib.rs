@@ -12,7 +12,7 @@ use anchor_lang::prelude::*;
 use instructions::*;
 use states::*;
 
-declare_id!("EwgWHHfU1rbczvaJzZR8J3hB4J6yup3ZY6uCP5FCgxKU");
+declare_id!("Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3");
 
 pub mod admin {
     use anchor_lang::prelude::declare_id;

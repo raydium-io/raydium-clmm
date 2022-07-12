@@ -330,7 +330,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         1,
     )?;
 
-    let create_metadata_ix = create_metadata_accounts(
+    let create_metadata_ix = create_metadata_accounts_v2(
         ctx.accounts.metadata_program.key(),
         ctx.accounts.metadata_account.key(),
         ctx.accounts.position_nft_mint.key(),
@@ -348,8 +348,8 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         0,
         true,
         false,
-        // None,
-        // None
+        None,
+        None
     );
     solana_program::program::invoke_signed(
         &create_metadata_ix,
