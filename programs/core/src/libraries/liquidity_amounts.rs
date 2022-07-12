@@ -25,12 +25,19 @@ pub fn get_liquidity_for_amount_0(
         std::mem::swap(&mut sqrt_ratio_a_x64, &mut sqrt_ratio_b_x64);
     };
     let intermediate = U128::from(sqrt_ratio_a_x64)
-        .mul_div_floor( U128::from(sqrt_ratio_b_x64),  U128::from(fixed_point_64::Q64))
+        .mul_div_floor(
+            U128::from(sqrt_ratio_b_x64),
+            U128::from(fixed_point_64::Q64),
+        )
         .unwrap();
 
-        U128::from(amount_0)
-        .mul_div_floor(intermediate,  U128::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64))
-        .unwrap().as_u128()
+    U128::from(amount_0)
+        .mul_div_floor(
+            intermediate,
+            U128::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),
+        )
+        .unwrap()
+        .as_u128()
 }
 
 /// Computes the amount of liquidity received for a given amount of token_1 and price range
@@ -53,8 +60,12 @@ pub fn get_liquidity_for_amount_1(
     };
 
     U128::from(amount_1)
-        .mul_div_floor( U128::from(fixed_point_64::Q64),  U128::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64))
-        .unwrap().as_u128()
+        .mul_div_floor(
+            U128::from(fixed_point_64::Q64),
+            U128::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),
+        )
+        .unwrap()
+        .as_u128()
 }
 
 /// Computes the maximum amount of liquidity received for a given amount of token_0, token_1, the current
@@ -147,8 +158,12 @@ pub fn get_amount_1_for_liquidity(
     };
 
     U128::from(liquidity)
-        .mul_div_floor( U128::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),  U128::from(fixed_point_64::Q64))
-        .unwrap().as_u64()
+        .mul_div_floor(
+            U128::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),
+            U128::from(fixed_point_64::Q64),
+        )
+        .unwrap()
+        .as_u64()
 }
 
 /// Computes the token_0 and token_1 value for a given amount of liquidity, the current

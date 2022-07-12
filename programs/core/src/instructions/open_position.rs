@@ -7,8 +7,7 @@ use anchor_lang::solana_program;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token;
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use mpl_token_metadata::instruction::create_metadata_accounts_v2;
-use mpl_token_metadata::{instruction::create_metadata_accounts, state::Creator};
+use mpl_token_metadata::{instruction::create_metadata_accounts_v2, state::Creator};
 use spl_token::instruction::AuthorityType;
 use std::ops::{Deref, DerefMut};
 
@@ -52,6 +51,9 @@ pub struct MintParam<'b, 'info> {
 
     /// The program account for the most recent oracle observation, at index = pool.observation_index
     pub last_observation: &'b mut Account<'info, ObservationState>,
+
+    /// The next observation state
+    pub next_observation: &'b mut Account<'info, ObservationState>,
 
     /// The SPL program to perform token transfers
     pub token_program: Program<'info, Token>,
@@ -192,6 +194,10 @@ pub struct OpenPosition<'info> {
     #[account(mut)]
     pub last_observation: Box<Account<'info, ObservationState>>,
 
+    /// The next observation state
+    #[account(mut)]
+    pub next_observation: Box<Account<'info, ObservationState>>,
+
     /// Sysvar for token mint and ATA creation
     pub rent: Sysvar<'info, Rent>,
 
@@ -298,6 +304,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         bitmap_upper: &bitmap_upper_state,
         protocol_position: ctx.accounts.protocol_position.as_mut(),
         last_observation: ctx.accounts.last_observation.as_mut(),
+        next_observation: ctx.accounts.next_observation.as_mut(),
         token_program: ctx.accounts.token_program.clone(),
     };
 
@@ -349,7 +356,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         true,
         false,
         None,
-        None
+        None,
     );
     solana_program::program::invoke_signed(
         &create_metadata_ix,
@@ -494,7 +501,6 @@ pub fn mint<'b, 'info>(
         ctx.last_observation.bump,
         false,
     )?;
-
     assert!(liquidity > 0);
 
     let (amount_0_int, amount_1_int) = _modify_position(
@@ -506,6 +512,7 @@ pub fn mint<'b, 'info>(
         ctx.bitmap_lower,
         ctx.bitmap_upper,
         ctx.last_observation,
+        ctx.next_observation,
         remaining_accounts,
     )?;
     // msg!(
@@ -577,7 +584,8 @@ pub fn _modify_position<'info>(
     bitmap_lower: &AccountLoader<'info, TickBitmapState>,
     bitmap_upper: &AccountLoader<'info, TickBitmapState>,
     last_observation_state: &mut Account<'info, ObservationState>,
-    remaining_accounts: &[AccountInfo<'info>],
+    next_observation_state: &mut Account<'info, ObservationState>,
+    _remaining_accounts: &[AccountInfo<'info>],
 ) -> Result<(i64, i64)> {
     crate::check_ticks(tick_lower_state.tick, tick_upper_state.tick)?;
 
@@ -614,30 +622,25 @@ pub fn _modify_position<'info>(
             let partition_current_timestamp = timestamp / 14;
             let partition_last_timestamp = last_observation_state.block_timestamp / 14;
 
-            let mut next_observation_state;
-            let new_observation = if partition_current_timestamp > partition_last_timestamp {
-                next_observation_state =
-                    Account::<ObservationState>::try_from(&remaining_accounts[0])?;
-                // let next_observation = next_observation_state.deref_mut();
+            let observation = if partition_current_timestamp > partition_last_timestamp {
                 pool_state.validate_observation_address(
                     &next_observation_state.key(),
                     next_observation_state.bump,
                     true,
                 )?;
-
                 next_observation_state.deref_mut()
             } else {
                 last_observation_state.deref_mut()
             };
 
-            pool_state.observation_cardinality_next = new_observation.update(
+            pool_state.observation_cardinality_next = observation.update(
                 timestamp,
                 pool_state.tick,
                 pool_state.liquidity,
                 pool_state.observation_cardinality,
                 pool_state.observation_cardinality_next,
             );
-            pool_state.observation_index = new_observation.index;
+            pool_state.observation_index = observation.index;
 
             // Both Δtoken_0 and Δtoken_1 will be needed in current price
             amount_0 = sqrt_price_math::get_amount_0_delta_signed(

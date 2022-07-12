@@ -52,10 +52,7 @@ pub fn create_or_allocate_account<'a>(
     Ok(())
 }
 
-pub fn close_account<'info>(
-    from: &AccountInfo<'info>,
-    to: &AccountInfo<'info>,
-) -> Result<()> {
+pub fn close_account<'info>(from: &AccountInfo<'info>, to: &AccountInfo<'info>) -> Result<()> {
     // let cpi_accounts = system_program::Transfer {
     //     from: from.to_account_info(),
     //     to: to.clone(),
@@ -67,6 +64,6 @@ pub fn close_account<'info>(
     let from_lamports = from.lamports();
     **from.lamports.borrow_mut() = 0;
     **to.lamports.borrow_mut() = to.lamports().checked_add(from_lamports).unwrap();
-    
+
     Ok(())
 }

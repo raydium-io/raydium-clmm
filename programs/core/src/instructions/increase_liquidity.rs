@@ -1,5 +1,5 @@
 use super::{add_liquidity, MintParam};
-use crate::libraries::{fixed_point_64, full_math::MulDiv, big_num::U128};
+use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::states::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
@@ -7,7 +7,13 @@ use anchor_spl::token::{Token, TokenAccount};
 #[derive(Accounts)]
 pub struct IncreaseLiquidity<'info> {
     /// Pays to mint the position
-    pub payer: Signer<'info>,
+    pub nft_owner: Signer<'info>,
+
+    /// The token account for the tokenized position
+    #[account(
+        constraint = nft_account.mint == personal_position.nft_mint
+    )]
+    pub nft_account: Box<Account<'info, TokenAccount>>,
 
     /// Authority PDA for the NFT mint
     pub amm_config: Account<'info, AmmConfig>,
@@ -72,6 +78,9 @@ pub struct IncreaseLiquidity<'info> {
     #[account(mut)]
     pub last_observation: Box<Account<'info, ObservationState>>,
 
+    /// The next observation state
+    #[account(mut)]
+    pub next_observation: Box<Account<'info, ObservationState>>,
     /// Program to create mint account and mint tokens
     pub token_program: Program<'info, Token>,
 }
@@ -86,7 +95,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     let tick_lower = ctx.accounts.tick_lower.tick;
     let tick_upper = ctx.accounts.tick_upper.tick;
     let mut accounts = MintParam {
-        payer: &ctx.accounts.payer,
+        payer: &ctx.accounts.nft_owner,
         token_account_0: ctx.accounts.token_account_0.as_mut(),
         token_account_1: ctx.accounts.token_account_1.as_mut(),
         token_vault_0: ctx.accounts.token_vault_0.as_mut(),
@@ -101,6 +110,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         bitmap_upper: &ctx.accounts.tick_bitmap_upper,
         protocol_position: ctx.accounts.protocol_position.as_mut(),
         last_observation: ctx.accounts.last_observation.as_mut(),
+        next_observation: ctx.accounts.next_observation.as_mut(),
         token_program: ctx.accounts.token_program.clone(),
     };
 
@@ -124,20 +134,32 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     personal_position.token_fees_owed_0 = personal_position
         .token_fees_owed_0
         .checked_add(
-            U128::from(fee_growth_inside_0_last_x64
-                .saturating_sub(personal_position.fee_growth_inside_0_last))
-                .mul_div_floor( U128::from(personal_position.liquidity),  U128::from(fixed_point_64::Q64))
-                .unwrap().as_u64(),
+            U128::from(
+                fee_growth_inside_0_last_x64
+                    .saturating_sub(personal_position.fee_growth_inside_0_last),
+            )
+            .mul_div_floor(
+                U128::from(personal_position.liquidity),
+                U128::from(fixed_point_64::Q64),
+            )
+            .unwrap()
+            .as_u64(),
         )
         .unwrap();
 
     personal_position.token_fees_owed_1 = personal_position
         .token_fees_owed_1
         .checked_add(
-            U128::from(fee_growth_inside_1_last_x64
-                .saturating_sub(personal_position.fee_growth_inside_1_last))
-                .mul_div_floor( U128::from(personal_position.liquidity),  U128::from(fixed_point_64::Q64))
-                .unwrap().as_u64(),
+            U128::from(
+                fee_growth_inside_1_last_x64
+                    .saturating_sub(personal_position.fee_growth_inside_1_last),
+            )
+            .mul_div_floor(
+                U128::from(personal_position.liquidity),
+                U128::from(fixed_point_64::Q64),
+            )
+            .unwrap()
+            .as_u64(),
         )
         .unwrap();
 

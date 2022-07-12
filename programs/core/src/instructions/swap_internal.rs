@@ -37,6 +37,9 @@ pub struct SwapContext<'b, 'info> {
 
     /// The program account for the most recent oracle observation
     pub last_observation_state: &'b mut Box<Account<'info, ObservationState>>,
+
+    /// The program account for the most recent oracle observation
+    pub next_observation_state: &'b mut Box<Account<'info, ObservationState>>,
 }
 
 pub struct SwapCache {
@@ -381,16 +384,13 @@ pub fn swap_internal<'b, 'info>(
     if state.tick != ctx.pool_state.tick {
         // use the next observation account and update pool observation index if block time falls
         // in another partition
-        let mut next_observation_state;
         let new_observation = if partition_current_timestamp > partition_last_timestamp {
-            next_observation_state =
-                Account::<ObservationState>::try_from(remaining_accounts_iter.next().unwrap())?;
             ctx.pool_state.validate_observation_address(
-                &next_observation_state.key(),
-                next_observation_state.bump,
+                &ctx.next_observation_state.key(),
+                ctx.next_observation_state.bump,
                 true,
             )?;
-            next_observation_state.deref_mut()
+            ctx.next_observation_state.deref_mut()
         } else {
             latest_observation
         };

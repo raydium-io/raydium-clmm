@@ -60,7 +60,6 @@ pub fn compute_swap_step(
                 liquidity,
                 true,
             )
-          
         } else {
             sqrt_price_math::get_amount_1_delta_unsigned(
                 sqrt_ratio_current_x64,

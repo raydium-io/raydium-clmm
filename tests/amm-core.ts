@@ -253,7 +253,7 @@ describe("amm-core", async () => {
       TOKEN_PROGRAM_ID
     );
 
-    if (token0.publicKey.toString() > token1.publicKey.toString()) {
+    if (token0.publicKey > token1.publicKey) {
       // swap token mints
       console.log("Swap tokens for A");
       const temp = token0;
@@ -267,7 +267,7 @@ describe("amm-core", async () => {
     console.log("Token 0", token0.publicKey.toString());
     console.log("Token 1", token1.publicKey.toString());
 
-    while (token1.publicKey.toString() >= token2.publicKey.toString()) {
+    while (token1.publicKey >= token2.publicKey) {
       token2 = await Token.createMint(
         connection,
         mintAuthority,
@@ -279,7 +279,7 @@ describe("amm-core", async () => {
     }
     console.log("Token 2", token2.publicKey.toString());
   });
-  
+
   it("creates token accounts for position minter and airdrops to them", async () => {
     minterWallet0 = await token0.createAssociatedTokenAccount(owner);
     minterWallet1 = await token1.createAssociatedTokenAccount(owner);
@@ -1981,6 +1981,7 @@ describe("amm-core", async () => {
           tokenVault0: vaultA0,
           tokenVault1: vaultA1,
           lastObservation: lastObservationAState,
+          nextObservation: nextObservationAState,
           personalPosition: personalPositionAState,
           systemProgram: SystemProgram.programId,
           rent: web3.SYSVAR_RENT_PUBKEY,
@@ -1988,13 +1989,7 @@ describe("amm-core", async () => {
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
           metadataProgram: metaplex.programs.metadata.MetadataProgram.PUBKEY,
         })
-        .remainingAccounts([
-          {
-            pubkey: nextObservationAState,
-            isSigner: false,
-            isWritable: true,
-          },
-        ])
+        .remainingAccounts([])
         .signers([nftMintAKeypair])
         .rpc();
       console.log("create position, tx:", tx);
@@ -2263,7 +2258,8 @@ describe("amm-core", async () => {
         amount1Minimum,
         {
           accounts: {
-            payer: owner,
+            nftOwner: owner,
+            nftAccount: positionANftAccount,
             ammConfig,
             poolState: poolAState,
             protocolPosition: protocolPositionAState,
@@ -2276,16 +2272,11 @@ describe("amm-core", async () => {
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
             lastObservation: lastObservationAState,
+            nextObservation: nextObservationAState,
             personalPosition: personalPositionAState,
             tokenProgram: TOKEN_PROGRAM_ID,
           },
-          remainingAccounts: [
-            {
-              pubkey: nextObservationAState,
-              isSigner: false,
-              isWritable: true,
-            },
-          ],
+          remainingAccounts: [],
         }
       );
       console.log("increaseLiquidity tx: ", tx);
@@ -2440,7 +2431,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.decreaseLiquidity(liquidity, new BN(0), amount1Desired, {
           accounts: {
-            ownerOrDelegate: notOwner.publicKey,
+            nftOwner: notOwner.publicKey,
             nftAccount: positionANftAccount,
             personalPosition: personalPositionAState,
             ammConfig,
@@ -2451,19 +2442,14 @@ describe("amm-core", async () => {
             tickBitmapLower: bitmapLowerAState,
             tickBitmapUpper: bitmapUpperAState,
             lastObservation: lastObservationAState,
+            nextObservation: nextObservationAState,
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
             recipientTokenAccount0: minterWallet0,
             recipientTokenAccount1: minterWallet1,
             tokenProgram: TOKEN_PROGRAM_ID,
           },
-          remainingAccounts: [
-            {
-              pubkey: nextObservationAState,
-              isSigner: false,
-              isWritable: true,
-            },
-          ],
+          remainingAccounts: [],
         })
       ).to.be.rejectedWith(Error);
     });
@@ -2476,7 +2462,7 @@ describe("amm-core", async () => {
           new BN(1_000_000), // 999_999 available
           {
             accounts: {
-              ownerOrDelegate: owner,
+              nftOwner: owner,
               nftAccount: positionANftAccount,
               personalPosition: personalPositionAState,
               ammConfig,
@@ -2487,19 +2473,14 @@ describe("amm-core", async () => {
               tickBitmapLower: bitmapLowerAState,
               tickBitmapUpper: bitmapUpperAState,
               lastObservation: lastObservationAState,
+              nextObservation: nextObservationAState,
               tokenVault0: vaultA0,
               tokenVault1: vaultA1,
               recipientTokenAccount0: minterWallet0,
               recipientTokenAccount1: minterWallet1,
               tokenProgram: TOKEN_PROGRAM_ID,
             },
-            remainingAccounts: [
-              {
-                pubkey: nextObservationAState,
-                isSigner: false,
-                isWritable: true,
-              },
-            ],
+            remainingAccounts: [],
           }
         )
       ).to.be.rejectedWith(Error);
@@ -2532,7 +2513,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.decreaseLiquidity(liquidity, new BN(0), amount1Desired, {
           accounts: {
-            ownerOrDelegate: owner,
+            nftOwner: owner,
             nftAccount: positionANftAccount, // no balance
             personalPosition: personalPositionAState,
             ammConfig,
@@ -2543,19 +2524,14 @@ describe("amm-core", async () => {
             tickBitmapLower: bitmapLowerAState,
             tickBitmapUpper: bitmapUpperAState,
             lastObservation: lastObservationAState,
+            nextObservation: nextObservationAState,
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
             recipientTokenAccount0: minterWallet0,
             recipientTokenAccount1: minterWallet1,
             tokenProgram: TOKEN_PROGRAM_ID,
           },
-          remainingAccounts: [
-            {
-              pubkey: nextObservationAState,
-              isSigner: false,
-              isWritable: true,
-            },
-          ],
+          remainingAccounts: [],
         })
       ).to.be.rejectedWith(Error);
 
@@ -2631,7 +2607,7 @@ describe("amm-core", async () => {
         amount1Desired,
         {
           accounts: {
-            ownerOrDelegate: owner,
+            nftOwner: owner,
             nftAccount: positionANftAccount,
             personalPosition: personalPositionAState,
             ammConfig,
@@ -2642,19 +2618,14 @@ describe("amm-core", async () => {
             tickBitmapLower: bitmapLowerAState,
             tickBitmapUpper: bitmapUpperAState,
             lastObservation: lastObservationAState,
+            nextObservation: nextObservationAState,
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
             recipientTokenAccount0: minterWallet0,
             recipientTokenAccount1: minterWallet1,
             tokenProgram: TOKEN_PROGRAM_ID,
           },
-          remainingAccounts: [
-            {
-              pubkey: nextObservationAState,
-              isSigner: false,
-              isWritable: true,
-            },
-          ],
+          remainingAccounts: [],
         }
       );
 
@@ -2741,7 +2712,7 @@ describe("amm-core", async () => {
         new BN(0),
         {
           accounts: {
-            ownerOrDelegate: mintAuthority.publicKey,
+            nftOwner: mintAuthority.publicKey,
             nftAccount: positionANftAccount,
             personalPosition: personalPositionAState,
             ammConfig,
@@ -2752,19 +2723,14 @@ describe("amm-core", async () => {
             tickBitmapLower: bitmapLowerAState,
             tickBitmapUpper: bitmapUpperAState,
             lastObservation: lastObservationAState,
+            nextObservation: nextObservationAState,
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
             recipientTokenAccount0: minterWallet0,
             recipientTokenAccount1: minterWallet1,
             tokenProgram: TOKEN_PROGRAM_ID,
           },
-          remainingAccounts: [
-            {
-              pubkey: nextObservationAState,
-              isSigner: false,
-              isWritable: true,
-            },
-          ],
+          remainingAccounts: [],
         }
       );
       await expect(
@@ -2774,21 +2740,21 @@ describe("amm-core", async () => {
     });
 
     it("burn liquidity as the delegated authority", async () => {
-      const approveTx = new web3.Transaction();
-      approveTx.recentBlockhash = (
-        await connection.getRecentBlockhash()
-      ).blockhash;
-      approveTx.add(
-        Token.createApproveInstruction(
-          TOKEN_PROGRAM_ID,
-          positionANftAccount,
-          mintAuthority.publicKey,
-          owner,
-          [],
-          1
-        )
-      );
-      await anchor.getProvider().send(approveTx);
+      // const approveTx = new web3.Transaction();
+      // approveTx.recentBlockhash = (
+      //   await connection.getRecentBlockhash()
+      // ).blockhash;
+      // approveTx.add(
+      //   Token.createApproveInstruction(
+      //     TOKEN_PROGRAM_ID,
+      //     positionANftAccount,
+      //     mintAuthority.publicKey,
+      //     owner,
+      //     [],
+      //     1
+      //   )
+      // );
+      // await anchor.getProvider().send(approveTx);
 
       const recipientWallet0BalanceBefore = await token0.getAccountInfo(
         minterWallet0
@@ -2803,7 +2769,8 @@ describe("amm-core", async () => {
       const tx = await program.methods
         .decreaseLiquidity(new BN(1_000_000), new BN(0), new BN(0))
         .accounts({
-          ownerOrDelegate: mintAuthority.publicKey,
+          // nftOwner: mintAuthority.publicKey,
+          nftOwner: owner,
           nftAccount: positionANftAccount,
           personalPosition: personalPositionAState,
           ammConfig,
@@ -2814,20 +2781,15 @@ describe("amm-core", async () => {
           tickBitmapLower: bitmapLowerAState,
           tickBitmapUpper: bitmapUpperAState,
           lastObservation: lastObservationAState,
+          nextObservation: nextObservationAState,
           tokenVault0: vaultA0,
           tokenVault1: vaultA1,
           recipientTokenAccount0: minterWallet0,
           recipientTokenAccount1: minterWallet1,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
-        .remainingAccounts([
-          {
-            pubkey: nextObservationAState,
-            isSigner: false,
-            isWritable: true,
-          },
-        ])
-        .signers([mintAuthority])
+        .remainingAccounts([])
+        .signers([])
         .rpc();
 
       const personalPositionData =
@@ -2931,7 +2893,7 @@ describe("amm-core", async () => {
         new BN(0),
         {
           accounts: {
-            ownerOrDelegate: mintAuthority.publicKey,
+            nftOwner: mintAuthority.publicKey,
             nftAccount: positionANftAccount,
             personalPosition: personalPositionAState,
             ammConfig,
@@ -2942,19 +2904,14 @@ describe("amm-core", async () => {
             tickBitmapLower: bitmapLowerAState,
             tickBitmapUpper: bitmapUpperAState,
             lastObservation: lastObservationAState,
+            nextObservation: nextObservationAState,
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
             recipientTokenAccount0: minterWallet0,
             recipientTokenAccount1: minterWallet1,
             tokenProgram: TOKEN_PROGRAM_ID,
           },
-          remainingAccounts: [
-            {
-              pubkey: nextObservationAState,
-              isSigner: false,
-              isWritable: true,
-            },
-          ],
+          remainingAccounts: [],
         }
       );
       // TODO check for 'Not approved' error
@@ -2991,14 +2948,10 @@ describe("amm-core", async () => {
               inputVault: vaultA0,
               outputVault: vaultA1,
               lastObservation: lastObservationAState,
+              nextObservation: nextObservationAState,
               tokenProgram: TOKEN_PROGRAM_ID,
             },
             remainingAccounts: [
-              {
-                pubkey: nextObservationAState,
-                isSigner: false,
-                isWritable: true,
-              },
               {
                 pubkey: bitmapLowerAState,
                 isSigner: false,
@@ -3089,16 +3042,10 @@ describe("amm-core", async () => {
             inputVault: vaultA0,
             outputVault: vaultA1,
             lastObservation: lastObservationAState,
+            nextObservation: nextObservationAState,
             tokenProgram: TOKEN_PROGRAM_ID,
           },
-          remainingAccounts: [
-            ...bitmapAndTickAccounts,
-            {
-              pubkey: nextObservationAState,
-              isSigner: false,
-              isWritable: true,
-            },
-          ],
+          remainingAccounts: [...bitmapAndTickAccounts],
         }
       );
       console.log("exactInputSingle, tx: ", tx);
@@ -3215,16 +3162,10 @@ describe("amm-core", async () => {
           inputVault: vaultA0,
           outputVault: vaultA1,
           lastObservation: lastObservationAState,
+          nextObservation: nextObservationAState,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
-        .remainingAccounts([
-          ...bitmapAndTickAccounts,
-          {
-            pubkey: nextObservationAState,
-            isSigner: false,
-            isWritable: true,
-          },
-        ])
+        .remainingAccounts([...bitmapAndTickAccounts])
         .rpc();
 
       const poolStateDataAfter = await program.account.poolState.fetch(
@@ -3296,7 +3237,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.collectFee(new BN(0), new BN(0), {
           accounts: {
-            ownerOrDelegate: owner,
+            nftOwner: owner,
             nftAccount: positionANftAccount,
             personalPosition: personalPositionAState,
             ammConfig,
@@ -3307,19 +3248,14 @@ describe("amm-core", async () => {
             tickBitmapLower: bitmapLowerAState,
             tickBitmapUpper: bitmapUpperAState,
             lastObservation: lastObservationAState,
+            nextObservation: nextObservationAState,
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
             recipientTokenAccount0: feeRecipientWallet0,
             recipientTokenAccount1: feeRecipientWallet1,
             tokenProgram: TOKEN_PROGRAM_ID,
           },
-          remainingAccounts: [
-            {
-              pubkey: nextObservationAState,
-              isSigner: false,
-              isWritable: true,
-            },
-          ],
+          remainingAccounts: [],
         })
       ).to.be.rejectedWith(Error);
     });
@@ -3327,7 +3263,7 @@ describe("amm-core", async () => {
     it("fails if signer is not the owner or a delegated authority", async () => {
       const tx = program.transaction.collectFee(new BN(0), new BN(10), {
         accounts: {
-          ownerOrDelegate: notOwner.publicKey,
+          nftOwner: notOwner.publicKey,
           nftAccount: positionANftAccount,
           personalPosition: personalPositionAState,
           ammConfig,
@@ -3338,19 +3274,14 @@ describe("amm-core", async () => {
           tickBitmapLower: bitmapLowerAState,
           tickBitmapUpper: bitmapUpperAState,
           lastObservation: lastObservationAState,
+          nextObservation: nextObservationAState,
           tokenVault0: vaultA0,
           tokenVault1: vaultA1,
           recipientTokenAccount0: feeRecipientWallet0,
           recipientTokenAccount1: feeRecipientWallet1,
           tokenProgram: TOKEN_PROGRAM_ID,
         },
-        remainingAccounts: [
-          {
-            pubkey: nextObservationAState,
-            isSigner: false,
-            isWritable: true,
-          },
-        ],
+        remainingAccounts: [],
       });
       await expect(
         connection.sendTransaction(tx, [notOwner])
@@ -3376,7 +3307,7 @@ describe("amm-core", async () => {
 
       const tx = program.transaction.collectFee(new BN(0), new BN(10), {
         accounts: {
-          ownerOrDelegate: mintAuthority.publicKey,
+          nftOwner: mintAuthority.publicKey,
           nftAccount: positionANftAccount,
           personalPosition: personalPositionAState,
           ammConfig,
@@ -3387,19 +3318,14 @@ describe("amm-core", async () => {
           tickBitmapLower: bitmapLowerAState,
           tickBitmapUpper: bitmapUpperAState,
           lastObservation: lastObservationAState,
+          nextObservation: nextObservationAState,
           tokenVault0: vaultA0,
           tokenVault1: vaultA1,
           recipientTokenAccount0: feeRecipientWallet0,
           recipientTokenAccount1: feeRecipientWallet1,
           tokenProgram: TOKEN_PROGRAM_ID,
         },
-        remainingAccounts: [
-          {
-            pubkey: nextObservationAState,
-            isSigner: false,
-            isWritable: true,
-          },
-        ],
+        remainingAccounts: [],
       });
       await expect(
         connection.sendTransaction(tx, [mintAuthority])
@@ -3426,7 +3352,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.collectFee(new BN(0), new BN(10), {
           accounts: {
-            ownerOrDelegate: owner,
+            nftOwner: owner,
             nftAccount: positionANftAccount,
             personalPosition: personalPositionAState,
             ammConfig,
@@ -3437,19 +3363,14 @@ describe("amm-core", async () => {
             tickBitmapLower: bitmapLowerAState,
             tickBitmapUpper: bitmapUpperAState,
             lastObservation: lastObservationAState,
+            nextObservation: nextObservationAState,
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
             recipientTokenAccount0: feeRecipientWallet0,
             recipientTokenAccount1: feeRecipientWallet1,
             tokenProgram: TOKEN_PROGRAM_ID,
           },
-          remainingAccounts: [
-            {
-              pubkey: nextObservationAState,
-              isSigner: false,
-              isWritable: true,
-            },
-          ],
+          remainingAccounts: [],
         })
       ).to.be.rejectedWith(Error);
 
@@ -3469,7 +3390,7 @@ describe("amm-core", async () => {
 
       await program.rpc.collectFee(amount0Max, amount1Max, {
         accounts: {
-          ownerOrDelegate: owner,
+          nftOwner: owner,
           nftAccount: positionANftAccount,
           personalPosition: personalPositionAState,
           ammConfig,
@@ -3480,19 +3401,14 @@ describe("amm-core", async () => {
           tickBitmapLower: bitmapLowerAState,
           tickBitmapUpper: bitmapUpperAState,
           lastObservation: lastObservationAState,
+          nextObservation: nextObservationAState,
           tokenVault0: vaultA0,
           tokenVault1: vaultA1,
           recipientTokenAccount0: feeRecipientWallet0,
           recipientTokenAccount1: feeRecipientWallet1,
           tokenProgram: TOKEN_PROGRAM_ID,
         },
-        remainingAccounts: [
-          {
-            pubkey: nextObservationAState,
-            isSigner: false,
-            isWritable: true,
-          },
-        ],
+        remainingAccounts: [],
       });
 
       const protocolPositionData =
@@ -3525,28 +3441,30 @@ describe("amm-core", async () => {
     });
 
     it("collect a portion of owed tokens as the delegated authority", async () => {
-      const approveTx = new web3.Transaction();
-      approveTx.recentBlockhash = (
-        await connection.getRecentBlockhash()
-      ).blockhash;
-      approveTx.add(
-        Token.createApproveInstruction(
-          TOKEN_PROGRAM_ID,
-          positionANftAccount,
-          mintAuthority.publicKey,
-          owner,
-          [],
-          1
-        )
-      );
-      await anchor.getProvider().send(approveTx);
+      // remove  collect fee for delegated authority
+
+      // const approveTx = new web3.Transaction();
+      // approveTx.recentBlockhash = (
+      //   await connection.getRecentBlockhash()
+      // ).blockhash;
+      // approveTx.add(
+      //   Token.createApproveInstruction(
+      //     TOKEN_PROGRAM_ID,
+      //     positionANftAccount,
+      //     mintAuthority.publicKey,
+      //     owner,
+      //     [],
+      //     1
+      //   )
+      // );
+      // await anchor.getProvider().send(approveTx);
 
       const amount0Max = new BN(0);
       const amount1Max = new BN(10);
 
       const tx = await program.rpc.collectFee(amount0Max, amount1Max, {
         accounts: {
-          ownerOrDelegate: mintAuthority.publicKey,
+          nftOwner:owner,
           nftAccount: positionANftAccount,
           personalPosition: personalPositionAState,
           ammConfig,
@@ -3557,20 +3475,15 @@ describe("amm-core", async () => {
           tickBitmapLower: bitmapLowerAState,
           tickBitmapUpper: bitmapUpperAState,
           lastObservation: lastObservationAState,
+          nextObservation: nextObservationAState,
           tokenVault0: vaultA0,
           tokenVault1: vaultA1,
           recipientTokenAccount0: feeRecipientWallet0,
           recipientTokenAccount1: feeRecipientWallet1,
           tokenProgram: TOKEN_PROGRAM_ID,
         },
-        remainingAccounts: [
-          {
-            pubkey: nextObservationAState,
-            isSigner: false,
-            isWritable: true,
-          },
-        ],
-        signers: [mintAuthority],
+        remainingAccounts: [],
+        signers: [],
       });
       console.log("collectFromTokenized delegated authority, tx: ", tx);
       const protocolPositionData =
@@ -3622,16 +3535,12 @@ describe("amm-core", async () => {
             inputVault: vaultA0,
             outputVault: vaultA1,
             lastObservation: lastObservationAState,
+            nextObservation: nextObservationAState,
             tokenProgram: TOKEN_PROGRAM_ID,
           },
           remainingAccounts: [
             {
               pubkey: bitmapLowerAState,
-              isSigner: false,
-              isWritable: true,
-            },
-            {
-              pubkey: nextObservationAState,
               isSigner: false,
               isWritable: true,
             },
@@ -3694,16 +3603,12 @@ describe("amm-core", async () => {
           inputVault: vaultA0,
           outputVault: vaultA1,
           lastObservation: lastObservationAState,
+          nextObservation: nextObservationAState,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .remainingAccounts([
           {
             pubkey: bitmapLowerAState,
-            isSigner: false,
-            isWritable: true,
-          },
-          {
-            pubkey: nextObservationAState,
             isSigner: false,
             isWritable: true,
           },
@@ -3810,12 +3715,12 @@ describe("amm-core", async () => {
               isSigner: false,
               isWritable: true,
             },
-            ...swapAccounts,
             {
               pubkey: nextObservationAState,
               isSigner: false,
               isWritable: true,
             },
+            ...swapAccounts,
           ],
         }
       );
@@ -3909,6 +3814,7 @@ describe("amm-core", async () => {
             tokenVault0: vaultB1,
             tokenVault1: vaultB2,
             lastObservation: latestObservationBState,
+            nextObservation: nextObservationAState,
             personalPosition: personalPositionBState,
             systemProgram: SystemProgram.programId,
             rent: SYSVAR_RENT_PUBKEY,
@@ -3916,13 +3822,7 @@ describe("amm-core", async () => {
             associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
             metadataProgram: metaplex.programs.metadata.MetadataProgram.PUBKEY,
           },
-          remainingAccounts: [
-            {
-              pubkey: nextObservationBState,
-              isSigner: false,
-              isWritable: true,
-            },
-          ],
+          remainingAccounts: [],
           signers: [nftMintBKeypair],
         }
       );
@@ -4005,7 +3905,7 @@ describe("amm-core", async () => {
       const amountIn = new BN(100_000);
       const amountOutMinimum = new BN(0);
       await program.methods
-        .swapRouterBaseIn(amountIn, amountOutMinimum, Buffer.from([2, 2]))
+        .swapRouterBaseIn(amountIn, amountOutMinimum, Buffer.from([1, 2]))
         .accounts({
           payer: owner,
           ammConfig,
@@ -4039,12 +3939,12 @@ describe("amm-core", async () => {
             isWritable: true,
           },
           {
-            pubkey: bitmapLowerAState,
+            pubkey: nextObservationAState,
             isSigner: false,
             isWritable: true,
           },
           {
-            pubkey: nextObservationAState,
+            pubkey: bitmapLowerAState,
             isSigner: false,
             isWritable: true,
           },
@@ -4075,17 +3975,17 @@ describe("amm-core", async () => {
             isWritable: true,
           },
           {
+            pubkey: nextObservationBState,
+            isSigner: false,
+            isWritable: true,
+          },
+          {
             pubkey: bitmapLowerBState,
             isSigner: false,
             isWritable: true,
           },
           {
             pubkey: tickUpperBState,
-            isSigner: false,
-            isWritable: true,
-          },
-          {
-            pubkey: nextObservationBState,
             isSigner: false,
             isWritable: true,
           },
@@ -4155,7 +4055,7 @@ describe("amm-core", async () => {
         program.methods
           .collectRewards()
           .accounts({
-            ownerOrDelegate: notOwner.publicKey,
+            nftOwner: notOwner.publicKey,
             nftAccount: positionANftAccount,
             personalPosition: personalPositionAState,
             poolState: poolAState,
@@ -4203,7 +4103,7 @@ describe("amm-core", async () => {
       await program.methods
         .collectRewards()
         .accounts({
-          ownerOrDelegate: owner,
+          nftOwner: owner,
           nftAccount: positionANftAccount,
           protocolPosition: protocolPositionAState,
           personalPosition: personalPositionAState,
@@ -4380,7 +4280,7 @@ describe("amm-core", async () => {
       await program.methods
         .decreaseLiquidity(liquidity, new BN(0), new BN(0))
         .accounts({
-          ownerOrDelegate: owner,
+          nftOwner: owner,
           nftAccount: positionANftAccount,
           personalPosition: personalPositionAState,
           ammConfig,
@@ -4391,25 +4291,20 @@ describe("amm-core", async () => {
           tickBitmapLower: bitmapLowerAState,
           tickBitmapUpper: bitmapUpperAState,
           lastObservation: lastObservationAState,
+          nextObservation: nextObservationAState,
           tokenVault0: vaultA0,
           tokenVault1: vaultA1,
           recipientTokenAccount0: feeRecipientWallet0,
           recipientTokenAccount1: feeRecipientWallet1,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
-        .remainingAccounts([
-          {
-            pubkey: nextObservationAState,
-            isSigner: false,
-            isWritable: true,
-          },
-        ])
+        .remainingAccounts([])
         .rpc();
 
       // collect fee
       await program.rpc.collectFee(new BN(10000), new BN(10000), {
         accounts: {
-          ownerOrDelegate: owner,
+          nftOwner: owner,
           nftAccount: positionANftAccount,
           personalPosition: personalPositionAState,
           ammConfig,
@@ -4420,19 +4315,14 @@ describe("amm-core", async () => {
           tickBitmapLower: bitmapLowerAState,
           tickBitmapUpper: bitmapUpperAState,
           lastObservation: lastObservationAState,
+          nextObservation: nextObservationAState,
           tokenVault0: vaultA0,
           tokenVault1: vaultA1,
           recipientTokenAccount0: feeRecipientWallet0,
           recipientTokenAccount1: feeRecipientWallet1,
           tokenProgram: TOKEN_PROGRAM_ID,
         },
-        remainingAccounts: [
-          {
-            pubkey: nextObservationAState,
-            isSigner: false,
-            isWritable: true,
-          },
-        ],
+        remainingAccounts: [],
       });
 
       // close position
@@ -4444,16 +4334,10 @@ describe("amm-core", async () => {
           positionNftAccount: positionANftAccount,
           personalPosition: personalPositionAState,
           ammConfig,
-          metadataAccount: metadataAccount,
+          // metadataAccount: metadataAccount,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
-        .remainingAccounts([
-          {
-            pubkey: nextObservationAState,
-            isSigner: false,
-            isWritable: true,
-          },
-        ])
+        .remainingAccounts([])
         .rpc();
     });
   });

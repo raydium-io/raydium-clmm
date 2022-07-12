@@ -85,7 +85,7 @@ pub mod amm_core {
     /// token accounts
     /// * `pool_state_bump` - Bump to validate Pool State address
     /// * `observation_state_bump` - Bump to validate Observation State address
-    /// * `sqrt_price_x64` - the initial sqrt price (amount_token_1 / amount_token_0) of the pool as a Q32.32
+    /// * `sqrt_price_x64` - the initial sqrt price (amount_token_1 / amount_token_0) of the pool as a Q64.64
     ///
     pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()> {
         instructions::create_pool(ctx, sqrt_price_x64)
@@ -97,7 +97,7 @@ pub mod amm_core {
     ///
     /// * `ctx`- Validates token addresses and fee state. Initializes pool, observation and
     /// token accounts
-    /// * `sqrt_price_x64` - the initial sqrt price (amount_token_1 / amount_token_0) of the pool as a Q32.32
+    /// * `sqrt_price_x64` - the initial sqrt price (amount_token_1 / amount_token_0) of the pool as a Q64.64
     ///
     pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price_x64: u128) -> Result<()> {
         instructions::reset_sqrt_price(ctx, sqrt_price_x64)
@@ -139,7 +139,7 @@ pub mod amm_core {
     /// * `reward_index` - The index of reward token in the pool.
     /// * `amount_desired` - The desired amount of reward to collect, if set 0, all will be collect.
     ///
-    #[access_control(is_authorized_for_token(&ctx.accounts.owner_or_delegate, &ctx.accounts.nft_account))]
+    #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
     pub fn collect_rewards<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, CollectRewards<'info>>,
     ) -> Result<()> {
@@ -272,7 +272,7 @@ pub mod amm_core {
         )
     }
 
-     /// Close a position 
+    /// Close a position
     ///
     /// # Arguments
     ///
@@ -283,7 +283,7 @@ pub mod amm_core {
     ) -> Result<()> {
         instructions::close_position(ctx)
     }
-   
+
     /// Increases liquidity in a tokenized position, with amount paid by `payer`
     ///
     /// # Arguments
@@ -295,6 +295,7 @@ pub mod amm_core {
     /// * `amount_1_min` - The minimum amount of token_1 to spend, which serves as a slippage check
     /// * `deadline` - The time by which the transaction must be included to effect the change
     ///
+    #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
     pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, IncreaseLiquidity<'info>>,
         amount_0_desired: u64,
@@ -320,7 +321,7 @@ pub mod amm_core {
     /// * `amount_1_min` - The minimum amount of token_1 that should be accounted for the burned liquidity
     /// * `deadline` - The time by which the transaction must be included to effect the change
     ///
-    #[access_control(is_authorized_for_token(&ctx.accounts.owner_or_delegate, &ctx.accounts.nft_account))]
+    #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
     pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, DecreaseLiquidity<'info>>,
         liquidity: u128,
@@ -339,7 +340,7 @@ pub mod amm_core {
     /// * `amount_0_max` - The maximum amount of token0 to collect
     /// * `amount_1_max` - The maximum amount of token0 to collect
     ///
-    #[access_control(is_authorized_for_token(&ctx.accounts.owner_or_delegate, &ctx.accounts.nft_account))]
+    #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
     pub fn collect_fee<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, CollectFee<'info>>,
         amount_0_max: u64,
@@ -357,7 +358,7 @@ pub mod amm_core {
     /// * `deadline` - The time by which the transaction must be included to effect the change
     /// * `amount_in` - Arranged in pairs with other_amount_threshold. (amount_in, amount_out_minimum) or (amount_out, amount_in_maximum)
     /// * `other_amount_threshold` - For slippage check
-    /// * `sqrt_price_limit` - The Q32.32 sqrt price √P limit. If zero for one, the price cannot
+    /// * `sqrt_price_limit` - The Q64.64 sqrt price √P limit. If zero for one, the price cannot
     /// be less than this value after the swap.  If one for zero, the price cannot be greater than
     /// this value after the swap.
     ///

@@ -1,6 +1,6 @@
 use crate::states::*;
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer, CloseAccount, Burn, Mint};
+use anchor_spl::token::{self, Burn, CloseAccount, Mint, Token, TokenAccount, Transfer};
 
 pub fn transfer_from_user_to_pool_vault<'info>(
     signer: &Signer<'info>,
@@ -55,32 +55,29 @@ pub fn transfer_from_pool_vault_to_user<'info>(
 
 pub fn close_spl_account<'a, 'b, 'c, 'info>(
     owner: &AccountInfo<'info>,
-    destination:  &AccountInfo<'info>,
+    destination: &AccountInfo<'info>,
     close_account: &AccountInfo<'info>,
     token_program: &Program<'info, Token>,
     signers_seeds: &[&[&[u8]]],
 ) -> Result<()> {
-    token::close_account(
-        CpiContext::new_with_signer(
-            token_program.to_account_info(),
-            CloseAccount {
-                account: close_account.to_account_info(),
-                destination: destination.to_account_info(),
-                authority: owner.to_account_info(),
-            },
-            signers_seeds
-        )
-    )
+    token::close_account(CpiContext::new_with_signer(
+        token_program.to_account_info(),
+        CloseAccount {
+            account: close_account.to_account_info(),
+            destination: destination.to_account_info(),
+            authority: owner.to_account_info(),
+        },
+        signers_seeds,
+    ))
 }
-
 
 pub fn burn<'a, 'b, 'c, 'info>(
     owner: &Signer<'info>,
-    mint:  &Account<'info,Mint>,
+    mint: &Account<'info, Mint>,
     burn_account: &Account<'info, TokenAccount>,
     token_program: &Program<'info, Token>,
     signers_seeds: &[&[&[u8]]],
-    amount: u64
+    amount: u64,
 ) -> Result<()> {
     token::burn(
         CpiContext::new_with_signer(
@@ -90,9 +87,8 @@ pub fn burn<'a, 'b, 'c, 'info>(
                 from: burn_account.to_account_info(),
                 authority: owner.to_account_info(),
             },
-            signers_seeds
+            signers_seeds,
         ),
-        amount
+        amount,
     )
 }
-

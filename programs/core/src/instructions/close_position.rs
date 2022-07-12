@@ -1,15 +1,13 @@
 use crate::error::ErrorCode;
 use crate::states::*;
-use crate::util::{burn, close_spl_account,close_account};
+use crate::util::{burn, close_account, close_spl_account};
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 
 #[derive(Accounts)]
 pub struct ClosePosition<'info> {
     /// The position nft owner
-    #[account(
-        mut
-    )]
+    #[account(mut)]
     pub nft_owner: Signer<'info>,
 
     /// The program account acting as the core liquidity custodian for token holder, and as
@@ -33,8 +31,8 @@ pub struct ClosePosition<'info> {
 
     /// To store metaplex metadata
     /// CHECK: Safety check performed inside function body
-    #[account(mut)]
-    pub metadata_account: UncheckedAccount<'info>,
+    // #[account(mut)]
+    // pub metadata_account: UncheckedAccount<'info>,
 
     /// Metadata for the tokenized position
     #[account(mut)]

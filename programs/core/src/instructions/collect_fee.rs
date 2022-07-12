@@ -1,5 +1,5 @@
 use super::{burn, BurnParam};
-use crate::libraries::{fixed_point_64, full_math::MulDiv, big_num::U128};
+use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::states::*;
 use crate::util::transfer_from_pool_vault_to_user;
 use anchor_lang::prelude::*;
@@ -41,7 +41,7 @@ pub struct CollectParam<'b, 'info> {
 #[derive(Accounts)]
 pub struct CollectFee<'info> {
     /// The position owner or delegated authority
-    pub owner_or_delegate: Signer<'info>,
+    pub nft_owner: Signer<'info>,
 
     /// The token account for the tokenized position
     #[account(
@@ -83,6 +83,10 @@ pub struct CollectFee<'info> {
     /// The latest observation state
     #[account(mut)]
     pub last_observation: Box<Account<'info, ObservationState>>,
+
+    /// The next observation state
+    #[account(mut)]
+    pub next_observation: Box<Account<'info, ObservationState>>,
 
     /// The pool's token account for token_0
     #[account(mut)]
@@ -134,6 +138,7 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
             bitmap_upper_state: &ctx.accounts.tick_bitmap_upper,
             procotol_position_state: ctx.accounts.protocol_position.as_mut(),
             last_observation_state: ctx.accounts.last_observation.as_mut(),
+            next_observation_state: ctx.accounts.next_observation.as_mut(),
         };
         // update fee inside
         burn(&mut burn_accounts, ctx.remaining_accounts, 0)?;
@@ -142,18 +147,30 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
 
         token_fees_owed_0 = token_fees_owed_0
             .checked_add(
-                U128::from(updated_protocol_position.fee_growth_inside_0_last
-                    - personal_position.fee_growth_inside_0_last)
-                    .mul_div_floor(U128::from(personal_position.liquidity),  U128::from(fixed_point_64::Q64))
-                    .unwrap().as_u64(),
+                U128::from(
+                    updated_protocol_position.fee_growth_inside_0_last
+                        - personal_position.fee_growth_inside_0_last,
+                )
+                .mul_div_floor(
+                    U128::from(personal_position.liquidity),
+                    U128::from(fixed_point_64::Q64),
+                )
+                .unwrap()
+                .as_u64(),
             )
             .unwrap();
         token_fees_owed_1 = token_fees_owed_1
             .checked_add(
-                U128::from(updated_protocol_position.fee_growth_inside_1_last
-                    - personal_position.fee_growth_inside_1_last)
-                    .mul_div_floor(U128::from(personal_position.liquidity),  U128::from(fixed_point_64::Q64))
-                    .unwrap().as_u64(),
+                U128::from(
+                    updated_protocol_position.fee_growth_inside_1_last
+                        - personal_position.fee_growth_inside_1_last,
+                )
+                .mul_div_floor(
+                    U128::from(personal_position.liquidity),
+                    U128::from(fixed_point_64::Q64),
+                )
+                .unwrap()
+                .as_u64(),
             )
             .unwrap();
 
