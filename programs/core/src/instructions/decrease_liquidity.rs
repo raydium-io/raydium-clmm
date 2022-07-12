@@ -1,6 +1,6 @@
 use super::_modify_position;
 use crate::error::ErrorCode;
-use crate::libraries::{fixed_point_64, full_math::MulDiv,big_num::U128};
+use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::states::*;
 use crate::util::transfer_from_pool_vault_to_user;
 use anchor_lang::prelude::*;
@@ -9,7 +9,7 @@ use anchor_spl::token::{Token, TokenAccount};
 #[derive(Accounts)]
 pub struct DecreaseLiquidity<'info> {
     /// The position owner or delegated authority
-    pub owner_or_delegate: Signer<'info>,
+    pub nft_owner: Signer<'info>,
 
     /// The token account for the tokenized position
     #[account(
@@ -66,6 +66,10 @@ pub struct DecreaseLiquidity<'info> {
     #[account(mut)]
     pub last_observation: Box<Account<'info, ObservationState>>,
 
+    /// The next observation state
+    #[account(mut)]
+    pub next_observation: Box<Account<'info, ObservationState>>,
+
     /// The destination token account for the collected amount_0
     #[account(
         mut,
@@ -104,6 +108,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         bitmap_upper_state: &ctx.accounts.tick_bitmap_upper,
         procotol_position_state: ctx.accounts.protocol_position.as_mut(),
         last_observation_state: ctx.accounts.last_observation.as_mut(),
+        next_observation_state: ctx.accounts.next_observation.as_mut(),
     };
 
     let (decrease_amount_0, decrease_amount_1) =
@@ -155,20 +160,32 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     personal_position.token_fees_owed_0 = personal_position
         .token_fees_owed_0
         .checked_add(
-            U128::from(fee_growth_inside_0_last_x64
-                .saturating_sub(personal_position.fee_growth_inside_0_last))
-                .mul_div_floor( U128::from(personal_position.liquidity),  U128::from(fixed_point_64::Q64))
-                .unwrap().as_u64(),
+            U128::from(
+                fee_growth_inside_0_last_x64
+                    .saturating_sub(personal_position.fee_growth_inside_0_last),
+            )
+            .mul_div_floor(
+                U128::from(personal_position.liquidity),
+                U128::from(fixed_point_64::Q64),
+            )
+            .unwrap()
+            .as_u64(),
         )
         .unwrap();
 
     personal_position.token_fees_owed_1 = personal_position
         .token_fees_owed_1
         .checked_add(
-            U128::from(fee_growth_inside_1_last_x64
-                .saturating_sub(personal_position.fee_growth_inside_1_last))
-                .mul_div_floor( U128::from(personal_position.liquidity),  U128::from(fixed_point_64::Q64))
-                .unwrap().as_u64(),
+            U128::from(
+                fee_growth_inside_1_last_x64
+                    .saturating_sub(personal_position.fee_growth_inside_1_last),
+            )
+            .mul_div_floor(
+                U128::from(personal_position.liquidity),
+                U128::from(fixed_point_64::Q64),
+            )
+            .unwrap()
+            .as_u64(),
         )
         .unwrap();
     personal_position.fee_growth_inside_0_last = fee_growth_inside_0_last_x64;
@@ -212,6 +229,9 @@ pub struct BurnParam<'b, 'info> {
 
     /// The program account for the most recent oracle observation
     pub last_observation_state: &'b mut Account<'info, ObservationState>,
+
+    /// The program account for the most recent oracle observation
+    pub next_observation_state: &'b mut Account<'info, ObservationState>,
 }
 
 pub fn burn<'b, 'info>(
@@ -263,6 +283,7 @@ pub fn burn<'b, 'info>(
         ctx.bitmap_lower_state,
         ctx.bitmap_upper_state,
         ctx.last_observation_state,
+        ctx.next_observation_state,
         remaining_accounts,
     )?;
 

@@ -85,7 +85,7 @@ impl TickState {
         tick_cumulative: i64,
         time: u32,
         upper: bool,
-        max_liquidity: u128,
+        _max_liquidity: u128,
         reward_growths_outside: [u128; REWARD_NUM],
     ) -> Result<bool> {
         let liquidity_gross_before = self.liquidity_gross;

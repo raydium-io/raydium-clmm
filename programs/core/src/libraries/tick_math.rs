@@ -2,7 +2,7 @@ use crate::{error::ErrorCode, libraries::big_num::U128};
 ///! Helper functions to calculate tick from √P and vice versa
 ///! Performs power and log calculations in a gas efficient manner
 ///!
-///! Computes sqrt price for ticks of size 1.0001, i.e. sqrt(1.0001^tick) as fixed point Q32.32 numbers. Supports
+///! Computes sqrt price for ticks of size 1.0001, i.e. sqrt(1.0001^tick) as fixed point Q64.64 numbers. Supports
 ///! prices between 2**-32 and 2**32
 ///!
 ///! # Resources

@@ -43,6 +43,9 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
         let mut last_observation_state = Box::new(Account::<ObservationState>::try_from(
             remaining_accounts.next().unwrap(),
         )?);
+        let mut next_observation_state = Box::new(Account::<ObservationState>::try_from(
+            remaining_accounts.next().unwrap(),
+        )?);
         solana_program::log::sol_log_compute_units();
         amount_in_internal = exact_internal(
             &mut SwapContext {
@@ -54,6 +57,7 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
                 input_vault: input_vault.clone(),
                 output_vault: output_vault.clone(),
                 last_observation_state: &mut last_observation_state,
+                next_observation_state: &mut next_observation_state,
                 token_program: ctx.accounts.token_program.clone(),
             },
             remaining_accounts.as_slice(),

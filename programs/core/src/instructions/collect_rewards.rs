@@ -9,7 +9,7 @@ use anchor_spl::token::{Token, TokenAccount};
 #[derive(Accounts)]
 pub struct CollectRewards<'info> {
     /// The position owner or delegated authority
-    pub owner_or_delegate: Signer<'info>,
+    pub nft_owner: Signer<'info>,
 
     /// The token account for the tokenized position
     #[account(

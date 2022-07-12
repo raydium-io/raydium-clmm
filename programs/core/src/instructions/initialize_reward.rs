@@ -1,5 +1,5 @@
 use crate::error::ErrorCode;
-use crate::libraries::{fixed_point_64, full_math::MulDiv,big_num::U128};
+use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::states::*;
 use crate::util::transfer_from_user_to_pool_vault;
 use anchor_lang::prelude::*;
@@ -82,10 +82,13 @@ pub fn initialize_reward(
     // Clock
     let clock = Clock::get()?;
     param.check(clock.unix_timestamp as u64)?;
-    let reward_amount = U128::from(param
-        .end_time -param.open_time)
-        .mul_div_floor(U128::from(param.emissions_per_second_x64), U128::from(fixed_point_64::Q64))
-        .unwrap().as_u64();
+    let reward_amount = U128::from(param.end_time - param.open_time)
+        .mul_div_floor(
+            U128::from(param.emissions_per_second_x64),
+            U128::from(fixed_point_64::Q64),
+        )
+        .unwrap()
+        .as_u64();
 
     require_gte!(ctx.accounts.funder_token_account.amount, reward_amount);
 

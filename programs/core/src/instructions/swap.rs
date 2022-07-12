@@ -42,6 +42,9 @@ pub struct SwapSingle<'info> {
     #[account(mut)]
     pub last_observation: Box<Account<'info, ObservationState>>,
 
+    #[account(mut)]
+    pub next_observation: Box<Account<'info, ObservationState>>,
+
     /// SPL program for token transfers
     pub token_program: Program<'info, Token>,
 }
@@ -64,6 +67,7 @@ pub fn swap<'a, 'b, 'c, 'info>(
             token_program: ctx.accounts.token_program.clone(),
             pool_state: ctx.accounts.pool_state.as_mut(),
             last_observation_state: &mut ctx.accounts.last_observation,
+            next_observation_state: &mut ctx.accounts.next_observation,
         },
         ctx.remaining_accounts,
         amount,

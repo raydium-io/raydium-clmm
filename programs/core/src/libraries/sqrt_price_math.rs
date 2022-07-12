@@ -76,7 +76,11 @@ pub fn get_next_sqrt_price_from_amount_0_rounding_up(
         // if the product overflows, we know the denominator underflows
         // in addition, we must check that the denominator does not underflow
         // assert!(product / amount == sqrt_p_x64 && numerator_1 > product);
-        let product = U128::from(U128::from(amount).checked_mul(U128::from(sqrt_p_x64)).unwrap());
+        let product = U128::from(
+            U128::from(amount)
+                .checked_mul(U128::from(sqrt_p_x64))
+                .unwrap(),
+        );
         assert!(numerator_1 > product);
 
         let denominator = numerator_1 - product;
@@ -119,16 +123,14 @@ pub fn get_next_sqrt_price_from_amount_1_rounding_down(
     // if amount <= u32::MAX, overflows do not happen
     if add {
         // quotient - `Δy / L` as U32.32
-        let quotient = 
-            // u32::MAX or below so that amount x 2^32 does not overflow
-            U128::from((amount as u128) << fixed_point_64::RESOLUTION) / liquidity;
-        
+        let quotient = U128::from((amount as u128) << fixed_point_64::RESOLUTION) / liquidity;
 
         sqrt_p_x64.checked_add(quotient.as_u128()).unwrap()
     } else {
-        let quotient = 
-            U128::div_rounding_up(U128::from((amount as u128) << fixed_point_64::RESOLUTION), U128::from(liquidity));
-     
+        let quotient = U128::div_rounding_up(
+            U128::from((amount as u128) << fixed_point_64::RESOLUTION),
+            U128::from(liquidity),
+        );
 
         assert!(sqrt_p_x64 > quotient.as_u128());
         sqrt_p_x64 - quotient.as_u128()
@@ -261,11 +263,18 @@ pub fn get_amount_1_delta_unsigned(
     };
 
     if round_up {
-        U128::from(liquidity).mul_div_ceil( U128::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),  U128::from(fixed_point_64::Q64))
+        U128::from(liquidity).mul_div_ceil(
+            U128::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),
+            U128::from(fixed_point_64::Q64),
+        )
     } else {
-        U128::from(liquidity).mul_div_floor( U128::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),  U128::from(fixed_point_64::Q64))
+        U128::from(liquidity).mul_div_floor(
+            U128::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),
+            U128::from(fixed_point_64::Q64),
+        )
     }
-    .unwrap().as_u64()
+    .unwrap()
+    .as_u64()
 }
 
 /// Helper function to get signed token_0 delta between two prices,
@@ -283,8 +292,12 @@ pub fn get_amount_0_delta_signed(
     liquidity: i128,
 ) -> i64 {
     if liquidity < 0 {
-        -(get_amount_0_delta_unsigned(sqrt_ratio_a_x64, sqrt_ratio_b_x64, -liquidity as u128, false)
-            as i64)
+        -(get_amount_0_delta_unsigned(
+            sqrt_ratio_a_x64,
+            sqrt_ratio_b_x64,
+            -liquidity as u128,
+            false,
+        ) as i64)
     } else {
         // TODO check overflow, since i64::MAX < u64::MAX
         get_amount_0_delta_unsigned(sqrt_ratio_a_x64, sqrt_ratio_b_x64, liquidity as u128, true)
@@ -307,8 +320,12 @@ pub fn get_amount_1_delta_signed(
     liquidity: i128,
 ) -> i64 {
     if liquidity < 0 {
-        -(get_amount_1_delta_unsigned(sqrt_ratio_a_x64, sqrt_ratio_b_x64, -liquidity as u128, false)
-            as i64)
+        -(get_amount_1_delta_unsigned(
+            sqrt_ratio_a_x64,
+            sqrt_ratio_b_x64,
+            -liquidity as u128,
+            false,
+        ) as i64)
     } else {
         // TODO check overflow, since i64::MAX < u64::MAX
         get_amount_1_delta_unsigned(sqrt_ratio_a_x64, sqrt_ratio_b_x64, liquidity as u128, true)

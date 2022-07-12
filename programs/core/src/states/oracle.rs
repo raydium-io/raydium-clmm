@@ -1,3 +1,4 @@
+use crate::libraries::fixed_point_64;
 /// Oracle provides price and liquidity data useful for a wide variety of system designs
 ///
 /// Instances of stored oracle data, "observations", are collected in the oracle array,
@@ -13,7 +14,6 @@
 /// by passing 0 as the index seed.
 ///
 use anchor_lang::prelude::*;
-use crate::libraries::fixed_point_64;
 /// Seed to derive account address and signature
 pub const OBSERVATION_SEED: &str = "observation";
 
@@ -63,7 +63,8 @@ impl ObservationState {
             block_timestamp,
             tick_cumulative: self.tick_cumulative + tick as i64 * delta as i64,
             seconds_per_liquidity_cumulative_x64: self.seconds_per_liquidity_cumulative_x64
-                + ((delta as u128) << fixed_point_64::RESOLUTION) / if liquidity > 0 { liquidity } else { 1 },
+                + ((delta as u128) << fixed_point_64::RESOLUTION)
+                    / if liquidity > 0 { liquidity } else { 1 },
             initialized: true,
         }
     }
@@ -118,7 +119,10 @@ impl ObservationState {
         if self.block_timestamp != time {
             last = self.transform(time, tick, liquidity);
         }
-        (last.tick_cumulative, last.seconds_per_liquidity_cumulative_x64)
+        (
+            last.tick_cumulative,
+            last.seconds_per_liquidity_cumulative_x64,
+        )
     }
 }
 

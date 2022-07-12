@@ -48,7 +48,7 @@ pub struct PoolState {
     /// This value has no relationship to the total liquidity across all ticks.
     pub liquidity: u128,
 
-    /// The current price of the pool as a sqrt(token_1/token_0) Q32.32 value
+    /// The current price of the pool as a sqrt(token_1/token_0) Q64.64 value
     pub sqrt_price_x64: u128,
 
     /// The current tick of the pool, i.e. according to the last tick transition that was run.
@@ -66,7 +66,7 @@ pub struct PoolState {
     /// The next maximum number of observations to store, triggered on a swap or position update
     pub observation_cardinality_next: u16,
 
-    /// The fee growth as a Q32.32 number, i.e. fees of token_0 and token_1 collected per
+    /// The fee growth as a Q64.64 number, i.e. fees of token_0 and token_1 collected per
     /// unit of liquidity for the entire life of the pool.
     /// These values can overflow u64
     pub fee_growth_global_0: u128,
@@ -460,7 +460,7 @@ pub struct RewardInfo {
     pub end_time: u64,
     /// Reward last update time
     pub last_update_time: u64,
-    /// Q32.32 number indicates how many tokens per second are earned per unit of liquidity.
+    /// Q64.64 number indicates how many tokens per second are earned per unit of liquidity.
     pub emissions_per_second_x64: u128,
     /// The total amount of reward emissioned
     pub reward_total_emissioned: u64,
@@ -472,13 +472,13 @@ pub struct RewardInfo {
     pub token_vault: Pubkey,
     /// The owner that has permission to set reward param
     pub authority: Pubkey,
-    /// Q32.32 number that tracks the total tokens earned per unit of liquidity since the reward
+    /// Q64.64 number that tracks the total tokens earned per unit of liquidity since the reward
     /// emissions were turned on.
     pub reward_growth_global_x64: u128,
 }
 
 impl RewardInfo {
-    pub const LEN: usize = 1 + 8 + 8 + 8 + 16 + 8 + 8 + 32 + 32 + 32 + 16; 
+    pub const LEN: usize = 1 + 8 + 8 + 8 + 16 + 8 + 8 + 32 + 32 + 32 + 16;
     /// Creates a new RewardInfo
     pub fn new(authority: Pubkey) -> Self {
         Self {
@@ -596,7 +596,7 @@ pub struct SwapEvent {
     /// The delta of the token_1 balance of the pool
     pub amount_1: i64,
 
-    /// The sqrt(price) of the pool after the swap, as a Q32.32
+    /// The sqrt(price) of the pool after the swap, as a Q64.64
     pub sqrt_price_x64: u128,
 
     /// The liquidity of the pool after the swap

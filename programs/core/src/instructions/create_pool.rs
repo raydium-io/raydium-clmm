@@ -60,7 +60,7 @@ pub struct CreatePool<'info> {
     )]
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
     /// Stores the desired fee for the pool
-    pub fee_state:  Box<Account<'info, FeeState>>,
+    pub fee_state: Box<Account<'info, FeeState>>,
 
     /// Initialize an account to store oracle observations
     #[account(
@@ -74,7 +74,7 @@ pub struct CreatePool<'info> {
         payer = pool_creator,
         space = 8 + size_of::<ObservationState>()
     )]
-    pub initial_first_observation:  Box<Account<'info, ObservationState>>,
+    pub initial_first_observation: Box<Account<'info, ObservationState>>,
     /// Spl token program
     pub token_program: Program<'info, Token>,
     /// To create a new program account
@@ -105,6 +105,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
     pool_state.sqrt_price_x64 = sqrt_price_x64;
     pool_state.tick = tick;
     pool_state.observation_cardinality = 1;
+    pool_state.observation_index = 0;
     pool_state.observation_cardinality_next = 1;
     pool_state.reward_infos = [RewardInfo::new(ctx.accounts.pool_creator.key()); REWARD_NUM];
 
