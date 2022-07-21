@@ -2694,7 +2694,6 @@ describe("amm-core", async () => {
             recipientTokenAccount1: minterWallet1,
             tokenProgram: TOKEN_PROGRAM_ID,
           })
-          .remainingAccounts([])
           .signers([ownerKeyPair])
           .rpc()
       ).to.be.rejectedWith(Error);
@@ -3937,18 +3936,26 @@ describe("amm-core", async () => {
         "tickUpperBState:",
         tickUpperBState.toString()
       );
-      await program.methods
-        .openPosition(
-          tickLower,
-          tickUpper,
-          wordPosLower,
-          wordPosUpper,
+
+      const additionalComputeBudgetInstruction =
+        ComputeBudgetProgram.requestUnits({
+          units: 400000,
+          additionalFee: 0,
+        });
+
+      const openIx = await openPosition(
+        program,
+        {
+          tickLowerIndex: tickLower,
+          tickUpperIndex: tickUpper,
+          wordLowerIndex: wordPosLower,
+          wordUpperIndex: wordPosUpper,
           amount0Desired,
           amount1Desired,
-          new BN(0),
-          new BN(0)
-        )
-        .accounts({
+          amount0Min: new BN(0),
+          amount1Min: new BN(0),
+        },
+        {
           payer: owner,
           positionNftOwner: owner,
           ammConfig,
@@ -3973,9 +3980,16 @@ describe("amm-core", async () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
           metadataProgram: metaplex.programs.metadata.MetadataProgram.PUBKEY,
-        })
-        .signers([ownerKeyPair, nftMintBKeypair])
-        .rpc();
+        }
+      );
+
+      const tx = await sendTransaction(
+        connection,
+        [additionalComputeBudgetInstruction, openIx],
+        [ownerKeyPair, nftMintBKeypair]
+      );
+      console.log("seconde position:", tx)
+      await sleep(2000)
     });
 
     it("perform a two pool swap", async () => {
