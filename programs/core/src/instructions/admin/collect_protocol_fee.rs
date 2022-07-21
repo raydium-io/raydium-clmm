@@ -6,7 +6,7 @@ use anchor_spl::token::{Token, TokenAccount};
 #[derive(Accounts)]
 pub struct CollectProtocolFee<'info> {
     /// Valid protocol owner
-    #[account(address = amm_config.owner)]
+    #[account(address = crate::admin::id())]
     pub owner: Signer<'info>,
 
     /// Factory state stores the protocol owner address

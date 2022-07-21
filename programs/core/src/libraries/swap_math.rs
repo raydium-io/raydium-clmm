@@ -3,7 +3,7 @@
 use super::full_math::MulDiv;
 use super::sqrt_price_math;
 use crate::states::fee::FEE_RATE_DENOMINATOR_VALUE;
-
+// use anchor_lang::prelude::msg;
 /// Result of a swap step
 #[derive(Default, Debug)]
 pub struct SwapStep {
@@ -68,7 +68,6 @@ pub fn compute_swap_step(
                 true,
             )
         };
-        // msg!("swap_step.amount_in: {}, sqrt_ratio_target_x64:{}, sqrt_ratio_current_x64:{},liquidity:{}", swap_step.amount_in,sqrt_ratio_target_x64,sqrt_ratio_current_x64,liquidity);
         swap_step.sqrt_ratio_next_x64 = if amount_remaining_less_fee >= swap_step.amount_in {
             sqrt_ratio_target_x64
         } else {
@@ -79,6 +78,7 @@ pub fn compute_swap_step(
                 zero_for_one,
             )
         };
+        // msg!("swap_step.amount_in: {}, sqrt_ratio_target_x64:{}, sqrt_ratio_current_x64:{},swap_step.sqrt_ratio_next_x64:{},liquidity:{},amount_remaining_less_fee:{}", swap_step.amount_in,sqrt_ratio_target_x64,sqrt_ratio_current_x64,swap_step.sqrt_ratio_next_x64,liquidity,amount_remaining_less_fee);
     } else {
         // round down amount_out
         swap_step.amount_out = if zero_for_one {
@@ -111,7 +111,12 @@ pub fn compute_swap_step(
 
     // whether we reached the max possible price for the given ticks
     let max = sqrt_ratio_target_x64 == swap_step.sqrt_ratio_next_x64;
-
+    // msg!(
+    //     "max:{}, sqrt_ratio_target_x64:{}, swap_step.sqrt_ratio_next_x64:{}",
+    //     max,
+    //     sqrt_ratio_target_x64,
+    //     swap_step.sqrt_ratio_next_x64
+    // );
     // get the input / output amounts when target price is not reached
     if zero_for_one {
         // if max is reached for exact input case, entire amount_in is needed

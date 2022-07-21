@@ -27,7 +27,7 @@ pub fn set_new_owner(ctx: Context<SetNewOwner>) -> Result<()> {
     );
     require!(
         ctx.accounts.owner.key() == amm_config.owner
-            || ctx.accounts.owner.key() == crate::admin::ID,
+            || ctx.accounts.owner.key() == crate::admin::id(),
         ErrorCode::NotApproved
     );
 

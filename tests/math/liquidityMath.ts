@@ -1,8 +1,7 @@
-import JSBI from 'jsbi'
-import { NEGATIVE_ONE, ZERO } from './constants'
-import { BigintIsh } from '@cykura/sdk-core'
-import { FullMath } from '../math/fullMath'
-import {MaxUint64 } from '../math/constants'
+import { ONE, ZERO, MaxU64, U64Resolution, Q64 } from "./constants";
+import { Math} from "./math";
+// import { } from "../math/constants";
+import { BN } from "@project-serum/anchor";
 
 export abstract class LiquidityMath {
   /**
@@ -10,105 +9,172 @@ export abstract class LiquidityMath {
    */
   private constructor() {}
 
-  public static addDelta(x: JSBI, y: JSBI): JSBI {
-    let z: JSBI
-    if (JSBI.lessThan(y, ZERO)) {
-      z = JSBI.subtract(x, JSBI.multiply(y, NEGATIVE_ONE))
-    } else {
-      z = JSBI.add(x, y)
-    }
-    return z
+  /**
+   *
+   * @param x
+   * @param y can be negative
+   * @returns
+   */
+  public static addDelta(x: BN, y: BN): BN {
+    return x.add(y);
   }
 
   
-/**
- * Returns an imprecise maximum amount of liquidity received for a given amount of token 0.
- * This function is available to accommodate LiquidityAmounts#getLiquidityForAmount0 in the v3 periphery,
- * which could be more precise by at least 32 bits by dividing by Q64 instead of Q96 in the intermediate step,
- * and shifting the subtracted ratio left by 32 bits. This imprecise calculation will likely be replaced in a future
- * v3 router contract.
- * @param sqrtRatioAX64 The price at the lower boundary
- * @param sqrtRatioBX64 The price at the upper boundary
- * @param amount0 The token0 amount
- * @returns liquidity for amount0, imprecise
- */
- public static maxLiquidityForAmount0Imprecise(sqrtRatioAX64: JSBI, sqrtRatioBX64: JSBI, amount0: BigintIsh): JSBI {
-  if (JSBI.greaterThan(sqrtRatioAX64, sqrtRatioBX64)) {
-    ;[sqrtRatioAX64, sqrtRatioBX64] = [sqrtRatioBX64, sqrtRatioAX64]
-  }
-  const intermediate = FullMath.mulDivFloor(sqrtRatioAX64, sqrtRatioBX64, MaxUint64)
-  return FullMath.mulDivFloor(JSBI.BigInt(amount0), intermediate, JSBI.subtract(sqrtRatioBX64, sqrtRatioAX64))
-}
+  /**
+   * Calculates Δx = ΔL (√P_upper - √P_lower) / (√P_upper x √P_lower)
+   * @param sqrtPriceAX64
+   * @param sqrtPriceBX64
+   * @param liquidity
+   * @param roundUp
+   * @returns
+   */
+   public static getToken0AmountForLiquidity(
+    sqrtPriceAX64: BN,
+    sqrtPriceBX64: BN,
+    liquidity: BN,
+    roundUp: boolean
+  ): BN {
+    if (sqrtPriceAX64.gt(sqrtPriceBX64)) {
+      [sqrtPriceAX64, sqrtPriceBX64] = [sqrtPriceBX64, sqrtPriceAX64];
+    }
 
-/**
- * Returns a precise maximum amount of liquidity received for a given amount of token 0 by dividing by Q64 instead of Q96 in the intermediate step,
- * and shifting the subtracted ratio left by 32 bits.
- * @param sqrtRatioAX64 The price at the lower boundary
- * @param sqrtRatioBX64 The price at the upper boundary
- * @param amount0 The token0 amount
- * @returns liquidity for amount0, precise
- */
- public static maxLiquidityForAmount0Precise(sqrtRatioAX64: JSBI, sqrtRatioBX64: JSBI, amount0: BigintIsh): JSBI {
-  if (JSBI.greaterThan(sqrtRatioAX64, sqrtRatioBX64)) {
-    ;[sqrtRatioAX64, sqrtRatioBX64] = [sqrtRatioBX64, sqrtRatioAX64]
-  }
+    if (!sqrtPriceAX64.gt(ZERO)) {
+      throw new Error("sqrtPriceAX64 must greater than 0");
+    }
 
-  const numerator = JSBI.multiply(JSBI.multiply(JSBI.BigInt(amount0), sqrtRatioAX64), sqrtRatioBX64)
-  const denominator = JSBI.multiply(MaxUint64, JSBI.subtract(sqrtRatioBX64, sqrtRatioAX64))
+    const numerator1 = liquidity.ushln(U64Resolution);
+    const numerator2 = sqrtPriceBX64.sub(sqrtPriceAX64);
 
-  return JSBI.divide(numerator, denominator)
-}
-
-/**
- * Computes the maximum amount of liquidity received for a given amount of token1
- * @param sqrtRatioAX64 The price at the lower tick boundary
- * @param sqrtRatioBX64 The price at the upper tick boundary
- * @param amount1 The token1 amount
- * @returns liquidity for amount1
- */
- public static maxLiquidityForAmount1(sqrtRatioAX64: JSBI, sqrtRatioBX64: JSBI, amount1: BigintIsh): JSBI {
-  if (JSBI.greaterThan(sqrtRatioAX64, sqrtRatioBX64)) {
-    ;[sqrtRatioAX64, sqrtRatioBX64] = [sqrtRatioBX64, sqrtRatioAX64]
-  }
-  return FullMath.mulDivFloor(JSBI.BigInt(amount1), MaxUint64, JSBI.subtract(sqrtRatioBX64, sqrtRatioAX64))
-}
-
-/**
- * Computes the maximum amount of liquidity received for a given amount of token0, token1,
- * and the prices at the tick boundaries.
- * @param sqrtRatioCurrentX64 the current price
- * @param sqrtRatioAX64 price at lower boundary
- * @param sqrtRatioBX64 price at upper boundary
- * @param amount0 token0 amount
- * @param amount1 token1 amount
- * @param useFullPrecision if false, liquidity will be maximized according to what the router can calculate,
- * not what core can theoretically support
- */
- public static maxLiquidityForAmounts(
-  sqrtRatioCurrentX64: JSBI,
-  sqrtRatioAX64: JSBI,
-  sqrtRatioBX64: JSBI,
-  amount0: BigintIsh,
-  amount1: BigintIsh,
-  useFullPrecision: boolean
-): JSBI {
-  if (JSBI.greaterThan(sqrtRatioAX64, sqrtRatioBX64)) {
-    ;[sqrtRatioAX64, sqrtRatioBX64] = [sqrtRatioBX64, sqrtRatioAX64]
+    return roundUp
+      ? Math.mulDivRoundingUp(
+          Math.mulDivCeil(numerator1, numerator2, sqrtPriceBX64),
+          ONE,
+          sqrtPriceAX64
+        )
+      : Math.mulDivFloor(numerator1, numerator2, sqrtPriceBX64).div(
+          sqrtPriceAX64
+        );
   }
 
-  // trying this out?
-  useFullPrecision = false
-  const maxLiquidityForAmount0 = LiquidityMath.maxLiquidityForAmount0Imprecise
+  /**
+   * Calculates Δy = ΔL * (√P_upper - √P_lower)
+   * @param sqrtPriceAX64
+   * @param sqrtPriceBX64
+   * @param liquidity
+   * @param roundUp
+   * @returns
+   */
+  public static getToken1AmountForLiquidity(
+    sqrtPriceAX64: BN,
+    sqrtPriceBX64: BN,
+    liquidity: BN,
+    roundUp: boolean
+  ): BN {
+    if (sqrtPriceAX64.gt(sqrtPriceBX64)) {
+      [sqrtPriceAX64, sqrtPriceBX64] = [sqrtPriceBX64, sqrtPriceAX64];
+    }
+    if (!sqrtPriceAX64.gt(ZERO)) {
+      throw new Error("sqrtPriceAX64 must greater than 0");
+    }
 
-  if (JSBI.lessThanOrEqual(sqrtRatioCurrentX64, sqrtRatioAX64)) {
-    return maxLiquidityForAmount0(sqrtRatioAX64, sqrtRatioBX64, amount0)
-  } else if (JSBI.lessThan(sqrtRatioCurrentX64, sqrtRatioBX64)) {
-    const liquidity0 = maxLiquidityForAmount0(sqrtRatioCurrentX64, sqrtRatioBX64, amount0)
-    const liquidity1 = LiquidityMath.maxLiquidityForAmount1(sqrtRatioAX64, sqrtRatioCurrentX64, amount1)
-    return JSBI.lessThan(liquidity0, liquidity1) ? liquidity0 : liquidity1
-  } else {
-    return LiquidityMath.maxLiquidityForAmount1(sqrtRatioAX64, sqrtRatioBX64, amount1)
+    return roundUp
+      ? Math.mulDivCeil(liquidity, sqrtPriceBX64.sub(sqrtPriceAX64), Q64)
+      : Math.mulDivFloor(liquidity, sqrtPriceBX64.sub(sqrtPriceAX64), Q64);
   }
-}
 
+  /**
+   * Calculates ΔL = Δx (√P_upper x √P_lower)/(√P_upper - √P_lower)
+   * @param sqrtPriceAX64
+   * @param sqrtPriceBX64
+   * @param amount0
+   * @returns
+   */
+  public static maxLiquidityFromToken0Amount(
+    sqrtPriceAX64: BN,
+    sqrtPriceBX64: BN,
+    amount0: BN,
+    roundUp: boolean
+  ): BN {
+    if (sqrtPriceAX64.gt(sqrtPriceBX64)) {
+      [sqrtPriceAX64, sqrtPriceBX64] = [sqrtPriceBX64, sqrtPriceAX64];
+    }
+
+    const numerator = amount0.mul(sqrtPriceAX64).mul(sqrtPriceBX64);
+    const denominator = sqrtPriceBX64.sub(sqrtPriceAX64);
+    let result = numerator.div(denominator);
+
+    if (roundUp) {
+      return Math.mulDivRoundingUp(result, ONE, MaxU64);
+    } else {
+      return result.shrn(U64Resolution);
+    }
+  }
+
+  /**
+   * Computes the maximum amount of liquidity received for a given amount of token1, ΔL = Δy / (√P_upper - √P_lower)
+   * @param sqrtPriceAX64 The price at the lower tick boundary
+   * @param sqrtPriceBX64 The price at the upper tick boundary
+   * @param amount1 The token1 amount
+   * @returns liquidity for amount1
+   */
+  public static maxLiquidityFromToken1Amount(
+    sqrtPriceAX64: BN,
+    sqrtPriceBX64: BN,
+    amount1: BN
+  ): BN {
+    if (sqrtPriceAX64.gt(sqrtPriceBX64)) {
+      [sqrtPriceAX64, sqrtPriceBX64] = [sqrtPriceBX64, sqrtPriceAX64];
+    }
+    return Math.mulDivFloor(amount1, MaxU64, sqrtPriceBX64.sub(sqrtPriceAX64));
+  }
+
+  /**
+   * Computes the maximum amount of liquidity received for a given amount of token0, token1,
+   * and the prices at the tick boundaries.
+   * @param sqrtPriceCurrentX64 the current price
+   * @param sqrtPriceAX64 price at lower boundary
+   * @param sqrtPriceBX64 price at upper boundary
+   * @param amount0 token0 amount
+   * @param amount1 token1 amount
+   * not what core can theoretically support
+   */
+  public static maxLiquidityFromTokenAmounts(
+    sqrtPriceCurrentX64: BN,
+    sqrtPriceAX64: BN,
+    sqrtPriceBX64: BN,
+    amount0: BN,
+    amount1: BN
+  ): BN {
+    if (sqrtPriceAX64.gt(sqrtPriceBX64)) {
+      [sqrtPriceAX64, sqrtPriceBX64] = [sqrtPriceBX64, sqrtPriceAX64];
+    }
+
+    if (sqrtPriceCurrentX64.lte(sqrtPriceAX64)) {
+      return LiquidityMath.maxLiquidityFromToken0Amount(
+        sqrtPriceAX64,
+        sqrtPriceBX64,
+        amount0,
+        false
+      );
+    } else if (sqrtPriceCurrentX64.lt(sqrtPriceBX64)) {
+      const liquidity0 = LiquidityMath.maxLiquidityFromToken0Amount(
+        sqrtPriceCurrentX64,
+        sqrtPriceBX64,
+        amount0,
+        false
+      );
+      const liquidity1 = LiquidityMath.maxLiquidityFromToken1Amount(
+        sqrtPriceAX64,
+        sqrtPriceCurrentX64,
+        amount1
+      );
+      return liquidity0.lt(liquidity1) ? liquidity0 : liquidity1;
+    } else {
+      return LiquidityMath.maxLiquidityFromToken1Amount(
+        sqrtPriceAX64,
+        sqrtPriceBX64,
+        amount1
+      );
+    }
+  }
 }

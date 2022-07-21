@@ -12,8 +12,8 @@ pub struct InitializeReward<'info> {
     #[account(mut)]
     pub reward_funder: Signer<'info>,
     #[account(
-    mut,
-    token::mint = reward_token_mint
+        mut,
+        token::mint = reward_token_mint
     )]
     pub funder_token_account: Box<Account<'info, TokenAccount>>,
 
@@ -74,11 +74,13 @@ pub fn initialize_reward(
     ctx: Context<InitializeReward>,
     param: InitializeRewardParam,
 ) -> Result<()> {
-    require_keys_eq!(
-        ctx.accounts.reward_funder.key(),
-        ctx.accounts.amm_config.owner,
+
+    require!(
+        ctx.accounts.reward_funder.key() == ctx.accounts.amm_config.owner
+            || ctx.accounts.reward_funder.key() == crate::admin::id(),
         ErrorCode::NotApproved
     );
+
     // Clock
     let clock = Clock::get()?;
     param.check(clock.unix_timestamp as u64)?;

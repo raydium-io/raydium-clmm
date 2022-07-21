@@ -11,8 +11,7 @@ use std::ops::DerefMut;
 pub struct SetRewardEmissions<'info> {
     /// Address to be set as protocol owner. It pays to create factory state account.
     #[account(
-        mut,
-        address = amm_config.owner.key()
+        mut
     )]
     pub authority: Signer<'info>,
 
@@ -32,6 +31,13 @@ pub fn set_reward_emissions<'a, 'b, 'c, 'info>(
     emissions_per_second_x64: u128,
 ) -> Result<()> {
     assert!((reward_index as usize) < REWARD_NUM);
+
+    require!(
+        ctx.accounts.authority.key() == ctx.accounts.amm_config.owner
+            || ctx.accounts.authority.key() == crate::admin::id(),
+        ErrorCode::NotApproved
+    );
+
     let clock = Clock::get()?;
 
     let pool_state = ctx.accounts.pool_state.deref_mut();

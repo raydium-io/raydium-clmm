@@ -178,6 +178,16 @@ pub fn swap_internal<'b, 'info>(
     // continue swapping as long as we haven't used the entire input/output and haven't
     // reached the price limit
     while state.amount_specified_remaining != 0 && state.sqrt_price_x64 != sqrt_price_limit_x64 {
+        #[cfg(feature = "enable-log")]
+        msg!(
+            "while begin, exact_input:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{},state.protocol_fee:{},cache.protocol_fee_rate:{}",
+            exact_input,
+            state.fee_growth_global_x64,
+            state.sqrt_price_x64,
+            state.tick,
+            state.protocol_fee,
+            cache.protocol_fee_rate
+        );
         let mut step = StepComputations::default();
         step.sqrt_price_start_x64 = state.sqrt_price_x64;
 
@@ -295,27 +305,17 @@ pub fn swap_internal<'b, 'info>(
 
         // update global fee tracker
         if state.liquidity > 0 {
-            msg!(
-                "step.fee_amount:{}, state.liquidity:{}",
-                step.fee_amount,
-                state.liquidity
-            );
+            // msg!(
+            //     "step.fee_amount:{}, state.liquidity:{}",
+            //     step.fee_amount,
+            //     state.liquidity
+            // );
             state.fee_growth_global_x64 += U128::from(step.fee_amount)
                 .mul_div_floor(U128::from(fixed_point_64::Q64), U128::from(state.liquidity))
                 .unwrap()
                 .as_u128();
         }
-        #[cfg(feature = "enable-log")]
-        msg!(
-            "exact_input:{},step_amount_in:{}, step_amount_out:{}, step_fee_amount:{},fee_growth_global_x32:{}, state.protocol_fee:{},cache.protocol_fee_rate:{}",
-            exact_input,
-            step.amount_in,
-            step.amount_out,
-            step.fee_amount,
-            state.fee_growth_global_x32,
-            state.protocol_fee,
-            cache.protocol_fee_rate
-        );
+       
         // shift tick if we reached the next price
         if state.sqrt_price_x64 == step.sqrt_price_next_x64 {
             // if the tick is initialized, run the tick transition
@@ -376,6 +376,20 @@ pub fn swap_internal<'b, 'info>(
             // recompute unless we're on a lower tick boundary (i.e. already transitioned ticks), and haven't moved
             state.tick = tick_math::get_tick_at_sqrt_ratio(state.sqrt_price_x64)?;
         }
+
+        #[cfg(feature = "enable-log")]
+        msg!(
+            "end, exact_input:{},step_amount_in:{}, step_amount_out:{}, step_fee_amount:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{},state.protocol_fee:{},cache.protocol_fee_rate:{}",
+            exact_input,
+            step.amount_in,
+            step.amount_out,
+            step.fee_amount,
+            state.fee_growth_global_x64,
+            state.sqrt_price_x64,
+            state.tick,
+            state.protocol_fee,
+            cache.protocol_fee_rate
+        );
     }
     let partition_current_timestamp = cache.block_timestamp / 14;
     let partition_last_timestamp = latest_observation.block_timestamp / 14;

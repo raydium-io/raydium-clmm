@@ -17,11 +17,18 @@ import { assert, expect } from "chai";
 import * as chai from "chai";
 import chaiAsPromised from "chai-as-promised";
 chai.use(chaiAsPromised);
-import { Pool, TokenAmount } from "./entities";
-// import { Currency } from "./base";
-import { Token as Currency } from "@raydium-io/raydium-sdk";
+import {
+  Fee,
+  FEE_RATE_DENOMINATOR,
+  TokenAmount,
+  tickPosition,
+} from "./entities";
+import { sendTransaction } from "./utils";
+import { AmmPool, CacheDataProviderImpl } from "./pool";
+import { array, Token as Currency } from "@raydium-io/raydium-sdk";
 
-import { TickMath, LiquidityMath } from "./math";
+import { SqrtPriceMath, LiquidityMath, Q64, MaxUint128, Q128 } from "./math";
+import { StateFetcher } from "./states";
 
 import {
   MaxU64,
@@ -41,18 +48,30 @@ import {
   getProtocolPositionAddress,
   getNftMetadataAddress,
   getPersonalPositionAddress,
+  sleep,
 } from "./utils";
 
 import { AmmCore } from "../target/types/amm_core";
-
-import SolanaTickDataProvider from "./SolanaTickDataProvider";
-import JSBI from "jsbi";
+import { openPosition, createPool } from "./instructions";
 
 const {
   metadata: { Metadata },
 } = metaplex.programs;
 
-const { PublicKey, Keypair, SystemProgram, SYSVAR_RENT_PUBKEY } = anchor.web3;
+const {
+  PublicKey,
+  Keypair,
+  SystemProgram,
+  SYSVAR_RENT_PUBKEY,
+  ComputeBudgetProgram,
+} = anchor.web3;
+
+const SUPER_ADMIN_SECRET_KEY = new Uint8Array([
+  18, 52, 81, 206, 137, 36, 192, 182, 13, 66, 109, 118, 114, 207, 71, 49, 105,
+  175, 72, 36, 151, 192, 249, 96, 106, 164, 193, 202, 163, 193, 97, 220, 159,
+  76, 221, 255, 199, 94, 34, 216, 103, 234, 235, 214, 208, 220, 7, 49, 93, 218,
+  5, 14, 106, 72, 212, 32, 27, 82, 57, 7, 173, 143, 104, 159,
+]);
 
 describe("amm-core", async () => {
   // Configure the client to use the local cluster.
@@ -62,30 +81,49 @@ describe("amm-core", async () => {
   console.log("provider set");
 
   const program = anchor.workspace.AmmCore as Program<AmmCore>;
+
+  // const additionalComputeBudgetInstruction = ComputeBudgetProgram.requestUnits({
+  //   units: 400000,
+  //   additionalFee: 0,
+  // });
+  // const transaction = new web3.Transaction().add(
+  //   additionalComputeBudgetInstruction
+  // );
+  // await anchor.getProvider().send(transaction);
+
+  const stateFetcher = new StateFetcher(program);
+
   console.log("program created");
   const { connection, wallet } = anchor.getProvider();
-  const owner = anchor.getProvider().wallet.publicKey;
+  const walletPubkey = anchor.getProvider().wallet.publicKey;
+  console.log("wallet address: ", walletPubkey.toString());
+  const ownerKeyPair = new Keypair();
+  const owner = ownerKeyPair.publicKey;
   console.log("owner address: ", owner.toString());
+
+  const superAdmin = web3.Keypair.fromSecretKey(SUPER_ADMIN_SECRET_KEY);
+  console.log("superAdmin:", superAdmin.publicKey.toString());
   const notOwner = new Keypair();
 
-  const fee = 500; // 500 / 1e6 = 0.0005
+  const fee = Fee.rate_500;
   const tickSpacing = 10;
 
   // find factory address
   const [ammConfig, ammConfigBump] = await getAmmConfigAddress(
     program.programId
   );
-  console.log("factory address: ", ammConfig.toString());
+  console.log(
+    "factory address: ",
+    ammConfig.toString(),
+    "bump:",
+    ammConfigBump
+  );
 
   // find fee address
   const [feeState, feeStateBump] = await getFeeAddress(fee, program.programId);
   console.log("Fee", feeState.toString(), feeStateBump);
 
   const mintAuthority = new Keypair();
-
-  // serum market
-  // const serumMarketA = new Keypair().publicKey;
-  // const serumMarketB = new Keypair().publicKey;
 
   // Tokens constituting the pool
   let token0: Token;
@@ -96,7 +134,8 @@ describe("amm-core", async () => {
   let currency1: Currency;
   let currency2: Currency;
 
-  let uniPoolA: Pool;
+  let ammPoolA: AmmPool;
+  let ammPoolB: AmmPool;
 
   // ATAs to hold pool tokens
   let vaultA0: web3.PublicKey;
@@ -149,8 +188,8 @@ describe("amm-core", async () => {
 
   const tickLower = 0;
   const tickUpper = 10;
-  const wordPosLower = (tickLower / tickSpacing) >> 8;
-  const wordPosUpper = (tickUpper / tickSpacing) >> 8;
+  const wordPosLower = tickPosition(tickLower, tickSpacing).wordPos;
+  const wordPosUpper = tickPosition(tickUpper, tickSpacing).wordPos;
 
   const amount0Desired = new BN(1_000_000);
   const amount1Desired = new BN(1_000_000);
@@ -201,29 +240,45 @@ describe("amm-core", async () => {
   // 18455969290605289472 / 18446744073709551616 = 1
   // float(18455969290605289472 % 18446744073709551616) / 18446744073709551616 = 0.0005001000100004482
   // price = 1.0005001000100004482 = √(1.0001^i) = 1.0001^(i/2) ------> i = 10
-  const initialPriceX64 = new BN("18455969290605289472");
+  // const initialPriceX64 = new BN("18455969290605289472");
+  const initialPriceX64 = SqrtPriceMath.getSqrtPriceX64FromTick(10);
   const initialTick = 10;
+  console.log("initialPriceX64:", initialPriceX64.toString());
 
   it("Create token mints", async () => {
     const transferSolTx = new web3.Transaction().add(
       web3.SystemProgram.transfer({
-        fromPubkey: owner,
+        fromPubkey: walletPubkey,
         toPubkey: mintAuthority.publicKey,
         lamports: web3.LAMPORTS_PER_SOL,
       })
     );
     transferSolTx.add(
       web3.SystemProgram.transfer({
-        fromPubkey: owner,
+        fromPubkey: walletPubkey,
         toPubkey: notOwner.publicKey,
         lamports: web3.LAMPORTS_PER_SOL,
       })
     );
     transferSolTx.add(
       web3.SystemProgram.transfer({
-        fromPubkey: owner,
+        fromPubkey: walletPubkey,
         toPubkey: rewardFounder.publicKey,
         lamports: web3.LAMPORTS_PER_SOL,
+      })
+    );
+    transferSolTx.add(
+      web3.SystemProgram.transfer({
+        fromPubkey: walletPubkey,
+        toPubkey: superAdmin.publicKey,
+        lamports: web3.LAMPORTS_PER_SOL,
+      })
+    );
+    transferSolTx.add(
+      web3.SystemProgram.transfer({
+        fromPubkey: walletPubkey,
+        toPubkey: owner,
+        lamports: 10 * web3.LAMPORTS_PER_SOL,
       })
     );
     await anchor.getProvider().send(transferSolTx);
@@ -252,6 +307,8 @@ describe("amm-core", async () => {
       6,
       TOKEN_PROGRAM_ID
     );
+    // let tokenArray = [token0,token1,token2]
+    // tokenArray.sort()
 
     if (token0.publicKey > token1.publicKey) {
       // swap token mints
@@ -340,14 +397,14 @@ describe("amm-core", async () => {
     console.log("creating reward token mints");
     const transferSolTx = new web3.Transaction().add(
       web3.SystemProgram.transfer({
-        fromPubkey: owner,
+        fromPubkey: walletPubkey,
         toPubkey: mintAuthority.publicKey,
         lamports: web3.LAMPORTS_PER_SOL,
       })
     );
     transferSolTx.add(
       web3.SystemProgram.transfer({
-        fromPubkey: owner,
+        fromPubkey: walletPubkey,
         toPubkey: notOwner.publicKey,
         lamports: web3.LAMPORTS_PER_SOL,
       })
@@ -462,10 +519,16 @@ describe("amm-core", async () => {
   describe("#create_config", () => {
     // Test for event and owner value
     it("initializes config and emits an event", async () => {
-      if (await accountExist(connection, ammConfig)) {
-        return;
-      }
-      console.log("to create amm config account");
+      // await expect(
+      //   program.rpc.createAmmConfig({
+      //     accounts: {
+      //       owner,
+      //       ammConfig,
+      //       systemProgram: anchor.web3.SystemProgram.programId,
+      //     },
+      //   })
+      // ).to.be.rejectedWith(Error);
+
       // let listener: number;
       // let [_event, _slot] = await new Promise((resolve, _reject) => {
       //   listener = program.addEventListener(
@@ -489,18 +552,40 @@ describe("amm-core", async () => {
       // });
       // await program.removeEventListener(listener);
       // feeRate/ 1e6 = 0.1
-      const tx = await program.rpc.createAmmConfig(100000, {
-        accounts: {
+
+      if (await accountExist(connection, ammConfig)) {
+        return;
+      }
+
+      const tx = await program.methods
+        .createAmmConfig(100000)
+        .accounts({
           owner,
           ammConfig,
           systemProgram: SystemProgram.programId,
-        },
-      });
-      console.log("init config without listener, tx: ", tx);
+        })
+        .signers([ownerKeyPair])
+        .rpc();
+      console.log("init amm config tx: ", tx);
+
       const ammConfigData = await program.account.ammConfig.fetch(ammConfig);
-      assert.equal(ammConfigData.bump, ammConfigBump);
-      assert(ammConfigData.owner.equals(owner));
+      console.log(
+        "ammConfigData.bump: ",
+        ammConfigData.bump,
+        "expectedBump:",
+        ammConfigBump,
+        "owner:",
+        ammConfigData.owner.toString(),
+        "admin:",
+        superAdmin.publicKey.toString()
+      );
+
+      assert.equal(
+        ammConfigData.owner.toString(),
+        superAdmin.publicKey.toString()
+      );
       assert.equal(ammConfigData.protocolFeeRate, 100000);
+      assert.equal(ammConfigData.bump, ammConfigBump);
     });
 
     it("Trying to re-initialize config fails", async () => {
@@ -515,7 +600,6 @@ describe("amm-core", async () => {
       ).to.be.rejectedWith(Error);
     });
   });
-
   describe("#set_owner", () => {
     const newOwner = new Keypair();
 
@@ -587,15 +671,17 @@ describe("amm-core", async () => {
       // });
       // await program.removeEventListener(listener);
 
-      await program.rpc.setNewOwner({
-        accounts: {
-          owner,
+      await program.methods
+        .setNewOwner()
+        .accounts({
+          owner: superAdmin.publicKey,
           newOwner: newOwner.publicKey,
           ammConfig,
-        },
-      });
+        })
+        .signers([superAdmin])
+        .rpc();
 
-      const ammConfigData = await program.account.ammConfig.fetch(ammConfig);
+      const ammConfigData = await stateFetcher.getAmmConfig(ammConfig);
       assert(ammConfigData.owner.equals(newOwner.publicKey));
     });
 
@@ -608,7 +694,7 @@ describe("amm-core", async () => {
         },
         signers: [newOwner],
       });
-      const factoryStateData = await program.account.ammConfig.fetch(ammConfig);
+      const factoryStateData = await stateFetcher.getAmmConfig(ammConfig);
       assert(factoryStateData.owner.equals(owner));
     });
   });
@@ -618,7 +704,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.createFeeAccount(fee + 1, tickSpacing, {
           accounts: {
-            owner,
+            owner: superAdmin.publicKey,
             ammConfig,
             feeState,
             systemProgram: SystemProgram.programId,
@@ -654,7 +740,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.createFeeAccount(highFee, tickSpacing, {
           accounts: {
-            owner,
+            owner: superAdmin.publicKey,
             ammConfig,
             feeState: highFeeState,
             systemProgram: SystemProgram.programId,
@@ -667,7 +753,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.createFeeAccount(fee, 0, {
           accounts: {
-            owner,
+            owner: superAdmin.publicKey,
             ammConfig,
             feeState: feeState,
             systemProgram: SystemProgram.programId,
@@ -680,7 +766,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.createFeeAccount(fee, 16384, {
           accounts: {
-            owner,
+            owner: superAdmin.publicKey,
             ammConfig,
             feeState: feeState,
             systemProgram: SystemProgram.programId,
@@ -715,14 +801,16 @@ describe("amm-core", async () => {
       //   });
       // });
       // await program.removeEventListener(listener);
-      await program.rpc.createFeeAccount(fee, tickSpacing, {
-        accounts: {
-          owner,
+      await program.methods
+        .createFeeAccount(fee, tickSpacing)
+        .accounts({
+          owner: superAdmin.publicKey,
           ammConfig,
           feeState,
           systemProgram: SystemProgram.programId,
-        },
-      });
+        })
+        .signers([superAdmin])
+        .rpc();
       const feeStateData = await program.account.feeState.fetch(feeState);
       console.log("fee state", feeStateData);
       assert.equal(feeStateData.bump, feeStateBump);
@@ -734,7 +822,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.createFeeAccount(feeStateBump, fee, tickSpacing, {
           accounts: {
-            owner,
+            owner: superAdmin.publicKey,
             ammConfig,
             feeState,
             systemProgram: SystemProgram.programId,
@@ -747,7 +835,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.createFeeAccount(feeStateBump, fee, tickSpacing + 1, {
           accounts: {
-            owner,
+            owner: superAdmin.publicKey,
             ammConfig,
             feeState,
             systemProgram: SystemProgram.programId,
@@ -768,21 +856,19 @@ describe("amm-core", async () => {
     it("fails if tokens are passed in reverse", async () => {
       // Unlike Uniswap, we must pass the tokens by address sort order
       await expect(
-        program.rpc.createPool(initialPriceX64, {
-          accounts: {
-            poolCreator: owner,
-            ammConfig: ammConfig,
-            tokenMint0: token1.publicKey,
-            tokenMint1: token0.publicKey,
-            tokenVault0: vaultA0,
-            tokenVault1: vaultA1,
-            feeState,
-            poolState: poolAState,
-            initialFirstObservation: initialObservationStateA,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            systemProgram: SystemProgram.programId,
-            rent: web3.SYSVAR_RENT_PUBKEY,
-          },
+        AmmPool.createPool(program, initialPriceX64, {
+          poolCreator: owner,
+          ammConfig: ammConfig,
+          tokenMint0: token1.publicKey,
+          tokenMint1: token0.publicKey,
+          tokenVault0: vaultA0,
+          tokenVault1: vaultA1,
+          feeState,
+          poolState: poolAState,
+          initialFirstObservation: initialObservationStateA,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: web3.SYSVAR_RENT_PUBKEY,
         })
       ).to.be.rejectedWith(Error);
     });
@@ -790,21 +876,19 @@ describe("amm-core", async () => {
     it("fails if token0 == token1", async () => {
       // Unlike Uniswap, we must pass the tokens by address sort order
       await expect(
-        program.rpc.createPool(initialPriceX64, {
-          accounts: {
-            poolCreator: owner,
-            ammConfig: ammConfig,
-            tokenMint0: token0.publicKey,
-            tokenMint1: token0.publicKey,
-            feeState,
-            poolState: poolAState,
-            initialFirstObservation: initialObservationStateA,
-            tokenVault0: vaultA0,
-            tokenVault1: vaultA1,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            systemProgram: SystemProgram.programId,
-            rent: web3.SYSVAR_RENT_PUBKEY,
-          },
+        AmmPool.createPool(program, initialPriceX64, {
+          poolCreator: owner,
+          ammConfig: ammConfig,
+          tokenMint0: token0.publicKey,
+          tokenMint1: token0.publicKey,
+          feeState,
+          poolState: poolAState,
+          initialFirstObservation: initialObservationStateA,
+          tokenVault0: vaultA0,
+          tokenVault1: vaultA1,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: web3.SYSVAR_RENT_PUBKEY,
         })
       ).to.be.rejectedWith(Error);
     });
@@ -816,110 +900,99 @@ describe("amm-core", async () => {
       );
 
       await expect(
-        program.rpc.createPool(initialPriceX64, {
-          accounts: {
-            poolCreator: owner,
-            ammConfig: ammConfig,
-            tokenMint0: token0.publicKey,
-            tokenMint1: token0.publicKey,
-            feeState: uninitializedFeeState,
-            poolState: poolAState,
-            initialFirstObservation: initialObservationStateA,
-            tokenVault0: vaultA0,
-            tokenVault1: vaultA1,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            systemProgram: SystemProgram.programId,
-            rent: web3.SYSVAR_RENT_PUBKEY,
-          },
+        AmmPool.createPool(program, initialPriceX64, {
+          poolCreator: owner,
+          ammConfig: ammConfig,
+          tokenMint0: token0.publicKey,
+          tokenMint1: token0.publicKey,
+          feeState: uninitializedFeeState,
+          poolState: poolAState,
+          initialFirstObservation: initialObservationStateA,
+          tokenVault0: vaultA0,
+          tokenVault1: vaultA1,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: web3.SYSVAR_RENT_PUBKEY,
         })
       ).to.be.rejectedWith(Error);
     });
 
     it("fails if starting price is too low", async () => {
       await expect(
-        program.rpc.createPool(new BN(1), {
-          accounts: {
-            poolCreator: owner,
-            ammConfig: ammConfig,
-            tokenMint0: token0.publicKey,
-            tokenMint1: token1.publicKey,
-            feeState,
-            poolState: poolAState,
-            initialFirstObservation: initialObservationStateA,
-            tokenVault0: vaultA0,
-            tokenVault1: vaultA1,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            systemProgram: SystemProgram.programId,
-            rent: web3.SYSVAR_RENT_PUBKEY,
-          },
+        AmmPool.createPool(program, new BN(1), {
+          poolCreator: owner,
+          ammConfig: ammConfig,
+          tokenMint0: token0.publicKey,
+          tokenMint1: token1.publicKey,
+          feeState,
+          poolState: poolAState,
+          initialFirstObservation: initialObservationStateA,
+          tokenVault0: vaultA0,
+          tokenVault1: vaultA1,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: web3.SYSVAR_RENT_PUBKEY,
         })
       ).to.be.rejectedWith(Error);
 
       await expect(
-        program.rpc.createPool(MIN_SQRT_RATIO.subn(1), {
-          accounts: {
-            poolCreator: owner,
-            ammConfig: ammConfig,
-            tokenMint0: token0.publicKey,
-            tokenMint1: token1.publicKey,
-            feeState,
-            poolState: poolAState,
-            initialFirstObservation: initialObservationStateA,
-            tokenVault0: vaultA0,
-            tokenVault1: vaultA1,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            systemProgram: SystemProgram.programId,
-            rent: web3.SYSVAR_RENT_PUBKEY,
-          },
+        AmmPool.createPool(program, MIN_SQRT_RATIO.subn(1), {
+          poolCreator: owner,
+          ammConfig: ammConfig,
+          tokenMint0: token0.publicKey,
+          tokenMint1: token1.publicKey,
+          feeState,
+          poolState: poolAState,
+          initialFirstObservation: initialObservationStateA,
+          tokenVault0: vaultA0,
+          tokenVault1: vaultA1,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: web3.SYSVAR_RENT_PUBKEY,
         })
       ).to.be.rejectedWith(Error);
     });
 
     it("fails if starting price is too high", async () => {
       await expect(
-        program.rpc.createPool(MAX_SQRT_RATIO, {
-          accounts: {
-            poolCreator: owner,
-            ammConfig: ammConfig,
-            tokenMint0: token0.publicKey,
-            tokenMint1: token1.publicKey,
-            feeState,
-            poolState: poolAState,
-            initialFirstObservation: initialObservationStateA,
-            tokenVault0: vaultA0,
-            tokenVault1: vaultA1,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            systemProgram: SystemProgram.programId,
-            rent: web3.SYSVAR_RENT_PUBKEY,
-          },
+        AmmPool.createPool(program, MAX_SQRT_RATIO, {
+          poolCreator: owner,
+          ammConfig: ammConfig,
+          tokenMint0: token0.publicKey,
+          tokenMint1: token1.publicKey,
+          feeState,
+          poolState: poolAState,
+          initialFirstObservation: initialObservationStateA,
+          tokenVault0: vaultA0,
+          tokenVault1: vaultA1,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: web3.SYSVAR_RENT_PUBKEY,
         })
       ).to.be.rejectedWith(Error);
 
       await expect(
-        program.rpc.createPool(new BN(2).pow(new BN(128)).subn(1), {
-          // u64::MAX
-          accounts: {
-            poolCreator: owner,
-            ammConfig: ammConfig,
-            tokenMint0: token0.publicKey,
-            tokenMint1: token1.publicKey,
-            feeState,
-            poolState: poolAState,
-            initialFirstObservation: initialObservationStateA,
-            tokenVault0: vaultA0,
-            tokenVault1: vaultA1,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            systemProgram: SystemProgram.programId,
-            rent: web3.SYSVAR_RENT_PUBKEY,
-          },
+        AmmPool.createPool(program, new BN(2).pow(new BN(128)).subn(1), {
+          poolCreator: owner,
+          ammConfig: ammConfig,
+          tokenMint0: token0.publicKey,
+          tokenMint1: token1.publicKey,
+          feeState,
+          poolState: poolAState,
+          initialFirstObservation: initialObservationStateA,
+          tokenVault0: vaultA0,
+          tokenVault1: vaultA1,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: web3.SYSVAR_RENT_PUBKEY,
         })
       ).to.be.rejectedWith(Error);
     });
 
     it("creates a new pool and initializes it with a starting price", async () => {
-      if (await accountExist(connection, poolAState)) {
-        return;
-      }
+      // if (await accountExist(connection, poolAState)) {
+      //   return;
+      // }
       // let listener: number;
       // let [_event, _slot] = await new Promise((resolve, _reject) => {
       //   listener = program.addEventListener(
@@ -955,24 +1028,27 @@ describe("amm-core", async () => {
       //   });
       // });
       // await program.removeEventListener(listener);
-      await program.rpc.createPool(initialPriceX64, {
-        accounts: {
-          poolCreator: owner,
-          ammConfig: ammConfig,
-          tokenMint0: token0.publicKey,
-          tokenMint1: token1.publicKey,
-          feeState,
-          poolState: poolAState,
-          initialFirstObservation: initialObservationStateA,
-          tokenVault0: vaultA0,
-          tokenVault1: vaultA1,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          systemProgram: SystemProgram.programId,
-          rent: web3.SYSVAR_RENT_PUBKEY,
-        },
+
+      const ix = await createPool(program, initialPriceX64, {
+        poolCreator: owner,
+        ammConfig: ammConfig,
+        tokenMint0: token0.publicKey,
+        tokenMint1: token1.publicKey,
+        feeState,
+        poolState: poolAState,
+        initialFirstObservation: initialObservationStateA,
+        tokenVault0: vaultA0,
+        tokenVault1: vaultA1,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        rent: web3.SYSVAR_RENT_PUBKEY,
       });
+
+      const tx = await sendTransaction(connection, [ix], [ownerKeyPair]);
+      console.log("create pool tx:", tx);
+      await sleep(2000);
       // pool state variables
-      const poolStateData = await program.account.poolState.fetch(poolAState);
+      const poolStateData = await stateFetcher.getPoolState(poolAState);
       assert.equal(poolStateData.bump, poolAStateBump);
       assert(poolStateData.tokenMint0.equals(token0.publicKey));
       assert(poolStateData.tokenMint1.equals(token1.publicKey));
@@ -1011,21 +1087,19 @@ describe("amm-core", async () => {
 
     it("fails if already initialized", async () => {
       await expect(
-        program.rpc.createPool(initialPriceX64, {
-          accounts: {
-            poolCreator: owner,
-            ammConfig: ammConfig,
-            tokenMint0: token0.publicKey,
-            tokenMint1: token1.publicKey,
-            feeState,
-            poolState: poolAState,
-            initialFirstObservation: initialObservationStateA,
-            tokenVault0: vaultA0,
-            tokenVault1: vaultA1,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            systemProgram: SystemProgram.programId,
-            rent: web3.SYSVAR_RENT_PUBKEY,
-          },
+        AmmPool.createPool(program, initialPriceX64, {
+          poolCreator: owner,
+          ammConfig: ammConfig,
+          tokenMint0: token0.publicKey,
+          tokenMint1: token1.publicKey,
+          feeState,
+          poolState: poolAState,
+          initialFirstObservation: initialObservationStateA,
+          tokenVault0: vaultA0,
+          tokenVault1: vaultA1,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: web3.SYSVAR_RENT_PUBKEY,
         })
       ).to.be.rejectedWith(Error);
     });
@@ -1036,7 +1110,7 @@ describe("amm-core", async () => {
         program.methods
           .resetSqrtPrice(new BN(10))
           .accounts({
-            owner: notOwner.publicKey,
+            owner: superAdmin.publicKey,
             ammConfig: ammConfig,
             poolState: poolAState,
             tokenVault0: vaultA0,
@@ -1051,31 +1125,33 @@ describe("amm-core", async () => {
       await program.methods
         .resetSqrtPrice(initialPriceX64.add(new BN(10)))
         .accounts({
-          owner: owner,
+          owner: superAdmin.publicKey,
           ammConfig: ammConfig,
           poolState: poolAState,
           tokenVault0: vaultA0,
           tokenVault1: vaultA1,
         })
         .remainingAccounts([])
+        .signers([superAdmin])
         .rpc();
 
-      let poolStateData = await program.account.poolState.fetch(poolAState);
+      let poolStateData = await stateFetcher.getPoolState(poolAState);
       assert(poolStateData.sqrtPriceX64.eq(initialPriceX64.add(new BN(10))));
 
       await program.methods
         .resetSqrtPrice(initialPriceX64)
         .accounts({
-          owner: owner,
+          owner: superAdmin.publicKey,
           ammConfig: ammConfig,
           poolState: poolAState,
           tokenVault0: vaultA0,
           tokenVault1: vaultA1,
         })
         .remainingAccounts([])
+        .signers([superAdmin])
         .rpc();
 
-      poolStateData = await program.account.poolState.fetch(poolAState);
+      poolStateData = await stateFetcher.getPoolState(poolAState);
       assert(poolStateData.sqrtPriceX64.eq(initialPriceX64));
     });
   });
@@ -1194,26 +1270,45 @@ describe("amm-core", async () => {
       //   );
       // });
       // await program.removeEventListener(listener);
-      await program.rpc.increaseObservation(
-        Buffer.from([observationState1Bump]),
-        {
-          accounts: {
-            payer: owner,
-            poolState: poolAState,
-            systemProgram: SystemProgram.programId,
-          },
-          remainingAccounts: [
-            {
-              pubkey: observationState1,
-              isSigner: false,
-              isWritable: true,
-            },
-          ],
-        }
-      );
 
-      const observationState1Data =
-        await program.account.observationState.fetch(observationState1);
+      // await program.rpc.increaseObservation(
+      //   Buffer.from([observationState1Bump]),
+      //   {
+      //     accounts: {
+      //       payer: owner,
+      //       poolState: poolAState,
+      //       systemProgram: SystemProgram.programId,
+      //     },
+      //     remainingAccounts: [
+      //       {
+      //         pubkey: observationState1,
+      //         isSigner: false,
+      //         isWritable: true,
+      //       },
+      //     ],
+      //   }
+      // );
+
+      await program.methods
+        .increaseObservation(Buffer.from([observationState1Bump]))
+        .accounts({
+          payer: owner,
+          poolState: poolAState,
+          systemProgram: SystemProgram.programId,
+        })
+        .remainingAccounts([
+          {
+            pubkey: observationState1,
+            isSigner: false,
+            isWritable: true,
+          },
+        ])
+        .signers([ownerKeyPair])
+        .rpc();
+
+      const observationState1Data = await stateFetcher.getObservationState(
+        observationState1
+      );
       console.log("Observation state 1 data", observationState1Data);
       assert.equal(observationState1Data.bump, observationState1Bump);
       assert.equal(observationState1Data.index, 1);
@@ -1343,7 +1438,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.setProtocolFeeRate(0, {
           accounts: {
-            owner,
+            owner: superAdmin.publicKey,
             ammConfig,
           },
         })
@@ -1352,7 +1447,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.setProtocolFeeRate(10000000000, {
           accounts: {
-            owner,
+            owner: superAdmin.publicKey,
             ammConfig,
           },
         })
@@ -1378,14 +1473,16 @@ describe("amm-core", async () => {
       // })
       // await program.removeEventListener(listener)
       // feeRate/ 1e6 = 0.3
-      await program.rpc.setProtocolFeeRate(300000, {
-        accounts: {
-          owner,
+      await program.methods
+        .setProtocolFeeRate(300000)
+        .accounts({
+          owner: superAdmin.publicKey,
           ammConfig,
-        },
-      });
+        })
+        .signers([superAdmin])
+        .rpc();
 
-      const factoryStateData = await program.account.ammConfig.fetch(ammConfig);
+      const factoryStateData = await stateFetcher.getAmmConfig(ammConfig);
       assert.equal(factoryStateData.protocolFeeRate, 300000);
     });
   });
@@ -1561,7 +1658,7 @@ describe("amm-core", async () => {
           systemProgram: SystemProgram.programId,
           rent: web3.SYSVAR_RENT_PUBKEY,
         })
-        .signers([])
+        .signers([ownerKeyPair])
         .rpc();
 
       const poolAStateData = await program.account.poolState.fetch(poolAState);
@@ -1609,7 +1706,7 @@ describe("amm-core", async () => {
           systemProgram: SystemProgram.programId,
           rent: web3.SYSVAR_RENT_PUBKEY,
         })
-        .signers([])
+        .signers([ownerKeyPair])
         .rpc();
       let poolAStateData = await program.account.poolState.fetch(poolAState);
 
@@ -1643,7 +1740,7 @@ describe("amm-core", async () => {
           systemProgram: SystemProgram.programId,
           rent: web3.SYSVAR_RENT_PUBKEY,
         })
-        .signers([])
+        .signers([ownerKeyPair])
         .rpc();
       let poolAStateData = await program.account.poolState.fetch(poolAState);
 
@@ -1748,9 +1845,11 @@ describe("amm-core", async () => {
       //   });
       // });
       // await program.removeEventListener(listener);
-      await program.rpc.collectProtocolFee(MaxU64, MaxU64, {
-        accounts: {
-          owner,
+
+      await program.methods
+        .collectProtocolFee(MaxU64, MaxU64)
+        .accounts({
+          owner: superAdmin.publicKey,
           ammConfig,
           poolState: poolAState,
           tokenVault0: vaultA0,
@@ -1758,9 +1857,11 @@ describe("amm-core", async () => {
           recipientTokenAccount0: feeRecipientWallet0,
           recipientTokenAccount1: feeRecipientWallet1,
           tokenProgram: TOKEN_PROGRAM_ID,
-        },
-      });
-      const poolStateData = await program.account.poolState.fetch(poolAState);
+        })
+        .signers([superAdmin])
+        .rpc();
+
+      const poolStateData = await stateFetcher.getPoolState(poolAState);
       assert(poolStateData.protocolFeesToken0.eqn(0));
       assert(poolStateData.protocolFeesToken1.eqn(0));
 
@@ -1930,18 +2031,19 @@ describe("amm-core", async () => {
       // tick_lower: 0,  price: 18446744073709551616
       // tick_upper: 10,  price: 18455969290605289472
       // so only token_1 be added.
-      const price_lower = TickMath.getSqrtPriceX64FromTick(tickLower);
-      const price_upper = TickMath.getSqrtPriceX64FromTick(tickUpper);
+      const price_lower = SqrtPriceMath.getSqrtPriceX64FromTick(tickLower);
+      const price_upper = SqrtPriceMath.getSqrtPriceX64FromTick(tickUpper);
       //  ΔL = Δy / (√P_upper - √P_lower)
       // ΔL = 1000000 /(18455969290605289472 - 18446744073709551616) * 18446744073709551616 = 1999600039.9982069
-      const expectLiquity = LiquidityMath.maxLiquidityForAmounts(
-        JSBI.BigInt("18455969290605289472"),
+      const expectLiquity = LiquidityMath.maxLiquidityFromTokenAmounts(
+        new BN("18455969290605289472"),
         price_lower,
         price_upper,
-        JSBI.BigInt(amount0Desired),
-        JSBI.BigInt(amount1Desired),
-        true
+        new BN(amount0Desired),
+        new BN(amount1Desired)
       );
+
+      const s = await stateFetcher.getAmmConfig(ammConfig);
       console.log(
         "price_lower:",
         price_lower.toString(),
@@ -1950,20 +2052,32 @@ describe("amm-core", async () => {
         "curr_price:",
         "18455969290605289472",
         "expectLiquity",
-        expectLiquity.toString()
+        expectLiquity.toString(),
+        "ammConfig:",
+        ammConfig.toString(),
+        "bump:",
+        s.bump
       );
-      const tx = await program.methods
-        .openPosition(
-          tickLower,
-          tickUpper,
-          wordPosLower,
-          wordPosUpper,
+
+      const additionalComputeBudgetInstruction =
+        ComputeBudgetProgram.requestUnits({
+          units: 400000,
+          additionalFee: 0,
+        });
+
+      const openIx = await openPosition(
+        program,
+        {
+          tickLowerIndex: tickLower,
+          tickUpperIndex: tickUpper,
+          wordLowerIndex: wordPosLower,
+          wordUpperIndex: wordPosUpper,
           amount0Desired,
           amount1Desired,
-          amount0Minimum,
-          amount1Minimum
-        )
-        .accounts({
+          amount0Min: amount0Minimum,
+          amount1Min: amount1Minimum,
+        },
+        {
           payer: owner,
           positionNftOwner: owner,
           ammConfig,
@@ -1988,10 +2102,55 @@ describe("amm-core", async () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
           metadataProgram: metaplex.programs.metadata.MetadataProgram.PUBKEY,
-        })
-        .remainingAccounts([])
-        .signers([nftMintAKeypair])
-        .rpc();
+        }
+      );
+
+      const tx = await sendTransaction(
+        connection,
+        [additionalComputeBudgetInstruction, openIx],
+        [ownerKeyPair, nftMintAKeypair]
+      );
+      await sleep(2000);
+      // const tx = await program.methods
+      //   .openPosition(
+      //     tickLower,
+      //     tickUpper,
+      //     wordPosLower,
+      //     wordPosUpper,
+      //     amount0Desired,
+      //     amount1Desired,
+      //     amount0Minimum,
+      //     amount1Minimum
+      //   )
+      //   .accounts({
+      //     payer: owner,
+      //     positionNftOwner: owner,
+      //     ammConfig,
+      //     positionNftMint: nftMintAKeypair.publicKey,
+      //     positionNftAccount: positionANftAccount,
+      //     metadataAccount,
+      //     poolState: poolAState,
+      //     protocolPosition: protocolPositionAState,
+      //     tickLower: tickLowerAState,
+      //     tickUpper: tickUpperAState,
+      //     tickBitmapLower: bitmapLowerAState,
+      //     tickBitmapUpper: bitmapUpperAState,
+      //     tokenAccount0: minterWallet0,
+      //     tokenAccount1: minterWallet1,
+      //     tokenVault0: vaultA0,
+      //     tokenVault1: vaultA1,
+      //     lastObservation: lastObservationAState,
+      //     nextObservation: nextObservationAState,
+      //     personalPosition: personalPositionAState,
+      //     systemProgram: SystemProgram.programId,
+      //     rent: web3.SYSVAR_RENT_PUBKEY,
+      //     tokenProgram: TOKEN_PROGRAM_ID,
+      //     associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      //     metadataProgram: metaplex.programs.metadata.MetadataProgram.PUBKEY,
+      //   })
+      //   .remainingAccounts([])
+      //   .signers([nftMintAKeypair])
+      //   .rpc();
       console.log("create position, tx:", tx);
       // let listener: number
       // let [_event, _slot] = await new Promise((resolve, _reject) => {
@@ -2044,6 +2203,12 @@ describe("amm-core", async () => {
       //   );
       // })
       // await program.removeEventListener(listener)
+
+      const a = await stateFetcher.getPoolState(poolAState);
+      console.log("a:", a);
+      const b = await stateFetcher.getPositionState(personalPositionAState);
+      console.log("b:", b);
+
       let poolAStateData = await program.account.poolState.fetch(poolAState);
       assert.equal(poolAStateData.liquidity.toNumber(), 0);
       const nftMint = new Token(
@@ -2251,40 +2416,40 @@ describe("amm-core", async () => {
     });
 
     it("Add token 1 to the position", async () => {
-      const tx = await program.rpc.increaseLiquidity(
-        amount0Desired,
-        amount1Desired,
-        amount0Minimum,
-        amount1Minimum,
-        {
-          accounts: {
-            nftOwner: owner,
-            nftAccount: positionANftAccount,
-            ammConfig,
-            poolState: poolAState,
-            protocolPosition: protocolPositionAState,
-            tickLower: tickLowerAState,
-            tickUpper: tickUpperAState,
-            tickBitmapLower: bitmapLowerAState,
-            tickBitmapUpper: bitmapUpperAState,
-            tokenAccount0: minterWallet0,
-            tokenAccount1: minterWallet1,
-            tokenVault0: vaultA0,
-            tokenVault1: vaultA1,
-            lastObservation: lastObservationAState,
-            nextObservation: nextObservationAState,
-            personalPosition: personalPositionAState,
-            tokenProgram: TOKEN_PROGRAM_ID,
-          },
-          remainingAccounts: [],
-        }
-      );
+      const tx = await program.methods
+        .increaseLiquidity(
+          amount0Desired,
+          amount1Desired,
+          amount0Minimum,
+          amount1Minimum
+        )
+        .accounts({
+          nftOwner: owner,
+          nftAccount: positionANftAccount,
+          ammConfig,
+          poolState: poolAState,
+          protocolPosition: protocolPositionAState,
+          tickLower: tickLowerAState,
+          tickUpper: tickUpperAState,
+          tickBitmapLower: bitmapLowerAState,
+          tickBitmapUpper: bitmapUpperAState,
+          tokenAccount0: minterWallet0,
+          tokenAccount1: minterWallet1,
+          tokenVault0: vaultA0,
+          tokenVault1: vaultA1,
+          lastObservation: lastObservationAState,
+          nextObservation: nextObservationAState,
+          personalPosition: personalPositionAState,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .remainingAccounts([])
+        .signers([ownerKeyPair])
+        .rpc();
       console.log("increaseLiquidity tx: ", tx);
 
-      const personalPositionData =
-        await program.account.personalPositionState.fetch(
-          personalPositionAState
-        );
+      const personalPositionData = await stateFetcher.getPositionState(
+        personalPositionAState
+      );
       // console.log("Tokenized position", personalPositionData);
       console.log(
         "liquidity inside position",
@@ -2292,9 +2457,7 @@ describe("amm-core", async () => {
       );
       assert.equal(personalPositionData.liquidity.toNumber(), 3999200078);
 
-      const tickLowerData = await program.account.tickState.fetch(
-        tickLowerAState
-      );
+      const tickLowerData = await stateFetcher.getTickState(tickLowerAState);
       // console.log("Tick lower", tickLowerData);
       assert.equal(
         tickLowerData.liquidityNet.toNumber(),
@@ -2304,9 +2467,7 @@ describe("amm-core", async () => {
         tickLowerData.liquidityGross.toNumber(),
         personalPositionData.liquidity.toNumber()
       );
-      const tickUpperData = await program.account.tickState.fetch(
-        tickUpperAState
-      );
+      const tickUpperData = await stateFetcher.getTickState(tickUpperAState);
       // console.log("Tick upper", tickUpperData);
       assert.equal(
         tickUpperData.liquidityNet.toNumber(),
@@ -2392,7 +2553,7 @@ describe("amm-core", async () => {
 
     it("update observation accounts", async () => {
       const { observationIndex, observationCardinalityNext } =
-        await program.account.poolState.fetch(poolAState);
+        await stateFetcher.getPoolState(poolAState);
 
       const { blockTimestamp: lastBlockTime } =
         await program.account.observationState.fetch(lastObservationAState);
@@ -2429,8 +2590,9 @@ describe("amm-core", async () => {
 
     it("fails if not called by the owner", async () => {
       await expect(
-        program.rpc.decreaseLiquidity(liquidity, new BN(0), amount1Desired, {
-          accounts: {
+        program.methods
+          .decreaseLiquidity(liquidity, new BN(0), amount1Desired)
+          .accounts({
             nftOwner: notOwner.publicKey,
             nftAccount: positionANftAccount,
             personalPosition: personalPositionAState,
@@ -2448,41 +2610,41 @@ describe("amm-core", async () => {
             recipientTokenAccount0: minterWallet0,
             recipientTokenAccount1: minterWallet1,
             tokenProgram: TOKEN_PROGRAM_ID,
-          },
-          remainingAccounts: [],
-        })
+          })
+          .signers([ownerKeyPair])
+          .rpc()
       ).to.be.rejectedWith(Error);
     });
 
     it("fails if past slippage tolerance", async () => {
       await expect(
-        program.rpc.decreaseLiquidity(
-          liquidity,
-          new BN(0),
-          new BN(1_000_000), // 999_999 available
-          {
-            accounts: {
-              nftOwner: owner,
-              nftAccount: positionANftAccount,
-              personalPosition: personalPositionAState,
-              ammConfig,
-              poolState: poolAState,
-              protocolPosition: protocolPositionAState,
-              tickLower: tickLowerAState,
-              tickUpper: tickUpperAState,
-              tickBitmapLower: bitmapLowerAState,
-              tickBitmapUpper: bitmapUpperAState,
-              lastObservation: lastObservationAState,
-              nextObservation: nextObservationAState,
-              tokenVault0: vaultA0,
-              tokenVault1: vaultA1,
-              recipientTokenAccount0: minterWallet0,
-              recipientTokenAccount1: minterWallet1,
-              tokenProgram: TOKEN_PROGRAM_ID,
-            },
-            remainingAccounts: [],
-          }
-        )
+        program.methods
+          .decreaseLiquidity(
+            liquidity,
+            new BN(0),
+            new BN(1_000_000) // 999_999 available
+          )
+          .accounts({
+            nftOwner: owner,
+            nftAccount: positionANftAccount,
+            personalPosition: personalPositionAState,
+            ammConfig,
+            poolState: poolAState,
+            protocolPosition: protocolPositionAState,
+            tickLower: tickLowerAState,
+            tickUpper: tickUpperAState,
+            tickBitmapLower: bitmapLowerAState,
+            tickBitmapUpper: bitmapUpperAState,
+            lastObservation: lastObservationAState,
+            nextObservation: nextObservationAState,
+            tokenVault0: vaultA0,
+            tokenVault1: vaultA1,
+            recipientTokenAccount0: minterWallet0,
+            recipientTokenAccount1: minterWallet1,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .signers([ownerKeyPair])
+          .rpc()
       ).to.be.rejectedWith(Error);
     });
 
@@ -2511,8 +2673,9 @@ describe("amm-core", async () => {
       await anchor.getProvider().send(transferTx);
 
       await expect(
-        program.rpc.decreaseLiquidity(liquidity, new BN(0), amount1Desired, {
-          accounts: {
+        program.methods
+          .decreaseLiquidity(liquidity, new BN(0), amount1Desired)
+          .accounts({
             nftOwner: owner,
             nftAccount: positionANftAccount, // no balance
             personalPosition: personalPositionAState,
@@ -2530,9 +2693,9 @@ describe("amm-core", async () => {
             recipientTokenAccount0: minterWallet0,
             recipientTokenAccount1: minterWallet1,
             tokenProgram: TOKEN_PROGRAM_ID,
-          },
-          remainingAccounts: [],
-        })
+          })
+          .signers([ownerKeyPair])
+          .rpc()
       ).to.be.rejectedWith(Error);
 
       // send the NFT back to the original owner
@@ -2601,38 +2764,34 @@ describe("amm-core", async () => {
       const recipientWallet1BalanceBefer = await token1.getAccountInfo(
         minterWallet1
       );
-      await program.rpc.decreaseLiquidity(
-        liquidity,
-        new BN(0),
-        amount1Desired,
-        {
-          accounts: {
-            nftOwner: owner,
-            nftAccount: positionANftAccount,
-            personalPosition: personalPositionAState,
-            ammConfig,
-            poolState: poolAState,
-            protocolPosition: protocolPositionAState,
-            tickLower: tickLowerAState,
-            tickUpper: tickUpperAState,
-            tickBitmapLower: bitmapLowerAState,
-            tickBitmapUpper: bitmapUpperAState,
-            lastObservation: lastObservationAState,
-            nextObservation: nextObservationAState,
-            tokenVault0: vaultA0,
-            tokenVault1: vaultA1,
-            recipientTokenAccount0: minterWallet0,
-            recipientTokenAccount1: minterWallet1,
-            tokenProgram: TOKEN_PROGRAM_ID,
-          },
-          remainingAccounts: [],
-        }
-      );
+      await program.methods
+        .decreaseLiquidity(liquidity, new BN(0), amount1Desired)
+        .accounts({
+          nftOwner: owner,
+          nftAccount: positionANftAccount,
+          personalPosition: personalPositionAState,
+          ammConfig,
+          poolState: poolAState,
+          protocolPosition: protocolPositionAState,
+          tickLower: tickLowerAState,
+          tickUpper: tickUpperAState,
+          tickBitmapLower: bitmapLowerAState,
+          tickBitmapUpper: bitmapUpperAState,
+          lastObservation: lastObservationAState,
+          nextObservation: nextObservationAState,
+          tokenVault0: vaultA0,
+          tokenVault1: vaultA1,
+          recipientTokenAccount0: minterWallet0,
+          recipientTokenAccount1: minterWallet1,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .remainingAccounts([])
+        .signers([ownerKeyPair])
+        .rpc();
 
-      const personalPositionData =
-        await program.account.personalPositionState.fetch(
-          personalPositionAState
-        );
+      const personalPositionData = await stateFetcher.getPositionState(
+        personalPositionAState
+      );
 
       assert.equal(personalPositionData.liquidity.toNumber(), 1999600039);
       const recipientWallet0BalanceAfter = await token0.getAccountInfo(
@@ -2661,9 +2820,7 @@ describe("amm-core", async () => {
       assert.equal(proctocolPositionData.tokenFeesOwed0.toNumber(), 0);
       assert.equal(proctocolPositionData.tokenFeesOwed1.toNumber(), 0);
 
-      const tickLowerData = await program.account.tickState.fetch(
-        tickLowerAState
-      );
+      const tickLowerData = await stateFetcher.getTickState(tickLowerAState);
       // console.log("Tick lower", tickLowerData);
       assert.equal(tickLowerData.liquidityNet.toNumber(), 1999600039);
       assert.equal(
@@ -2674,9 +2831,7 @@ describe("amm-core", async () => {
         tickLowerData.liquidityGross.toNumber(),
         personalPositionData.liquidity.toNumber()
       );
-      const tickUpperData = await program.account.tickState.fetch(
-        tickUpperAState
-      );
+      const tickUpperData = await stateFetcher.getTickState(tickUpperAState);
       // console.log("Tick upper", tickUpperData);
       assert.equal(tickUpperData.liquidityNet.toNumber(), -1999600039);
       assert.equal(
@@ -2706,12 +2861,10 @@ describe("amm-core", async () => {
       );
       await anchor.getProvider().send(approveTx);
 
-      const tx = program.transaction.decreaseLiquidity(
-        new BN(1_000),
-        new BN(0),
-        new BN(0),
-        {
-          accounts: {
+      await expect(
+        await program.methods
+          .decreaseLiquidity(new BN(1_000), new BN(0), new BN(0))
+          .accounts({
             nftOwner: mintAuthority.publicKey,
             nftAccount: positionANftAccount,
             personalPosition: personalPositionAState,
@@ -2729,12 +2882,9 @@ describe("amm-core", async () => {
             recipientTokenAccount0: minterWallet0,
             recipientTokenAccount1: minterWallet1,
             tokenProgram: TOKEN_PROGRAM_ID,
-          },
-          remainingAccounts: [],
-        }
-      );
-      await expect(
-        connection.sendTransaction(tx, [mintAuthority])
+          })
+          .signers([mintAuthority])
+          .rpc()
       ).to.be.rejectedWith(Error);
       // TODO see why errors inside functions are not propagating outside
     });
@@ -2789,13 +2939,12 @@ describe("amm-core", async () => {
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .remainingAccounts([])
-        .signers([])
+        .signers([ownerKeyPair])
         .rpc();
 
-      const personalPositionData =
-        await program.account.personalPositionState.fetch(
-          personalPositionAState
-        );
+      const personalPositionData = await stateFetcher.getPositionState(
+        personalPositionAState
+      );
 
       const recipientWallet0BalanceAfter = await token0.getAccountInfo(
         minterWallet0
@@ -2932,45 +3081,46 @@ describe("amm-core", async () => {
       const sqrtPriceLimitX32 = new BN("18455969290605289572");
 
       await expect(
-        program.rpc.swap(
-          // true,
-          amountIn,
-          amountOutMinimum,
-          sqrtPriceLimitX32,
-          true,
-          {
-            accounts: {
-              payer: owner,
-              ammConfig,
-              poolState: poolAState,
-              inputTokenAccount: minterWallet0,
-              outputTokenAccount: minterWallet1,
-              inputVault: vaultA0,
-              outputVault: vaultA1,
-              lastObservation: lastObservationAState,
-              nextObservation: nextObservationAState,
-              tokenProgram: TOKEN_PROGRAM_ID,
+        program.methods
+          .swap(
+            // true,
+            amountIn,
+            amountOutMinimum,
+            sqrtPriceLimitX32,
+            true
+          )
+          .accounts({
+            payer: owner,
+            ammConfig,
+            poolState: poolAState,
+            inputTokenAccount: minterWallet0,
+            outputTokenAccount: minterWallet1,
+            inputVault: vaultA0,
+            outputVault: vaultA1,
+            lastObservation: lastObservationAState,
+            nextObservation: nextObservationAState,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .remainingAccounts([
+            {
+              pubkey: bitmapLowerAState,
+              isSigner: false,
+              isWritable: true,
             },
-            remainingAccounts: [
-              {
-                pubkey: bitmapLowerAState,
-                isSigner: false,
-                isWritable: true,
-              },
-              // price moves downwards in zero for one swap
-              {
-                pubkey: tickUpperAState,
-                isSigner: false,
-                isWritable: true,
-              },
-              {
-                pubkey: tickLowerAState,
-                isSigner: false,
-                isWritable: true,
-              },
-            ],
-          }
-        )
+            // price moves downwards in zero for one swap
+            {
+              pubkey: tickUpperAState,
+              isSigner: false,
+              isWritable: true,
+            },
+            {
+              pubkey: tickLowerAState,
+              isSigner: false,
+              isWritable: true,
+            },
+          ])
+          .signers([ownerKeyPair])
+          .rpc()
       ).to.be.rejectedWith(Error);
     });
 
@@ -2981,38 +3131,36 @@ describe("amm-core", async () => {
       // current price is 18455969290605289472
       const sqrtPriceLimitX64 = new BN("18455969190605289472");
 
-      const tickDataProvider = new SolanaTickDataProvider(program, {
-        key: poolAState,
-        token0: token0.publicKey,
-        token1: token1.publicKey,
-        fee,
-      });
+      const tickDataProvider = new CacheDataProviderImpl(program, poolAState);
 
       const {
         tick: currentTick,
         sqrtPriceX64: currentSqrtPriceX64,
         liquidity: currentLiquidity,
       } = await program.account.poolState.fetch(poolAState);
-      await tickDataProvider.eagerLoadCache(currentTick, tickSpacing);
+      await tickDataProvider.loadTickAndBitmapCache(currentTick, tickSpacing);
 
+      const poolStateAData = await stateFetcher.getPoolState(poolAState);
       // output is one tick behind actual (8 instead of 9)
-      uniPoolA = new Pool(
+      ammPoolA = new AmmPool(
+        program,
+        poolAState,
         currency0,
         currency1,
-        fee,
-        JSBI.BigInt(currentSqrtPriceX64.toString()),
-        JSBI.BigInt(currentLiquidity.toString()),
-        currentTick,
+        poolStateAData,
+        stateFetcher,
         tickDataProvider
       );
 
-      const [expectedAmountOut, expectedNewPool, bitmapAndTickAccounts] =
-        uniPoolA.getOutputAmount(
+      const [expectedAmountOut, expectedPoolState, bitmapAndTickAccounts] =
+        await ammPoolA.getOutputAmountAndRemainAccounts(
           new TokenAmount(currency0, amountIn.toNumber()),
-          JSBI.BigInt(sqrtPriceLimitX64)
+          sqrtPriceLimitX64,
+          true
         );
+
       assert.equal(
-        expectedNewPool.sqrtRatioX64.toString(),
+        expectedPoolState.sqrtPriceX64.toString(),
         sqrtPriceLimitX64.toString()
       );
 
@@ -3027,48 +3175,45 @@ describe("amm-core", async () => {
       // delta y = L (√P_upper - √P_lower)
       // delta y  = 1998600039 *(18455969290605289472 - 18455969190605289472) /18446744073709551616(Q64) = 10.83443252106707 -> floor = 10
       // fee: 1
-      const tx = await program.rpc.swap(
-        amountIn,
-        amountOutMinimum,
-        sqrtPriceLimitX64,
-        true,
-        {
-          accounts: {
-            payer: owner,
-            ammConfig,
-            poolState: poolAState,
-            inputTokenAccount: minterWallet0,
-            outputTokenAccount: minterWallet1,
-            inputVault: vaultA0,
-            outputVault: vaultA1,
-            lastObservation: lastObservationAState,
-            nextObservation: nextObservationAState,
-            tokenProgram: TOKEN_PROGRAM_ID,
-          },
-          remainingAccounts: [...bitmapAndTickAccounts],
-        }
-      );
+      const tx = await program.methods
+        .swap(amountIn, amountOutMinimum, sqrtPriceLimitX64, true)
+        .accounts({
+          payer: owner,
+          ammConfig,
+          poolState: poolAState,
+          inputTokenAccount: minterWallet0,
+          outputTokenAccount: minterWallet1,
+          inputVault: vaultA0,
+          outputVault: vaultA1,
+          lastObservation: lastObservationAState,
+          nextObservation: nextObservationAState,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .remainingAccounts([...bitmapAndTickAccounts])
+        .signers([ownerKeyPair])
+        .rpc();
+
       console.log("exactInputSingle, tx: ", tx);
       let poolStateData = await program.account.poolState.fetch(poolAState);
       console.log(
         "poolStateData.tick:",
         poolStateData.tick,
-        "poolStateData.sqrtPriceX32: ",
+        "poolStateData.sqrtPriceX64: ",
         poolStateData.sqrtPriceX64.toString(),
-        "sqrtPriceLimitX32:",
+        "sqrtPriceLimitX64:",
         sqrtPriceLimitX64.toString(),
         "expectedAmountOut:",
-        JSBI.toNumber(expectedAmountOut.amount)
+        expectedAmountOut.amount.toString()
       );
       assert.equal(poolStateData.feeGrowthGlobal0.toNumber(), 9229832739);
-      assert.equal(JSBI.toNumber(expectedAmountOut.amount), 10);
+      assert.equal(expectedAmountOut.amount.toNumber(), 10);
 
       assert(poolStateData.sqrtPriceX64.eq(sqrtPriceLimitX64));
       assert.equal(
         poolStateData.sqrtPriceX64.toString(),
-        expectedNewPool.sqrtRatioX64.toString()
+        expectedPoolState.sqrtPriceX64.toString()
       );
-      assert.equal(poolStateData.tick, expectedNewPool.tickCurrent);
+      assert.equal(poolStateData.tick, expectedPoolState.tick);
 
       const wallet0BalanceAfter = await token0.getAccountInfo(minterWallet0);
       const wallet1BalanceAfter = await token1.getAccountInfo(minterWallet1);
@@ -3093,16 +3238,16 @@ describe("amm-core", async () => {
       );
 
       console.log(
-        "tick after swap",
+        "after swap pool tick:",
         poolStateData.tick,
-        "price",
+        "pool price:",
         poolStateData.sqrtPriceX64.toString(),
         "after swap vaultA0: ",
         vault0BalanceAfter.amount.toNumber(),
         "after swap vaultA1:",
         vault1BalanceAfter.amount.toNumber()
       );
-      uniPoolA = expectedNewPool;
+
       let poolAStateData = await program.account.poolState.fetch(poolAState);
       assert.equal(poolAStateData.liquidity.toNumber(), 1998600039);
     });
@@ -3141,12 +3286,12 @@ describe("amm-core", async () => {
 
       console.log(
         "poolA tick:",
-        uniPoolA.tickCurrent,
+        ammPoolA.poolState.tick,
         "poolA price:",
-        uniPoolA.sqrtRatioX64.toString()
+        ammPoolA.poolState.sqrtPriceX64.toString()
       );
-      const [expectedAmountOut, expectedNewPool, bitmapAndTickAccounts] =
-        uniPoolA.getOutputAmount(
+      const [expectedAmountOut, expectedPoolNewState, bitmapAndTickAccounts] =
+        await ammPoolA.getOutputAmountAndRemainAccounts(
           new TokenAmount(currency0, amountIn.toNumber())
         );
       // console.log("expected pool", expectedNewPool);
@@ -3166,6 +3311,7 @@ describe("amm-core", async () => {
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .remainingAccounts([...bitmapAndTickAccounts])
+        .signers([ownerKeyPair])
         .rpc();
 
       const poolStateDataAfter = await program.account.poolState.fetch(
@@ -3173,16 +3319,17 @@ describe("amm-core", async () => {
       );
 
       console.log(
-        "pool price after",
-        poolStateDataAfter.sqrtPriceX64.toString()
+        "pool price after:",
+        poolStateDataAfter.sqrtPriceX64.toString(),
+        "pool tick after: ",
+        poolStateDataAfter.tick
       );
-      console.log("pool tick after", poolStateDataAfter.tick);
 
       assert.equal(
         poolStateDataAfter.sqrtPriceX64.toString(),
-        expectedNewPool.sqrtRatioX64.toString()
+        expectedPoolNewState.sqrtPriceX64.toString()
       );
-      assert.equal(poolStateDataAfter.tick, expectedNewPool.tickCurrent);
+      assert.equal(poolStateDataAfter.tick, expectedPoolNewState.tick);
 
       const feeGrowthGlobalToken0After = poolStateDataAfter.protocolFeesToken0;
       const vaultBalanceA1After = await token1.getAccountInfo(vaultA1);
@@ -3194,20 +3341,16 @@ describe("amm-core", async () => {
       assert.equal(
         vaultBalanceA1Befer.amount.toNumber() -
           vaultBalanceA1After.amount.toNumber(),
-        JSBI.toNumber(expectedAmountOut.amount)
+        expectedAmountOut.amount.toNumber()
       );
-      console.log(
-        "expectedAmountOut: ",
-        JSBI.toNumber(expectedAmountOut.amount)
-      );
-
-      uniPoolA = expectedNewPool;
+      console.log("expectedAmountOut: ", expectedAmountOut.amount.toNumber());
     });
 
     it("collect protocol fees after swap", async () => {
-      await program.rpc.collectProtocolFee(MaxU64, MaxU64, {
-        accounts: {
-          owner,
+      await program.methods
+        .collectProtocolFee(MaxU64, MaxU64)
+        .accounts({
+          owner: superAdmin.publicKey,
           ammConfig,
           poolState: poolAState,
           tokenVault0: vaultA0,
@@ -3215,8 +3358,10 @@ describe("amm-core", async () => {
           recipientTokenAccount0: feeRecipientWallet0,
           recipientTokenAccount1: feeRecipientWallet1,
           tokenProgram: TOKEN_PROGRAM_ID,
-        },
-      });
+        })
+        .signers([superAdmin])
+        .rpc();
+
       const poolStateData = await program.account.poolState.fetch(poolAState);
       assert(poolStateData.protocolFeesToken0.eqn(0));
       assert(poolStateData.protocolFeesToken1.eqn(0));
@@ -3235,8 +3380,9 @@ describe("amm-core", async () => {
   describe("#collect_fee", () => {
     it("fails if both amounts are set as 0", async () => {
       await expect(
-        program.rpc.collectFee(new BN(0), new BN(0), {
-          accounts: {
+        program.methods
+          .collectFee(new BN(0), new BN(0))
+          .accounts({
             nftOwner: owner,
             nftAccount: positionANftAccount,
             personalPosition: personalPositionAState,
@@ -3254,9 +3400,10 @@ describe("amm-core", async () => {
             recipientTokenAccount0: feeRecipientWallet0,
             recipientTokenAccount1: feeRecipientWallet1,
             tokenProgram: TOKEN_PROGRAM_ID,
-          },
-          remainingAccounts: [],
-        })
+          })
+          .remainingAccounts([])
+          .signers([ownerKeyPair])
+          .rpc()
       ).to.be.rejectedWith(Error);
     });
 
@@ -3305,30 +3452,30 @@ describe("amm-core", async () => {
       );
       await anchor.getProvider().send(approveTx);
 
-      const tx = program.transaction.collectFee(new BN(0), new BN(10), {
-        accounts: {
-          nftOwner: mintAuthority.publicKey,
-          nftAccount: positionANftAccount,
-          personalPosition: personalPositionAState,
-          ammConfig,
-          poolState: poolAState,
-          protocolPosition: protocolPositionAState,
-          tickLower: tickLowerAState,
-          tickUpper: tickUpperAState,
-          tickBitmapLower: bitmapLowerAState,
-          tickBitmapUpper: bitmapUpperAState,
-          lastObservation: lastObservationAState,
-          nextObservation: nextObservationAState,
-          tokenVault0: vaultA0,
-          tokenVault1: vaultA1,
-          recipientTokenAccount0: feeRecipientWallet0,
-          recipientTokenAccount1: feeRecipientWallet1,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        },
-        remainingAccounts: [],
-      });
       await expect(
-        connection.sendTransaction(tx, [mintAuthority])
+        await program.methods
+          .collectFee(new BN(0), new BN(10))
+          .accounts({
+            nftOwner: mintAuthority.publicKey,
+            nftAccount: positionANftAccount,
+            personalPosition: personalPositionAState,
+            ammConfig,
+            poolState: poolAState,
+            protocolPosition: protocolPositionAState,
+            tickLower: tickLowerAState,
+            tickUpper: tickUpperAState,
+            tickBitmapLower: bitmapLowerAState,
+            tickBitmapUpper: bitmapUpperAState,
+            lastObservation: lastObservationAState,
+            nextObservation: nextObservationAState,
+            tokenVault0: vaultA0,
+            tokenVault1: vaultA1,
+            recipientTokenAccount0: feeRecipientWallet0,
+            recipientTokenAccount1: feeRecipientWallet1,
+            tokenProgram: TOKEN_PROGRAM_ID,
+          })
+          .signers([mintAuthority])
+          .rpc()
       ).to.be.rejectedWith(Error);
     });
 
@@ -3350,8 +3497,9 @@ describe("amm-core", async () => {
       await anchor.getProvider().send(transferTx);
 
       await expect(
-        program.rpc.collectFee(new BN(0), new BN(10), {
-          accounts: {
+        program.methods
+          .collectFee(new BN(0), new BN(10))
+          .accounts({
             nftOwner: owner,
             nftAccount: positionANftAccount,
             personalPosition: personalPositionAState,
@@ -3369,9 +3517,9 @@ describe("amm-core", async () => {
             recipientTokenAccount0: feeRecipientWallet0,
             recipientTokenAccount1: feeRecipientWallet1,
             tokenProgram: TOKEN_PROGRAM_ID,
-          },
-          remainingAccounts: [],
-        })
+          })
+          .signers([ownerKeyPair])
+          .rpc()
       ).to.be.rejectedWith(Error);
 
       // send the NFT back to the original owner
@@ -3388,8 +3536,9 @@ describe("amm-core", async () => {
       const amount0Max = new BN(0);
       const amount1Max = new BN(10);
 
-      await program.rpc.collectFee(amount0Max, amount1Max, {
-        accounts: {
+      await program.methods
+        .collectFee(amount0Max, amount1Max)
+        .accounts({
           nftOwner: owner,
           nftAccount: positionANftAccount,
           personalPosition: personalPositionAState,
@@ -3407,9 +3556,9 @@ describe("amm-core", async () => {
           recipientTokenAccount0: feeRecipientWallet0,
           recipientTokenAccount1: feeRecipientWallet1,
           tokenProgram: TOKEN_PROGRAM_ID,
-        },
-        remainingAccounts: [],
-      });
+        })
+        .signers([ownerKeyPair])
+        .rpc();
 
       const protocolPositionData =
         await program.account.procotolPositionState.fetch(
@@ -3462,9 +3611,10 @@ describe("amm-core", async () => {
       const amount0Max = new BN(0);
       const amount1Max = new BN(10);
 
-      const tx = await program.rpc.collectFee(amount0Max, amount1Max, {
-        accounts: {
-          nftOwner:owner,
+      const tx = await program.methods
+        .collectFee(amount0Max, amount1Max)
+        .accounts({
+          nftOwner: owner,
           nftAccount: positionANftAccount,
           personalPosition: personalPositionAState,
           ammConfig,
@@ -3481,10 +3631,10 @@ describe("amm-core", async () => {
           recipientTokenAccount0: feeRecipientWallet0,
           recipientTokenAccount1: feeRecipientWallet1,
           tokenProgram: TOKEN_PROGRAM_ID,
-        },
-        remainingAccounts: [],
-        signers: [],
-      });
+        })
+        .signers([ownerKeyPair])
+        .rpc();
+
       console.log("collectFromTokenized delegated authority, tx: ", tx);
       const protocolPositionData =
         await program.account.procotolPositionState.fetch(
@@ -3525,8 +3675,9 @@ describe("amm-core", async () => {
       const sqrtPriceLimitX32 = new BN(0);
 
       await expect(
-        program.rpc.swap(amountOut, amountInMaximum, sqrtPriceLimitX32, false, {
-          accounts: {
+        program.methods
+          .swap(amountOut, amountInMaximum, sqrtPriceLimitX32, false)
+          .accounts({
             payer: owner,
             ammConfig,
             poolState: poolAState,
@@ -3537,15 +3688,16 @@ describe("amm-core", async () => {
             lastObservation: lastObservationAState,
             nextObservation: nextObservationAState,
             tokenProgram: TOKEN_PROGRAM_ID,
-          },
-          remainingAccounts: [
+          })
+          .remainingAccounts([
             {
               pubkey: bitmapLowerAState,
               isSigner: false,
               isWritable: true,
             },
-          ],
-        })
+          ])
+          .signers([ownerKeyPair])
+          .rpc()
       ).to.be.rejectedWith(Error);
     });
 
@@ -3577,23 +3729,24 @@ describe("amm-core", async () => {
 
       const amountInMaximum = new BN(100_000);
       const amountOut = new BN(100_000);
-      const sqrtPriceLimitX32 = new BN(0);
+      const sqrtPriceLimitX64 = new BN(0);
 
       console.log(
         "pool tick",
-        uniPoolA.tickCurrent,
+        ammPoolA.poolState.tick,
         "price",
-        uniPoolA.sqrtRatioX64.toString()
+        ammPoolA.poolState.sqrtPriceX64.toString()
       );
-      const [expectedAmountIn, expectedNewPool] = uniPoolA.getInputAmount(
-        new TokenAmount(currency1, amountOut.toNumber())
-      );
-      console.log("expectedAmountIn: ", JSBI.toNumber(expectedAmountIn.amount));
+      const [expectedAmountIn, expectedPoolNewState] =
+        await ammPoolA.getInputAmountAndAccounts(
+          new TokenAmount(currency1, amountOut)
+        );
+      console.log("expectedAmountIn: ", expectedAmountIn.amount.toNumber());
       // console.log("expected pool", expectedNewPool);
 
       let vaultBalanceA0Before = await token0.getAccountInfo(vaultA0);
       await program.methods
-        .swap(amountOut, amountInMaximum, sqrtPriceLimitX32, false)
+        .swap(amountOut, amountInMaximum, sqrtPriceLimitX64, false)
         .accounts({
           payer: owner,
           ammConfig,
@@ -3613,6 +3766,7 @@ describe("amm-core", async () => {
             isWritable: true,
           },
         ])
+        .signers([ownerKeyPair])
         .rpc();
 
       const poolStateDataAfter = await program.account.poolState.fetch(
@@ -3620,22 +3774,22 @@ describe("amm-core", async () => {
       );
       console.log(
         "pool price after",
-        poolStateDataAfter.sqrtPriceX64.toString()
+        poolStateDataAfter.sqrtPriceX64.toString(),
+        "pool tick after",
+        poolStateDataAfter.tick
       );
-      console.log("pool tick after", poolStateDataAfter.tick);
 
-      assert.equal(poolStateDataAfter.tick, expectedNewPool.tickCurrent);
+      assert.equal(poolStateDataAfter.tick, expectedPoolNewState.tick);
       assert.equal(
         poolStateDataAfter.sqrtPriceX64.toString(),
-        expectedNewPool.sqrtRatioX64.toString()
+        expectedPoolNewState.sqrtPriceX64.toString()
       );
 
       let vaultBalanceA0After = await token0.getAccountInfo(vaultA0);
       assert.equal(
-        JSBI.toNumber(expectedAmountIn.amount),
+        expectedAmountIn.amount.toNumber(),
         new Number(vaultBalanceA0After.amount.sub(vaultBalanceA0Before.amount))
       );
-      uniPoolA = expectedNewPool;
     });
   });
 
@@ -3669,62 +3823,55 @@ describe("amm-core", async () => {
       const amountIn = new BN(100_000);
       const amountOutMinimum = new BN(0);
       const [expectedAmountOut, expectedNewPool, swapAccounts] =
-        uniPoolA.getOutputAmount(
+        await ammPoolA.getOutputAmountAndRemainAccounts(
           new TokenAmount(currency0, amountIn.toNumber())
         );
-      console.log(
-        "expectedAmountOut: ",
-        JSBI.toNumber(expectedAmountOut.amount)
-      );
+      console.log("expectedAmountOut: ", expectedAmountOut.amount.toNumber());
       // console.log("expected pool", expectedNewPool);
 
-      await program.rpc.swapRouterBaseIn(
-        amountIn,
-        amountOutMinimum,
-        Buffer.from([2]),
-        {
-          accounts: {
-            payer: owner,
-            ammConfig,
-            inputTokenAccount: minterWallet0,
-            tokenProgram: TOKEN_PROGRAM_ID,
+      await program.methods
+        .swapRouterBaseIn(amountIn, amountOutMinimum, Buffer.from([2]))
+        .accounts({
+          payer: owner,
+          ammConfig,
+          inputTokenAccount: minterWallet0,
+          tokenProgram: TOKEN_PROGRAM_ID,
+        })
+        .remainingAccounts([
+          {
+            pubkey: poolAState,
+            isSigner: false,
+            isWritable: true,
           },
-          remainingAccounts: [
-            {
-              pubkey: poolAState,
-              isSigner: false,
-              isWritable: true,
-            },
-            {
-              pubkey: minterWallet1, // outputTokenAccount
-              isSigner: false,
-              isWritable: true,
-            },
-            {
-              pubkey: vaultA0, // input vault
-              isSigner: false,
-              isWritable: true,
-            },
-            {
-              pubkey: vaultA1, // output vault
-              isSigner: false,
-              isWritable: true,
-            },
-            {
-              pubkey: lastObservationAState,
-              isSigner: false,
-              isWritable: true,
-            },
-            {
-              pubkey: nextObservationAState,
-              isSigner: false,
-              isWritable: true,
-            },
-            ...swapAccounts,
-          ],
-        }
-      );
-
+          {
+            pubkey: minterWallet1, // outputTokenAccount
+            isSigner: false,
+            isWritable: true,
+          },
+          {
+            pubkey: vaultA0, // input vault
+            isSigner: false,
+            isWritable: true,
+          },
+          {
+            pubkey: vaultA1, // output vault
+            isSigner: false,
+            isWritable: true,
+          },
+          {
+            pubkey: lastObservationAState,
+            isSigner: false,
+            isWritable: true,
+          },
+          {
+            pubkey: nextObservationAState,
+            isSigner: false,
+            isWritable: true,
+          },
+          ...swapAccounts,
+        ])
+        .signers([ownerKeyPair])
+        .rpc();
       const poolStateDataAfter = await program.account.poolState.fetch(
         poolAState
       );
@@ -3736,8 +3883,9 @@ describe("amm-core", async () => {
     });
 
     it("creates a second liquidity pool", async () => {
-      await program.rpc.createPool(initialPriceX64, {
-        accounts: {
+      await program.methods
+        .createPool(initialPriceX64)
+        .accounts({
           poolCreator: owner,
           ammConfig: ammConfig,
           tokenMint0: token1.publicKey,
@@ -3750,8 +3898,10 @@ describe("amm-core", async () => {
           tokenProgram: TOKEN_PROGRAM_ID,
           systemProgram: SystemProgram.programId,
           rent: web3.SYSVAR_RENT_PUBKEY,
-        },
-      });
+        })
+        .signers([ownerKeyPair])
+        .rpc();
+
       console.log(
         "second pool created,token1:",
         token1.publicKey.toString(),
@@ -3782,50 +3932,64 @@ describe("amm-core", async () => {
       // can't combine with createTokenizedPosition due to size limit
       console.log(
         "tickLowerBState:",
-        tickLowerBState,
+        tickLowerBState.toString(),
         "tickUpperBState:",
-        tickUpperBState
+        tickUpperBState.toString()
       );
-      await program.rpc.openPosition(
-        tickLower,
-        tickUpper,
-        wordPosLower,
-        wordPosUpper,
-        amount0Desired,
-        amount1Desired,
-        new BN(0),
-        new BN(0),
+
+      const additionalComputeBudgetInstruction =
+        ComputeBudgetProgram.requestUnits({
+          units: 400000,
+          additionalFee: 0,
+        });
+
+      const openIx = await openPosition(
+        program,
         {
-          accounts: {
-            payer: owner,
-            positionNftOwner: owner,
-            ammConfig,
-            positionNftMint: nftMintBKeypair.publicKey,
-            positionNftAccount: positionBNftAccount,
-            metadataAccount: metadataBAccount,
-            poolState: poolBState,
-            protocolPosition: protocolPositionBState,
-            tickLower: tickLowerBState,
-            tickUpper: tickUpperBState,
-            tickBitmapLower: bitmapLowerBState,
-            tickBitmapUpper: bitmapUpperBState,
-            tokenAccount0: minterWallet1,
-            tokenAccount1: minterWallet2,
-            tokenVault0: vaultB1,
-            tokenVault1: vaultB2,
-            lastObservation: latestObservationBState,
-            nextObservation: nextObservationAState,
-            personalPosition: personalPositionBState,
-            systemProgram: SystemProgram.programId,
-            rent: SYSVAR_RENT_PUBKEY,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-            metadataProgram: metaplex.programs.metadata.MetadataProgram.PUBKEY,
-          },
-          remainingAccounts: [],
-          signers: [nftMintBKeypair],
+          tickLowerIndex: tickLower,
+          tickUpperIndex: tickUpper,
+          wordLowerIndex: wordPosLower,
+          wordUpperIndex: wordPosUpper,
+          amount0Desired,
+          amount1Desired,
+          amount0Min: new BN(0),
+          amount1Min: new BN(0),
+        },
+        {
+          payer: owner,
+          positionNftOwner: owner,
+          ammConfig,
+          positionNftMint: nftMintBKeypair.publicKey,
+          positionNftAccount: positionBNftAccount,
+          metadataAccount: metadataBAccount,
+          poolState: poolBState,
+          protocolPosition: protocolPositionBState,
+          tickLower: tickLowerBState,
+          tickUpper: tickUpperBState,
+          tickBitmapLower: bitmapLowerBState,
+          tickBitmapUpper: bitmapUpperBState,
+          tokenAccount0: minterWallet1,
+          tokenAccount1: minterWallet2,
+          tokenVault0: vaultB1,
+          tokenVault1: vaultB2,
+          lastObservation: latestObservationBState,
+          nextObservation: nextObservationAState,
+          personalPosition: personalPositionBState,
+          systemProgram: SystemProgram.programId,
+          rent: SYSVAR_RENT_PUBKEY,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+          metadataProgram: metaplex.programs.metadata.MetadataProgram.PUBKEY,
         }
       );
+
+      const tx = await sendTransaction(
+        connection,
+        [additionalComputeBudgetInstruction, openIx],
+        [ownerKeyPair, nftMintBKeypair]
+      );
+      console.log("seconde position:", tx)
+      await sleep(2000)
     });
 
     it("perform a two pool swap", async () => {
@@ -3990,6 +4154,7 @@ describe("amm-core", async () => {
             isWritable: true,
           },
         ])
+        .signers([ownerKeyPair])
         .rpc({
           skipPreflight: true,
           preflightCommitment: "processed",
@@ -4095,6 +4260,7 @@ describe("amm-core", async () => {
               isWritable: true,
             },
           ])
+          .signers([notOwner])
           .rpc()
       ).to.be.rejectedWith(Error);
     });
@@ -4144,6 +4310,7 @@ describe("amm-core", async () => {
             isWritable: true,
           },
         ])
+        .signers([ownerKeyPair])
         .rpc();
     });
   });
@@ -4158,6 +4325,7 @@ describe("amm-core", async () => {
             ammConfig: ammConfig,
             poolState: poolAState,
           })
+          .signers([notOwner])
           .remainingAccounts([])
           .rpc()
       ).to.be.rejectedWith(Error);
@@ -4172,6 +4340,7 @@ describe("amm-core", async () => {
             ammConfig: ammConfig,
             poolState: poolAState,
           })
+          .signers([ownerKeyPair])
           .remainingAccounts([])
           .rpc()
       ).to.be.rejectedWith(Error);
@@ -4185,6 +4354,7 @@ describe("amm-core", async () => {
           ammConfig: ammConfig,
           poolState: poolAState,
         })
+        .signers([ownerKeyPair])
         .remainingAccounts([])
         .rpc();
 
@@ -4299,11 +4469,13 @@ describe("amm-core", async () => {
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .remainingAccounts([])
+        .signers([ownerKeyPair])
         .rpc();
 
       // collect fee
-      await program.rpc.collectFee(new BN(10000), new BN(10000), {
-        accounts: {
+      await program.methods
+        .collectFee(new BN(10000), new BN(10000))
+        .accounts({
           nftOwner: owner,
           nftAccount: positionANftAccount,
           personalPosition: personalPositionAState,
@@ -4321,9 +4493,9 @@ describe("amm-core", async () => {
           recipientTokenAccount0: feeRecipientWallet0,
           recipientTokenAccount1: feeRecipientWallet1,
           tokenProgram: TOKEN_PROGRAM_ID,
-        },
-        remainingAccounts: [],
-      });
+        })
+        .signers([ownerKeyPair])
+        .rpc();
 
       // close position
       await program.methods
@@ -4338,6 +4510,7 @@ describe("amm-core", async () => {
           tokenProgram: TOKEN_PROGRAM_ID,
         })
         .remainingAccounts([])
+        .signers([ownerKeyPair])
         .rpc();
     });
   });

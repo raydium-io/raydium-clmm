@@ -6,7 +6,7 @@ use std::ops::DerefMut;
 #[instruction(fee: u32)]
 pub struct CreateFeeAccount<'info> {
     /// Valid protocol owner
-    #[account(mut, address = amm_config.owner)]
+    #[account(mut, address = crate::admin::id())]
     pub owner: Signer<'info>,
 
     /// Factory state stores the protocol owner address

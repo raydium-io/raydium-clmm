@@ -16,7 +16,7 @@ declare_id!("Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3");
 
 pub mod admin {
     use anchor_lang::prelude::declare_id;
-    declare_id!("E1CjPgJodwDyAzvHEvHGcGqNeJc2ZLSe8kdJC3affmZf");
+    declare_id!("BiqojH9aSwnY56SUSb3hj2gCea5F1CG38oihKWfFHr6z");
 }
 
 #[program]
