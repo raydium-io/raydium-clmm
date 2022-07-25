@@ -4,7 +4,7 @@ import {
   AccountMeta,
 } from "@solana/web3.js";
 import { Program } from "@project-serum/anchor";
-import { AmmCore } from "../anchor/amm_core";
+import { AmmCore } from "../../target/types/amm_core";
 
 export type CollectRewardsAccounts = {
   nftOwner: PublicKey;
@@ -12,8 +12,8 @@ export type CollectRewardsAccounts = {
   poolState: PublicKey;
   protocolPosition: PublicKey;
   personalPosition: PublicKey;
-  tickLower: PublicKey;
-  tickUpper: PublicKey;
+  tickArrayLower: PublicKey;
+  tickArrayUpper: PublicKey;
   tokenProgram: PublicKey;
   remainings: AccountMeta[];
 };
@@ -28,8 +28,8 @@ export function collectRewards(
     poolState,
     protocolPosition,
     personalPosition,
-    tickLower,
-    tickUpper,
+    tickArrayLower,
+    tickArrayUpper,
     tokenProgram,
   } = accounts;
 
@@ -41,8 +41,8 @@ export function collectRewards(
       personalPosition,
       poolState,
       protocolPosition,
-      tickLower,
-      tickUpper,
+      tickArrayLower,
+      tickArrayUpper,
       tokenProgram,
     })
     .remainingAccounts(accounts.remainings)

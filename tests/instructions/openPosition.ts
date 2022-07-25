@@ -1,6 +1,6 @@
 import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { Program, BN } from "@project-serum/anchor";
-import { AmmCore } from "../anchor/amm_core";
+import { AmmCore } from "../../target/types/amm_core";
 import { IncreaseLiquidityAccounts } from "./increaseLiquidity";
 
 export type OpenPositionAccounts = {
@@ -33,8 +33,8 @@ export type OpenPositionAccounts = {
 export type OpenPositionArgs = {
   tickLowerIndex: number;
   tickUpperIndex: number;
-  wordLowerIndex: number;
-  wordUpperIndex: number;
+  tickArrayLowerIndex: number;
+  tickArrayUpperIndex: number;
   amount0Desired: BN;
   amount1Desired: BN;
   amount0Min: BN;
@@ -49,8 +49,8 @@ export function openPosition(
   const {
     tickLowerIndex,
     tickUpperIndex,
-    wordLowerIndex,
-    wordUpperIndex,
+    tickArrayLowerIndex,
+    tickArrayUpperIndex,
     amount0Desired,
     amount1Desired,
     amount0Min,
@@ -61,8 +61,8 @@ export function openPosition(
     .openPosition(
       tickLowerIndex,
       tickUpperIndex,
-      wordLowerIndex,
-      wordUpperIndex,
+      tickArrayLowerIndex,
+      tickArrayUpperIndex,
       amount0Desired,
       amount1Desired,
       amount0Min,

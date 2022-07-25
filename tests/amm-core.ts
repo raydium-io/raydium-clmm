@@ -3,6 +3,7 @@ import {
   Program,
   web3,
   BN,
+  Idl,
   ProgramError,
   eventDiscriminator,
 } from "@project-serum/anchor";
@@ -29,7 +30,7 @@ import { array, Token as Currency } from "@raydium-io/raydium-sdk";
 
 import { SqrtPriceMath, LiquidityMath, Q64, MaxUint128, Q128 } from "./math";
 import { StateFetcher } from "./states";
-
+import {Context,NodeWallet} from "./base";
 import {
   MaxU64,
   MAX_SQRT_RATIO,
@@ -38,12 +39,10 @@ import {
   getUnixTs,
   getBlockTimestamp,
   getAmmConfigAddress,
-  getFeeAddress,
   getPoolAddress,
   getPoolVaultAddress,
   getPoolRewardVaultAddress,
   getObservationAddress,
-  getTickAddress,
   getTickBitmapAddress,
   getProtocolPositionAddress,
   getNftMetadataAddress,
@@ -53,6 +52,7 @@ import {
 
 import { AmmCore } from "../target/types/amm_core";
 import { openPosition, createPool } from "./instructions";
+import { Connection,ConfirmOptions, Keypair } from "@solana/web3.js";
 
 const {
   metadata: { Metadata },
@@ -60,7 +60,6 @@ const {
 
 const {
   PublicKey,
-  Keypair,
   SystemProgram,
   SYSVAR_RENT_PUBKEY,
   ComputeBudgetProgram,
@@ -82,6 +81,8 @@ describe("amm-core", async () => {
 
   const program = anchor.workspace.AmmCore as Program<AmmCore>;
 
+
+  console.log("program init");
   // const additionalComputeBudgetInstruction = ComputeBudgetProgram.requestUnits({
   //   units: 400000,
   //   additionalFee: 0,
@@ -94,9 +95,9 @@ describe("amm-core", async () => {
   const stateFetcher = new StateFetcher(program);
 
   console.log("program created");
-  const { connection, wallet } = anchor.getProvider();
-  const walletPubkey = anchor.getProvider().wallet.publicKey;
-  console.log("wallet address: ", walletPubkey.toString());
+  // const { connection, wallet } = anchor.getProvider();
+  // const walletPubkey = anchor.getProvider().wallet.publicKey;
+  // console.log("wallet address: ", walletPubkey.toString());
   const ownerKeyPair = new Keypair();
   const owner = ownerKeyPair.publicKey;
   console.log("owner address: ", owner.toString());
@@ -110,6 +111,7 @@ describe("amm-core", async () => {
 
   // find factory address
   const [ammConfig, ammConfigBump] = await getAmmConfigAddress(
+    0,
     program.programId
   );
   console.log(
@@ -118,10 +120,6 @@ describe("amm-core", async () => {
     "bump:",
     ammConfigBump
   );
-
-  // find fee address
-  const [feeState, feeStateBump] = await getFeeAddress(fee, program.programId);
-  console.log("Fee", feeState.toString(), feeStateBump);
 
   const mintAuthority = new Keypair();
 
@@ -698,7 +696,7 @@ describe("amm-core", async () => {
       assert(factoryStateData.owner.equals(owner));
     });
   });
-
+return
   describe("#create_pool", () => {
     it("derive first observation slot address", async () => {
       [initialObservationStateA, initialObservationBumpA] =
@@ -2083,8 +2081,8 @@ describe("amm-core", async () => {
       assert.equal(personalPositionData.bump, personalPositionABump);
       assert(personalPositionData.poolId.equals(poolAState));
       assert(personalPositionData.nftMint.equals(nftMintAKeypair.publicKey));
-      assert.equal(personalPositionData.tickLower, tickLower);
-      assert.equal(personalPositionData.tickUpper, tickUpper);
+      assert.equal(personalPositionData.tickLowerIndex, tickLower);
+      assert.equal(personalPositionData.tickUpperIndex, tickUpper);
       assert(personalPositionData.feeGrowthInside0Last.eqn(0));
       assert(personalPositionData.feeGrowthInside1Last.eqn(0));
       assert(personalPositionData.tokenFeesOwed0.eqn(0));

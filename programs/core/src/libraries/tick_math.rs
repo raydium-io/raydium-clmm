@@ -203,212 +203,212 @@ pub fn get_tick_at_sqrt_ratio(sqrt_price_x64: u128) -> Result<i32, anchor_lang::
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
 
-    mod get_sqrt_ratio_at_tick {
-        use crate::libraries::test_utils::encode_price_sqrt_x32;
+//     mod get_sqrt_ratio_at_tick {
+//         use crate::libraries::test_utils::encode_price_sqrt_x32;
 
-        use super::*;
+//         use super::*;
 
-        #[test]
-        #[should_panic]
-        fn throws_for_too_low() {
-            get_sqrt_ratio_at_tick(MIN_TICK - 1).unwrap();
-        }
+//         #[test]
+//         #[should_panic]
+//         fn throws_for_too_low() {
+//             get_sqrt_ratio_at_tick(MIN_TICK - 1).unwrap();
+//         }
 
-        #[test]
-        #[should_panic]
-        fn throws_for_too_high() {
-            get_sqrt_ratio_at_tick(MAX_TICK + 1).unwrap();
-        }
+//         #[test]
+//         #[should_panic]
+//         fn throws_for_too_high() {
+//             get_sqrt_ratio_at_tick(MAX_TICK + 1).unwrap();
+//         }
 
-        #[test]
-        fn min_tick() {
-            assert_eq!(
-                get_sqrt_ratio_at_tick(MIN_TICK).unwrap(),
-                MIN_SQRT_RATIO_X64
-            );
-        }
+//         #[test]
+//         fn min_tick() {
+//             assert_eq!(
+//                 get_sqrt_ratio_at_tick(MIN_TICK).unwrap(),
+//                 MIN_SQRT_RATIO_X64
+//             );
+//         }
 
-        #[test]
-        fn min_tick_plus_one() {
-            assert_eq!(get_sqrt_ratio_at_tick(MIN_TICK + 1).unwrap(), 65540);
-        }
+//         #[test]
+//         fn min_tick_plus_one() {
+//             assert_eq!(get_sqrt_ratio_at_tick(MIN_TICK + 1).unwrap(), 65540);
+//         }
 
-        #[test]
-        fn max_tick() {
-            assert_eq!(
-                get_sqrt_ratio_at_tick(MAX_TICK).unwrap(),
-                MAX_SQRT_RATIO_X64
-            );
-        }
+//         #[test]
+//         fn max_tick() {
+//             assert_eq!(
+//                 get_sqrt_ratio_at_tick(MAX_TICK).unwrap(),
+//                 MAX_SQRT_RATIO_X64
+//             );
+//         }
 
-        #[test]
-        fn max_tick_minus_one() {
-            assert_eq!(
-                get_sqrt_ratio_at_tick(MAX_TICK - 1).unwrap(),
-                281458259142766
-            );
-        }
+//         #[test]
+//         fn max_tick_minus_one() {
+//             assert_eq!(
+//                 get_sqrt_ratio_at_tick(MAX_TICK - 1).unwrap(),
+//                 281458259142766
+//             );
+//         }
 
-        #[test]
-        fn min_tick_ratio_is_less_than_js_implementation() {
-            assert!(
-                get_sqrt_ratio_at_tick(MIN_TICK).unwrap()
-                    < encode_price_sqrt_x32(1, u64::pow(2, 31))
-            );
-        }
+//         #[test]
+//         fn min_tick_ratio_is_less_than_js_implementation() {
+//             assert!(
+//                 get_sqrt_ratio_at_tick(MIN_TICK).unwrap()
+//                     < encode_price_sqrt_x32(1, u64::pow(2, 31))
+//             );
+//         }
 
-        #[test]
-        fn max_tick_ratio_is_greater_than_js_implementation() {
-            assert!(
-                get_sqrt_ratio_at_tick(MAX_TICK).unwrap()
-                    > encode_price_sqrt_x32(u64::pow(2, 31), 1)
-            );
-        }
+//         #[test]
+//         fn max_tick_ratio_is_greater_than_js_implementation() {
+//             assert!(
+//                 get_sqrt_ratio_at_tick(MAX_TICK).unwrap()
+//                     > encode_price_sqrt_x32(u64::pow(2, 31), 1)
+//             );
+//         }
 
-        #[test]
-        fn is_at_most_off_by_a_bip() {
-            // 1/100th of a bip condition holds for positive ticks
-            let _abs_ticks: Vec<i32> = vec![
-                50, 100, 250, 500, 1_000, 2_500, 3_000, 4_000, 5_000, 50_000, 150_000,
-            ];
+//         #[test]
+//         fn is_at_most_off_by_a_bip() {
+//             // 1/100th of a bip condition holds for positive ticks
+//             let _abs_ticks: Vec<i32> = vec![
+//                 50, 100, 250, 500, 1_000, 2_500, 3_000, 4_000, 5_000, 50_000, 150_000,
+//             ];
 
-            for tick in MIN_TICK..=MAX_TICK {
-                let result = get_sqrt_ratio_at_tick(tick).unwrap();
-                let float_result = (f64::powi(1.0001, tick).sqrt() * u64::pow(2, 32) as f64) as u64;
-                let abs_diff = if result > float_result {
-                    result - float_result
-                } else {
-                    float_result - result
-                };
-                assert!((abs_diff as f64 / result as f64) < 0.0001);
-            }
-        }
+//             for tick in MIN_TICK..=MAX_TICK {
+//                 let result = get_sqrt_ratio_at_tick(tick).unwrap();
+//                 let float_result = (f64::powi(1.0001, tick).sqrt() * u64::pow(2, 32) as f64) as u64;
+//                 let abs_diff = if result > float_result {
+//                     result - float_result
+//                 } else {
+//                     float_result - result
+//                 };
+//                 assert!((abs_diff as f64 / result as f64) < 0.0001);
+//             }
+//         }
 
-        #[test]
-        fn original_tick_can_be_retrieved_from_sqrt_ratio() {
-            for tick in MIN_TICK..=MAX_TICK {
-                let sqrt_price_x32 = get_sqrt_ratio_at_tick(tick).unwrap();
-                if sqrt_price_x32 < MAX_SQRT_RATIO_X64 {
-                    let obtained_tick = get_tick_at_sqrt_ratio(sqrt_price_x32).unwrap();
-                    assert_eq!(tick, obtained_tick);
-                }
-            }
-        }
+//         #[test]
+//         fn original_tick_can_be_retrieved_from_sqrt_ratio() {
+//             for tick in MIN_TICK..=MAX_TICK {
+//                 let sqrt_price_x32 = get_sqrt_ratio_at_tick(tick).unwrap();
+//                 if sqrt_price_x32 < MAX_SQRT_RATIO_X64 {
+//                     let obtained_tick = get_tick_at_sqrt_ratio(sqrt_price_x32).unwrap();
+//                     assert_eq!(tick, obtained_tick);
+//                 }
+//             }
+//         }
 
-        #[test]
-        fn sqrt_price_increases_with_tick() {
-            let mut prev_price_x32: u64 = 0;
-            for tick in MIN_TICK..=MAX_TICK {
-                let sqrt_price_x32 = get_sqrt_ratio_at_tick(tick).unwrap();
-                // P should increase with tick
-                if prev_price_x32 != 0 {
-                    assert!(sqrt_price_x32 > prev_price_x32);
-                }
-                prev_price_x32 = sqrt_price_x32;
-            }
-        }
-    }
+//         #[test]
+//         fn sqrt_price_increases_with_tick() {
+//             let mut prev_price_x32: u64 = 0;
+//             for tick in MIN_TICK..=MAX_TICK {
+//                 let sqrt_price_x32 = get_sqrt_ratio_at_tick(tick).unwrap();
+//                 // P should increase with tick
+//                 if prev_price_x32 != 0 {
+//                     assert!(sqrt_price_x32 > prev_price_x32);
+//                 }
+//                 prev_price_x32 = sqrt_price_x32;
+//             }
+//         }
+//     }
 
-    mod get_tick_at_sqrt_ratio {
-        use crate::libraries::test_utils::encode_price_sqrt_x32;
+//     mod get_tick_at_sqrt_ratio {
+//         use crate::libraries::test_utils::encode_price_sqrt_x32;
 
-        use super::*;
+//         use super::*;
 
-        #[test]
-        #[should_panic(expected = "R")]
-        fn throws_for_too_low() {
-            get_tick_at_sqrt_ratio(MIN_SQRT_RATIO_X64 - 1).unwrap();
-        }
+//         #[test]
+//         #[should_panic(expected = "R")]
+//         fn throws_for_too_low() {
+//             get_tick_at_sqrt_ratio(MIN_SQRT_RATIO_X64 - 1).unwrap();
+//         }
 
-        #[test]
-        #[should_panic(expected = "R")]
-        fn throws_for_too_high() {
-            get_tick_at_sqrt_ratio(MAX_SQRT_RATIO_X64).unwrap();
-        }
+//         #[test]
+//         #[should_panic(expected = "R")]
+//         fn throws_for_too_high() {
+//             get_tick_at_sqrt_ratio(MAX_SQRT_RATIO_X64).unwrap();
+//         }
 
-        #[test]
-        fn ratio_of_min_tick() {
-            assert_eq!(
-                get_tick_at_sqrt_ratio(MIN_SQRT_RATIO_X64).unwrap(),
-                MIN_TICK
-            );
-        }
+//         #[test]
+//         fn ratio_of_min_tick() {
+//             assert_eq!(
+//                 get_tick_at_sqrt_ratio(MIN_SQRT_RATIO_X64).unwrap(),
+//                 MIN_TICK
+//             );
+//         }
 
-        #[test]
-        fn ratio_of_min_tick_plus_one() {
-            assert_eq!(get_tick_at_sqrt_ratio(65540).unwrap(), MIN_TICK + 1);
-        }
+//         #[test]
+//         fn ratio_of_min_tick_plus_one() {
+//             assert_eq!(get_tick_at_sqrt_ratio(65540).unwrap(), MIN_TICK + 1);
+//         }
 
-        #[test]
-        fn ratio_of_max_tick_minus_one() {
-            assert_eq!(
-                get_tick_at_sqrt_ratio(281458259142766).unwrap(),
-                MAX_TICK - 1
-            );
-        }
+//         #[test]
+//         fn ratio_of_max_tick_minus_one() {
+//             assert_eq!(
+//                 get_tick_at_sqrt_ratio(281458259142766).unwrap(),
+//                 MAX_TICK - 1
+//             );
+//         }
 
-        #[test]
-        fn ratio_closest_to_max_tick() {
-            assert_eq!(
-                get_tick_at_sqrt_ratio(MAX_SQRT_RATIO_X64 - 1).unwrap(),
-                MAX_TICK - 1
-            );
-        }
+//         #[test]
+//         fn ratio_closest_to_max_tick() {
+//             assert_eq!(
+//                 get_tick_at_sqrt_ratio(MAX_SQRT_RATIO_X64 - 1).unwrap(),
+//                 MAX_TICK - 1
+//             );
+//         }
 
-        #[test]
-        fn is_off_by_at_most_one() {
-            let sqrt_ratios: Vec<u64> = vec![
-                encode_price_sqrt_x32(u64::pow(10, 6), 1),
-                encode_price_sqrt_x32(1, 64),
-                encode_price_sqrt_x32(1, 8),
-                encode_price_sqrt_x32(1, 2),
-                encode_price_sqrt_x32(1, 1),
-                encode_price_sqrt_x32(2, 1),
-                encode_price_sqrt_x32(8, 1),
-                encode_price_sqrt_x32(64, 1),
-                encode_price_sqrt_x32(1, u64::pow(10, 6)),
-            ];
-            for sqrt_ratio_x32 in sqrt_ratios.iter() {
-                let float_result = f64::log(
-                    *sqrt_ratio_x32 as f64 / u64::pow(2, 32) as f64,
-                    f64::sqrt(1.0001),
-                );
-                let result = get_tick_at_sqrt_ratio(*sqrt_ratio_x32).unwrap() as f64;
+//         #[test]
+//         fn is_off_by_at_most_one() {
+//             let sqrt_ratios: Vec<u64> = vec![
+//                 encode_price_sqrt_x32(u64::pow(10, 6), 1),
+//                 encode_price_sqrt_x32(1, 64),
+//                 encode_price_sqrt_x32(1, 8),
+//                 encode_price_sqrt_x32(1, 2),
+//                 encode_price_sqrt_x32(1, 1),
+//                 encode_price_sqrt_x32(2, 1),
+//                 encode_price_sqrt_x32(8, 1),
+//                 encode_price_sqrt_x32(64, 1),
+//                 encode_price_sqrt_x32(1, u64::pow(10, 6)),
+//             ];
+//             for sqrt_ratio_x32 in sqrt_ratios.iter() {
+//                 let float_result = f64::log(
+//                     *sqrt_ratio_x32 as f64 / u64::pow(2, 32) as f64,
+//                     f64::sqrt(1.0001),
+//                 );
+//                 let result = get_tick_at_sqrt_ratio(*sqrt_ratio_x32).unwrap() as f64;
 
-                let abs_diff = if result > float_result {
-                    result - float_result
-                } else {
-                    float_result - result
-                };
-                assert!(abs_diff < 1.0);
-            }
-        }
+//                 let abs_diff = if result > float_result {
+//                     result - float_result
+//                 } else {
+//                     float_result - result
+//                 };
+//                 assert!(abs_diff < 1.0);
+//             }
+//         }
 
-        #[test]
-        fn ratio_is_between_tick_and_tick_plus_one() {
-            let sqrt_ratios: Vec<u64> = vec![
-                encode_price_sqrt_x32(u64::pow(10, 6), 1),
-                encode_price_sqrt_x32(1, 64),
-                encode_price_sqrt_x32(1, 8),
-                encode_price_sqrt_x32(1, 2),
-                encode_price_sqrt_x32(1, 1),
-                encode_price_sqrt_x32(2, 1),
-                encode_price_sqrt_x32(8, 1),
-                encode_price_sqrt_x32(64, 1),
-                encode_price_sqrt_x32(1, u64::pow(10, 6)),
-            ];
-            for ratio in sqrt_ratios.iter() {
-                let tick = get_tick_at_sqrt_ratio(*ratio).unwrap();
-                let ratio_of_tick = get_sqrt_ratio_at_tick(tick).unwrap();
-                let ratio_of_tick_plus_one = get_sqrt_ratio_at_tick(tick + 1).unwrap();
+//         #[test]
+//         fn ratio_is_between_tick_and_tick_plus_one() {
+//             let sqrt_ratios: Vec<u64> = vec![
+//                 encode_price_sqrt_x32(u64::pow(10, 6), 1),
+//                 encode_price_sqrt_x32(1, 64),
+//                 encode_price_sqrt_x32(1, 8),
+//                 encode_price_sqrt_x32(1, 2),
+//                 encode_price_sqrt_x32(1, 1),
+//                 encode_price_sqrt_x32(2, 1),
+//                 encode_price_sqrt_x32(8, 1),
+//                 encode_price_sqrt_x32(64, 1),
+//                 encode_price_sqrt_x32(1, u64::pow(10, 6)),
+//             ];
+//             for ratio in sqrt_ratios.iter() {
+//                 let tick = get_tick_at_sqrt_ratio(*ratio).unwrap();
+//                 let ratio_of_tick = get_sqrt_ratio_at_tick(tick).unwrap();
+//                 let ratio_of_tick_plus_one = get_sqrt_ratio_at_tick(tick + 1).unwrap();
 
-                assert!(*ratio >= ratio_of_tick);
-                assert!(*ratio < ratio_of_tick_plus_one);
-            }
-        }
-    }
-}
+//                 assert!(*ratio >= ratio_of_tick);
+//                 assert!(*ratio < ratio_of_tick_plus_one);
+//             }
+//         }
+//     }
+// }

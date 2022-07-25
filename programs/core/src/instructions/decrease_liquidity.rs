@@ -35,8 +35,8 @@ pub struct DecreaseLiquidity<'info> {
         seeds = [
             POSITION_SEED.as_bytes(),
             pool_state.key().as_ref(),
-            &personal_position.tick_lower.to_be_bytes(),
-            &personal_position.tick_upper.to_be_bytes(),
+            &personal_position.tick_lower_index.to_be_bytes(),
+            &personal_position.tick_upper_index.to_be_bytes(),
         ],
         bump,
     )]
@@ -56,29 +56,13 @@ pub struct DecreaseLiquidity<'info> {
     )]
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
-    /// Account to store data for the position's lower tick
-    #[account(mut)]
-    pub tick_lower: Box<Account<'info, TickState>>,
-
-    /// Account to store data for the position's upper tick
-    #[account(mut)]
-    pub tick_upper: Box<Account<'info, TickState>>,
-
     /// Stores init state for the lower tick
     #[account(mut)]
-    pub tick_bitmap_lower: AccountLoader<'info, TickBitmapState>,
+    pub tick_array_lower: AccountLoader<'info, TickArrayState>,
 
     /// Stores init state for the upper tick
     #[account(mut)]
-    pub tick_bitmap_upper: AccountLoader<'info, TickBitmapState>,
-
-    /// The latest observation state
-    #[account(mut)]
-    pub last_observation: Box<Account<'info, ObservationState>>,
-
-    /// The next observation state
-    #[account(mut)]
-    pub next_observation: Box<Account<'info, ObservationState>>,
+    pub tick_array_upper: AccountLoader<'info, TickArrayState>,
 
     /// The destination token account for the collected amount_0
     #[account(
@@ -110,19 +94,14 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     procotol_position_owner.is_signer = true;
     let mut pool_state = ctx.accounts.pool_state.as_mut().clone();
     let mut accounts = BurnParam {
-        owner: &Signer::try_from(&procotol_position_owner)?,
         pool_state: &mut pool_state,
-        tick_lower_state: ctx.accounts.tick_lower.as_mut(),
-        tick_upper_state: ctx.accounts.tick_upper.as_mut(),
-        bitmap_lower_state: &ctx.accounts.tick_bitmap_lower,
-        bitmap_upper_state: &ctx.accounts.tick_bitmap_upper,
+        tick_array_lower_state: &ctx.accounts.tick_array_lower,
+        tick_array_upper_state: &ctx.accounts.tick_array_upper,
         procotol_position_state: ctx.accounts.protocol_position.as_mut(),
-        last_observation_state: ctx.accounts.last_observation.as_mut(),
-        next_observation_state: ctx.accounts.next_observation.as_mut(),
     };
 
     let (decrease_amount_0, decrease_amount_1) =
-        burn(&mut accounts, ctx.remaining_accounts, liquidity)?;
+        burn(&mut accounts, liquidity)?;
     require!(
         decrease_amount_0 >= amount_0_min && decrease_amount_1 >= amount_1_min,
         ErrorCode::PriceSlippageCheck
@@ -216,85 +195,41 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
 }
 
 pub struct BurnParam<'b, 'info> {
-    /// The position owner
-    pub owner: &'b Signer<'info>,
-
     /// Burn liquidity for this pool
     pub pool_state: &'b mut Account<'info, PoolState>,
 
-    /// The lower tick boundary of the position
-    pub tick_lower_state: &'b mut Account<'info, TickState>,
-
-    /// The upper tick boundary of the position
-    pub tick_upper_state: &'b mut Account<'info, TickState>,
-
     /// The bitmap storing initialization state of the lower tick
-    pub bitmap_lower_state: &'b AccountLoader<'info, TickBitmapState>,
+    pub tick_array_lower_state: &'b AccountLoader<'info, TickArrayState>,
 
     /// The bitmap storing initialization state of the upper tick
-    pub bitmap_upper_state: &'b AccountLoader<'info, TickBitmapState>,
+    pub tick_array_upper_state: &'b AccountLoader<'info, TickArrayState>,
 
     /// Burn liquidity from this position
     pub procotol_position_state: &'b mut Account<'info, ProcotolPositionState>,
-
-    /// The program account for the most recent oracle observation
-    pub last_observation_state: &'b mut Account<'info, ObservationState>,
-
-    /// The program account for the most recent oracle observation
-    pub next_observation_state: &'b mut Account<'info, ObservationState>,
 }
 
 pub fn burn<'b, 'info>(
     ctx: &mut BurnParam<'b, 'info>,
-    remaining_accounts: &[AccountInfo<'info>],
     liquidity: u128,
 ) -> Result<(u64, u64)> {
-    ctx.pool_state.validate_tick_address(
-        &ctx.tick_lower_state.key(),
-        ctx.tick_lower_state.bump,
-        ctx.tick_lower_state.tick,
-    )?;
-    ctx.pool_state.validate_tick_address(
-        &ctx.tick_upper_state.key(),
-        ctx.tick_upper_state.bump,
-        ctx.tick_upper_state.tick,
-    )?;
-    ctx.pool_state.validate_bitmap_address(
-        &ctx.bitmap_lower_state.key(),
-        ctx.bitmap_lower_state.load()?.bump,
-        tick_bitmap::position(ctx.tick_lower_state.tick / ctx.pool_state.tick_spacing as i32)
-            .word_pos,
-    )?;
-    ctx.pool_state.validate_bitmap_address(
-        &ctx.bitmap_upper_state.key(),
-        ctx.bitmap_upper_state.load()?.bump,
-        tick_bitmap::position(ctx.tick_upper_state.tick / ctx.pool_state.tick_spacing as i32)
-            .word_pos,
-    )?;
-    ctx.pool_state.validate_protocol_position_address(
-        &ctx.procotol_position_state.key(),
-        ctx.procotol_position_state.bump,
-        ctx.tick_lower_state.tick,
-        ctx.tick_upper_state.tick,
+    let mut tick_array_lower = ctx.tick_array_lower_state.load_mut()?;
+    let tick_lower_state = tick_array_lower.get_tick_state_mut(
+        ctx.procotol_position_state.tick_lower_index,
+        ctx.pool_state.tick_spacing as i32,
     )?;
 
-    ctx.pool_state.validate_observation_address(
-        &ctx.last_observation_state.key(),
-        ctx.last_observation_state.bump,
-        false,
+    let mut tick_array_upper = ctx.tick_array_upper_state.load_mut()?;
+    let tick_upper_state = tick_array_upper.get_tick_state_mut(
+        ctx.procotol_position_state.tick_upper_index,
+        ctx.pool_state.tick_spacing as i32,
     )?;
 
     let (amount_0_int, amount_1_int) = _modify_position(
         -i128::try_from(liquidity).unwrap(),
         ctx.pool_state,
         ctx.procotol_position_state,
-        ctx.tick_lower_state,
-        ctx.tick_upper_state,
-        ctx.bitmap_lower_state,
-        ctx.bitmap_upper_state,
-        ctx.last_observation_state,
-        ctx.next_observation_state,
-        remaining_accounts,
+        tick_lower_state,
+        tick_upper_state,
     )?;
 
     let amount_0 = (-amount_0_int) as u64;

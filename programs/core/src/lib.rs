@@ -6,8 +6,6 @@ pub mod states;
 pub mod util;
 
 use crate::access_control::*;
-use crate::error::ErrorCode;
-use crate::libraries::tick_math;
 use anchor_lang::prelude::*;
 use instructions::*;
 use states::*;
@@ -151,26 +149,6 @@ pub mod amm_core {
     ) -> Result<()> {
         instructions::set_reward_emissions(ctx, reward_index, emissions_per_second_x64)
     }
-    // ---------------------------------------------------------------------
-    // Oracle
-
-    /// Increase the maximum number of price and liquidity observations that this pool will store
-    ///
-    /// An `ObservationState` account is created per unit increase in cardinality_next,
-    /// and `observation_cardinality_next` is accordingly incremented.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - Holds the pool and payer addresses, along with a vector of
-    /// observation accounts which will be initialized
-    /// * `observation_account_bumps` - Vector of bumps to initialize the observation state PDAs
-    ///
-    pub fn increase_observation<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, IncreaseObservation<'info>>,
-        observation_account_bumps: Vec<u8>,
-    ) -> Result<()> {
-        instructions::increase_observation_cardinality_next(ctx, observation_account_bumps)
-    }
 
     // ---------------------------------------------------------------------
     // Pool owner instructions
@@ -241,8 +219,8 @@ pub mod amm_core {
         ctx: Context<'a, 'b, 'c, 'info, OpenPosition<'info>>,
         tick_lower_index: i32,
         tick_upper_index: i32,
-        word_lower_index: i16,
-        word_upper_index: i16,
+        tick_array_lower_start_index: i32,
+        tick_array_upper_start_index: i32,
         amount_0_desired: u64,
         amount_1_desired: u64,
         amount_0_min: u64,
@@ -256,8 +234,8 @@ pub mod amm_core {
             amount_1_min,
             tick_lower_index,
             tick_upper_index,
-            word_lower_index,
-            word_upper_index,
+            tick_array_lower_start_index,
+            tick_array_upper_start_index
         )
     }
 
@@ -411,32 +389,4 @@ pub mod amm_core {
     // }
 }
 
-/// Common checks for a valid tick input.
-/// A tick is valid iff it lies within tick boundaries and it is a multiple
-/// of tick spacing.
-///
-/// # Arguments
-///
-/// * `tick` - The price tick
-///
-pub fn check_tick(tick: i32, tick_spacing: u16) -> Result<()> {
-    require!(tick >= tick_math::MIN_TICK, ErrorCode::TickLowerOverflow);
-    require!(tick <= tick_math::MAX_TICK, ErrorCode::TickUpperOverflow);
-    require!(
-        tick % tick_spacing as i32 == 0,
-        ErrorCode::TickAndSpacingNotMatch
-    );
-    Ok(())
-}
 
-/// Common checks for valid tick inputs.
-///
-/// # Arguments
-///
-/// * `tick_lower` - The lower tick
-/// * `tick_upper` - The upper tick
-///
-pub fn check_ticks(tick_lower: i32, tick_upper: i32) -> Result<()> {
-    require!(tick_lower < tick_upper, ErrorCode::TickInvaildOrder);
-    Ok(())
-}

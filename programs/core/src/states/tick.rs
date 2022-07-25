@@ -1,22 +1,197 @@
+use crate::error::ErrorCode;
 ///! Contains functions for managing tick processes and relevant calculations
 ///!
 use crate::libraries::{liquidity_math, tick_math};
 use crate::pool::{RewardInfo, REWARD_NUM};
-use anchor_lang::prelude::*;
+use crate::util::*;
+use anchor_lang::{prelude::*, system_program};
 
 /// Seed to derive account address and signature
-pub const TICK_SEED: &str = "tick";
+pub const TICK_ARRAY_SEED: &str = "tick_array";
+pub const TICK_ARRAY_SIZE_USIZE: usize = 100;
+pub const TICK_ARRAY_SIZE: i32 = 100;
+
+#[account(zero_copy)]
+#[repr(packed)]
+pub struct TickArrayState {
+    pub amm_pool: Pubkey,
+    pub start_tick_index: i32,
+    pub ticks: [TickState; TICK_ARRAY_SIZE_USIZE],
+}
+
+impl TickArrayState {
+    pub const LEN: usize = 8 + 32 + 4 + TickState::LEN * TICK_ARRAY_SIZE_USIZE;
+
+    pub fn get_or_create_tick_array<'info>(
+        payer: AccountInfo<'info>,
+        tick_array_account_info: AccountInfo<'info>,
+        system_program: AccountInfo<'info>,
+        pool_key: Pubkey,
+        start_index: i32,
+        tick_spacing: u16,
+    ) -> Result<AccountLoader<'info, TickArrayState>> {
+        let mut is_create = false;
+        let tick_array_state = if tick_array_account_info.owner == &system_program::ID {
+            let (expect_pda_address, bump) = Pubkey::find_program_address(
+                &[
+                    TICK_ARRAY_SEED.as_bytes(),
+                    pool_key.as_ref(),
+                    &start_index.to_be_bytes(),
+                ],
+                &crate::id(),
+            );
+            require_keys_eq!(expect_pda_address, tick_array_account_info.key());
+            create_or_allocate_account(
+                &crate::id(),
+                payer,
+                system_program,
+                tick_array_account_info.clone(),
+                &[
+                    TICK_ARRAY_SEED.as_bytes(),
+                    pool_key.as_ref(),
+                    &start_index.to_be_bytes(),
+                    &[bump],
+                ],
+                TickArrayState::LEN,
+            )?;
+            is_create = true;
+            AccountLoader::<TickArrayState>::try_from_unchecked(
+                &crate::id(),
+                &tick_array_account_info,
+            )?
+        } else {
+            AccountLoader::<TickArrayState>::try_from(&tick_array_account_info)?
+        };
+
+        if is_create {
+            {
+                let mut tick_array_account = tick_array_state.load_init()?;
+                tick_array_account.initialize(start_index, tick_spacing, pool_key)?;
+            }
+            tick_array_state.exit(&crate::id())?;
+        }
+        Ok(tick_array_state)
+    }
+
+    pub fn initialize(
+        &mut self,
+        start_index: i32,
+        tick_spacing: u16,
+        pool_key: Pubkey,
+    ) -> Result<()> {
+        require_eq!(0, start_index % (TICK_ARRAY_SIZE * (tick_spacing) as i32));
+        self.start_tick_index = start_index;
+        self.amm_pool = pool_key;
+        Ok(())
+    }
+
+    pub fn first_initialized_tick(&mut self, zero_for_one: bool) -> Result<&mut TickState> {
+        if zero_for_one {
+            let mut i = TICK_ARRAY_SIZE - 1;
+            while i >= 0 {
+                if self.ticks[i as usize].is_initialized() {
+                    return Ok(self.ticks.get_mut(i as usize).unwrap());
+                }
+                i = i - 1;
+            }
+        } else {
+            let mut i = 0;
+            while i < TICK_ARRAY_SIZE_USIZE {
+                if self.ticks[i].is_initialized() {
+                    return Ok(self.ticks.get_mut(i).unwrap());
+                }
+                i = i + 1;
+            }
+        }
+        err!(ErrorCode::InvalidTickArray)
+    }
+
+    pub fn next_initialized_tick(
+        &mut self,
+        currenct_tick_index: i32,
+        tick_spacing: u16,
+        zero_for_one: bool,
+    ) -> Result<Option<&mut TickState>> {
+        assert!(currenct_tick_index > self.start_tick_index);
+        let start_tick_index =
+            TickArrayState::get_arrary_start_index(currenct_tick_index, tick_spacing as i32);
+        require_eq!(
+            start_tick_index,
+            self.start_tick_index,
+            ErrorCode::InvalidTickArray
+        );
+        let index_in_array = (currenct_tick_index - self.start_tick_index) / (tick_spacing as i32);
+        if zero_for_one {
+            let mut i = index_in_array;
+            while i >= 0 {
+                if self.ticks[i as usize].is_initialized() {
+                    return Ok(self.ticks.get_mut(i as usize));
+                }
+                i = i - 1;
+            }
+        } else {
+            let mut i = 0;
+            while i < TICK_ARRAY_SIZE_USIZE {
+                if self.ticks[i].is_initialized() {
+                    return Ok(self.ticks.get_mut(i));
+                }
+                i = i + 1;
+            }
+        }
+        Ok(None)
+    }
+
+    pub fn get_tick_state_mut(
+        &mut self,
+        tick_index: i32,
+        tick_spacing: i32,
+    ) -> Result<&mut TickState> {
+        let start_tick_index = TickArrayState::get_arrary_start_index(tick_index, tick_spacing);
+        require_eq!(
+            start_tick_index,
+            self.start_tick_index,
+            ErrorCode::InvalidTickArray
+        );
+        let index_in_array = ((tick_index - self.start_tick_index) / tick_spacing) as usize;
+        Ok(&mut self.ticks[index_in_array])
+    }
+
+    pub fn next_tick_arrary_start_index(&self, tick_spacing: u16, zero_for_one: bool) -> i32 {
+        if zero_for_one {
+            self.start_tick_index - (tick_spacing as i32) * TICK_ARRAY_SIZE
+        } else {
+            self.start_tick_index + (tick_spacing as i32) * TICK_ARRAY_SIZE
+        }
+    }
+
+    pub fn get_arrary_start_index(tick_index: i32, tick_spacing: i32) -> i32 {
+        let mut start = tick_index / (tick_spacing * TICK_ARRAY_SIZE);
+        if tick_index < 0 {
+            start = start - 1
+        }
+        start * (tick_spacing * TICK_ARRAY_SIZE)
+    }
+}
+
+impl Default for TickArrayState {
+    #[inline]
+    fn default() -> TickArrayState {
+        TickArrayState {
+            amm_pool: Pubkey::default(),
+            ticks: [TickState::default(); TICK_ARRAY_SIZE_USIZE],
+            start_tick_index: 0,
+        }
+    }
+}
 
 /// Account storing info for a price tick
 ///
 /// PDA of `[TICK_SEED, token_0, token_1, fee, tick]`
 ///
-#[account]
+#[account(zero_copy)]
+#[repr(packed)]
 #[derive(Default, Debug)]
 pub struct TickState {
-    /// Bump to identify PDA
-    pub bump: u8,
-
     /// The price tick whose info is stored in the account
     pub tick: i32,
 
@@ -30,17 +205,6 @@ pub struct TickState {
     pub fee_growth_outside_0_x64: u128,
     pub fee_growth_outside_1_x64: u128,
 
-    /// The cumulative tick value on the other side of the tick
-    pub tick_cumulative_outside: i64,
-
-    /// The seconds per unit of liquidity on the _other_ side of this tick (relative to the current tick)
-    /// only has relative meaning, not absolute — the value depends on when the tick is initialized
-    pub seconds_per_liquidity_outside_x64: u128,
-
-    /// The seconds spent on the other side of the tick (relative to the current tick)
-    /// only has relative meaning, not absolute — the value depends on when the tick is initialized
-    pub seconds_outside: u32,
-
     // Array of Q64.64
     pub reward_growths_outside: [u128; REWARD_NUM],
     // padding space for upgrade
@@ -48,17 +212,14 @@ pub struct TickState {
 }
 
 impl TickState {
-    pub const LEN: usize = 8 + 1 + 4 + 16 + 16 + 16 + 16 + 8 + 16 + 4 + 16 * REWARD_NUM + 64;
+    pub const LEN: usize = 8 + 4 + 16 + 16 + 16 + 16 + 16 * REWARD_NUM + 64;
 
-    pub fn initialize(&mut self, bump: u8, tick: i32, tick_spacing: u16) -> Result<()> {
-        crate::check_tick(tick, tick_spacing)?;
-        self.bump = bump;
+    pub fn initialize(&mut self, tick: i32, tick_spacing: u16) -> Result<()> {
+        check_tick_boundary(tick, tick_spacing)?;
         self.tick = tick;
         Ok(())
     }
-}
 
-impl TickState {
     /// Updates a tick and returns true if the tick was flipped from initialized to uninitialized, or vice versa
     ///
     /// # Arguments
@@ -69,9 +230,6 @@ impl TickState {
     /// from left to right (right to left)
     /// * `fee_growth_global_0_x64` - The all-time global fee growth, per unit of liquidity, in token_0
     /// * `fee_growth_global_1_x64` - The all-time global fee growth, per unit of liquidity, in token_1
-    /// * `seconds_per_liquidity_cumulative_x64` - The all-time seconds per max(1, liquidity) of the pool
-    /// * `tick_cumulative` - The tick * time elapsed since the pool was first initialized
-    /// * `time` - The current block timestamp cast to a u32
     /// * `upper` - true for updating a position's upper tick, or false for updating a position's lower tick
     /// * `max_liquidity` - The maximum liquidity allocation for a single tick
     ///
@@ -81,9 +239,6 @@ impl TickState {
         liquidity_delta: i128,
         fee_growth_global_0_x64: u128,
         fee_growth_global_1_x64: u128,
-        seconds_per_liquidity_cumulative_x64: u128,
-        tick_cumulative: i64,
-        time: u32,
         upper: bool,
         _max_liquidity: u128,
         reward_growths_outside: [u128; REWARD_NUM],
@@ -105,9 +260,6 @@ impl TickState {
             if self.tick <= tick_current {
                 self.fee_growth_outside_0_x64 = fee_growth_global_0_x64;
                 self.fee_growth_outside_1_x64 = fee_growth_global_1_x64;
-                self.seconds_per_liquidity_outside_x64 = seconds_per_liquidity_cumulative_x64;
-                self.tick_cumulative_outside = tick_cumulative;
-                self.seconds_outside = time;
                 self.reward_growths_outside = reward_growths_outside;
             }
         }
@@ -134,17 +286,11 @@ impl TickState {
     /// * `self` - The destination tick of the transition
     /// * `fee_growth_global_0_x64` - The all-time global fee growth, per unit of liquidity, in token_0
     /// * `fee_growth_global_1_x64` - The all-time global fee growth, per unit of liquidity, in token_1
-    /// * `seconds_per_liquidity_cumulative_x64` - The current seconds per liquidity
-    /// * `tick_cumulative` - The tick * time elapsed since the pool was first initialized
-    /// * `time` - The current block timestamp
     ///
     pub fn cross(
         &mut self,
         fee_growth_global_0_x64: u128,
         fee_growth_global_1_x64: u128,
-        seconds_per_liquidity_cumulative_x64: u128,
-        tick_cumulative: i64,
-        time: u32,
         reward_infos: &[RewardInfo; REWARD_NUM],
     ) -> i128 {
         self.fee_growth_outside_0_x64 = fee_growth_global_0_x64
@@ -153,13 +299,6 @@ impl TickState {
         self.fee_growth_outside_1_x64 = fee_growth_global_1_x64
             .checked_sub(self.fee_growth_outside_1_x64)
             .unwrap();
-        self.seconds_per_liquidity_outside_x64 = seconds_per_liquidity_cumulative_x64
-            .checked_sub(self.seconds_per_liquidity_outside_x64)
-            .unwrap();
-        self.tick_cumulative_outside = tick_cumulative
-            .checked_sub(self.tick_cumulative_outside)
-            .unwrap();
-        self.seconds_outside = time.checked_sub(self.seconds_outside).unwrap();
 
         for i in 0..REWARD_NUM {
             if !reward_infos[i].initialized() {
@@ -186,9 +325,10 @@ impl TickState {
         self.liquidity_gross = 0;
         self.fee_growth_outside_0_x64 = 0;
         self.fee_growth_outside_1_x64 = 0;
-        self.tick_cumulative_outside = 0;
-        self.seconds_per_liquidity_outside_x64 = 0;
-        self.seconds_outside = 0;
+    }
+
+    pub fn is_initialized(self) -> bool {
+        self.liquidity_gross != 0
     }
 
     pub fn is_clear(self) -> bool {
@@ -196,9 +336,6 @@ impl TickState {
             && self.liquidity_gross == 0
             && self.fee_growth_outside_0_x64 == 0
             && self.fee_growth_outside_1_x64 == 0
-            && self.tick_cumulative_outside == 0
-            && self.seconds_per_liquidity_outside_x64 == 0
-            && self.seconds_outside == 0
     }
 }
 
@@ -319,6 +456,39 @@ pub fn get_reward_growths_inside(
     reward_growths_inside
 }
 
+/// Common checks for a valid tick input.
+/// A tick is valid iff it lies within tick boundaries and it is a multiple
+/// of tick spacing.
+///
+/// # Arguments
+///
+/// * `tick` - The price tick
+///
+pub fn check_tick_boundary(tick: i32, tick_spacing: u16) -> Result<()> {
+    require!(tick >= tick_math::MIN_TICK, ErrorCode::TickLowerOverflow);
+    require!(tick <= tick_math::MAX_TICK, ErrorCode::TickUpperOverflow);
+    require!(
+        tick % tick_spacing as i32 == 0,
+        ErrorCode::TickAndSpacingNotMatch
+    );
+    Ok(())
+}
+
+/// Common checks for valid tick inputs.
+///
+/// # Arguments
+///
+/// * `tick_lower` - The lower tick
+/// * `tick_upper` - The upper tick
+///
+pub fn check_ticks_order(tick_lower_index: i32, tick_upper_index: i32) -> Result<()> {
+    require!(
+        tick_lower_index < tick_upper_index,
+        ErrorCode::TickInvaildOrder
+    );
+    Ok(())
+}
+
 /// Derives max liquidity per tick from given tick spacing
 ///
 /// # Arguments
@@ -340,409 +510,35 @@ pub fn tick_spacing_to_max_liquidity_per_tick(tick_spacing: i32) -> u128 {
 mod test {
     use super::*;
 
-    mod tick_spacing_to_max_liquidity_per_tick {
+    mod tick_array_test {
         use super::*;
-
         #[test]
-        fn lowest_fee() {
-            println!("max 1 {}", tick_spacing_to_max_liquidity_per_tick(1));
-            println!("max 10 {}", tick_spacing_to_max_liquidity_per_tick(10));
-            println!("max 60 {}", tick_spacing_to_max_liquidity_per_tick(60));
-        }
-
-        #[test]
-        fn returns_the_correct_value_for_low_fee() {
-            assert_eq!(
-                tick_spacing_to_max_liquidity_per_tick(10),
-                415813720300916 // (2^64 - 1) / ((221810 -(-221810))/ 10 + 1)
+        fn get_arrary_start_index_test() {
+            println!(
+                "tick 120 array start index {}",
+                TickArrayState::get_arrary_start_index(120, 3)
             );
-            // https://www.wolframalpha.com/input?i=%282%5E64+-+1%29+%2F+%28%28221810+-%28-221810%29%29%2F+10+%2B+1%29
-        }
-
-        #[test]
-        fn returns_the_correct_value_for_medium_fee() {
-            assert_eq!(
-                tick_spacing_to_max_liquidity_per_tick(60),
-                2495163543042006 // (2^64 - 1) / ((221760 -(-221760)) / 60 + 1)
+            println!(
+                "tick 1002 array start index {}",
+                TickArrayState::get_arrary_start_index(1002, 30)
             );
-            // https://www.wolframalpha.com/input?i=%282%5E64+-+1%29+%2F+%28%28221760+-%28-221760%29%29+%2F+60+%2B+1%29
-        }
-
-        #[test]
-        fn returns_the_correct_value_for_high_fee() {
-            assert_eq!(
-                tick_spacing_to_max_liquidity_per_tick(200),
-                8313088811946620 // (2^64 - 1) / ((221800 -(-221800)) / 200 + 1)
+            println!(
+                "tick -120 array start index {}",
+                TickArrayState::get_arrary_start_index(-120, 3)
             );
-            // https://www.wolframalpha.com/input?i=%282%5E64+-+1%29+%2F+%28%28221800+-%28-221800%29%29+%2F+200+%2B+1%29
-        }
-
-        #[test]
-        fn returns_the_correct_value_for_the_entire_range() {
-            assert_eq!(
-                tick_spacing_to_max_liquidity_per_tick(221818),
-                6148914691236517205 // (2^64 - 1) / ((221818 -(-221818)) / 221818 + 1)
-            );
-            // https://www.wolframalpha.com/input?i=%282%5E64+-+1%29+%2F+%28%28221818+-%28-221818%29%29+%2F+221818+%2B+1%29
-        }
-    }
-
-    mod get_fee_growth_inside {
-        use super::*;
-
-        #[test]
-        fn returns_all_for_two_empty_ticks_if_tick_is_inside() {
-            let mut tick_lower = TickState::default();
-            tick_lower.tick = -2;
-            let mut tick_upper = TickState::default();
-            tick_upper.tick = 2;
-            assert_eq!(
-                get_fee_growth_inside(&tick_lower, &tick_upper, 0, 15, 15),
-                (15, 15)
+            println!(
+                "tick -1002 array start index {}",
+                TickArrayState::get_arrary_start_index(-1002, 30)
             );
         }
 
         #[test]
-        fn returns_zero_for_two_empty_ticks_if_tick_is_above() {
-            let mut tick_lower = TickState::default();
-            tick_lower.tick = -2;
-            let mut tick_upper = TickState::default();
-            tick_upper.tick = 2;
-            assert_eq!(
-                get_fee_growth_inside(&tick_lower, &tick_upper, 4, 15, 15),
-                (0, 0)
-            );
-        }
-
-        #[test]
-        fn returns_zero_for_two_empty_ticks_if_tick_is_below() {
-            let mut tick_lower = TickState::default();
-            tick_lower.tick = -2;
-            let mut tick_upper = TickState::default();
-            tick_upper.tick = 2;
-            assert_eq!(
-                get_fee_growth_inside(&tick_lower, &tick_upper, -4, 15, 15),
-                (0, 0)
-            );
-        }
-
-        #[test]
-        fn subtracts_upper_tick_if_below() {
-            let mut tick_lower = TickState::default();
-            tick_lower.tick = -2;
-            let tick_upper = TickState {
-                bump: 0,
-                tick: 2,
-                liquidity_net: 0,
-                liquidity_gross: 0,
-                fee_growth_outside_0_x64: 2,
-                fee_growth_outside_1_x64: 3,
-                tick_cumulative_outside: 0,
-                seconds_per_liquidity_outside_x64: 0,
-                seconds_outside: 0,
-                reward_growths_outside: [0; REWARD_NUM],
-            };
-            assert_eq!(
-                get_fee_growth_inside(&tick_lower, &tick_upper, 0, 15, 15),
-                (13, 12)
-            );
-        }
-
-        #[test]
-        fn subtracts_lower_tick_if_above() {
-            let tick_lower = TickState {
-                bump: 0,
-                tick: -2,
-                liquidity_net: 0,
-                liquidity_gross: 0,
-                fee_growth_outside_0_x64: 2,
-                fee_growth_outside_1_x64: 3,
-                tick_cumulative_outside: 0,
-                seconds_per_liquidity_outside_x64: 0,
-                seconds_outside: 0,
-                reward_growths_outside: [0; REWARD_NUM],
-            };
-            let mut tick_upper = TickState::default();
-            tick_upper.tick = 2;
-            assert_eq!(
-                get_fee_growth_inside(&tick_lower, &tick_upper, 0, 15, 15),
-                (13, 12)
-            );
-        }
-
-        #[test]
-        fn subtracts_upper_tick_and_lower_tick_if_inside() {
-            let tick_lower = TickState {
-                bump: 0,
-                tick: -2,
-                liquidity_net: 0,
-                liquidity_gross: 0,
-                fee_growth_outside_0_x64: 2,
-                fee_growth_outside_1_x64: 3,
-                tick_cumulative_outside: 0,
-                seconds_per_liquidity_outside_x64: 0,
-                seconds_outside: 0,
-                reward_growths_outside: [0; REWARD_NUM],
-            };
-            let tick_upper = TickState {
-                bump: 0,
-                tick: 2,
-                liquidity_net: 0,
-                liquidity_gross: 0,
-                fee_growth_outside_0_x64: 4,
-                fee_growth_outside_1_x64: 1,
-                tick_cumulative_outside: 0,
-                seconds_per_liquidity_outside_x64: 0,
-                seconds_outside: 0,
-                reward_growths_outside: [0; REWARD_NUM],
-            };
-            assert_eq!(
-                get_fee_growth_inside(&tick_lower, &tick_upper, 0, 15, 15),
-                (9, 11)
-            );
-        }
-
-        // Run in release mode, otherwise test fails
-        #[test]
-        fn works_correctly_with_overflow_on_inside_tick() {
-            let tick_lower = TickState {
-                bump: 0,
-                tick: -2,
-                liquidity_net: 0,
-                liquidity_gross: 0,
-                fee_growth_outside_0_x64: u128::MAX - 3,
-                fee_growth_outside_1_x64: u128::MAX - 2,
-                tick_cumulative_outside: 0,
-                seconds_per_liquidity_outside_x64: 0,
-                seconds_outside: 0,
-                reward_growths_outside: [0; REWARD_NUM],
-            };
-            let tick_upper = TickState {
-                bump: 0,
-                tick: 2,
-                liquidity_net: 0,
-                liquidity_gross: 0,
-                fee_growth_outside_0_x64: 3,
-                fee_growth_outside_1_x64: 5,
-                tick_cumulative_outside: 0,
-                seconds_per_liquidity_outside_x64: 0,
-                seconds_outside: 0,
-                reward_growths_outside: [0; REWARD_NUM],
-            };
-            assert_eq!(
-                get_fee_growth_inside(&tick_lower, &tick_upper, 0, 15, 15),
-                (16, 13)
-            );
-        }
-    }
-
-    mod update {
-        use super::*;
-
-        #[test]
-        fn flips_from_zero_to_non_zero() {
-            let mut tick = TickState::default();
-            assert!(tick
-                .update(0, 1, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
-                .unwrap());
-        }
-
-        #[test]
-        fn does_not_flip_from_nonzero_to_greater_nonzero() {
-            let mut tick = TickState::default();
-            tick.update(0, 1, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
-                .unwrap();
-            assert!(!tick
-                .update(0, 1, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
-                .unwrap());
-        }
-
-        #[test]
-        fn flips_from_nonzero_to_zero() {
-            let mut tick = TickState::default();
-            tick.update(0, 1, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
-                .unwrap();
-            assert!(tick
-                .update(0, -1, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
-                .unwrap());
-        }
-
-        #[test]
-        fn does_not_flip_from_nonzero_to_lesser_nonzero() {
-            let mut tick = TickState::default();
-            tick.update(0, 2, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
-                .unwrap();
-            assert!(!tick
-                .update(0, -1, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
-                .unwrap());
-        }
-
-        #[test]
-        #[should_panic(expected = "LO")]
-        fn reverts_if_total_liquidity_gross_is_greater_than_max() {
-            let mut tick = TickState::default();
-            tick.update(0, 2, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
-                .unwrap();
-            tick.update(0, 2, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
-                .unwrap();
-            tick.update(0, 1, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
-                .unwrap();
-        }
-
-        #[test]
-        fn nets_the_liquidity_based_on_upper_flag() {
-            let mut tick = TickState::default();
-            tick.update(0, 2, 0, 0, 0, 0, 0, false, 3, [0; REWARD_NUM])
-                .unwrap();
-            tick.update(0, 1, 0, 0, 0, 0, 0, true, 10, [0; REWARD_NUM])
-                .unwrap();
-            tick.update(0, 3, 0, 0, 0, 0, 0, true, 10, [0; REWARD_NUM])
-                .unwrap();
-            tick.update(0, 1, 0, 0, 0, 0, 0, false, 10, [0; REWARD_NUM])
-                .unwrap();
-
-            assert!(tick.liquidity_gross == 2 + 1 + 3 + 1);
-            assert!(tick.liquidity_net == 2 - 1 - 3 + 1);
-        }
-
-        #[test]
-        #[should_panic]
-        fn reverts_on_overflow_liquidity_gross() {
-            let mut tick = TickState::default();
-            tick.update(
-                0,
-                (u128::MAX / 2 - 1) as i128,
-                0,
-                0,
-                0,
-                0,
-                0,
-                false,
-                u128::MAX,
-                [0; REWARD_NUM],
-            )
-            .unwrap();
-            tick.update(
-                0,
-                (u128::MAX / 2 - 1) as i128,
-                0,
-                0,
-                0,
-                0,
-                0,
-                false,
-                u128::MAX,
-                [0; REWARD_NUM],
-            )
-            .unwrap();
-        }
-
-        #[test]
-        fn assume_all_growth_happens_below_ticks_lte_current_tick() {
-            let mut tick = TickState::default();
-            tick.tick = 1;
-            tick.update(1, 1, 1, 2, 3, 4, 5, false, u128::MAX, [0; REWARD_NUM])
-                .unwrap();
-
-            assert!(tick.fee_growth_outside_0_x64 == 1);
-            assert!(tick.fee_growth_outside_1_x64 == 2);
-            assert!(tick.seconds_per_liquidity_outside_x64 == 3);
-            assert!(tick.tick_cumulative_outside == 4);
-            assert!(tick.seconds_outside == 5);
-        }
-
-        #[test]
-        fn does_not_set_any_growth_fields_for_ticks_gt_current_tick() {
-            let mut tick = TickState::default();
-            tick.tick = 2;
-            tick.update(1, 1, 1, 2, 3, 4, 5, false, u128::MAX, [0; REWARD_NUM])
-                .unwrap();
-
-            assert!(tick.fee_growth_outside_0_x64 == 0);
-            assert!(tick.fee_growth_outside_1_x64 == 0);
-            assert!(tick.seconds_per_liquidity_outside_x64 == 0);
-            assert!(tick.tick_cumulative_outside == 0);
-            assert!(tick.seconds_outside == 0);
-        }
-    }
-
-    mod clear {
-        use super::*;
-
-        #[test]
-        fn deletes_all_data_in_the_tick() {
-            let mut tick = TickState {
-                bump: 255,
-                tick: 2,
-                liquidity_net: 4,
-                liquidity_gross: 3,
-                fee_growth_outside_0_x64: 1,
-                fee_growth_outside_1_x64: 2,
-                tick_cumulative_outside: 6,
-                seconds_per_liquidity_outside_x64: 5,
-                seconds_outside: 7,
-                reward_growths_outside: [0; REWARD_NUM],
-            };
-            tick.clear();
-            assert!(tick.bump == 255);
-            assert!(tick.fee_growth_outside_0_x64 == 0);
-            assert!(tick.fee_growth_outside_1_x64 == 0);
-            assert!(tick.seconds_per_liquidity_outside_x64 == 0);
-            assert!(tick.tick_cumulative_outside == 0);
-            assert!(tick.seconds_outside == 0);
-            assert!(tick.liquidity_gross == 0);
-            assert!(tick.liquidity_net == 0);
-        }
-    }
-
-    mod cross {
-        use super::*;
-
-        #[test]
-        fn flips_the_growth_variables() {
-            let mut tick = TickState {
-                bump: 255,
-                tick: 2,
-                liquidity_net: 4,
-                liquidity_gross: 3,
-                fee_growth_outside_0_x64: 1,
-                fee_growth_outside_1_x64: 2,
-                tick_cumulative_outside: 6,
-                seconds_per_liquidity_outside_x64: 5,
-                seconds_outside: 7,
-                reward_growths_outside: [0; REWARD_NUM],
-            };
-            tick.cross(7, 9, 8, 15, 10);
-
-            assert!(tick.fee_growth_outside_0_x64 == 6);
-            assert!(tick.fee_growth_outside_1_x64 == 7);
-            assert!(tick.seconds_per_liquidity_outside_x64 == 3);
-            assert!(tick.tick_cumulative_outside == 9);
-            assert!(tick.seconds_outside == 3);
-        }
-
-        #[test]
-        fn two_flips_are_a_no_op() {
-            let mut tick = TickState {
-                bump: 255,
-                tick: 2,
-                liquidity_net: 4,
-                liquidity_gross: 3,
-                fee_growth_outside_0_x64: 1,
-                fee_growth_outside_1_x64: 2,
-                tick_cumulative_outside: 6,
-                seconds_per_liquidity_outside_x64: 5,
-                seconds_outside: 7,
-                reward_growths_outside: [0; REWARD_NUM],
-            };
-            tick.cross(7, 9, 8, 15, 10);
-            tick.cross(7, 9, 8, 15, 10);
-
-            assert!(tick.fee_growth_outside_0_x64 == 1);
-            assert!(tick.fee_growth_outside_1_x64 == 2);
-            assert!(tick.seconds_per_liquidity_outside_x64 == 5);
-            assert!(tick.tick_cumulative_outside == 6);
-            assert!(tick.seconds_outside == 7);
+        fn next_tick_arrary_start_index_test() {
+            let tick_array = &mut TickArrayState::default();
+            tick_array.initialize(-3000, 15, Pubkey::default()).unwrap();
+            // println!("{:?}", tick_array);
+            assert_eq!(-4500, tick_array.next_tick_arrary_start_index(15, true));
+            assert_eq!(-1500, tick_array.next_tick_arrary_start_index(15, false));
         }
     }
 }

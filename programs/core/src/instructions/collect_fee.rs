@@ -7,17 +7,8 @@ use anchor_spl::token::{Token, TokenAccount};
 use std::ops::Deref;
 
 pub struct CollectParam<'b, 'info> {
-    /// The position owner
-    pub owner: &'b Signer<'info>,
-
     /// The program account for the liquidity pool from which fees are collected
     pub pool_state: &'b mut Account<'info, PoolState>,
-
-    /// The lower tick of the position for which to collect fees
-    pub tick_lower_state: &'b mut Account<'info, TickState>,
-
-    /// The upper tick of the position for which to collect fees
-    pub tick_upper_state: &'b mut Account<'info, TickState>,
 
     /// The position program account to collect fees from
     pub position_state: &'b mut Account<'info, ProcotolPositionState>,
@@ -61,32 +52,25 @@ pub struct CollectFee<'info> {
     pub pool_state: Box<Account<'info, PoolState>>,
 
     /// The program account to access the core program position state
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [
+            POSITION_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+            &personal_position.tick_lower_index.to_be_bytes(),
+            &personal_position.tick_upper_index.to_be_bytes(),
+        ],
+        bump,
+    )]
     pub protocol_position: Box<Account<'info, ProcotolPositionState>>,
-
-    /// The program account for the position's lower tick
-    #[account(mut)]
-    pub tick_lower: Box<Account<'info, TickState>>,
-
-    /// The program account for the position's upper tick
-    #[account(mut)]
-    pub tick_upper: Box<Account<'info, TickState>>,
 
     /// The bitmap program account for the init state of the lower tick
     #[account(mut)]
-    pub tick_bitmap_lower: AccountLoader<'info, TickBitmapState>,
+    pub tick_array_lower: AccountLoader<'info, TickArrayState>,
 
     /// Stores init state for the upper tick
     #[account(mut)]
-    pub tick_bitmap_upper: AccountLoader<'info, TickBitmapState>,
-
-    /// The latest observation state
-    #[account(mut)]
-    pub last_observation: Box<Account<'info, ObservationState>>,
-
-    /// The next observation state
-    #[account(mut)]
-    pub next_observation: Box<Account<'info, ObservationState>>,
+    pub tick_array_upper: AccountLoader<'info, TickArrayState>,
 
     /// The pool's token account for token_0
     #[account(mut)]
@@ -130,18 +114,13 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
     // trigger an update of the position fees owed and fee growth snapshots if it has any liquidity
     if personal_position.liquidity > 0 {
         let mut burn_accounts = BurnParam {
-            owner: &Signer::try_from(&protocol_position_owner)?,
             pool_state: ctx.accounts.pool_state.as_mut(),
-            tick_lower_state: ctx.accounts.tick_lower.as_mut(),
-            tick_upper_state: ctx.accounts.tick_upper.as_mut(),
-            bitmap_lower_state: &ctx.accounts.tick_bitmap_lower,
-            bitmap_upper_state: &ctx.accounts.tick_bitmap_upper,
+            tick_array_lower_state: &ctx.accounts.tick_array_lower,
+            tick_array_upper_state: &ctx.accounts.tick_array_upper,
             procotol_position_state: ctx.accounts.protocol_position.as_mut(),
-            last_observation_state: ctx.accounts.last_observation.as_mut(),
-            next_observation_state: ctx.accounts.next_observation.as_mut(),
         };
         // update fee inside
-        burn(&mut burn_accounts, ctx.remaining_accounts, 0)?;
+        burn(&mut burn_accounts, 0)?;
 
         let updated_protocol_position = burn_accounts.procotol_position_state.deref();
 
@@ -189,10 +168,7 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
     msg!("collect amount_0: {}, amount_1: {}", amount_0, amount_1);
 
     let mut accounts = CollectParam {
-        owner: &Signer::try_from(&protocol_position_owner)?,
         pool_state: ctx.accounts.pool_state.as_mut(),
-        tick_lower_state: ctx.accounts.tick_lower.as_mut(),
-        tick_upper_state: ctx.accounts.tick_upper.as_mut(),
         position_state: ctx.accounts.protocol_position.as_mut(),
         vault_0: &mut ctx.accounts.token_vault_0,
         vault_1: &mut ctx.accounts.token_vault_1,
@@ -224,27 +200,6 @@ pub fn collect<'b, 'info>(
     amount_0_requested: u64,
     amount_1_requested: u64,
 ) -> Result<()> {
-    let pool_state_info = ctx.pool_state.to_account_info();
-
-    ctx.pool_state.validate_tick_address(
-        &ctx.tick_lower_state.key(),
-        ctx.tick_lower_state.bump,
-        ctx.tick_lower_state.tick,
-    )?;
-
-    ctx.pool_state.validate_tick_address(
-        &ctx.tick_upper_state.key(),
-        ctx.tick_upper_state.bump,
-        ctx.tick_upper_state.tick,
-    )?;
-
-    ctx.pool_state.validate_protocol_position_address(
-        &ctx.position_state.key(),
-        ctx.position_state.bump,
-        ctx.tick_lower_state.tick,
-        ctx.tick_upper_state.tick,
-    )?;
-
     let position = &mut ctx.position_state;
 
     let amount_0 = amount_0_requested.min(position.token_fees_owed_0);
@@ -270,15 +225,5 @@ pub fn collect<'b, 'info>(
             amount_1,
         )?;
     }
-
-    emit!(CollectFeeEvent {
-        pool_state: pool_state_info.key(),
-        owner: ctx.owner.key(),
-        tick_lower: ctx.tick_lower_state.tick,
-        tick_upper: ctx.tick_upper_state.tick,
-        collect_amount_0: amount_0,
-        collect_amount_1: amount_1,
-    });
-
     Ok(())
 }

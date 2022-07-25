@@ -1,11 +1,7 @@
-use super::{oracle::ObservationState, tick::TickState};
 use crate::error::ErrorCode;
 use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::states::{
-    oracle::{self, OBSERVATION_SEED},
     position::POSITION_SEED,
-    tick::TICK_SEED,
-    tick_bitmap::BITMAP_SEED,
 };
 use anchor_lang::prelude::*;
 
@@ -15,6 +11,7 @@ pub const POOL_VAULT_SEED: &str = "pool_vault";
 pub const POOL_REWARD_VAULT_SEED: &str = "pool_reward_vault";
 // Number of rewards Token
 pub const REWARD_NUM: usize = 3;
+pub const OBSERVATION_UPDATE_DURATION_DEFAULT: u16 = 15;
 
 /// The pool state
 ///
@@ -38,6 +35,13 @@ pub struct PoolState {
     pub token_vault_0: Pubkey,
     pub token_vault_1: Pubkey,
 
+    /// observation account key
+    pub observation_key: Pubkey,
+
+    /// mint0 and mint1 decimals
+    pub mint_0_decimals: u8,
+    pub mint_1_decimals: u8,
+
     /// The minimum number of ticks between initialized ticks
     pub tick_spacing: u16,
 
@@ -52,16 +56,12 @@ pub struct PoolState {
     /// This value may not always be equal to SqrtTickMath.getTickAtSqrtRatio(sqrtPriceX96) if the
     /// price is on a tick boundary.
     /// Not necessarily a multiple of tick_spacing.
-    pub tick: i32,
+    pub tick_current: i32,
 
     /// the most-recently updated index of the observations array
     pub observation_index: u16,
 
-    /// the current maximum number of observations that are being stored
-    pub observation_cardinality: u16,
-
-    /// The next maximum number of observations to store, triggered on a swap or position update
-    pub observation_cardinality_next: u16,
+    pub observation_update_duration: u16,
 
     /// The fee growth as a Q64.64 number, i.e. fees of token_0 and token_1 collected per
     /// unit of liquidity for the entire life of the pool.
@@ -86,12 +86,13 @@ pub struct PoolState {
 impl PoolState {
     pub const LEN: usize = 8
         + 1
-        + 32 * 6
+        + 32 * 7
+        + 1
+        + 1
         + 2
         + 16
         + 16
         + 4
-        + 2
         + 2
         + 2
         + 16
@@ -120,9 +121,9 @@ impl PoolState {
     /// # Arguments
     /// * `self` - A pool account
     ///
-    pub fn next_observation_index(&self) -> u16 {
-        (self.observation_index + 1) % self.observation_cardinality_next
-    }
+    // pub fn next_observation_index(&self) -> u16 {
+    //     (self.observation_index + 1) % self.observation_cardinality_next
+    // }
 
     /// Validates the public key of an observation account
     ///
@@ -133,26 +134,26 @@ impl PoolState {
     /// * `bump` - The PDA bump for the address
     /// * `next` - Whether to validate the current observation account or the next account
     ///
-    pub fn validate_observation_address(&self, key: &Pubkey, bump: u8, next: bool) -> Result<()> {
-        let index = if next {
-            self.next_observation_index()
-        } else {
-            self.observation_index
-        };
-        assert!(
-            *key == Pubkey::create_program_address(
-                &[
-                    &OBSERVATION_SEED.as_bytes(),
-                    self.key().as_ref(),
-                    &index.to_be_bytes(),
-                    &[bump],
-                ],
-                &crate::id()
-            )
-            .unwrap()
-        );
-        Ok(())
-    }
+    // pub fn validate_observation_address(&self, key: &Pubkey, bump: u8, next: bool) -> Result<()> {
+    //     let index = if next {
+    //         self.next_observation_index()
+    //     } else {
+    //         self.observation_index
+    //     };
+    //     assert!(
+    //         *key == Pubkey::create_program_address(
+    //             &[
+    //                 &OBSERVATION_SEED.as_bytes(),
+    //                 self.key().as_ref(),
+    //                 &index.to_be_bytes(),
+    //                 &[bump],
+    //             ],
+    //             &crate::id()
+    //         )
+    //         .unwrap()
+    //     );
+    //     Ok(())
+    // }
 
     /// Validates the public key of a tick account
     ///
@@ -163,21 +164,21 @@ impl PoolState {
     /// * `bump` - The PDA bump for the address
     /// * `tick` - The tick from which the address should be derived
     ///
-    pub fn validate_tick_address(&self, key: &Pubkey, bump: u8, tick: i32) -> Result<()> {
-        assert!(
-            *key == Pubkey::create_program_address(
-                &[
-                    &TICK_SEED.as_bytes(),
-                    self.key().as_ref(),
-                    &tick.to_be_bytes(),
-                    &[bump],
-                ],
-                &crate::id(),
-            )
-            .unwrap(),
-        );
-        Ok(())
-    }
+    // pub fn validate_tick_address(&self, key: &Pubkey, bump: u8, tick: i32) -> Result<()> {
+    //     assert!(
+    //         *key == Pubkey::create_program_address(
+    //             &[
+    //                 &TICK_SEED.as_bytes(),
+    //                 self.key().as_ref(),
+    //                 &tick.to_be_bytes(),
+    //                 &[bump],
+    //             ],
+    //             &crate::id(),
+    //         )
+    //         .unwrap(),
+    //     );
+    //     Ok(())
+    // }
 
     /// Validates the public key of a bitmap account
     ///
@@ -188,21 +189,21 @@ impl PoolState {
     /// * `bump` - The PDA bump for the address
     /// * `tick` - The tick from which the address should be derived
     ///
-    pub fn validate_bitmap_address(&self, key: &Pubkey, bump: u8, word_pos: i16) -> Result<()> {
-        assert!(
-            *key == Pubkey::create_program_address(
-                &[
-                    &BITMAP_SEED.as_bytes(),
-                    self.key().as_ref(),
-                    &word_pos.to_be_bytes(),
-                    &[bump],
-                ],
-                &crate::id(),
-            )
-            .unwrap(),
-        );
-        Ok(())
-    }
+    // pub fn validate_bitmap_address(&self, key: &Pubkey, bump: u8, word_pos: i16) -> Result<()> {
+    //     assert!(
+    //         *key == Pubkey::create_program_address(
+    //             &[
+    //                 &BITMAP_SEED.as_bytes(),
+    //                 self.key().as_ref(),
+    //                 &word_pos.to_be_bytes(),
+    //                 &[bump],
+    //             ],
+    //             &crate::id(),
+    //         )
+    //         .unwrap(),
+    //     );
+    //     Ok(())
+    // }
 
     /// Validates the public key of a bitmap account
     ///
@@ -234,64 +235,6 @@ impl PoolState {
             .unwrap(),
         );
         Ok(())
-    }
-
-    /// Returns a snapshot of the tick cumulative, seconds per liquidity and seconds inside a tick range
-    ///
-    /// Snapshots must only be compared to other snapshots, taken over a period for which a position existed.
-    /// I.e., snapshots cannot be compared if a position is not held for the entire period between when the first
-    /// snapshot is taken and the second snapshot is taken.
-    ///
-    /// # Arguments
-    ///
-    /// * `lower` - The lower tick of the range.
-    /// * `upper` - The upper tick of the range.
-    /// * `latest_observation` - The latest oracle observation. The latest condition must be externally checked.
-    ///
-    pub fn snapshot_cumulatives_inside(
-        &self,
-        lower: &TickState,
-        upper: &TickState,
-        latest_observation: &ObservationState,
-    ) -> SnapshotCumulative {
-        if self.tick < lower.tick {
-            SnapshotCumulative {
-                tick_cumulative_inside: lower.tick_cumulative_outside
-                    - upper.tick_cumulative_outside,
-                seconds_per_liquidity_inside_x64: lower.seconds_per_liquidity_outside_x64
-                    - upper.seconds_per_liquidity_outside_x64,
-                seconds_inside: lower.seconds_outside - upper.seconds_outside,
-            }
-        } else if self.tick < upper.tick {
-            let time = oracle::_block_timestamp();
-            let ObservationState {
-                tick_cumulative,
-                seconds_per_liquidity_cumulative_x64,
-                ..
-            } = if latest_observation.block_timestamp == time {
-                *latest_observation
-            } else {
-                latest_observation.transform(time, self.tick, self.liquidity)
-            };
-
-            SnapshotCumulative {
-                tick_cumulative_inside: tick_cumulative
-                    - lower.tick_cumulative_outside
-                    - upper.tick_cumulative_outside,
-                seconds_per_liquidity_inside_x64: seconds_per_liquidity_cumulative_x64
-                    - lower.seconds_per_liquidity_outside_x64
-                    - upper.seconds_per_liquidity_outside_x64,
-                seconds_inside: time - lower.seconds_outside - upper.seconds_outside,
-            }
-        } else {
-            SnapshotCumulative {
-                tick_cumulative_inside: upper.tick_cumulative_outside
-                    - lower.tick_cumulative_outside,
-                seconds_per_liquidity_inside_x64: upper.seconds_per_liquidity_outside_x64
-                    - lower.seconds_per_liquidity_outside_x64,
-                seconds_inside: upper.seconds_outside - lower.seconds_outside,
-            }
-        }
     }
 
     pub fn initialize_reward(
@@ -496,18 +439,6 @@ impl RewardInfo {
         }
         reward_growths
     }
-}
-
-/// A snapshot of the tick cumulative, seconds per liquidity and seconds inside a tick range
-pub struct SnapshotCumulative {
-    /// The snapshot of the tick accumulator for the range.
-    pub tick_cumulative_inside: i64,
-
-    /// The snapshot of seconds per liquidity for the range.
-    pub seconds_per_liquidity_inside_x64: u128,
-
-    /// The snapshot of seconds per liquidity for the range.
-    pub seconds_inside: u32,
 }
 
 /// Emitted when a pool is created and initialized with a starting price

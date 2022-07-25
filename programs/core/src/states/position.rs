@@ -22,6 +22,12 @@ pub struct ProcotolPositionState {
     /// Bump to identify PDA
     pub bump: u8,
 
+    /// The lower bound tick of the position
+    pub tick_lower_index: i32,
+
+    /// The upper bound tick of the position
+    pub tick_upper_index: i32,
+
     /// The amount of liquidity owned by this position
     pub liquidity: u128,
 
@@ -44,7 +50,7 @@ pub struct ProcotolPositionState {
 }
 
 impl ProcotolPositionState {
-    pub const LEN: usize = 8 + 1 + 16 + 16 + 16 + 8 + 8 + 16 * REWARD_NUM + 64;
+    pub const LEN: usize = 8 + 1 + 4 + 4 + 16 + 16 + 16 + 8 + 8 + 16 * REWARD_NUM + 64;
     /// Credits accumulated fees to a user's position
     ///
     /// # Arguments
@@ -58,6 +64,8 @@ impl ProcotolPositionState {
     ///
     pub fn update(
         &mut self,
+        tick_lower_index: i32,
+        tick_upper_index: i32,
         liquidity_delta: i128,
         fee_growth_inside_0_x64: u128,
         fee_growth_inside_1_x64: u128,
@@ -88,6 +96,8 @@ impl ProcotolPositionState {
         }
         self.fee_growth_inside_0_last = fee_growth_inside_0_x64;
         self.fee_growth_inside_1_last = fee_growth_inside_1_x64;
+        self.tick_lower_index = tick_lower_index;
+        self.tick_upper_index = tick_upper_index;
         if tokens_owed_0 > 0 || tokens_owed_1 > 0 {
             // overflow is acceptable, have to withdraw before you hit u64::MAX fees
             self.token_fees_owed_0 = self.token_fees_owed_0.checked_add(tokens_owed_0).unwrap();
@@ -119,11 +129,11 @@ pub struct CreatePersonalPositionEvent {
 
     /// The lower tick of the position
     #[index]
-    pub tick_lower: i32,
+    pub tick_lower_index: i32,
 
     /// The upper tick of the position
     #[index]
-    pub tick_upper: i32,
+    pub tick_upper_index: i32,
 
     /// The amount of liquidity minted to the position range
     pub liquidity: u128,
@@ -148,11 +158,11 @@ pub struct BurnEvent {
 
     /// The lower tick of the position
     #[index]
-    pub tick_lower: i32,
+    pub tick_lower_index: i32,
 
     /// The upper tick of the position
     #[index]
-    pub tick_upper: i32,
+    pub tick_upper_index: i32,
 
     /// The amount of liquidity to remove
     pub amount: u64,
@@ -162,30 +172,4 @@ pub struct BurnEvent {
 
     /// The amount of token_1 withdrawn
     pub amount_1: u64,
-}
-
-/// Emitted when fees are collected by the owner of a position
-/// Collect events may be emitted with zero amount_0 and amount_1 when the caller chooses not to collect fees
-#[event]
-pub struct CollectFeeEvent {
-    /// The pool from which fees are collected
-    #[index]
-    pub pool_state: Pubkey,
-
-    /// The owner of the position for which fees are collected
-    pub owner: Pubkey,
-
-    /// The lower tick of the position
-    #[index]
-    pub tick_lower: i32,
-
-    /// The upper tick of the position
-    #[index]
-    pub tick_upper: i32,
-
-    /// The amount of token_0 fees collected
-    pub collect_amount_0: u64,
-
-    /// The amount of token_1 fees collected
-    pub collect_amount_1: u64,
 }

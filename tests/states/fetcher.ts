@@ -1,11 +1,10 @@
 import { Program } from "@project-serum/anchor";
 import { PublicKey } from "@solana/web3.js";
-import { AmmCore } from "../anchor/amm_core";
+import { AmmCore } from "../../target/types/amm_core";
 import {
   PoolState,
   TickState,
   PositionState,
-  FeeState,
   ObservationState,
   AmmConfig,
   PositionRewardInfo,
@@ -38,7 +37,6 @@ export class StateFetcher {
       tokenMint1,
       tokenVault0,
       tokenVault1,
-      feeRate,
       tick,
       tickSpacing,
       liquidity,
@@ -65,7 +63,6 @@ export class StateFetcher {
       tokenMint1,
       tokenVault0,
       tokenVault1,
-      feeRate,
       tick,
       tickSpacing,
       liquidity,
@@ -115,8 +112,8 @@ export class StateFetcher {
       bump,
       nftMint,
       poolId,
-      tickLower,
-      tickUpper,
+      tickLowerIndex,
+      tickUpperIndex,
       liquidity,
       feeGrowthInside0Last,
       feeGrowthInside1Last,
@@ -135,25 +132,14 @@ export class StateFetcher {
       bump,
       nftMint,
       poolId,
-      tickLower,
-      tickUpper,
+      tickLowerIndex,
+      tickUpperIndex,
       liquidity,
       feeGrowthInside0Last,
       feeGrowthInside1Last,
       tokenFeesOwed0,
       tokenFeesOwed1,
       // rewardInfos,
-    };
-  }
-
-  public async getFeeState(address: PublicKey): Promise<FeeState> {
-    const { bump, fee, tickSpacing } =
-      await this.program.account.feeState.fetch(address);
-
-    return {
-      bump,
-      fee,
-      tickSpacing,
     };
   }
 

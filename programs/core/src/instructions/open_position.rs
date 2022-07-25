@@ -9,7 +9,7 @@ use anchor_spl::token;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use mpl_token_metadata::{instruction::create_metadata_accounts_v2, state::Creator};
 use spl_token::instruction::AuthorityType;
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref};
 
 pub struct MintParam<'b, 'info> {
     /// Pays to mint liquidity
@@ -30,33 +30,21 @@ pub struct MintParam<'b, 'info> {
     /// Mint liquidity for this pool
     pub pool_state: &'b mut Account<'info, PoolState>,
 
-    /// The lower tick boundary of the position
-    pub tick_lower: &'b mut Account<'info, TickState>,
-
-    /// The upper tick boundary of the position
-    pub tick_upper: &'b mut Account<'info, TickState>,
-
     /// The bitmap storing initialization state of the lower tick
-    pub bitmap_lower: &'b AccountLoader<'info, TickBitmapState>,
+    pub tick_array_lower: &'b AccountLoader<'info, TickArrayState>,
 
     /// The bitmap storing initialization state of the upper tick
-    pub bitmap_upper: &'b AccountLoader<'info, TickBitmapState>,
+    pub tick_array_upper: &'b AccountLoader<'info, TickArrayState>,
 
     /// The position into which liquidity is minted
     pub protocol_position: &'b mut Account<'info, ProcotolPositionState>,
-
-    /// The program account for the most recent oracle observation, at index = pool.observation_index
-    pub last_observation: &'b mut Account<'info, ObservationState>,
-
-    /// The next observation state
-    pub next_observation: &'b mut Account<'info, ObservationState>,
 
     /// The SPL program to perform token transfers
     pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
-#[instruction(tick_lower_index: i32, tick_upper_index: i32,word_lower_index:i16,word_upper_index:i16)]
+#[instruction(tick_lower_index: i32, tick_upper_index: i32,tick_array_lower_start_index:i32,tick_array_upper_start_index:i32)]
 pub struct OpenPosition<'info> {
     /// Pays to mint the position
     #[account(mut)]
@@ -113,41 +101,29 @@ pub struct OpenPosition<'info> {
     )]
     pub protocol_position: Box<Account<'info, ProcotolPositionState>>,
 
-    /// Account to store data for the position's lower tick
-    #[account(
-        init_if_needed,
-        seeds = [
-            TICK_SEED.as_bytes(),
-            pool_state.key().as_ref(),
-            &tick_lower_index.to_be_bytes()
-        ],
-        bump,
-        payer = payer,
-        space = TickState::LEN
-    )]
-    pub tick_lower: Box<Account<'info, TickState>>,
-
-    /// Account to store data for the position's upper tick
-    #[account(
-        init_if_needed,
-        seeds = [
-            TICK_SEED.as_bytes(),
-            pool_state.key().as_ref(),
-            &tick_upper_index.to_be_bytes()
-        ],
-        bump,
-        payer = payer,
-        space = TickState::LEN
-    )]
-    pub tick_upper: Box<Account<'info, TickState>>,
-
     /// CHECK: Account to mark the lower tick as initialized
-    #[account(mut)]
-    pub tick_bitmap_lower: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        seeds = [
+            TICK_ARRAY_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+            &tick_array_lower_start_index.to_be_bytes(),
+        ],
+        bump,
+    )]
+    pub tick_array_lower: UncheckedAccount<'info>,
 
     /// CHECK:Account to store data for the position's upper tick
-    #[account(mut)]
-    pub tick_bitmap_upper: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        seeds = [
+            TICK_ARRAY_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+            &tick_array_upper_start_index.to_be_bytes(),
+        ],
+        bump,
+    )]
+    pub tick_array_upper: UncheckedAccount<'info>,
 
     /// Metadata for the tokenized position
     #[account(
@@ -187,14 +163,6 @@ pub struct OpenPosition<'info> {
     )]
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
-    /// The latest observation state
-    #[account(mut)]
-    pub last_observation: Box<Account<'info, ObservationState>>,
-
-    /// The next observation state
-    #[account(mut)]
-    pub next_observation: Box<Account<'info, ObservationState>>,
-
     /// Sysvar for token mint and ATA creation
     pub rent: Sysvar<'info, Rent>,
 
@@ -219,56 +187,50 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     amount_1_desired: u64,
     amount_0_min: u64,
     amount_1_min: u64,
-    tick_lower: i32,
-    tick_upper: i32,
-    word_pos_lower: i16,
-    word_pos_upper: i16,
+    tick_lower_index: i32,
+    tick_upper_index: i32,
+    tick_array_lower_start_index: i32,
+    tick_array_upper_start_index: i32,
 ) -> Result<()> {
-    assert!(tick_lower < tick_upper);
-    assert!(word_pos_lower <= word_pos_upper);
+    check_ticks_order(tick_lower_index, tick_upper_index)?;
+    check_tick_boundary(tick_lower_index, ctx.accounts.pool_state.tick_spacing)?;
+    check_tick_boundary(tick_upper_index, ctx.accounts.pool_state.tick_spacing)?;
+
     if ctx.accounts.protocol_position.bump == 0 {
         let position_account = &mut ctx.accounts.protocol_position;
         position_account.bump = *ctx.bumps.get("protocol_position").unwrap();
     }
 
-    if ctx.accounts.tick_lower.bump == 0 {
-        let tick_state = ctx.accounts.tick_lower.as_mut();
-        tick_state.initialize(
-            *ctx.bumps.get("tick_lower").unwrap(),
-            tick_lower,
-            ctx.accounts.pool_state.tick_spacing,
-        )?;
-    }
+    let tick_spacing = ctx.accounts.pool_state.tick_spacing;
+    let max_start_index = (tick_math::MAX_TICK / tick_spacing as i32) / TICK_ARRAY_SIZE;
+    let min_start_index = (tick_math::MIN_TICK / tick_spacing as i32) / TICK_ARRAY_SIZE;
+    let start_lower_index =
+        TickArrayState::get_arrary_start_index(tick_lower_index, tick_spacing as i32);
+    let start_upper_index =
+        TickArrayState::get_arrary_start_index(tick_upper_index, tick_spacing as i32);
+    assert!(tick_array_lower_start_index == start_lower_index);
+    assert!(tick_array_upper_start_index == start_upper_index);
+    assert!(start_lower_index >= min_start_index && start_lower_index <= max_start_index);
+    assert!(start_upper_index >= min_start_index && start_upper_index <= max_start_index);
 
-    if ctx.accounts.tick_upper.bump == 0 {
-        let tick_state = ctx.accounts.tick_upper.as_mut();
-        tick_state.initialize(
-            *ctx.bumps.get("tick_upper").unwrap(),
-            tick_upper,
-            ctx.accounts.pool_state.tick_spacing,
-        )?;
-    }
-
-    let bitmap_lower_state = TickBitmapState::get_or_create_tick_bitmap(
+    let tick_array_lower_state = TickArrayState::get_or_create_tick_array(
         ctx.accounts.payer.to_account_info(),
-        ctx.accounts.tick_bitmap_lower.to_account_info(),
+        ctx.accounts.tick_array_lower.to_account_info(),
         ctx.accounts.system_program.to_account_info(),
         ctx.accounts.pool_state.key(),
-        word_pos_lower,
+        start_lower_index,
         ctx.accounts.pool_state.tick_spacing,
     )?;
 
-    let bitmap_upper_state = if word_pos_lower == word_pos_upper {
-        AccountLoader::<TickBitmapState>::try_from(
-            &ctx.accounts.tick_bitmap_upper.to_account_info(),
-        )?
+    let tick_array_upper_state = if start_lower_index == start_upper_index {
+        AccountLoader::<TickArrayState>::try_from(&ctx.accounts.tick_array_upper.to_account_info())?
     } else {
-        TickBitmapState::get_or_create_tick_bitmap(
+        TickArrayState::get_or_create_tick_array(
             ctx.accounts.payer.to_account_info(),
-            ctx.accounts.tick_bitmap_upper.to_account_info(),
+            ctx.accounts.tick_array_upper.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
             ctx.accounts.pool_state.key(),
-            word_pos_upper,
+            start_upper_index,
             ctx.accounts.pool_state.tick_spacing,
         )?
     };
@@ -276,43 +238,35 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     // Validate addresses manually, as constraint checks are not applied to internal calls
     let pool_state_info = ctx.accounts.pool_state.to_account_info();
     let pool_state_clone = ctx.accounts.pool_state.clone();
-    let tick_lower = ctx.accounts.tick_lower.tick;
-    let tick_upper = ctx.accounts.tick_upper.tick;
     require_keys_eq!(
-        *ctx.accounts.tick_bitmap_lower.to_account_info().owner,
+        *ctx.accounts.tick_array_lower.to_account_info().owner,
         crate::id()
     );
 
-    // let aa = ctx.accounts.bitmap_lower_state.load_mut()?;
-    let mut accounts = MintParam {
+    let mut mint_accounts = MintParam {
         payer: &ctx.accounts.payer,
         token_account_0: ctx.accounts.token_account_0.as_mut(),
         token_account_1: ctx.accounts.token_account_1.as_mut(),
         token_vault_0: ctx.accounts.token_vault_0.as_mut(),
         token_vault_1: ctx.accounts.token_vault_1.as_mut(),
         pool_state: ctx.accounts.pool_state.as_mut(),
-        tick_lower: ctx.accounts.tick_lower.as_mut(),
-        tick_upper: ctx.accounts.tick_upper.as_mut(),
-        bitmap_lower: &bitmap_lower_state,
-        bitmap_upper: &bitmap_upper_state,
+        tick_array_lower: &tick_array_lower_state,
+        tick_array_upper: &tick_array_upper_state,
         protocol_position: ctx.accounts.protocol_position.as_mut(),
-        last_observation: ctx.accounts.last_observation.as_mut(),
-        next_observation: ctx.accounts.next_observation.as_mut(),
         token_program: ctx.accounts.token_program.clone(),
     };
 
     let (liquidity, amount_0, amount_1) = add_liquidity(
-        &mut accounts,
-        ctx.remaining_accounts,
+        &mut mint_accounts,
         amount_0_desired,
         amount_1_desired,
         amount_0_min,
         amount_1_min,
-        tick_lower,
-        tick_upper,
+        tick_lower_index,
+        tick_upper_index,
     )?;
 
-    let amm_config_key =  ctx.accounts.amm_config.key();
+    let amm_config_key = ctx.accounts.amm_config.key();
     let token_mint_0 = pool_state_clone.token_mint_0.key();
     let token_mint_1 = pool_state_clone.token_mint_1.key();
     let seeds = [
@@ -390,11 +344,11 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     personal_position.nft_mint = ctx.accounts.position_nft_mint.key();
     personal_position.pool_id = pool_state_info.key();
 
-    personal_position.tick_lower = tick_lower; // can read from core position
-    personal_position.tick_upper = tick_upper;
+    personal_position.tick_lower_index = tick_lower_index;
+    personal_position.tick_upper_index = tick_upper_index;
     personal_position.liquidity = liquidity;
 
-    let updated_core_position = accounts.protocol_position;
+    let updated_core_position = mint_accounts.protocol_position;
     personal_position.fee_growth_inside_0_last = updated_core_position.fee_growth_inside_0_last;
     personal_position.fee_growth_inside_1_last = updated_core_position.fee_growth_inside_1_last;
     personal_position.update_rewards(updated_core_position.reward_growth_inside)?;
@@ -403,8 +357,8 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         pool_state: pool_state_info.key(),
         minter: ctx.accounts.payer.key(),
         nft_owner: ctx.accounts.position_nft_owner.key(),
-        tick_lower: tick_lower,
-        tick_upper: tick_upper,
+        tick_lower_index: tick_lower_index,
+        tick_upper_index: tick_upper_index,
         liquidity: liquidity,
         deposit_amount_0: amount_0,
         deposit_amount_1: amount_1,
@@ -427,18 +381,17 @@ pub fn open_position<'a, 'b, 'c, 'info>(
 ///
 pub fn add_liquidity<'b, 'info>(
     accounts: &mut MintParam<'b, 'info>,
-    remaining_accounts: &[AccountInfo<'info>],
     amount_0_desired: u64,
     amount_1_desired: u64,
     amount_0_min: u64,
     amount_1_min: u64,
-    tick_lower: i32,
-    tick_upper: i32,
+    tick_lower_index: i32,
+    tick_upper_index: i32,
 ) -> Result<(u128, u64, u64)> {
     let sqrt_price_x64 = accounts.pool_state.sqrt_price_x64;
 
-    let sqrt_ratio_a_x64 = tick_math::get_sqrt_ratio_at_tick(tick_lower)?;
-    let sqrt_ratio_b_x64 = tick_math::get_sqrt_ratio_at_tick(tick_upper)?;
+    let sqrt_ratio_a_x64 = tick_math::get_sqrt_ratio_at_tick(tick_lower_index)?;
+    let sqrt_ratio_b_x64 = tick_math::get_sqrt_ratio_at_tick(tick_upper_index)?;
     let liquidity = liquidity_amounts::get_liquidity_for_amounts(
         sqrt_price_x64,
         sqrt_ratio_a_x64,
@@ -446,76 +399,27 @@ pub fn add_liquidity<'b, 'info>(
         amount_0_desired,
         amount_1_desired,
     );
-
+    assert!(liquidity > 0);
     let balance_0_before = accounts.token_vault_0.amount;
     let balance_1_before = accounts.token_vault_1.amount;
 
-    mint(accounts, remaining_accounts, liquidity)?;
+    let mut tick_array_lower = accounts.tick_array_lower.load_mut()?;
+    let tick_lower_state = tick_array_lower
+        .get_tick_state_mut(tick_lower_index, accounts.pool_state.tick_spacing as i32)?;
 
-    accounts.token_vault_0.reload()?;
-    accounts.token_vault_1.reload()?;
-    let amount_0 = accounts.token_vault_0.amount - balance_0_before;
-    let amount_1 = accounts.token_vault_1.amount - balance_1_before;
-    require!(
-        amount_0 >= amount_0_min && amount_1 >= amount_1_min,
-        ErrorCode::PriceSlippageCheck
-    );
+    let mut tick_array_upper = accounts.tick_array_upper.load_mut()?;
+    let tick_upper_state = tick_array_upper
+        .get_tick_state_mut(tick_upper_index, accounts.pool_state.tick_spacing as i32)?;
 
-    Ok((liquidity, amount_0, amount_1))
-}
-
-pub fn mint<'b, 'info>(
-    ctx: &mut MintParam<'b, 'info>,
-    remaining_accounts: &[AccountInfo<'info>],
-    liquidity: u128,
-) -> Result<()> {
-    assert!(ctx.token_vault_0.key() == ctx.pool_state.token_vault_0);
-    assert!(ctx.token_vault_1.key() == ctx.pool_state.token_vault_1);
-    ctx.pool_state.validate_tick_address(
-        &ctx.tick_lower.key(),
-        ctx.tick_lower.bump,
-        ctx.tick_lower.tick,
-    )?;
-    ctx.pool_state.validate_tick_address(
-        &ctx.tick_upper.key(),
-        ctx.tick_upper.bump,
-        ctx.tick_upper.tick,
-    )?;
-    ctx.pool_state.validate_bitmap_address(
-        &ctx.bitmap_lower.key(),
-        ctx.bitmap_lower.load()?.bump,
-        tick_bitmap::position(ctx.tick_lower.tick / ctx.pool_state.tick_spacing as i32).word_pos,
-    )?;
-    ctx.pool_state.validate_bitmap_address(
-        &ctx.bitmap_upper.key(),
-        ctx.bitmap_upper.load()?.bump,
-        tick_bitmap::position(ctx.tick_upper.tick / ctx.pool_state.tick_spacing as i32).word_pos,
-    )?;
-
-    ctx.pool_state.validate_protocol_position_address(
-        &ctx.protocol_position.key(),
-        ctx.protocol_position.bump,
-        ctx.tick_lower.tick,
-        ctx.tick_upper.tick,
-    )?;
-    ctx.pool_state.validate_observation_address(
-        &ctx.last_observation.key(),
-        ctx.last_observation.bump,
-        false,
-    )?;
-    assert!(liquidity > 0);
+    tick_lower_state.tick = tick_lower_index;
+    tick_upper_state.tick = tick_upper_index;
 
     let (amount_0_int, amount_1_int) = _modify_position(
         i128::try_from(liquidity).unwrap(),
-        ctx.pool_state,
-        ctx.protocol_position,
-        ctx.tick_lower,
-        ctx.tick_upper,
-        ctx.bitmap_lower,
-        ctx.bitmap_upper,
-        ctx.last_observation,
-        ctx.next_observation,
-        remaining_accounts,
+        accounts.pool_state,
+        accounts.protocol_position,
+        tick_lower_state,
+        tick_upper_state,
     )?;
     // msg!(
     //     "amount_0_init:{},amount_1_init:{}",
@@ -527,24 +431,33 @@ pub fn mint<'b, 'info>(
 
     if amount_0 > 0 {
         transfer_from_user_to_pool_vault(
-            &ctx.payer,
-            &ctx.token_account_0,
-            &ctx.token_vault_0,
-            &ctx.token_program,
+            &accounts.payer,
+            &accounts.token_account_0,
+            &accounts.token_vault_0,
+            &accounts.token_program,
             amount_0,
         )?;
     }
     if amount_1 > 0 {
         transfer_from_user_to_pool_vault(
-            &ctx.payer,
-            &ctx.token_account_1,
-            &ctx.token_vault_1,
-            &ctx.token_program,
+            &accounts.payer,
+            &accounts.token_account_1,
+            &accounts.token_vault_1,
+            &accounts.token_program,
             amount_1,
         )?;
     }
 
-    Ok(())
+    accounts.token_vault_0.reload()?;
+    accounts.token_vault_1.reload()?;
+    let amount_0 = accounts.token_vault_0.amount - balance_0_before;
+    let amount_1 = accounts.token_vault_1.amount - balance_1_before;
+    require!(
+        amount_0 >= amount_0_min && amount_1 >= amount_1_min,
+        ErrorCode::PriceSlippageCheck
+    );
+
+    Ok((liquidity, amount_0, amount_1))
 }
 
 /// Credit or debit liquidity to a position, and find the amount of token_0 and token_1
@@ -559,10 +472,6 @@ pub fn mint<'b, 'info>(
 /// * `tick_upper_state`- Program account for the upper tick boundary
 /// * `bitmap_lower` - Holds the initialization state of the lower tick
 /// * `bitmap_upper` - Holds the initialization state of the upper tick
-/// * `last_observation_state` - The last written oracle observation, having index = pool.observation_index.
-/// This condition must be externally tracked.
-/// * `next_observation_state` - The observation account following `last_observation_state`. Becomes equal
-/// to last_observation_state when cardinality is 1.
 /// * `lamport_destination` - Destination account for freed lamports when a tick state is
 /// un-initialized
 /// * `liquidity_delta` - The change in liquidity. Can be 0 to perform a poke.
@@ -570,26 +479,16 @@ pub fn mint<'b, 'info>(
 pub fn _modify_position<'info>(
     liquidity_delta: i128,
     pool_state: &mut Account<'info, PoolState>,
-    position_state: &mut Account<'info, ProcotolPositionState>,
-    tick_lower_state: &mut Account<'info, TickState>,
-    tick_upper_state: &mut Account<'info, TickState>,
-    bitmap_lower: &AccountLoader<'info, TickBitmapState>,
-    bitmap_upper: &AccountLoader<'info, TickBitmapState>,
-    last_observation_state: &mut Account<'info, ObservationState>,
-    next_observation_state: &mut Account<'info, ObservationState>,
-    _remaining_accounts: &[AccountInfo<'info>],
+    protocol_position_state: &mut Account<'info, ProcotolPositionState>,
+    tick_lower_state: &mut TickState,
+    tick_upper_state: &mut TickState,
 ) -> Result<(i64, i64)> {
-    crate::check_ticks(tick_lower_state.tick, tick_upper_state.tick)?;
-
     _update_position(
         liquidity_delta,
         pool_state,
-        last_observation_state,
-        position_state,
+        protocol_position_state,
         tick_lower_state,
         tick_upper_state,
-        bitmap_lower,
-        bitmap_upper,
     )?;
 
     let mut amount_0 = 0;
@@ -599,7 +498,7 @@ pub fn _modify_position<'info>(
     let tick_upper = tick_upper_state.tick;
 
     if liquidity_delta != 0 {
-        if pool_state.tick < tick_lower {
+        if pool_state.tick_current < tick_lower {
             // current tick is below the passed range; liquidity can only become in range by crossing from left to
             // right, when we'll need _more_ token_0 (it's becoming more valuable) so user must provide it
             amount_0 = sqrt_price_math::get_amount_0_delta_signed(
@@ -607,33 +506,7 @@ pub fn _modify_position<'info>(
                 tick_math::get_sqrt_ratio_at_tick(tick_upper)?,
                 liquidity_delta,
             );
-        } else if pool_state.tick < tick_upper {
-            // current tick is inside the passed range
-            // write oracle observation
-            let timestamp = oracle::_block_timestamp();
-            let partition_current_timestamp = timestamp / 14;
-            let partition_last_timestamp = last_observation_state.block_timestamp / 14;
-
-            let observation = if partition_current_timestamp > partition_last_timestamp {
-                pool_state.validate_observation_address(
-                    &next_observation_state.key(),
-                    next_observation_state.bump,
-                    true,
-                )?;
-                next_observation_state.deref_mut()
-            } else {
-                last_observation_state.deref_mut()
-            };
-
-            pool_state.observation_cardinality_next = observation.update(
-                timestamp,
-                pool_state.tick,
-                pool_state.liquidity,
-                pool_state.observation_cardinality,
-                pool_state.observation_cardinality_next,
-            );
-            pool_state.observation_index = observation.index;
-
+        } else if pool_state.tick_current < tick_upper {
             // Both Δtoken_0 and Δtoken_1 will be needed in current price
             amount_0 = sqrt_price_math::get_amount_0_delta_signed(
                 pool_state.sqrt_price_x64,
@@ -679,12 +552,9 @@ pub fn _modify_position<'info>(
 pub fn _update_position<'info>(
     liquidity_delta: i128,
     pool_state: &mut Account<'info, PoolState>,
-    last_observation_state: &mut Account<ObservationState>,
-    position_state: &mut Account<'info, ProcotolPositionState>,
-    tick_lower_state: &mut Account<'info, TickState>,
-    tick_upper_state: &mut Account<'info, TickState>,
-    bitmap_lower: &AccountLoader<'info, TickBitmapState>,
-    bitmap_upper: &AccountLoader<'info, TickBitmapState>,
+    protocol_position_state: &mut Account<'info, ProcotolPositionState>,
+    tick_lower_state: &mut TickState,
+    tick_upper_state: &mut TickState,
 ) -> Result<()> {
     let clock = Clock::get()?;
     let updated_reward_infos = pool_state.update_reward_infos(clock.unix_timestamp as u64)?;
@@ -694,42 +564,30 @@ pub fn _update_position<'info>(
         "_update_position: update_rewared_info:{:?}",
         reward_growths_outside
     );
-    let tick_lower = tick_lower_state.deref_mut();
-    let tick_upper = tick_upper_state.deref_mut();
 
     let mut flipped_lower = false;
     let mut flipped_upper = false;
 
     // update the ticks if liquidity delta is non-zero
     if liquidity_delta != 0 {
-        let time = oracle::_block_timestamp();
-        let (tick_cumulative, seconds_per_liquidity_cumulative_x64) =
-            last_observation_state.observe_latest(time, pool_state.tick, pool_state.liquidity);
-
         let max_liquidity_per_tick =
             tick_spacing_to_max_liquidity_per_tick(pool_state.tick_spacing as i32);
 
         // Update tick state and find if tick is flipped
-        flipped_lower = tick_lower.update(
-            pool_state.tick,
+        flipped_lower = tick_lower_state.update(
+            pool_state.tick_current,
             liquidity_delta,
             pool_state.fee_growth_global_0,
             pool_state.fee_growth_global_1,
-            seconds_per_liquidity_cumulative_x64,
-            tick_cumulative,
-            time,
             false,
             max_liquidity_per_tick,
             reward_growths_outside,
         )?;
-        flipped_upper = tick_upper.update(
-            pool_state.tick,
+        flipped_upper = tick_upper_state.update(
+            pool_state.tick_current,
             liquidity_delta,
             pool_state.fee_growth_global_0,
             pool_state.fee_growth_global_1,
-            seconds_per_liquidity_cumulative_x64,
-            tick_cumulative,
-            time,
             true,
             max_liquidity_per_tick,
             reward_growths_outside,
@@ -740,37 +598,27 @@ pub fn _update_position<'info>(
             tick_upper.reward_growths_outside,
             tick_lower.reward_growths_outside
         );
-        if flipped_lower {
-            let bit_pos = ((tick_lower.tick / pool_state.tick_spacing as i32) % 256) as u8; // rightmost 8 bits
-            bitmap_lower.load_mut()?.flip_bit(bit_pos);
-        }
-        if flipped_upper {
-            let bit_pos = ((tick_upper.tick / pool_state.tick_spacing as i32) % 256) as u8;
-            if bitmap_lower.key() == bitmap_upper.key() {
-                bitmap_lower.load_mut()?.flip_bit(bit_pos);
-            } else {
-                bitmap_upper.load_mut()?.flip_bit(bit_pos);
-            }
-        }
     }
     // Update fees accrued to the position
     let (fee_growth_inside_0_x64, fee_growth_inside_1_x64) = tick::get_fee_growth_inside(
-        tick_lower.deref(),
-        tick_upper.deref(),
-        pool_state.tick,
+        tick_lower_state.deref(),
+        tick_upper_state.deref(),
+        pool_state.tick_current,
         pool_state.fee_growth_global_0,
         pool_state.fee_growth_global_1,
     );
 
     // Update reward accrued to the position
     let reward_growths_inside = tick::get_reward_growths_inside(
-        tick_lower.deref(),
-        tick_upper.deref(),
-        pool_state.tick,
+        tick_lower_state.deref(),
+        tick_upper_state.deref(),
+        pool_state.tick_current,
         &updated_reward_infos,
     );
 
-    position_state.update(
+    protocol_position_state.update(
+        tick_lower_state.tick,
+        tick_upper_state.tick,
         liquidity_delta,
         fee_growth_inside_0_x64,
         fee_growth_inside_1_x64,
@@ -781,10 +629,10 @@ pub fn _update_position<'info>(
     // A tick is un-initialized on flip if liquidity_delta is negative
     if liquidity_delta < 0 {
         if flipped_lower {
-            tick_lower.clear();
+            tick_lower_state.clear();
         }
         if flipped_upper {
-            tick_upper.clear();
+            tick_upper_state.clear();
         }
     }
     Ok(())

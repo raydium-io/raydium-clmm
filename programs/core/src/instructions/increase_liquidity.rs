@@ -29,8 +29,8 @@ pub struct IncreaseLiquidity<'info> {
         seeds = [
             POSITION_SEED.as_bytes(),
             pool_state.key().as_ref(),
-            &personal_position.tick_lower.to_be_bytes(),
-            &personal_position.tick_upper.to_be_bytes(),
+            &personal_position.tick_lower_index.to_be_bytes(),
+            &personal_position.tick_upper_index.to_be_bytes(),
         ],
         bump,
     )]
@@ -40,21 +40,13 @@ pub struct IncreaseLiquidity<'info> {
     #[account(mut)]
     pub personal_position: Box<Account<'info, PersonalPositionState>>,
 
-    /// Account to store data for the position's lower tick
-    #[account(mut)]
-    pub tick_lower: Box<Account<'info, TickState>>,
-
-    /// Account to store data for the position's upper tick
-    #[account(mut)]
-    pub tick_upper: Box<Account<'info, TickState>>,
-
     /// Stores init state for the lower tick
     #[account(mut)]
-    pub tick_bitmap_lower: AccountLoader<'info, TickBitmapState>,
+    pub tick_array_lower: AccountLoader<'info, TickArrayState>,
 
     /// Stores init state for the upper tick
     #[account(mut)]
-    pub tick_bitmap_upper: AccountLoader<'info, TickBitmapState>,
+    pub tick_array_upper: AccountLoader<'info, TickArrayState>,
 
     /// The payer's token account for token_0
     #[account(
@@ -84,13 +76,6 @@ pub struct IncreaseLiquidity<'info> {
     )]
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
-    /// The latest observation state
-    #[account(mut)]
-    pub last_observation: Box<Account<'info, ObservationState>>,
-
-    /// The next observation state
-    #[account(mut)]
-    pub next_observation: Box<Account<'info, ObservationState>>,
     /// Program to create mint account and mint tokens
     pub token_program: Program<'info, Token>,
 }
@@ -102,8 +87,8 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     amount_0_min: u64,
     amount_1_min: u64,
 ) -> Result<()> {
-    let tick_lower = ctx.accounts.tick_lower.tick;
-    let tick_upper = ctx.accounts.tick_upper.tick;
+    let tick_lower = ctx.accounts.personal_position.tick_lower_index;
+    let tick_upper = ctx.accounts.personal_position.tick_upper_index;
     let mut accounts = MintParam {
         payer: &ctx.accounts.nft_owner,
         token_account_0: ctx.accounts.token_account_0.as_mut(),
@@ -111,19 +96,14 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         token_vault_0: ctx.accounts.token_vault_0.as_mut(),
         token_vault_1: ctx.accounts.token_vault_1.as_mut(),
         pool_state: ctx.accounts.pool_state.as_mut(),
-        tick_lower: ctx.accounts.tick_lower.as_mut(),
-        tick_upper: ctx.accounts.tick_upper.as_mut(),
-        bitmap_lower: &ctx.accounts.tick_bitmap_lower,
-        bitmap_upper: &ctx.accounts.tick_bitmap_upper,
+        tick_array_lower: &ctx.accounts.tick_array_lower,
+        tick_array_upper: &ctx.accounts.tick_array_upper,
         protocol_position: ctx.accounts.protocol_position.as_mut(),
-        last_observation: ctx.accounts.last_observation.as_mut(),
-        next_observation: ctx.accounts.next_observation.as_mut(),
         token_program: ctx.accounts.token_program.clone(),
     };
 
     let (liquidity, amount_0, amount_1) = add_liquidity(
         &mut accounts,
-        ctx.remaining_accounts,
         amount_0_desired,
         amount_1_desired,
         amount_0_min,

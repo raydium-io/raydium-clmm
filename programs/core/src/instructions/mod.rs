@@ -2,9 +2,6 @@
 pub mod create_pool;
 pub use create_pool::*;
 
-pub mod increase_observation;
-pub use increase_observation::*;
-
 pub mod swap_internal;
 pub use swap_internal::*;
 

@@ -390,7 +390,7 @@ fn main() -> Result<()> {
                     }
                     let mut find_position = raydium_amm_v3::states::PersonalPositionState::default();
                     for position in user_positions {
-                        if position.pool_id == cfg.pool_id_account.unwrap() && position.tick_lower == tick_lower_index && position.tick_upper == tick_upper_index {
+                        if position.pool_id == cfg.pool_id_account.unwrap() && position.tick_lower_index == tick_lower_index && position.tick_upper_index == tick_upper_index {
                             find_position = position.clone();
                         }
                     }
@@ -463,7 +463,7 @@ fn main() -> Result<()> {
                     }
                     let mut find_position = raydium_amm_v3::states::PersonalPositionState::default();
                     for position in user_positions {
-                        if position.pool_id == cfg.pool_id_account.unwrap() && position.tick_lower == tick_lower_index && position.tick_upper == tick_upper_index {
+                        if position.pool_id == cfg.pool_id_account.unwrap() && position.tick_lower_index == tick_lower_index && position.tick_upper_index == tick_upper_index {
                             find_position = position.clone();
                         }
                     }
@@ -532,7 +532,7 @@ fn main() -> Result<()> {
                     }
                     let mut find_position = raydium_amm_v3::states::PersonalPositionState::default();
                     for position in user_positions {
-                        if position.pool_id == cfg.pool_id_account.unwrap() && position.tick_lower == tick_lower_index && position.tick_upper == tick_upper_index {
+                        if position.pool_id == cfg.pool_id_account.unwrap() && position.tick_lower_index == tick_lower_index && position.tick_upper_index == tick_upper_index {
                             find_position = position.clone();
                         }
                     }

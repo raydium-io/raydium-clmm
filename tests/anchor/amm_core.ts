@@ -266,12 +266,12 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "tickLower",
+          "name": "tickArrayLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpper",
+          "name": "tickArrayUpper",
           "isMut": true,
           "isSigner": false
         },
@@ -454,22 +454,12 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "tickLower",
+          "name": "tickArrayLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpper",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickBitmapLower",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickBitmapUpper",
+          "name": "tickArrayUpper",
           "isMut": true,
           "isSigner": false
         },
@@ -544,12 +534,12 @@ export type AmmCore = {
           "type": "i32"
         },
         {
-          "name": "wordLowerIndex",
-          "type": "i16"
+          "name": "tickArrayLowerStartIndex",
+          "type": "i32"
         },
         {
-          "name": "wordUpperIndex",
-          "type": "i16"
+          "name": "tickArrayUpperStartIndex",
+          "type": "i32"
         },
         {
           "name": "amount0Desired",
@@ -639,22 +629,12 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "tickLower",
+          "name": "tickArrayLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpper",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickBitmapLower",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickBitmapUpper",
+          "name": "tickArrayUpper",
           "isMut": true,
           "isSigner": false
         },
@@ -757,22 +737,12 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "tickLower",
+          "name": "tickArrayLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpper",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickBitmapLower",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickBitmapUpper",
+          "name": "tickArrayUpper",
           "isMut": true,
           "isSigner": false
         },
@@ -851,22 +821,12 @@ export type AmmCore = {
           "isSigner": false
         },
         {
-          "name": "tickLower",
+          "name": "tickArrayLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpper",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickBitmapLower",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickBitmapUpper",
+          "name": "tickArrayUpper",
           "isMut": true,
           "isSigner": false
         },
@@ -952,6 +912,11 @@ export type AmmCore = {
         },
         {
           "name": "outputVault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tickArray",
           "isMut": true,
           "isSigner": false
         },
@@ -1108,11 +1073,11 @@ export type AmmCore = {
             "type": "publicKey"
           },
           {
-            "name": "tickLower",
+            "name": "tickLowerIndex",
             "type": "i32"
           },
           {
-            "name": "tickUpper",
+            "name": "tickUpperIndex",
             "type": "i32"
           },
           {
@@ -1195,7 +1160,7 @@ export type AmmCore = {
             "type": "u128"
           },
           {
-            "name": "tick",
+            "name": "tickCurrent",
             "type": "i32"
           },
           {
@@ -1254,6 +1219,14 @@ export type AmmCore = {
             "type": "u8"
           },
           {
+            "name": "tickLowerIndex",
+            "type": "i32"
+          },
+          {
+            "name": "tickUpperIndex",
+            "type": "i32"
+          },
+          {
             "name": "liquidity",
             "type": "u128"
           },
@@ -1286,24 +1259,26 @@ export type AmmCore = {
       }
     },
     {
-      "name": "tickBitmapState",
+      "name": "tickArrayState",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "bump",
-            "type": "u8"
+            "name": "ammPool",
+            "type": "publicKey"
           },
           {
-            "name": "wordPos",
-            "type": "i16"
+            "name": "startTickIndex",
+            "type": "i32"
           },
           {
-            "name": "word",
+            "name": "ticks",
             "type": {
               "array": [
-                "u64",
-                4
+                {
+                  "defined": "TickState"
+                },
+                100
               ]
             }
           }
@@ -1315,10 +1290,6 @@ export type AmmCore = {
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "bump",
-            "type": "u8"
-          },
           {
             "name": "tick",
             "type": "i32"
@@ -1780,12 +1751,12 @@ export type AmmCore = {
           "index": false
         },
         {
-          "name": "tickLower",
+          "name": "tickLowerIndex",
           "type": "i32",
           "index": false
         },
         {
-          "name": "tickUpper",
+          "name": "tickUpperIndex",
           "type": "i32",
           "index": false
         },
@@ -1820,12 +1791,12 @@ export type AmmCore = {
           "index": false
         },
         {
-          "name": "tickLower",
+          "name": "tickLowerIndex",
           "type": "i32",
           "index": false
         },
         {
-          "name": "tickUpper",
+          "name": "tickUpperIndex",
           "type": "i32",
           "index": false
         },
@@ -1845,41 +1816,6 @@ export type AmmCore = {
           "index": false
         }
       ]
-    },
-    {
-      "name": "CollectFeeEvent",
-      "fields": [
-        {
-          "name": "poolState",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "owner",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "tickLower",
-          "type": "i32",
-          "index": false
-        },
-        {
-          "name": "tickUpper",
-          "type": "i32",
-          "index": false
-        },
-        {
-          "name": "collectAmount0",
-          "type": "u64",
-          "index": false
-        },
-        {
-          "name": "collectAmount1",
-          "type": "u64",
-          "index": false
-        }
-      ]
     }
   ],
   "errors": [
@@ -1895,111 +1831,121 @@ export type AmmCore = {
     },
     {
       "code": 6002,
+      "name": "AccountLack",
+      "msg": "Account lack"
+    },
+    {
+      "code": 6003,
       "name": "ClosePositionErr",
       "msg": "Remove liquitity, collect fees owed and reward then you can close position account"
     },
     {
-      "code": 6003,
+      "code": 6004,
       "name": "ZeroMintAmount",
       "msg": "Minting amount should be greater than 0"
     },
     {
-      "code": 6004,
+      "code": 6005,
       "name": "InvaildTickIndex",
       "msg": "Tick index of lower must be smaller than upper"
     },
     {
-      "code": 6005,
+      "code": 6006,
       "name": "TickInvaildOrder",
       "msg": "The lower tick must be below the upper tick"
     },
     {
-      "code": 6006,
+      "code": 6007,
       "name": "TickLowerOverflow",
       "msg": "The tick must be greater, or equal to the minimum tick(-221818)"
     },
     {
-      "code": 6007,
+      "code": 6008,
       "name": "TickUpperOverflow",
       "msg": "The tick must be lesser than, or equal to the maximum tick(221818)"
     },
     {
-      "code": 6008,
+      "code": 6009,
       "name": "TickAndSpacingNotMatch",
       "msg": "tick % tick_spacing must be zero"
     },
     {
-      "code": 6009,
+      "code": 6010,
+      "name": "InvalidTickArray",
+      "msg": "Invaild tick array account"
+    },
+    {
+      "code": 6011,
       "name": "SqrtPriceLimitOverflow",
       "msg": "Square root price limit overflow"
     },
     {
-      "code": 6010,
+      "code": 6012,
       "name": "SqrtPriceX64",
       "msg": "sqrt_price_x64 out of range"
     },
     {
-      "code": 6011,
+      "code": 6013,
       "name": "LiquiditySubValueErr",
       "msg": "Liquidity sub delta L must be smaller than before"
     },
     {
-      "code": 6012,
+      "code": 6014,
       "name": "LiquidityAddValueErr",
       "msg": "Liquidity add delta L must be greater, or equal to before"
     },
     {
-      "code": 6013,
+      "code": 6015,
       "name": "InvaildLiquidity",
       "msg": "Invaild liquidity when update position"
     },
     {
-      "code": 6014,
+      "code": 6016,
       "name": "TransactionTooOld",
       "msg": "Transaction too old"
     },
     {
-      "code": 6015,
+      "code": 6017,
       "name": "PriceSlippageCheck",
       "msg": "Price slippage check"
     },
     {
-      "code": 6016,
+      "code": 6018,
       "name": "TooLittleOutputReceived",
       "msg": "Too little output received"
     },
     {
-      "code": 6017,
+      "code": 6019,
       "name": "TooMuchInputPaid",
       "msg": "Too much input paid"
     },
     {
-      "code": 6018,
+      "code": 6020,
       "name": "InvaildSwapAmountSpecified",
       "msg": "Swap special amount can not be zero"
     },
     {
-      "code": 6019,
+      "code": 6021,
       "name": "InvalidRewardIndex",
       "msg": "Invalid reward index"
     },
     {
-      "code": 6020,
+      "code": 6022,
       "name": "InvalidRewardInitParam",
       "msg": "Invalid reward init param"
     },
     {
-      "code": 6021,
+      "code": 6023,
       "name": "InvalidRewardDesiredAmount",
       "msg": "Invalid collect reward desired amount"
     },
     {
-      "code": 6022,
+      "code": 6024,
       "name": "InvalidRewardInputAccountNumber",
       "msg": "Invalid collect reward input account number"
     },
     {
-      "code": 6023,
+      "code": 6025,
       "name": "UnInitializedRewardInfo",
       "msg": "uninitialized reward info"
     }
@@ -2274,12 +2220,12 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "tickLower",
+          "name": "tickArrayLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpper",
+          "name": "tickArrayUpper",
           "isMut": true,
           "isSigner": false
         },
@@ -2462,22 +2408,12 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "tickLower",
+          "name": "tickArrayLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpper",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickBitmapLower",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickBitmapUpper",
+          "name": "tickArrayUpper",
           "isMut": true,
           "isSigner": false
         },
@@ -2552,12 +2488,12 @@ export const IDL: AmmCore = {
           "type": "i32"
         },
         {
-          "name": "wordLowerIndex",
-          "type": "i16"
+          "name": "tickArrayLowerStartIndex",
+          "type": "i32"
         },
         {
-          "name": "wordUpperIndex",
-          "type": "i16"
+          "name": "tickArrayUpperStartIndex",
+          "type": "i32"
         },
         {
           "name": "amount0Desired",
@@ -2647,22 +2583,12 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "tickLower",
+          "name": "tickArrayLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpper",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickBitmapLower",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickBitmapUpper",
+          "name": "tickArrayUpper",
           "isMut": true,
           "isSigner": false
         },
@@ -2765,22 +2691,12 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "tickLower",
+          "name": "tickArrayLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpper",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickBitmapLower",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickBitmapUpper",
+          "name": "tickArrayUpper",
           "isMut": true,
           "isSigner": false
         },
@@ -2859,22 +2775,12 @@ export const IDL: AmmCore = {
           "isSigner": false
         },
         {
-          "name": "tickLower",
+          "name": "tickArrayLower",
           "isMut": true,
           "isSigner": false
         },
         {
-          "name": "tickUpper",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickBitmapLower",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickBitmapUpper",
+          "name": "tickArrayUpper",
           "isMut": true,
           "isSigner": false
         },
@@ -2960,6 +2866,11 @@ export const IDL: AmmCore = {
         },
         {
           "name": "outputVault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tickArray",
           "isMut": true,
           "isSigner": false
         },
@@ -3116,11 +3027,11 @@ export const IDL: AmmCore = {
             "type": "publicKey"
           },
           {
-            "name": "tickLower",
+            "name": "tickLowerIndex",
             "type": "i32"
           },
           {
-            "name": "tickUpper",
+            "name": "tickUpperIndex",
             "type": "i32"
           },
           {
@@ -3203,7 +3114,7 @@ export const IDL: AmmCore = {
             "type": "u128"
           },
           {
-            "name": "tick",
+            "name": "tickCurrent",
             "type": "i32"
           },
           {
@@ -3262,6 +3173,14 @@ export const IDL: AmmCore = {
             "type": "u8"
           },
           {
+            "name": "tickLowerIndex",
+            "type": "i32"
+          },
+          {
+            "name": "tickUpperIndex",
+            "type": "i32"
+          },
+          {
             "name": "liquidity",
             "type": "u128"
           },
@@ -3294,24 +3213,26 @@ export const IDL: AmmCore = {
       }
     },
     {
-      "name": "tickBitmapState",
+      "name": "tickArrayState",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "bump",
-            "type": "u8"
+            "name": "ammPool",
+            "type": "publicKey"
           },
           {
-            "name": "wordPos",
-            "type": "i16"
+            "name": "startTickIndex",
+            "type": "i32"
           },
           {
-            "name": "word",
+            "name": "ticks",
             "type": {
               "array": [
-                "u64",
-                4
+                {
+                  "defined": "TickState"
+                },
+                100
               ]
             }
           }
@@ -3323,10 +3244,6 @@ export const IDL: AmmCore = {
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "bump",
-            "type": "u8"
-          },
           {
             "name": "tick",
             "type": "i32"
@@ -3788,12 +3705,12 @@ export const IDL: AmmCore = {
           "index": false
         },
         {
-          "name": "tickLower",
+          "name": "tickLowerIndex",
           "type": "i32",
           "index": false
         },
         {
-          "name": "tickUpper",
+          "name": "tickUpperIndex",
           "type": "i32",
           "index": false
         },
@@ -3828,12 +3745,12 @@ export const IDL: AmmCore = {
           "index": false
         },
         {
-          "name": "tickLower",
+          "name": "tickLowerIndex",
           "type": "i32",
           "index": false
         },
         {
-          "name": "tickUpper",
+          "name": "tickUpperIndex",
           "type": "i32",
           "index": false
         },
@@ -3853,41 +3770,6 @@ export const IDL: AmmCore = {
           "index": false
         }
       ]
-    },
-    {
-      "name": "CollectFeeEvent",
-      "fields": [
-        {
-          "name": "poolState",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "owner",
-          "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "tickLower",
-          "type": "i32",
-          "index": false
-        },
-        {
-          "name": "tickUpper",
-          "type": "i32",
-          "index": false
-        },
-        {
-          "name": "collectAmount0",
-          "type": "u64",
-          "index": false
-        },
-        {
-          "name": "collectAmount1",
-          "type": "u64",
-          "index": false
-        }
-      ]
     }
   ],
   "errors": [
@@ -3903,111 +3785,121 @@ export const IDL: AmmCore = {
     },
     {
       "code": 6002,
+      "name": "AccountLack",
+      "msg": "Account lack"
+    },
+    {
+      "code": 6003,
       "name": "ClosePositionErr",
       "msg": "Remove liquitity, collect fees owed and reward then you can close position account"
     },
     {
-      "code": 6003,
+      "code": 6004,
       "name": "ZeroMintAmount",
       "msg": "Minting amount should be greater than 0"
     },
     {
-      "code": 6004,
+      "code": 6005,
       "name": "InvaildTickIndex",
       "msg": "Tick index of lower must be smaller than upper"
     },
     {
-      "code": 6005,
+      "code": 6006,
       "name": "TickInvaildOrder",
       "msg": "The lower tick must be below the upper tick"
     },
     {
-      "code": 6006,
+      "code": 6007,
       "name": "TickLowerOverflow",
       "msg": "The tick must be greater, or equal to the minimum tick(-221818)"
     },
     {
-      "code": 6007,
+      "code": 6008,
       "name": "TickUpperOverflow",
       "msg": "The tick must be lesser than, or equal to the maximum tick(221818)"
     },
     {
-      "code": 6008,
+      "code": 6009,
       "name": "TickAndSpacingNotMatch",
       "msg": "tick % tick_spacing must be zero"
     },
     {
-      "code": 6009,
+      "code": 6010,
+      "name": "InvalidTickArray",
+      "msg": "Invaild tick array account"
+    },
+    {
+      "code": 6011,
       "name": "SqrtPriceLimitOverflow",
       "msg": "Square root price limit overflow"
     },
     {
-      "code": 6010,
+      "code": 6012,
       "name": "SqrtPriceX64",
       "msg": "sqrt_price_x64 out of range"
     },
     {
-      "code": 6011,
+      "code": 6013,
       "name": "LiquiditySubValueErr",
       "msg": "Liquidity sub delta L must be smaller than before"
     },
     {
-      "code": 6012,
+      "code": 6014,
       "name": "LiquidityAddValueErr",
       "msg": "Liquidity add delta L must be greater, or equal to before"
     },
     {
-      "code": 6013,
+      "code": 6015,
       "name": "InvaildLiquidity",
       "msg": "Invaild liquidity when update position"
     },
     {
-      "code": 6014,
+      "code": 6016,
       "name": "TransactionTooOld",
       "msg": "Transaction too old"
     },
     {
-      "code": 6015,
+      "code": 6017,
       "name": "PriceSlippageCheck",
       "msg": "Price slippage check"
     },
     {
-      "code": 6016,
+      "code": 6018,
       "name": "TooLittleOutputReceived",
       "msg": "Too little output received"
     },
     {
-      "code": 6017,
+      "code": 6019,
       "name": "TooMuchInputPaid",
       "msg": "Too much input paid"
     },
     {
-      "code": 6018,
+      "code": 6020,
       "name": "InvaildSwapAmountSpecified",
       "msg": "Swap special amount can not be zero"
     },
     {
-      "code": 6019,
+      "code": 6021,
       "name": "InvalidRewardIndex",
       "msg": "Invalid reward index"
     },
     {
-      "code": 6020,
+      "code": 6022,
       "name": "InvalidRewardInitParam",
       "msg": "Invalid reward init param"
     },
     {
-      "code": 6021,
+      "code": 6023,
       "name": "InvalidRewardDesiredAmount",
       "msg": "Invalid collect reward desired amount"
     },
     {
-      "code": 6022,
+      "code": 6024,
       "name": "InvalidRewardInputAccountNumber",
       "msg": "Invalid collect reward input account number"
     },
     {
-      "code": 6023,
+      "code": 6025,
       "name": "UnInitializedRewardInfo",
       "msg": "uninitialized reward info"
     }

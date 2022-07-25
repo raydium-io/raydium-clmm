@@ -1,5 +1,4 @@
 export * from "./createAmmConfig";
-export * from "./createFeeAccount";
 export * from "./setNewOwner";
 export * from "./setProtocolFeeRate";
 export * from "./setRewardEmissions";

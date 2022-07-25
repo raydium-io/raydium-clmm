@@ -12,6 +12,9 @@ export const FEE_SEED = Buffer.from(anchor.utils.bytes.utf8.encode("fee"));
 export const BITMAP_SEED = Buffer.from(
   anchor.utils.bytes.utf8.encode("tick_bitmap")
 );
+export const TICK_ARRAY_SEED = Buffer.from(
+  anchor.utils.bytes.utf8.encode("tick_array")
+);
 export const POSITION_SEED = Buffer.from(
   anchor.utils.bytes.utf8.encode("position")
 );

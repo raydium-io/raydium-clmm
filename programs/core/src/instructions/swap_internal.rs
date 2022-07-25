@@ -3,7 +3,6 @@ use crate::libraries::{
     big_num::U128, fixed_point_64, full_math::MulDiv, liquidity_math, swap_math, tick_math,
 };
 use crate::states::*;
-use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
 use std::iter::Iterator;
@@ -35,11 +34,10 @@ pub struct SwapContext<'b, 'info> {
     /// The program account of the pool in which the swap will be performed
     pub pool_state: &'b mut Account<'info, PoolState>,
 
-    /// The program account for the most recent oracle observation
-    pub last_observation_state: &'b mut Box<Account<'info, ObservationState>>,
+    pub tick_array_state: &'b mut AccountLoader<'info, TickArrayState>,
 
-    /// The program account for the most recent oracle observation
-    pub next_observation_state: &'b mut Box<Account<'info, ObservationState>>,
+    /// The program account for the oracle observation
+    pub observation_state: &'b mut AccountLoader<'info, ObservationState>,
 }
 
 pub struct SwapCache {
@@ -49,12 +47,6 @@ pub struct SwapCache {
     pub liquidity_start: u128,
     // the timestamp of the current block
     pub block_timestamp: u32,
-    // the current value of the tick accumulator, computed only if we cross an initialized tick
-    pub tick_cumulative: i64,
-    // the current value of seconds per liquidity accumulator, computed only if we cross an initialized tick
-    pub seconds_per_liquidity_cumulative_x64: u128,
-    // whether we've computed and cached the above two accumulators
-    pub computed_latest_observation: bool,
 }
 
 // the top level state of the swap, the results of which are recorded in storage at the end
@@ -100,7 +92,7 @@ pub fn swap_internal<'b, 'info>(
     amount_specified: i64,
     sqrt_price_limit_x64: u128,
     zero_for_one: bool,
-) -> Result<()> {
+) -> Result<(i64,i64)> {
     require!(amount_specified != 0, ErrorCode::InvaildSwapAmountSpecified);
     require!(
         if zero_for_one {
@@ -114,39 +106,11 @@ pub fn swap_internal<'b, 'info>(
     );
 
     let amm_config = ctx.amm_config.deref();
-    let pool_state_info = ctx.pool_state.to_account_info();
-
-    let (token_account_0, token_account_1, vault_0, vault_1) = if zero_for_one {
-        (
-            ctx.input_token_account.clone(),
-            ctx.output_token_account.clone(),
-            ctx.input_vault.clone(),
-            ctx.output_vault.clone(),
-        )
-    } else {
-        (
-            ctx.output_token_account.clone(),
-            ctx.input_token_account.clone(),
-            ctx.output_vault.clone(),
-            ctx.input_vault.clone(),
-        )
-    };
-    assert!(vault_0.key() == ctx.pool_state.token_vault_0);
-    assert!(vault_1.key() == ctx.pool_state.token_vault_1);
-
-    ctx.pool_state.validate_observation_address(
-        &ctx.last_observation_state.key(),
-        ctx.last_observation_state.bump,
-        false,
-    )?;
 
     let cache = &mut SwapCache {
         liquidity_start: ctx.pool_state.liquidity,
         block_timestamp: oracle::_block_timestamp(),
         protocol_fee_rate: amm_config.protocol_fee_rate,
-        seconds_per_liquidity_cumulative_x64: 0,
-        tick_cumulative: 0,
-        computed_latest_observation: false,
     };
 
     let updated_reward_infos = ctx
@@ -159,7 +123,7 @@ pub fn swap_internal<'b, 'info>(
         amount_specified_remaining: amount_specified,
         amount_calculated: 0,
         sqrt_price_x64: ctx.pool_state.sqrt_price_x64,
-        tick: ctx.pool_state.tick,
+        tick: ctx.pool_state.tick_current,
         fee_growth_global_x64: if zero_for_one {
             ctx.pool_state.fee_growth_global_0
         } else {
@@ -169,12 +133,12 @@ pub fn swap_internal<'b, 'info>(
         liquidity: cache.liquidity_start,
     };
 
-    let latest_observation = ctx.last_observation_state.as_mut();
+    let mut observation_state = ctx.observation_state.load_mut()?;
     let mut remaining_accounts_iter = remaining_accounts.iter();
 
-    // cache for the current bitmap account. Cache is cleared on bitmap transitions
-    let mut bitmap_cache: Option<TickBitmapState> = None;
+    let mut tick_array_current_loader = ctx.tick_array_state.load_mut()?;
 
+    // let mut tick_array_loader_next: AccountLoader<TickArrayState>;
     // continue swapping as long as we haven't used the entire input/output and haven't
     // reached the price limit
     while state.amount_specified_remaining != 0 && state.sqrt_price_x64 != sqrt_price_limit_x64 {
@@ -191,63 +155,45 @@ pub fn swap_internal<'b, 'info>(
         let mut step = StepComputations::default();
         step.sqrt_price_start_x64 = state.sqrt_price_x64;
 
-        let mut compressed = state.tick / ctx.pool_state.tick_spacing as i32;
+        let mut next_initialized_tick = if let Some(tick_state) = tick_array_current_loader.next_initialized_tick(
+            state.tick,
+            ctx.pool_state.tick_spacing,
+            zero_for_one,
+        )? {
+            Box::new(*tick_state)
+        } else {
+            Box::new(TickState::default())
+        };
 
-        // state.tick is the starting tick for the transition
-        if state.tick < 0 && state.tick % ctx.pool_state.tick_spacing as i32 != 0 {
-            compressed -= 1; // round towards negative infinity
-        }
-        // The current tick is not considered in greater than or equal to (lte = false, i.e one for zero) case
-        if !zero_for_one {
-            compressed += 1;
-        }
+        if !next_initialized_tick.is_initialized() {
+            let next_array_start_index = tick_array_current_loader
+                .next_tick_arrary_start_index(ctx.pool_state.tick_spacing, zero_for_one);
 
-        let Position { word_pos, bit_pos } = tick_bitmap::position(compressed);
-
-        // load the next bitmap account if cache is empty (first loop instance), or if we have
-        // crossed out of this bitmap
-        if bitmap_cache.is_none() || bitmap_cache.unwrap().word_pos != word_pos {
-            let bitmap_account = remaining_accounts_iter.next().unwrap();
+            let tick_array_account_info = remaining_accounts_iter.next().unwrap();
             // ensure this is a valid PDA, even if account is not initialized
             require_keys_eq!(
-                bitmap_account.key(),
+                tick_array_account_info.key(),
                 Pubkey::find_program_address(
                     &[
-                        BITMAP_SEED.as_bytes(),
+                        TICK_ARRAY_SEED.as_bytes(),
                         ctx.pool_state.key().as_ref(),
-                        &word_pos.to_be_bytes(),
+                        &next_array_start_index.to_be_bytes(),
                     ],
                     &crate::id()
                 )
                 .0
             );
 
-            // read from bitmap if account is initialized, else use default values for next initialized bit
-            if let Ok(bitmap_loader) = AccountLoader::<TickBitmapState>::try_from(bitmap_account) {
-                let bitmap_state = bitmap_loader.load()?;
-                bitmap_cache = Some(*bitmap_state.deref());
-            } else {
-                // clear cache if the bitmap account was uninitialized. This way default uninitialized
-                // values will be returned for the next bit
-                msg!("cache cleared");
-                bitmap_cache = None;
-            }
+            let tick_array_loader_next =
+                AccountLoader::<TickArrayState>::try_from(remaining_accounts_iter.next().unwrap())?;
+            let mut tick_array_next = tick_array_loader_next.load_mut()?;
+            let mut first_initialized_tick =
+                tick_array_next.first_initialized_tick(zero_for_one)?;
+
+            next_initialized_tick = Box::new(*first_initialized_tick.deref_mut());
         }
-
-        // what if bitmap_cache is not updated since next account is not initialized?
-        // default values for the next initialized bit if the bitmap account is not initialized
-        let next_initialized_bit = if let Some(bitmap) = bitmap_cache {
-            bitmap.next_initialized_bit(bit_pos, zero_for_one)
-        } else {
-            NextBit {
-                next: if zero_for_one { 0 } else { 255 },
-                initialized: false,
-            }
-        };
-
-        step.tick_next = (((word_pos as i32) << 8) + next_initialized_bit.next as i32)
-            * ctx.pool_state.tick_spacing as i32; // convert relative to absolute
-        step.initialized = next_initialized_bit.initialized;
+        step.tick_next = next_initialized_tick.tick;
+        step.initialized = next_initialized_tick.is_initialized();
 
         // ensure that we do not overshoot the min/max tick, as the tick bitmap is not aware of these bounds
         if step.tick_next < tick_math::MIN_TICK {
@@ -315,33 +261,15 @@ pub fn swap_internal<'b, 'info>(
                 .unwrap()
                 .as_u128();
         }
-       
+
         // shift tick if we reached the next price
         if state.sqrt_price_x64 == step.sqrt_price_next_x64 {
             // if the tick is initialized, run the tick transition
             if step.initialized {
-                // check for the placeholder value for the oracle observation, which we replace with the
-                // actual value the first time the swap crosses an initialized tick
-                if !cache.computed_latest_observation {
-                    let new_observation = latest_observation.observe_latest(
-                        cache.block_timestamp,
-                        ctx.pool_state.tick,
-                        ctx.pool_state.liquidity,
-                    );
-                    cache.tick_cumulative = new_observation.0;
-                    cache.seconds_per_liquidity_cumulative_x64 = new_observation.1;
-                    cache.computed_latest_observation = true;
-                }
                 #[cfg(feature = "enable-log")]
                 msg!("loading next tick {}", step.tick_next);
-                let mut tick_state =
-                    Account::<TickState>::try_from(remaining_accounts_iter.next().unwrap())?;
-                ctx.pool_state.validate_tick_address(
-                    &tick_state.key(),
-                    tick_state.bump,
-                    step.tick_next,
-                )?;
-                let mut liquidity_net = tick_state.deref_mut().cross(
+
+                let mut liquidity_net = next_initialized_tick.cross(
                     if zero_for_one {
                         state.fee_growth_global_x64
                     } else {
@@ -352,9 +280,6 @@ pub fn swap_internal<'b, 'info>(
                     } else {
                         state.fee_growth_global_x64
                     },
-                    cache.seconds_per_liquidity_cumulative_x64,
-                    cache.tick_cumulative,
-                    cache.block_timestamp,
                     &updated_reward_infos,
                 );
 
@@ -391,31 +316,16 @@ pub fn swap_internal<'b, 'info>(
             cache.protocol_fee_rate
         );
     }
-    let partition_current_timestamp = cache.block_timestamp / 14;
-    let partition_last_timestamp = latest_observation.block_timestamp / 14;
 
-    // update tick and write an oracle entry if the tick changes
-    if state.tick != ctx.pool_state.tick {
-        // use the next observation account and update pool observation index if block time falls
-        // in another partition
-        let new_observation = if partition_current_timestamp > partition_last_timestamp {
-            ctx.pool_state.validate_observation_address(
-                &ctx.next_observation_state.key(),
-                ctx.next_observation_state.bump,
-                true,
-            )?;
-            ctx.next_observation_state.deref_mut()
-        } else {
-            latest_observation
-        };
-        ctx.pool_state.tick = state.tick;
-        ctx.pool_state.observation_cardinality_next = new_observation.update(
-            cache.block_timestamp,
-            ctx.pool_state.tick,
-            cache.liquidity_start,
-            ctx.pool_state.observation_cardinality,
-            ctx.pool_state.observation_cardinality_next,
-        );
+    // update tick
+    if state.tick != ctx.pool_state.tick_current {
+        ctx.pool_state.tick_current = state.tick;
+    }
+    // update the previous price to the observation
+    let next_observation_index = observation_state.update_check(oracle::_block_timestamp(), ctx.pool_state.sqrt_price_x64, ctx.pool_state.observation_index, ctx.pool_state.observation_update_duration.into()).unwrap();
+    match next_observation_index {
+        Option::Some(index) => { ctx.pool_state.observation_index = index },
+        Option::None => {},
     }
     ctx.pool_state.sqrt_price_x64 = state.sqrt_price_x64;
 
@@ -450,59 +360,5 @@ pub fn swap_internal<'b, 'info>(
         )
     };
 
-    if zero_for_one {
-        //  x -> y, deposit x token from user to pool vault.
-        if amount_0 > 0 {
-            transfer_from_user_to_pool_vault(
-                &ctx.signer,
-                &token_account_0,
-                &vault_0,
-                &ctx.token_program,
-                amount_0 as u64,
-            )?;
-        }
-        // x -> y，transfer y token from pool vault to user.
-        if amount_1 < 0 {
-            transfer_from_pool_vault_to_user(
-                ctx.pool_state,
-                &vault_1,
-                &token_account_1,
-                &ctx.token_program,
-                amount_1.neg() as u64,
-            )?;
-        }
-    } else {
-        if amount_1 > 0 {
-            transfer_from_user_to_pool_vault(
-                &ctx.signer,
-                &token_account_1,
-                &vault_1,
-                &ctx.token_program,
-                amount_1 as u64,
-            )?;
-        }
-        if amount_0 < 0 {
-            transfer_from_pool_vault_to_user(
-                ctx.pool_state,
-                &vault_0,
-                &token_account_0,
-                &ctx.token_program,
-                amount_0.neg() as u64,
-            )?;
-        }
-    }
-
-    emit!(SwapEvent {
-        pool_state: pool_state_info.key(),
-        sender: ctx.signer.key(),
-        token_account_0: token_account_0.key(),
-        token_account_1: token_account_1.key(),
-        amount_0,
-        amount_1,
-        sqrt_price_x64: state.sqrt_price_x64,
-        liquidity: state.liquidity,
-        tick: state.tick
-    });
-
-    Ok(())
+    Ok((amount_0,amount_1))
 }

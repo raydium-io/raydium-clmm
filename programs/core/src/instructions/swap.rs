@@ -2,8 +2,10 @@ use super::{swap_internal, SwapContext};
 use crate::error::ErrorCode;
 use crate::libraries::tick_math;
 use crate::states::*;
+use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
+use std::ops::Neg;
 
 #[derive(Accounts)]
 pub struct SwapSingle<'info> {
@@ -34,12 +36,12 @@ pub struct SwapSingle<'info> {
     #[account(mut)]
     pub output_vault: Account<'info, TokenAccount>,
 
-    /// The program account for the most recent oracle observation
-    #[account(mut)]
-    pub last_observation: Box<Account<'info, ObservationState>>,
+    #[account(mut, constraint = tick_array.load()?.amm_pool == pool_state.key())]
+    pub tick_array: AccountLoader<'info, TickArrayState>,
 
-    #[account(mut)]
-    pub next_observation: Box<Account<'info, ObservationState>>,
+    /// The program account for the most recent oracle observation
+    #[account(mut, address = pool_state.observation_key)]
+    pub observation_state: AccountLoader<'info, ObservationState>,
 
     /// SPL program for token transfers
     pub token_program: Program<'info, Token>,
@@ -62,8 +64,8 @@ pub fn swap<'a, 'b, 'c, 'info>(
             output_vault: ctx.accounts.output_vault.clone(),
             token_program: ctx.accounts.token_program.clone(),
             pool_state: ctx.accounts.pool_state.as_mut(),
-            last_observation_state: &mut ctx.accounts.last_observation,
-            next_observation_state: &mut ctx.accounts.next_observation,
+            tick_array_state: &mut ctx.accounts.tick_array,
+            observation_state: &mut ctx.accounts.observation_state,
         },
         ctx.remaining_accounts,
         amount,
@@ -88,23 +90,24 @@ pub fn swap<'a, 'b, 'c, 'info>(
 /// Performs a single exact input/output swap
 /// if is_base_input = true, return vaule is the max_amount_out, otherwise is min_amount_in
 pub fn exact_internal<'b, 'info>(
-    accounts: &mut SwapContext<'b, 'info>,
+    ctx: &mut SwapContext<'b, 'info>,
     remaining_accounts: &[AccountInfo<'info>],
     amount_specified: u64,
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
 ) -> Result<u64> {
-    let zero_for_one = accounts.input_vault.mint == accounts.pool_state.token_mint_0;
-    let input_balance_before = accounts.input_vault.amount;
-    let output_balance_before = accounts.output_vault.amount;
+    let pool_state_info = ctx.pool_state.to_account_info();
+    let zero_for_one = ctx.input_vault.mint == ctx.pool_state.token_mint_0;
+    let input_balance_before = ctx.input_vault.amount;
+    let output_balance_before = ctx.output_vault.amount;
 
     let mut amount_specified = i64::try_from(amount_specified).unwrap();
     if !is_base_input {
         amount_specified = -i64::try_from(amount_specified).unwrap();
     };
 
-    swap_internal(
-        accounts,
+    let (amount_0, amount_1) = swap_internal(
+        ctx,
         remaining_accounts,
         amount_specified,
         if sqrt_price_limit_x64 == 0 {
@@ -119,21 +122,95 @@ pub fn exact_internal<'b, 'info>(
         zero_for_one,
     )?;
 
-    accounts.input_vault.reload()?;
-    accounts.output_vault.reload()?;
     #[cfg(feature = "enable-log")]
     msg!(
-        "exact_swap_internal, is_base_input:{}, amount_in: {}, amount_out: {}",
+        "exact_swap_internal, is_base_input:{}, amount_0: {}, amount_1: {}",
         is_base_input,
-        accounts.input_vault.amount - input_balance_before,
-        output_balance_before - accounts.output_vault.amount
+        amount_0,
+        amount_1
     );
+
+    let (token_account_0, token_account_1, vault_0, vault_1) = if zero_for_one {
+        (
+            ctx.input_token_account.clone(),
+            ctx.output_token_account.clone(),
+            ctx.input_vault.clone(),
+            ctx.output_vault.clone(),
+        )
+    } else {
+        (
+            ctx.output_token_account.clone(),
+            ctx.input_token_account.clone(),
+            ctx.output_vault.clone(),
+            ctx.input_vault.clone(),
+        )
+    };
+    assert!(vault_0.key() == ctx.pool_state.token_vault_0);
+    assert!(vault_1.key() == ctx.pool_state.token_vault_1);
+
+    if zero_for_one {
+        //  x -> y, deposit x token from user to pool vault.
+        if amount_0 > 0 {
+            transfer_from_user_to_pool_vault(
+                &ctx.signer,
+                &token_account_0,
+                &vault_0,
+                &ctx.token_program,
+                amount_0 as u64,
+            )?;
+        }
+        // x -> y，transfer y token from pool vault to user.
+        if amount_1 < 0 {
+            transfer_from_pool_vault_to_user(
+                ctx.pool_state,
+                &vault_1,
+                &token_account_1,
+                &ctx.token_program,
+                amount_1.neg() as u64,
+            )?;
+        }
+    } else {
+        if amount_1 > 0 {
+            transfer_from_user_to_pool_vault(
+                &ctx.signer,
+                &token_account_1,
+                &vault_1,
+                &ctx.token_program,
+                amount_1 as u64,
+            )?;
+        }
+        if amount_0 < 0 {
+            transfer_from_pool_vault_to_user(
+                ctx.pool_state,
+                &vault_0,
+                &token_account_0,
+                &ctx.token_program,
+                amount_0.neg() as u64,
+            )?;
+        }
+    }
+
+    emit!(SwapEvent {
+        pool_state: pool_state_info.key(),
+        sender: ctx.signer.key(),
+        token_account_0: token_account_0.key(),
+        token_account_1: token_account_1.key(),
+        amount_0,
+        amount_1,
+        sqrt_price_x64: ctx.pool_state.sqrt_price_x64,
+        liquidity: ctx.pool_state.liquidity,
+        tick: ctx.pool_state.tick_current
+    });
+
+    ctx.input_vault.reload()?;
+    ctx.output_vault.reload()?;
+
     if is_base_input {
         Ok(output_balance_before
-            .checked_sub(accounts.output_vault.amount)
+            .checked_sub(ctx.output_vault.amount)
             .unwrap())
     } else {
-        Ok(accounts
+        Ok(ctx
             .input_vault
             .amount
             .checked_sub(input_balance_before)

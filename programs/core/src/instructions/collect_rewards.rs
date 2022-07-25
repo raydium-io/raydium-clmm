@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use crate::error::ErrorCode;
 use crate::states::*;
 use crate::util::transfer_from_pool_vault_to_user;
@@ -17,7 +15,16 @@ pub struct CollectRewards<'info> {
     )]
     pub nft_account: Box<Account<'info, TokenAccount>>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [
+            POSITION_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+            &personal_position.tick_lower_index.to_be_bytes(),
+            &personal_position.tick_upper_index.to_be_bytes(),
+        ],
+        bump,
+    )]
     pub protocol_position: Box<Account<'info, ProcotolPositionState>>,
 
     /// The program account of the NFT for which tokens are being collected
@@ -28,13 +35,13 @@ pub struct CollectRewards<'info> {
     #[account(mut)]
     pub pool_state: Box<Account<'info, PoolState>>,
 
-    /// Account to store data for the position's lower tick
+    /// Stores init state for the lower tick
     #[account(mut)]
-    pub tick_lower: Box<Account<'info, TickState>>,
+    pub tick_array_lower: AccountLoader<'info, TickArrayState>,
 
-    /// Account to store data for the position's upper tick
+    /// Stores init state for the upper tick
     #[account(mut)]
-    pub tick_upper: Box<Account<'info, TickState>>,
+    pub tick_array_upper: AccountLoader<'info, TickArrayState>,
 
     /// SPL program to transfer out tokens
     pub token_program: Program<'info, Token>,
@@ -52,14 +59,27 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
     }
 
     let clock = Clock::get()?;
+
+    let mut tick_array_lower = ctx.accounts.tick_array_lower.load_mut()?;
+    let tick_lower_state = tick_array_lower.get_tick_state_mut(
+        ctx.accounts.personal_position.tick_lower_index,
+        ctx.accounts.pool_state.tick_spacing as i32,
+    )?;
+
+    let mut tick_array_upper = ctx.accounts.tick_array_upper.load_mut()?;
+    let tick_upper_state = tick_array_upper.get_tick_state_mut(
+        ctx.accounts.personal_position.tick_upper_index,
+        ctx.accounts.pool_state.tick_spacing as i32,
+    )?;
+    
     let pool_state = ctx.accounts.pool_state.as_mut();
     // update global reward info
     let updated_reward_infos = pool_state.update_reward_infos(clock.unix_timestamp as u64)?;
     let reward_growths_inside = get_updated_reward_growths_inside(
         &mut &mut ctx.accounts.protocol_position,
-        &ctx.accounts.tick_lower,
-        &ctx.accounts.tick_upper,
-        pool_state.tick,
+        tick_lower_state,
+        tick_upper_state,
+        pool_state.tick_current,
         &updated_reward_infos,
     );
     let personal_position = &mut ctx.accounts.personal_position;
@@ -115,15 +135,15 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
 
 fn get_updated_reward_growths_inside<'info>(
     procotol_position_state: &mut Account<'info, ProcotolPositionState>,
-    tick_lower_state: &Account<'info, TickState>,
-    tick_upper_state: &Account<'info, TickState>,
+    tick_lower_state: &mut TickState,
+    tick_upper_state: &mut TickState,
     current_tick: i32,
     updated_reward_infos: &[RewardInfo; REWARD_NUM],
 ) -> ([u128; REWARD_NUM]) {
     // Update reward accrued to the position
     let reward_growths_inside = tick::get_reward_growths_inside(
-        tick_lower_state.deref(),
-        tick_upper_state.deref(),
+        tick_lower_state,
+        tick_upper_state,
         current_tick,
         &updated_reward_infos,
     );

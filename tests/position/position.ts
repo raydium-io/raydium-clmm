@@ -46,8 +46,8 @@ export class Position {
     const {
       tickLowerIndex,
       tickUpperIndex,
-      wordLowerIndex,
-      wordUpperIndex,
+      tickArrayLowerIndex,
+      tickArrayUpperIndex,
       amount0Desired,
       amount1Desired,
       amount0Min,
@@ -58,8 +58,8 @@ export class Position {
       .openPosition(
         tickLowerIndex,
         tickUpperIndex,
-        wordLowerIndex,
-        wordUpperIndex,
+        tickArrayLowerIndex,
+        tickArrayUpperIndex,
         amount0Desired,
         amount1Desired,
         amount0Min,
@@ -129,8 +129,8 @@ export class Position {
       poolState,
       protocolPosition,
       personalPosition,
-      tickLower,
-      tickUpper,
+      tickArrayLower,
+      tickArrayUpper,
       tokenProgram,
     } = accounts;
    return  await this.program.methods
@@ -141,8 +141,8 @@ export class Position {
         personalPosition,
         poolState,
         protocolPosition,
-        tickLower,
-        tickUpper,
+        tickArrayLower,
+        tickArrayUpper,
         tokenProgram,
       })
       .remainingAccounts(accounts.remainings)

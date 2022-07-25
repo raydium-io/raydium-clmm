@@ -7,12 +7,6 @@ export type AmmConfig = {
   protocolFeeRate: number;
 };
 
-export type FeeState = {
-  bump: number;
-  fee: number;
-  tickSpacing: number;
-};
-
 export type ObservationState = {
   bump: number;
   index: number;
@@ -30,7 +24,6 @@ export type PoolState = {
   tokenMint1: PublicKey;
   tokenVault0: PublicKey;
   tokenVault1: PublicKey;
-  feeRate: number;
   tick: number;
   tickSpacing: number;
   liquidity: BN;
@@ -64,8 +57,8 @@ export type PositionState = {
   bump: number;
   nftMint: PublicKey;
   poolId: PublicKey;
-  tickLower: number;
-  tickUpper: number;
+  tickLowerIndex: number;
+  tickUpperIndex: number;
   liquidity: BN;
   // Q64.64
   feeGrowthInside0Last: BN;

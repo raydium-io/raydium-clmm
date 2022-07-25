@@ -65,13 +65,12 @@ pub struct CreatePool<'info> {
         seeds = [
             &OBSERVATION_SEED.as_bytes(),
             pool_state.key().as_ref(),
-            &0_u16.to_be_bytes(),
         ],
         bump,
         payer = pool_creator,
         space = 8 + size_of::<ObservationState>()
     )]
-    pub initial_first_observation: Box<Account<'info, ObservationState>>,
+    pub observation_state: AccountLoader<'info, ObservationState>,
     /// Spl token program
     pub token_program: Program<'info, Token>,
     /// To create a new program account
@@ -95,20 +94,16 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
     pool_state.owner = ctx.accounts.pool_creator.key();
     pool_state.token_mint_0 = ctx.accounts.token_mint_0.key();
     pool_state.token_mint_1 = ctx.accounts.token_mint_1.key();
+    pool_state.mint_0_decimals = ctx.accounts.token_mint_0.decimals;
+    pool_state.mint_1_decimals = ctx.accounts.token_mint_1.decimals;
     pool_state.token_vault_0 = ctx.accounts.token_vault_0.key();
     pool_state.token_vault_1 = ctx.accounts.token_vault_1.key();
     pool_state.tick_spacing = ctx.accounts.amm_config.tick_spacing;
     pool_state.sqrt_price_x64 = sqrt_price_x64;
-    pool_state.tick = tick;
-    pool_state.observation_cardinality = 1;
-    pool_state.observation_index = 0;
-    pool_state.observation_cardinality_next = 1;
+    pool_state.tick_current = tick;
+    pool_state.observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
     pool_state.reward_infos = [RewardInfo::new(ctx.accounts.pool_creator.key()); REWARD_NUM];
-
-    let initial_observation_state = ctx.accounts.initial_first_observation.deref_mut();
-    initial_observation_state.bump = *ctx.bumps.get("initial_first_observation").unwrap();
-    initial_observation_state.block_timestamp = oracle::_block_timestamp();
-    initial_observation_state.initialized = true;
+    pool_state.observation_key = ctx.accounts.observation_state.key();
 
     emit!(PoolCreatedEvent {
         token_mint_0: ctx.accounts.token_mint_0.key(),

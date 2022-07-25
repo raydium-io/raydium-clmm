@@ -1,4 +1,8 @@
-use crate::libraries::fixed_point_64;
+use crate::libraries::{
+    fixed_point_64,
+    full_math::MulDiv,
+    big_num::U128,
+};
 /// Oracle provides price and liquidity data useful for a wide variety of system designs
 ///
 /// Instances of stored oracle data, "observations", are collected in the oracle array,
@@ -16,60 +20,49 @@ use crate::libraries::fixed_point_64;
 use anchor_lang::prelude::*;
 /// Seed to derive account address and signature
 pub const OBSERVATION_SEED: &str = "observation";
+// Number of ObservationState element
+pub const OBSERVATION_NUM: usize = 1000;
 
 /// Returns data about a specific observation index
 ///
 /// PDA of `[OBSERVATION_SEED, token_0, token_1, fee, index]`
 ///
-#[account]
-#[derive(Default, Copy, Debug)]
+#[account(zero_copy)]
+#[repr(packed)]
 pub struct ObservationState {
-    /// Bump to identify PDA
-    pub bump: u8,
-
-    /// The element of the observations array stored in this account
-    pub index: u16,
-
+    /// Whether the ObservationState is initialized
+    pub initialized: bool,
+    pub observations: [Observation; OBSERVATION_NUM],
+    /// padding for feature update
+    pub padding: [u128; 5],
+}
+impl Default for ObservationState {
+    #[inline]
+    fn default() -> ObservationState {
+        ObservationState {
+            initialized: false,
+            observations: [Observation::default(); OBSERVATION_NUM],
+            padding: [0u128; 5],
+        }
+    }
+}
+/// The element of observations in ObservationState
+#[account(zero_copy)]
+#[repr(packed)]
+#[derive(Default, Debug)]
+pub struct Observation {
     /// The block timestamp of the observation
     pub block_timestamp: u32,
-
-    /// The tick multiplied by seconds elapsed for the life of the pool as of the observation timestamp
-    pub tick_cumulative: i64,
-
-    /// The seconds per in range liquidity for the life of the pool as of the observation timestamp
-    pub seconds_per_liquidity_cumulative_x64: u128,
-
-    /// Whether the observation has been initialized and the values are safe to use
-    pub initialized: bool,
+    /// the price of the observation timestamp, Q64.64
+    pub sqrt_price_x64: u128,
+    /// the cumulative of price during the duration time, Q64.64
+    pub cumulative_time_price_x64: u128,
+    /// padding for feature update
+    pub padding: u128,
 }
 
 impl ObservationState {
-    /// Transforms a previous observation into a new observation, given the passage of time
-    /// and the current tick and liquidity values
-    ///
-    /// # Arguments
-    ///
-    /// * `last` - Must be chronologically equal to or greater than last.blockTimestamp,
-    /// safe for 0 or 1 overflows.
-    /// * `block_timestamp` - The timestamp of the new observation
-    /// * `tick` - The active tick at the time of the new observation
-    /// * `liquidity` - The total in-range liquidity at the time of the new observation
-    ///
-    pub fn transform(self, block_timestamp: u32, tick: i32, liquidity: u128) -> ObservationState {
-        let delta = block_timestamp.saturating_sub(self.block_timestamp);
-        ObservationState {
-            bump: self.bump,
-            index: self.index,
-            block_timestamp,
-            tick_cumulative: self.tick_cumulative + tick as i64 * delta as i64,
-            seconds_per_liquidity_cumulative_x64: self.seconds_per_liquidity_cumulative_x64
-                + ((delta as u128) << fixed_point_64::RESOLUTION)
-                    / if liquidity > 0 { liquidity } else { 1 },
-            initialized: true,
-        }
-    }
-
-    /// Writes an oracle observation to the account, returning the updated cardinality.
+    // Writes an oracle observation to the account, returning the next observation_index.
     /// Writable at most once per second. Index represents the most recently written element.
     /// cardinality and index must be tracked externally.
     /// If the index is at the end of the allowable array length (according to cardinality),
@@ -78,51 +71,48 @@ impl ObservationState {
     ///
     /// # Arguments
     ///
-    /// * `self` - The observation account to write in
-    /// * `block_timestamp` - The timestamp of the new observation
-    /// * `tick` - The active tick at the time of the new observation
-    /// * `liquidity` - The total in-range liquidity at the time of the new observation
-    /// * `cardinality` - The number of populated elements in the oracle array
-    /// * `cardinality_next` - The new length of the oracle array, independent of population
+    /// * `self` - The ObservationState account to write in
+    /// * `block_timestamp` - The current timestamp of to update
+    /// * `sqrt_price_x64` - The sqrt_price_x64 at the time of the new observation
+    /// * `observation_index` - The number of populated elements in the oracle array
+    /// 
+    /// # Return
+    /// * `next_observation_index` - The next index of the oracle array
     ///
-    pub fn update(
-        &mut self,
-        block_timestamp: u32,
-        tick: i32,
-        liquidity: u128,
-        cardinality: u16,
-        cardinality_next: u16,
-    ) -> u16 {
-        if self.block_timestamp == block_timestamp {
-            return cardinality;
+    pub fn update_check(&mut self, block_timestamp: u32, sqrt_price_x64: u128, observation_index: u16, observation_update_duration: u32) -> Result<Option<u16>> {
+        if !self.initialized {
+            self.initialized = true;
+            self.observations[observation_index as usize].block_timestamp = block_timestamp;
+            self.observations[observation_index as usize].sqrt_price_x64 = sqrt_price_x64;
+            self.observations[observation_index as usize].cumulative_time_price_x64 = 0;
+            Ok(Some(observation_index))
         }
-
-        *self = self.transform(block_timestamp, tick, liquidity);
-
-        if cardinality_next > cardinality && self.index == (cardinality - 1) {
-            cardinality_next
-        } else {
-            cardinality
+        else {
+            let observation = self.observations[observation_index as usize];
+            let delta_time = block_timestamp.saturating_sub(observation.block_timestamp);
+            if delta_time < observation_update_duration || sqrt_price_x64 == observation.sqrt_price_x64 {
+                return Ok(None);
+            }
+            let cur_price_x64 = U128::from(sqrt_price_x64).mul_div_floor(
+                U128::from(sqrt_price_x64),
+                U128::from(fixed_point_64::Q64),
+            ).unwrap()
+            .as_u128();
+            let delta_price_x64 = cur_price_x64.checked_mul(delta_time.into()).unwrap();
+            let next_observation_index = if observation_index as usize == OBSERVATION_NUM - 1 {
+                0
+            }
+            else {
+                observation_index + 1
+            };
+            self.observations[next_observation_index as usize].block_timestamp = block_timestamp;
+            self.observations[next_observation_index as usize].sqrt_price_x64 = sqrt_price_x64;
+            // cumulative_time_price_x64 may be flipped because of 'observation.cumulative_time_price_x64 + delta_price_x64' is larger than std::u128::MAX;
+            // if the current observation's cumulative_time_price_x64 is smaller then the previous's,
+            // the previous's real cumulative_time_price_x64 will be "cumulative_time_price_x64 + std::u128::MAX"
+            self.observations[next_observation_index as usize].cumulative_time_price_x64 = observation.cumulative_time_price_x64 + delta_price_x64;
+            Ok(Some(next_observation_index))
         }
-    }
-
-    /// Makes a new observation for the current block timestamp
-    ///
-    /// # Arguments
-    ///
-    /// * `last` - The most recently written observation
-    /// * `time` - The current block timestamp
-    /// * `liquidity` - The current in-range pool liquidity
-    ///
-    pub fn observe_latest(self, time: u32, tick: i32, liquidity: u128) -> (i64, u128) {
-        let mut last = self;
-        if self.block_timestamp != time {
-            last = self.transform(time, tick, liquidity);
-        }
-        (
-            last.tick_cumulative,
-            last.seconds_per_liquidity_cumulative_x64,
-        )
     }
 }
 
@@ -132,16 +122,122 @@ pub fn _block_timestamp() -> u32 {
     Clock::get().unwrap().unix_timestamp as u32 // truncation is desired
 }
 
-/// Emitted by the pool for increases to the number of observations that can be stored
-///
-/// `observation_cardinality_next` is not the observation cardinality until an observation
-/// is written at the index just before a mint/swap/burn.
-///
-#[event]
-pub struct IncreaseObservationCardinalityNext {
-    /// The previous value of the next observation cardinality
-    pub observation_cardinality_next_old: u16,
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::libraries::{
+        get_sqrt_ratio_at_tick,
+    };
+    use crate::states::pool::OBSERVATION_UPDATE_DURATION_DEFAULT;
+        #[test]
+    fn test_update_check_init() {
+        let block_timestamp = 1647424834 as u32;
+        let sqrt_price_x64 = get_sqrt_ratio_at_tick(1000).unwrap();
+        let observation_index = 0u16;
+        let observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
+        let mut observation_state = ObservationState::default();
+        let next_observation_index = observation_state.update_check(block_timestamp, sqrt_price_x64, observation_index, observation_update_duration.into()).unwrap();
+        assert!(next_observation_index == Some(observation_index));
+        assert!(observation_state.initialized == true);
+        assert!(observation_state.observations[observation_index as usize].block_timestamp == block_timestamp);
+        assert!(observation_state.observations[observation_index as usize].sqrt_price_x64 == sqrt_price_x64);
+        assert!(observation_state.observations[observation_index as usize].cumulative_time_price_x64 == 0);
+    }
+    #[test]
+    fn test_update_check_init_turn_around() {
+        let block_timestamp = 1647424834 as u32;
+        let sqrt_price_x64 = get_sqrt_ratio_at_tick(1000).unwrap();
+        let observation_index = (OBSERVATION_NUM - 1) as u16;
+        let observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
+        let mut observation_state = ObservationState::default();
+        let next_observation_index = observation_state.update_check(block_timestamp, sqrt_price_x64, observation_index, observation_update_duration.into()).unwrap();
+        assert!(next_observation_index == Some(observation_index));
+        assert!(observation_state.initialized == true);
+        assert!(observation_state.observations[observation_index as usize].block_timestamp == block_timestamp);
+        assert!(observation_state.observations[observation_index as usize].sqrt_price_x64 == sqrt_price_x64);
+        assert!(observation_state.observations[observation_index as usize].cumulative_time_price_x64 == 0);
+    }
+    #[test]
+    fn test_update_check_time_within_duration() {
+        // init
+        let mut block_timestamp = 1647424834 as u32;
+        let mut sqrt_price_x64 = get_sqrt_ratio_at_tick(1000).unwrap();
+        let mut observation_index = 0u16;
+        let observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
+        let mut observation_state = ObservationState::default();
+        let next_observation_index = observation_state.update_check(block_timestamp, sqrt_price_x64, observation_index, observation_update_duration.into()).unwrap();
+        assert!(next_observation_index == Some(observation_index));
+        assert!(observation_state.initialized == true);
+        assert!(observation_state.observations[observation_index as usize].block_timestamp == block_timestamp);
+        assert!(observation_state.observations[observation_index as usize].sqrt_price_x64 == sqrt_price_x64);
+        assert!(observation_state.observations[observation_index as usize].cumulative_time_price_x64 == 0);
+        // update
+        block_timestamp += 10;
+        sqrt_price_x64 = get_sqrt_ratio_at_tick(1001).unwrap();
+        observation_index = next_observation_index.unwrap();
+        let next_observation_index = observation_state.update_check(block_timestamp, sqrt_price_x64, observation_index, observation_update_duration.into()).unwrap();
+        assert!(next_observation_index == None);
+    }
 
-    /// The updated value of the next observation cardinality
-    pub observation_cardinality_next_new: u16,
+    #[test]
+    fn test_update_check_time_out_duration_same_price() {
+        // init
+        let mut block_timestamp = 1647424834 as u32;
+        let mut sqrt_price_x64 = get_sqrt_ratio_at_tick(1000).unwrap();
+        let mut observation_index = 0u16;
+        let observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
+        let mut observation_state = ObservationState::default();
+        let next_observation_index = observation_state.update_check(block_timestamp, sqrt_price_x64, observation_index, observation_update_duration.into()).unwrap();
+        assert!(next_observation_index == Some(observation_index));
+        assert!(observation_state.initialized == true);
+        assert!(observation_state.observations[observation_index as usize].block_timestamp == block_timestamp);
+        assert!(observation_state.observations[observation_index as usize].sqrt_price_x64 == sqrt_price_x64);
+        assert!(observation_state.observations[observation_index as usize].cumulative_time_price_x64 == 0);
+        // update
+        block_timestamp += OBSERVATION_UPDATE_DURATION_DEFAULT as u32;
+        sqrt_price_x64 = get_sqrt_ratio_at_tick(1000).unwrap();
+        observation_index = next_observation_index.unwrap();
+        let next_observation_index = observation_state.update_check(block_timestamp, sqrt_price_x64, observation_index, observation_update_duration.into()).unwrap();
+        assert!(next_observation_index == None);
+    }
+
+    #[test]
+    fn test_update_check_ok() {
+        // init
+        let mut block_timestamp = 1647424834 as u32;
+        let mut sqrt_price_x64 = get_sqrt_ratio_at_tick(1000).unwrap();
+        let mut observation_index = 0u16;
+        let observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
+        let mut observation_state = ObservationState::default();
+        let mut next_observation_index = observation_state.update_check(block_timestamp, sqrt_price_x64, observation_index, observation_update_duration.into()).unwrap();
+        assert!(next_observation_index == Some(observation_index));
+        assert!(observation_state.initialized == true);
+        assert!(observation_state.observations[observation_index as usize].block_timestamp == block_timestamp);
+        assert!(observation_state.observations[observation_index as usize].sqrt_price_x64 == sqrt_price_x64);
+        assert!(observation_state.observations[observation_index as usize].cumulative_time_price_x64 == 0);
+        // update
+        block_timestamp += OBSERVATION_UPDATE_DURATION_DEFAULT as u32;
+        sqrt_price_x64 = get_sqrt_ratio_at_tick(1001).unwrap();
+
+        let observation = observation_state.observations[observation_index as usize];
+        let delta_time = block_timestamp.saturating_sub(observation.block_timestamp);
+        if delta_time < OBSERVATION_UPDATE_DURATION_DEFAULT as u32 || sqrt_price_x64 == observation.sqrt_price_x64 {
+            assert!(false)
+        }
+        let cur_price_x64 = U128::from(sqrt_price_x64).mul_div_floor(
+            U128::from(sqrt_price_x64),
+            U128::from(fixed_point_64::Q64),
+        ).unwrap()
+        .as_u128();
+        let delta_price_x64 = cur_price_x64.checked_mul(delta_time.into()).unwrap();
+        let expected = observation.cumulative_time_price_x64 + delta_price_x64;
+    
+        observation_index = next_observation_index.unwrap();
+        next_observation_index = observation_state.update_check(block_timestamp, sqrt_price_x64, observation_index, observation_update_duration.into()).unwrap();
+        assert!(next_observation_index == Some(observation_index + 1));
+        observation_index = next_observation_index.unwrap();
+        assert!(observation_state.observations[observation_index as usize].block_timestamp == block_timestamp);
+        assert!(observation_state.observations[observation_index as usize].sqrt_price_x64 == sqrt_price_x64);
+        assert!(observation_state.observations[observation_index as usize].cumulative_time_price_x64 == expected);
+    }
 }

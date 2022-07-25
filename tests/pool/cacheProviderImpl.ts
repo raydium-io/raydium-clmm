@@ -8,10 +8,10 @@ import {
   generateBitmapWord,
 } from "../entities";
 
-import { BITMAP_SEED, TICK_SEED, u32ToBytes, u16ToBytes } from "../utils";
+import {TICK_SEED, u32ToBytes, u16ToBytes } from "../utils";
 import { MAX_TICK, MIN_TICK } from "../math";
 import { CacheDataProvider } from "../entities/cacheProvider";
-import { getTickAddress, getTickBitmapAddress } from "../utils";
+import { getTickBitmapAddress,getTickAddress } from "../utils";
 interface TickBitmap {
   word: BN[];
 }

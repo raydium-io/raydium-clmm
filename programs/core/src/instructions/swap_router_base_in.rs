@@ -38,12 +38,9 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
             Account::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
         let input_vault = Account::<TokenAccount>::try_from(remaining_accounts.next().unwrap())?;
         let output_vault = Account::<TokenAccount>::try_from(remaining_accounts.next().unwrap())?;
-        let mut last_observation_state = Box::new(Account::<ObservationState>::try_from(
-            remaining_accounts.next().unwrap(),
-        )?);
-        let mut next_observation_state = Box::new(Account::<ObservationState>::try_from(
-            remaining_accounts.next().unwrap(),
-        )?);
+        let mut tick_array =  AccountLoader::<TickArrayState>::try_from(remaining_accounts.next().unwrap())?;
+        let mut observation_state = AccountLoader::<ObservationState>::try_from(remaining_accounts.next().unwrap())?;
+        require_keys_eq!(pool_state.observation_key, observation_state.key());
         solana_program::log::sol_log_compute_units();
         amount_in_internal = exact_internal(
             &mut SwapContext {
@@ -54,8 +51,8 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
                 output_token_account: output_token_account.clone(),
                 input_vault: input_vault.clone(),
                 output_vault: output_vault.clone(),
-                last_observation_state: &mut last_observation_state,
-                next_observation_state: &mut next_observation_state,
+                tick_array_state: &mut tick_array,
+                observation_state: &mut observation_state,
                 token_program: ctx.accounts.token_program.clone(),
             },
             remaining_accounts.as_slice(),
@@ -66,7 +63,7 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
         // solana_program::log::sol_log_compute_units();
         output_token_account.reload()?;
         pool_state.exit(&crate::id())?;
-        last_observation_state.exit(&crate::id())?;
+        observation_state.exit(&crate::id())?;
 
         if i < additional_accounts_per_pool.len() - 1 {
             // reach accounts needed for the next swap

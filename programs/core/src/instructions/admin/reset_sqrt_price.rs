@@ -30,7 +30,7 @@ pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price_x64: u128) -> R
     }
     let tick = tick_math::get_tick_at_sqrt_ratio(sqrt_price_x64)?;
     pool_state.sqrt_price_x64 = sqrt_price_x64;
-    pool_state.tick = tick;
+    pool_state.tick_current = tick;
 
     Ok(())
 }

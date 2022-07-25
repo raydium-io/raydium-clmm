@@ -6,7 +6,8 @@ pub enum ErrorCode {
     LOK,
     #[msg("Not approved")]
     NotApproved,
-
+    #[msg("Account lack")]
+    AccountLack,
     #[msg("Remove liquitity, collect fees owed and reward then you can close position account")]
     ClosePositionErr,
 
@@ -23,6 +24,8 @@ pub enum ErrorCode {
     TickUpperOverflow,
     #[msg("tick % tick_spacing must be zero")]
     TickAndSpacingNotMatch,
+    #[msg("Invaild tick array account")]
+    InvalidTickArray,
 
     #[msg("Square root price limit overflow")]
     SqrtPriceLimitOverflow,

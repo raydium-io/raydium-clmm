@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "programs/*",
-    "client"
 ]
 
 [profile.test]
