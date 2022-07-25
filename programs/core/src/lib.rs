@@ -36,9 +36,17 @@ pub mod amm_core {
     /// * `ctx`- Initializes the factory state account
     /// * `amm_config_bump` - Bump to validate factory state address
     ///
-    pub fn create_amm_config(ctx: Context<CreateAmmConfig>, protocol_fee_rate: u32) -> Result<()> {
+    pub fn create_amm_config(
+        ctx: Context<CreateAmmConfig>,
+        index: u16,
+        tick_spacing: u16,
+        global_fee_rate: u32,
+        protocol_fee_rate: u32,
+    ) -> Result<()> {
         assert!(protocol_fee_rate > 0 && protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
-        instructions::create_amm_config(ctx, protocol_fee_rate)
+        assert!(global_fee_rate < 1_000_000); // 100%
+        assert!(tick_spacing > 0 && tick_spacing < 16384);
+        instructions::create_amm_config(ctx, index, tick_spacing,protocol_fee_rate, global_fee_rate)
     }
 
     /// Updates the owner of the factory
@@ -51,26 +59,7 @@ pub mod amm_core {
     pub fn set_new_owner(ctx: Context<SetNewOwner>) -> Result<()> {
         instructions::set_new_owner(ctx)
     }
-
-    /// Create a fee account with the given tick_spacing
-    /// Fee account may never be removed once created
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx`- Checks whether protocol owner has signed and initializes the fee account
-    /// * `fee_state_bump` - Bump to validate fee state address
-    /// * `fee` - The fee amount to enable, denominated in hundredths of a bip (i.e. 1e-6)
-    /// * `tick_spacing` - The spacing between ticks to be enforced for all pools created
-    /// with the given fee amount
-    ///
-    pub fn create_fee_account(
-        ctx: Context<CreateFeeAccount>,
-        fee: u32,
-        tick_spacing: u16,
-    ) -> Result<()> {
-        instructions::create_fee_account(ctx, fee, tick_spacing)
-    }
-
+    
     // ---------------------------------------------------------------------
     // Pool instructions
 

@@ -11,3 +11,4 @@ tests/dist
 test-ledger
 Cargo.lock
 yarn.lock
+Makefile

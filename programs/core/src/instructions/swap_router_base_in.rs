@@ -9,12 +9,7 @@ pub struct SwapRouterBaseIn<'info> {
     /// The user performing the swap
     pub payer: Signer<'info>,
 
-    /// The factory state to read protocol fees
-    /// CHECK: Safety check performed inside function body
-    pub amm_config: Box<Account<'info, AmmConfig>>,
-
     /// The token account that pays input tokens for the swap
-    /// CHECK: Account validation is performed by the token program
     #[account(mut)]
     pub input_token_account: Account<'info, TokenAccount>,
 
@@ -33,6 +28,9 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
     let mut input_token_account = ctx.accounts.input_token_account.clone();
 
     for i in 0..additional_accounts_per_pool.len() {
+        let mut amm_config = Box::new(Account::<AmmConfig>::try_from(
+            remaining_accounts.next().unwrap(),
+        )?);
         let mut pool_state = Box::new(Account::<PoolState>::try_from(
             remaining_accounts.next().unwrap(),
         )?);
@@ -50,7 +48,7 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
         amount_in_internal = exact_internal(
             &mut SwapContext {
                 signer: ctx.accounts.payer.clone(),
-                amm_config: ctx.accounts.amm_config.as_mut(),
+                amm_config: amm_config.as_mut(),
                 input_token_account: input_token_account.clone(),
                 pool_state: pool_state.as_mut(),
                 output_token_account: output_token_account.clone(),

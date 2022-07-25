@@ -16,6 +16,7 @@ pub struct IncreaseLiquidity<'info> {
     pub nft_account: Box<Account<'info, TokenAccount>>,
 
     /// Authority PDA for the NFT mint
+    #[account(address = pool_state.amm_config)]
     pub amm_config: Account<'info, AmmConfig>,
 
     /// Mint liquidity for this pool
@@ -23,7 +24,16 @@ pub struct IncreaseLiquidity<'info> {
     pub pool_state: Box<Account<'info, PoolState>>,
 
     /// Core program account to store position data
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [
+            POSITION_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+            &personal_position.tick_lower.to_be_bytes(),
+            &personal_position.tick_upper.to_be_bytes(),
+        ],
+        bump,
+    )]
     pub protocol_position: Box<Account<'info, ProcotolPositionState>>,
 
     /// Increase liquidity for this position
@@ -100,9 +110,6 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         token_account_1: ctx.accounts.token_account_1.as_mut(),
         token_vault_0: ctx.accounts.token_vault_0.as_mut(),
         token_vault_1: ctx.accounts.token_vault_1.as_mut(),
-        protocol_position_owner: UncheckedAccount::try_from(
-            ctx.accounts.amm_config.to_account_info(),
-        ),
         pool_state: ctx.accounts.pool_state.as_mut(),
         tick_lower: ctx.accounts.tick_lower.as_mut(),
         tick_upper: ctx.accounts.tick_upper.as_mut(),

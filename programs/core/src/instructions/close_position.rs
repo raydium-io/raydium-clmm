@@ -10,10 +10,6 @@ pub struct ClosePosition<'info> {
     #[account(mut)]
     pub nft_owner: Signer<'info>,
 
-    /// The program account acting as the core liquidity custodian for token holder, and as
-    /// mint authority of the position NFT
-    pub amm_config: Box<Account<'info, AmmConfig>>,
-
     /// Unique token mint address
     #[account(
       mut,

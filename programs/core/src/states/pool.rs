@@ -38,9 +38,6 @@ pub struct PoolState {
     pub token_vault_0: Pubkey,
     pub token_vault_1: Pubkey,
 
-    /// Fee amount for swaps, denominated in hundredths of a bip (i.e. 1e-6)
-    pub fee_rate: u32,
-
     /// The minimum number of ticks between initialized ticks
     pub tick_spacing: u16,
 
@@ -90,7 +87,6 @@ impl PoolState {
     pub const LEN: usize = 8
         + 1
         + 32 * 6
-        + 4
         + 2
         + 16
         + 16
@@ -105,7 +101,7 @@ impl PoolState {
         + 8
         + RewardInfo::LEN * REWARD_NUM
         + 512;
-
+        
     pub fn key(&self) -> Pubkey {
         Pubkey::create_program_address(
             &[
@@ -113,7 +109,6 @@ impl PoolState {
                 self.amm_config.as_ref(),
                 self.token_mint_0.as_ref(),
                 self.token_mint_1.as_ref(),
-                &self.fee_rate.to_be_bytes(),
                 &[self.bump],
             ],
             &crate::id(),
@@ -526,10 +521,6 @@ pub struct PoolCreatedEvent {
     /// The second token of the pool by address sort order
     #[index]
     pub token_mint_1: Pubkey,
-
-    /// The fee collected upon every swap in the pool, denominated in hundredths of a bip
-    #[index]
-    pub fee: u32,
 
     /// The minimum number of ticks between initialized ticks
     pub tick_spacing: u16,

@@ -18,6 +18,7 @@ pub struct InitializeReward<'info> {
     pub funder_token_account: Box<Account<'info, TokenAccount>>,
 
     /// Which config the pool belongs to.
+    #[account(address = pool_state.amm_config)]
     pub amm_config: Box<Account<'info, AmmConfig>>,
 
     /// Set reward for this pool
@@ -74,7 +75,6 @@ pub fn initialize_reward(
     ctx: Context<InitializeReward>,
     param: InitializeRewardParam,
 ) -> Result<()> {
-
     require!(
         ctx.accounts.reward_funder.key() == ctx.accounts.amm_config.owner
             || ctx.accounts.reward_funder.key() == crate::admin::id(),

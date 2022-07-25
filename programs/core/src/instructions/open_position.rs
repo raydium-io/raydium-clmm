@@ -27,10 +27,6 @@ pub struct MintParam<'b, 'info> {
     /// The address that holds pool tokens for token_1
     pub token_vault_1: &'b mut Account<'info, TokenAccount>,
 
-    /// Liquidity is minted on behalf of recipient
-    /// CHECK: This is not dangerous because we don't read or write from this account
-    pub protocol_position_owner: UncheckedAccount<'info>,
-
     /// Mint liquidity for this pool
     pub pool_state: &'b mut Account<'info, PoolState>,
 
@@ -72,6 +68,7 @@ pub struct OpenPosition<'info> {
 
     /// The program account acting as the core liquidity custodian for token holder, and as
     /// mint authority of the position NFT
+    #[account(address = pool_state.amm_config)]
     pub amm_config: Box<Account<'info, AmmConfig>>,
 
     /// Unique token mint address
@@ -278,6 +275,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
 
     // Validate addresses manually, as constraint checks are not applied to internal calls
     let pool_state_info = ctx.accounts.pool_state.to_account_info();
+    let pool_state_clone = ctx.accounts.pool_state.clone();
     let tick_lower = ctx.accounts.tick_lower.tick;
     let tick_upper = ctx.accounts.tick_upper.tick;
     require_keys_eq!(
@@ -292,14 +290,9 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         token_account_1: ctx.accounts.token_account_1.as_mut(),
         token_vault_0: ctx.accounts.token_vault_0.as_mut(),
         token_vault_1: ctx.accounts.token_vault_1.as_mut(),
-        protocol_position_owner: UncheckedAccount::try_from(
-            ctx.accounts.amm_config.to_account_info(),
-        ),
         pool_state: ctx.accounts.pool_state.as_mut(),
         tick_lower: ctx.accounts.tick_lower.as_mut(),
         tick_upper: ctx.accounts.tick_upper.as_mut(),
-        // bitmap_lower_state: &ctx.accounts.bitmap_lower_state,
-        // bitmap_upper_state: &ctx.accounts.bitmap_upper_state,
         bitmap_lower: &bitmap_lower_state,
         bitmap_upper: &bitmap_upper_state,
         protocol_position: ctx.accounts.protocol_position.as_mut(),
@@ -318,10 +311,16 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         tick_lower,
         tick_upper,
     )?;
-    msg!("ctx.accounts.amm_config:{}, bump {}", ctx.accounts.amm_config.key(), ctx.accounts.amm_config.bump);
+
+    let amm_config_key =  ctx.accounts.amm_config.key();
+    let token_mint_0 = pool_state_clone.token_mint_0.key();
+    let token_mint_1 = pool_state_clone.token_mint_1.key();
     let seeds = [
-        &AMM_CONFIG_SEED.as_bytes(),
-        &[ctx.accounts.amm_config.bump] as &[u8],
+        &POOL_SEED.as_bytes(),
+        amm_config_key.as_ref(),
+        token_mint_0.as_ref(),
+        token_mint_1.as_ref(),
+        &[pool_state_clone.bump] as &[u8],
     ];
     // Mint the NFT
     token::mint_to(
@@ -330,7 +329,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             token::MintTo {
                 mint: ctx.accounts.position_nft_mint.to_account_info().clone(),
                 to: ctx.accounts.position_nft_account.to_account_info().clone(),
-                authority: ctx.accounts.amm_config.to_account_info().clone(),
+                authority: pool_state_info.clone(),
             },
             &[&seeds[..]],
         ),
@@ -341,14 +340,14 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         ctx.accounts.metadata_program.key(),
         ctx.accounts.metadata_account.key(),
         ctx.accounts.position_nft_mint.key(),
-        ctx.accounts.amm_config.key(),
+        pool_state_info.key(),
         ctx.accounts.payer.key(),
-        ctx.accounts.amm_config.key(),
+        pool_state_info.key(),
         String::from("Raydium AMM V3 Positions"),
         String::from(""),
         String::from(""),
         Some(vec![Creator {
-            address: ctx.accounts.amm_config.key(),
+            address: pool_state_info.key(),
             verified: true,
             share: 100,
         }]),
@@ -364,7 +363,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             ctx.accounts.metadata_account.to_account_info().clone(),
             ctx.accounts.position_nft_mint.to_account_info().clone(),
             ctx.accounts.payer.to_account_info().clone(),
-            ctx.accounts.amm_config.to_account_info().clone(), // mint and update authority
+            pool_state_info.clone(), // mint and update authority
             ctx.accounts.system_program.to_account_info().clone(),
             ctx.accounts.rent.to_account_info().clone(),
         ],
@@ -376,7 +375,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info().clone(),
             token::SetAuthority {
-                current_authority: ctx.accounts.amm_config.to_account_info().clone(),
+                current_authority: pool_state_info.clone(),
                 account_or_mint: ctx.accounts.position_nft_mint.to_account_info().clone(),
             },
             &[&seeds[..]],
@@ -399,11 +398,16 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     personal_position.fee_growth_inside_0_last = updated_core_position.fee_growth_inside_0_last;
     personal_position.fee_growth_inside_1_last = updated_core_position.fee_growth_inside_1_last;
     personal_position.update_rewards(updated_core_position.reward_growth_inside)?;
-    emit!(IncreaseLiquidityEvent {
-        position_nft_mint: ctx.accounts.position_nft_mint.key(),
-        liquidity,
-        amount_0,
-        amount_1
+
+    emit!(CreatePersonalPositionEvent {
+        pool_state: pool_state_info.key(),
+        minter: ctx.accounts.payer.key(),
+        nft_owner: ctx.accounts.position_nft_owner.key(),
+        tick_lower: tick_lower,
+        tick_upper: tick_upper,
+        liquidity: liquidity,
+        deposit_amount_0: amount_0,
+        deposit_amount_1: amount_1,
     });
 
     Ok(())
@@ -465,8 +469,6 @@ pub fn mint<'b, 'info>(
     remaining_accounts: &[AccountInfo<'info>],
     liquidity: u128,
 ) -> Result<()> {
-    let pool_state_info = ctx.pool_state.to_account_info();
-
     assert!(ctx.token_vault_0.key() == ctx.pool_state.token_vault_0);
     assert!(ctx.token_vault_1.key() == ctx.pool_state.token_vault_1);
     ctx.pool_state.validate_tick_address(
@@ -541,16 +543,6 @@ pub fn mint<'b, 'info>(
             amount_1,
         )?;
     }
-    emit!(CreatePersonalPositionEvent {
-        pool_state: pool_state_info.key(),
-        minter: ctx.payer.key(),
-        nft_owner: ctx.protocol_position_owner.key(),
-        tick_lower: ctx.tick_lower.tick,
-        tick_upper: ctx.tick_upper.tick,
-        liquidity: liquidity,
-        deposit_amount_0: amount_0,
-        deposit_amount_1: amount_1,
-    });
 
     Ok(())
 }

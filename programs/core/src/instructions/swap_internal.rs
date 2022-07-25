@@ -269,7 +269,7 @@ pub fn swap_internal<'b, 'info>(
             target_price,
             state.liquidity,
             state.amount_specified_remaining,
-            ctx.pool_state.fee_rate,
+            ctx.amm_config.global_fee_rate,
         );
         state.sqrt_price_x64 = swap_step.sqrt_ratio_next_x64;
         step.amount_in = swap_step.amount_in;

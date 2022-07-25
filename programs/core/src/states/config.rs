@@ -18,18 +18,22 @@ pub const AMM_CONFIG_SEED: &str = "amm_config";
 pub struct AmmConfig {
     /// Bump to identify PDA
     pub bump: u8,
-
+    pub index: u16,
     /// Address of the protocol owner
     pub owner: Pubkey,
-
     /// The global protocol fee
     pub protocol_fee_rate: u32,
+    /// The enabled fee, denominated in hundredths of a bip (10^-6)
+    pub global_fee_rate: u32,
+    /// The minimum number of ticks between initialized ticks for pools
+    /// created with the given fee
+    pub tick_spacing: u16,
     // padding space for upgrade
-    // pub padding: [u64; 16],
+    // pub padding: [u64; 8],
 }
 
 impl AmmConfig {
-    pub const LEN: usize = 8 + 1 + 32 + 1 + 128;
+    pub const LEN: usize = 8 + 1 + 2 + 32 + 4 + 4 + 2 + 64;
 
     pub fn is_authorized<'info>(
         &self,

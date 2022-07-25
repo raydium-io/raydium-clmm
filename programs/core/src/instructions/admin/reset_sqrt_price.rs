@@ -11,6 +11,7 @@ pub struct ResetSqrtPrice<'info> {
     #[account(address = crate::admin::id())]
     pub owner: Signer<'info>,
     /// Which config the pool belongs to
+    #[account(address = pool_state.amm_config)]
     pub amm_config: Box<Account<'info, AmmConfig>>,
     /// Initialize an account to store the pool state
     #[account(mut)]

@@ -9,10 +9,6 @@ pub struct CollectProtocolFee<'info> {
     #[account(address = crate::admin::id())]
     pub owner: Signer<'info>,
 
-    /// Factory state stores the protocol owner address
-    #[account(mut)]
-    pub amm_config: Account<'info, AmmConfig>,
-
     /// Pool state stores accumulated protocol fee amount
     #[account(mut)]
     pub pool_state: Box<Account<'info, PoolState>>,

@@ -11,21 +11,18 @@ pub struct SwapSingle<'info> {
     pub payer: Signer<'info>,
 
     /// The factory state to read protocol fees
-    /// CHECK: Safety check performed inside function body
+    #[account(address = pool_state.amm_config)]
     pub amm_config: Box<Account<'info, AmmConfig>>,
 
     /// The program account of the pool in which the swap will be performed
-    /// CHECK: Safety check performed inside function body
     #[account(mut)]
     pub pool_state: Box<Account<'info, PoolState>>,
 
     /// The user token account for input token
-    /// CHECK: Account validation is performed by the token program
     #[account(mut)]
     pub input_token_account: Account<'info, TokenAccount>,
 
     /// The user token account for output token
-    /// CHECK: Account validation is performed by the token program
     #[account(mut)]
     pub output_token_account: Account<'info, TokenAccount>,
 
@@ -38,7 +35,6 @@ pub struct SwapSingle<'info> {
     pub output_vault: Account<'info, TokenAccount>,
 
     /// The program account for the most recent oracle observation
-    /// CHECK: Safety check performed inside function body
     #[account(mut)]
     pub last_observation: Box<Account<'info, ObservationState>>,
 

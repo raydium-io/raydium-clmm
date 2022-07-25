@@ -23,6 +23,18 @@ export type AmmCore = {
       ],
       "args": [
         {
+          "name": "index",
+          "type": "u16"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "u16"
+        },
+        {
+          "name": "globalFeeRate",
+          "type": "u32"
+        },
+        {
           "name": "protocolFeeRate",
           "type": "u32"
         }
@@ -48,41 +60,6 @@ export type AmmCore = {
         }
       ],
       "args": []
-    },
-    {
-      "name": "createFeeAccount",
-      "accounts": [
-        {
-          "name": "owner",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "feeState",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "fee",
-          "type": "u32"
-        },
-        {
-          "name": "tickSpacing",
-          "type": "u16"
-        }
-      ]
     },
     {
       "name": "createPool",
@@ -120,11 +97,6 @@ export type AmmCore = {
         {
           "name": "tokenVault1",
           "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "feeState",
-          "isMut": false,
           "isSigner": false
         },
         {
@@ -397,11 +369,6 @@ export type AmmCore = {
           "isSigner": true
         },
         {
-          "name": "ammConfig",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
           "name": "poolState",
           "isMut": true,
           "isSigner": false
@@ -609,11 +576,6 @@ export type AmmCore = {
           "name": "nftOwner",
           "isMut": true,
           "isSigner": true
-        },
-        {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
         },
         {
           "name": "positionNftMint",
@@ -1037,11 +999,6 @@ export type AmmCore = {
           "isSigner": true
         },
         {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "inputTokenAccount",
           "isMut": true,
           "isSigner": false
@@ -1079,27 +1036,19 @@ export type AmmCore = {
             "type": "u8"
           },
           {
+            "name": "index",
+            "type": "u16"
+          },
+          {
             "name": "owner",
             "type": "publicKey"
           },
           {
             "name": "protocolFeeRate",
             "type": "u32"
-          }
-        ]
-      }
-    },
-    {
-      "name": "feeState",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "bump",
-            "type": "u8"
           },
           {
-            "name": "fee",
+            "name": "globalFeeRate",
             "type": "u32"
           },
           {
@@ -1232,10 +1181,6 @@ export type AmmCore = {
           {
             "name": "tokenVault1",
             "type": "publicKey"
-          },
-          {
-            "name": "feeRate",
-            "type": "u32"
           },
           {
             "name": "tickSpacing",
@@ -1580,21 +1525,6 @@ export type AmmCore = {
       ]
     },
     {
-      "name": "CreateFeeAccountEvent",
-      "fields": [
-        {
-          "name": "fee",
-          "type": "u32",
-          "index": false
-        },
-        {
-          "name": "tickSpacing",
-          "type": "u16",
-          "index": false
-        }
-      ]
-    },
-    {
       "name": "IncreaseObservationCardinalityNext",
       "fields": [
         {
@@ -1717,11 +1647,6 @@ export type AmmCore = {
         {
           "name": "tokenMint1",
           "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "fee",
-          "type": "u32",
           "index": false
         },
         {
@@ -2106,6 +2031,18 @@ export const IDL: AmmCore = {
       ],
       "args": [
         {
+          "name": "index",
+          "type": "u16"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "u16"
+        },
+        {
+          "name": "globalFeeRate",
+          "type": "u32"
+        },
+        {
           "name": "protocolFeeRate",
           "type": "u32"
         }
@@ -2131,41 +2068,6 @@ export const IDL: AmmCore = {
         }
       ],
       "args": []
-    },
-    {
-      "name": "createFeeAccount",
-      "accounts": [
-        {
-          "name": "owner",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "feeState",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "fee",
-          "type": "u32"
-        },
-        {
-          "name": "tickSpacing",
-          "type": "u16"
-        }
-      ]
     },
     {
       "name": "createPool",
@@ -2203,11 +2105,6 @@ export const IDL: AmmCore = {
         {
           "name": "tokenVault1",
           "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "feeState",
-          "isMut": false,
           "isSigner": false
         },
         {
@@ -2480,11 +2377,6 @@ export const IDL: AmmCore = {
           "isSigner": true
         },
         {
-          "name": "ammConfig",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
           "name": "poolState",
           "isMut": true,
           "isSigner": false
@@ -2692,11 +2584,6 @@ export const IDL: AmmCore = {
           "name": "nftOwner",
           "isMut": true,
           "isSigner": true
-        },
-        {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
         },
         {
           "name": "positionNftMint",
@@ -3120,11 +3007,6 @@ export const IDL: AmmCore = {
           "isSigner": true
         },
         {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "inputTokenAccount",
           "isMut": true,
           "isSigner": false
@@ -3162,27 +3044,19 @@ export const IDL: AmmCore = {
             "type": "u8"
           },
           {
+            "name": "index",
+            "type": "u16"
+          },
+          {
             "name": "owner",
             "type": "publicKey"
           },
           {
             "name": "protocolFeeRate",
             "type": "u32"
-          }
-        ]
-      }
-    },
-    {
-      "name": "feeState",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "bump",
-            "type": "u8"
           },
           {
-            "name": "fee",
+            "name": "globalFeeRate",
             "type": "u32"
           },
           {
@@ -3315,10 +3189,6 @@ export const IDL: AmmCore = {
           {
             "name": "tokenVault1",
             "type": "publicKey"
-          },
-          {
-            "name": "feeRate",
-            "type": "u32"
           },
           {
             "name": "tickSpacing",
@@ -3663,21 +3533,6 @@ export const IDL: AmmCore = {
       ]
     },
     {
-      "name": "CreateFeeAccountEvent",
-      "fields": [
-        {
-          "name": "fee",
-          "type": "u32",
-          "index": false
-        },
-        {
-          "name": "tickSpacing",
-          "type": "u16",
-          "index": false
-        }
-      ]
-    },
-    {
       "name": "IncreaseObservationCardinalityNext",
       "fields": [
         {
@@ -3800,11 +3655,6 @@ export const IDL: AmmCore = {
         {
           "name": "tokenMint1",
           "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "fee",
-          "type": "u32",
           "index": false
         },
         {

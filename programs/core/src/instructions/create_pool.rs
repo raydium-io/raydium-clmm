@@ -19,7 +19,6 @@ pub struct CreatePool<'info> {
             amm_config.key().as_ref(),
             token_mint_0.key().as_ref(),
             token_mint_1.key().as_ref(),
-            &fee_state.fee.to_be_bytes()
         ],
         bump,
         payer = pool_creator,
@@ -59,8 +58,6 @@ pub struct CreatePool<'info> {
         token::authority = pool_state
     )]
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
-    /// Stores the desired fee for the pool
-    pub fee_state: Box<Account<'info, FeeState>>,
 
     /// Initialize an account to store oracle observations
     #[account(
@@ -100,8 +97,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
     pool_state.token_mint_1 = ctx.accounts.token_mint_1.key();
     pool_state.token_vault_0 = ctx.accounts.token_vault_0.key();
     pool_state.token_vault_1 = ctx.accounts.token_vault_1.key();
-    pool_state.fee_rate = ctx.accounts.fee_state.fee;
-    pool_state.tick_spacing = ctx.accounts.fee_state.tick_spacing;
+    pool_state.tick_spacing = ctx.accounts.amm_config.tick_spacing;
     pool_state.sqrt_price_x64 = sqrt_price_x64;
     pool_state.tick = tick;
     pool_state.observation_cardinality = 1;
@@ -117,8 +113,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
     emit!(PoolCreatedEvent {
         token_mint_0: ctx.accounts.token_mint_0.key(),
         token_mint_1: ctx.accounts.token_mint_1.key(),
-        fee: ctx.accounts.fee_state.fee,
-        tick_spacing: ctx.accounts.fee_state.tick_spacing,
+        tick_spacing: ctx.accounts.amm_config.tick_spacing,
         pool_state: ctx.accounts.pool_state.key(),
         sqrt_price_x64,
         tick,

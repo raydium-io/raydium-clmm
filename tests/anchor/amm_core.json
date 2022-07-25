@@ -23,6 +23,18 @@
       ],
       "args": [
         {
+          "name": "index",
+          "type": "u16"
+        },
+        {
+          "name": "tickSpacing",
+          "type": "u16"
+        },
+        {
+          "name": "globalFeeRate",
+          "type": "u32"
+        },
+        {
           "name": "protocolFeeRate",
           "type": "u32"
         }
@@ -48,41 +60,6 @@
         }
       ],
       "args": []
-    },
-    {
-      "name": "createFeeAccount",
-      "accounts": [
-        {
-          "name": "owner",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "feeState",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "fee",
-          "type": "u32"
-        },
-        {
-          "name": "tickSpacing",
-          "type": "u16"
-        }
-      ]
     },
     {
       "name": "createPool",
@@ -120,11 +97,6 @@
         {
           "name": "tokenVault1",
           "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "feeState",
-          "isMut": false,
           "isSigner": false
         },
         {
@@ -397,11 +369,6 @@
           "isSigner": true
         },
         {
-          "name": "ammConfig",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
           "name": "poolState",
           "isMut": true,
           "isSigner": false
@@ -609,11 +576,6 @@
           "name": "nftOwner",
           "isMut": true,
           "isSigner": true
-        },
-        {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
         },
         {
           "name": "positionNftMint",
@@ -1037,11 +999,6 @@
           "isSigner": true
         },
         {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "inputTokenAccount",
           "isMut": true,
           "isSigner": false
@@ -1079,27 +1036,19 @@
             "type": "u8"
           },
           {
+            "name": "index",
+            "type": "u16"
+          },
+          {
             "name": "owner",
             "type": "publicKey"
           },
           {
             "name": "protocolFeeRate",
             "type": "u32"
-          }
-        ]
-      }
-    },
-    {
-      "name": "FeeState",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "bump",
-            "type": "u8"
           },
           {
-            "name": "fee",
+            "name": "globalFeeRate",
             "type": "u32"
           },
           {
@@ -1232,10 +1181,6 @@
           {
             "name": "tokenVault1",
             "type": "publicKey"
-          },
-          {
-            "name": "feeRate",
-            "type": "u32"
           },
           {
             "name": "tickSpacing",
@@ -1580,21 +1525,6 @@
       ]
     },
     {
-      "name": "CreateFeeAccountEvent",
-      "fields": [
-        {
-          "name": "fee",
-          "type": "u32",
-          "index": false
-        },
-        {
-          "name": "tickSpacing",
-          "type": "u16",
-          "index": false
-        }
-      ]
-    },
-    {
       "name": "IncreaseObservationCardinalityNext",
       "fields": [
         {
@@ -1717,11 +1647,6 @@
         {
           "name": "tokenMint1",
           "type": "publicKey",
-          "index": false
-        },
-        {
-          "name": "fee",
-          "type": "u32",
           "index": false
         },
         {
@@ -2078,5 +2003,8 @@
       "name": "UnInitializedRewardInfo",
       "msg": "uninitialized reward info"
     }
-  ]
+  ],
+  "metadata": {
+    "address": "Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3"
+  }
 }

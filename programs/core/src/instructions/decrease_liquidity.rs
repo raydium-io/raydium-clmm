@@ -22,6 +22,7 @@ pub struct DecreaseLiquidity<'info> {
     pub personal_position: Account<'info, PersonalPositionState>,
 
     /// The program account acting as the core liquidity custodian for token holder
+    #[account(address = pool_state.amm_config)]
     pub amm_config: Account<'info, AmmConfig>,
 
     /// Burn liquidity for this pool
@@ -29,7 +30,16 @@ pub struct DecreaseLiquidity<'info> {
     pub pool_state: Box<Account<'info, PoolState>>,
 
     /// Core program account to store position data
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [
+            POSITION_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+            &personal_position.tick_lower.to_be_bytes(),
+            &personal_position.tick_upper.to_be_bytes(),
+        ],
+        bump,
+    )]
     pub protocol_position: Box<Account<'info, ProcotolPositionState>>,
 
     /// Token_0 vault

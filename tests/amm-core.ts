@@ -558,7 +558,7 @@ describe("amm-core", async () => {
       }
 
       const tx = await program.methods
-        .createAmmConfig(100000)
+        .createAmmConfig(0, 10, 1000, 2500)
         .accounts({
           owner,
           ammConfig,
@@ -699,152 +699,6 @@ describe("amm-core", async () => {
     });
   });
 
-  describe("#create_fee_account", () => {
-    it("fails if PDA seeds do not match", async () => {
-      await expect(
-        program.rpc.createFeeAccount(fee + 1, tickSpacing, {
-          accounts: {
-            owner: superAdmin.publicKey,
-            ammConfig,
-            feeState,
-            systemProgram: SystemProgram.programId,
-          },
-        })
-      ).to.be.rejectedWith(Error);
-    });
-
-    it("fails if caller is not owner", async () => {
-      const tx = program.transaction.createFeeAccount(fee, tickSpacing, {
-        accounts: {
-          owner: notOwner.publicKey,
-          ammConfig,
-          feeState,
-          systemProgram: SystemProgram.programId,
-        },
-        signers: [notOwner],
-      });
-      tx.recentBlockhash = (await connection.getRecentBlockhash()).blockhash;
-
-      await expect(
-        connection.sendTransaction(tx, [notOwner])
-      ).to.be.rejectedWith(Error);
-    });
-
-    it("fails if fee is too great", async () => {
-      const highFee = 1_000_000;
-      const [highFeeState, highFeeStateBump] = await getFeeAddress(
-        highFee,
-        program.programId
-      );
-
-      await expect(
-        program.rpc.createFeeAccount(highFee, tickSpacing, {
-          accounts: {
-            owner: superAdmin.publicKey,
-            ammConfig,
-            feeState: highFeeState,
-            systemProgram: SystemProgram.programId,
-          },
-        })
-      ).to.be.rejectedWith(Error);
-    });
-
-    it("fails if tick spacing is too small", async () => {
-      await expect(
-        program.rpc.createFeeAccount(fee, 0, {
-          accounts: {
-            owner: superAdmin.publicKey,
-            ammConfig,
-            feeState: feeState,
-            systemProgram: SystemProgram.programId,
-          },
-        })
-      ).to.be.rejectedWith(Error);
-    });
-
-    it("fails if tick spacing is too large", async () => {
-      await expect(
-        program.rpc.createFeeAccount(fee, 16384, {
-          accounts: {
-            owner: superAdmin.publicKey,
-            ammConfig,
-            feeState: feeState,
-            systemProgram: SystemProgram.programId,
-          },
-        })
-      ).to.be.rejectedWith(Error);
-    });
-
-    it("sets the fee amount and emits an event", async () => {
-      if (await accountExist(connection, feeState)) {
-        return;
-      }
-      // let listener: number;
-      // let [_event, _slot] = await new Promise((resolve, _reject) => {
-      //   listener = program.addEventListener(
-      //     "FeeAmountEnabled",
-      //     (event, slot) => {
-      //       assert.equal(event.fee, fee);
-      //       assert.equal(event.tickSpacing, tickSpacing);
-
-      //       resolve([event, slot]);
-      //     }
-      //   );
-
-      //   program.rpc.createFeeAccount(fee, tickSpacing, {
-      //     accounts: {
-      //       owner,
-      //       ammConfig,
-      //       feeState,
-      //       systemProgram: SystemProgram.programId,
-      //     },
-      //   });
-      // });
-      // await program.removeEventListener(listener);
-      await program.methods
-        .createFeeAccount(fee, tickSpacing)
-        .accounts({
-          owner: superAdmin.publicKey,
-          ammConfig,
-          feeState,
-          systemProgram: SystemProgram.programId,
-        })
-        .signers([superAdmin])
-        .rpc();
-      const feeStateData = await program.account.feeState.fetch(feeState);
-      console.log("fee state", feeStateData);
-      assert.equal(feeStateData.bump, feeStateBump);
-      assert.equal(feeStateData.fee, fee);
-      assert.equal(feeStateData.tickSpacing, tickSpacing);
-    });
-
-    it("fails if already initialized", async () => {
-      await expect(
-        program.rpc.createFeeAccount(feeStateBump, fee, tickSpacing, {
-          accounts: {
-            owner: superAdmin.publicKey,
-            ammConfig,
-            feeState,
-            systemProgram: SystemProgram.programId,
-          },
-        })
-      ).to.be.rejectedWith(Error);
-    });
-
-    it("cannot change spacing of a fee tier", async () => {
-      await expect(
-        program.rpc.createFeeAccount(feeStateBump, fee, tickSpacing + 1, {
-          accounts: {
-            owner: superAdmin.publicKey,
-            ammConfig,
-            feeState,
-            systemProgram: SystemProgram.programId,
-          },
-        })
-      ).to.be.rejectedWith(Error);
-    });
-  });
-
   describe("#create_pool", () => {
     it("derive first observation slot address", async () => {
       [initialObservationStateA, initialObservationBumpA] =
@@ -863,7 +717,6 @@ describe("amm-core", async () => {
           tokenMint1: token0.publicKey,
           tokenVault0: vaultA0,
           tokenVault1: vaultA1,
-          feeState,
           poolState: poolAState,
           initialFirstObservation: initialObservationStateA,
           tokenProgram: TOKEN_PROGRAM_ID,
@@ -881,7 +734,6 @@ describe("amm-core", async () => {
           ammConfig: ammConfig,
           tokenMint0: token0.publicKey,
           tokenMint1: token0.publicKey,
-          feeState,
           poolState: poolAState,
           initialFirstObservation: initialObservationStateA,
           tokenVault0: vaultA0,
@@ -905,7 +757,6 @@ describe("amm-core", async () => {
           ammConfig: ammConfig,
           tokenMint0: token0.publicKey,
           tokenMint1: token0.publicKey,
-          feeState: uninitializedFeeState,
           poolState: poolAState,
           initialFirstObservation: initialObservationStateA,
           tokenVault0: vaultA0,
@@ -924,7 +775,6 @@ describe("amm-core", async () => {
           ammConfig: ammConfig,
           tokenMint0: token0.publicKey,
           tokenMint1: token1.publicKey,
-          feeState,
           poolState: poolAState,
           initialFirstObservation: initialObservationStateA,
           tokenVault0: vaultA0,
@@ -941,7 +791,6 @@ describe("amm-core", async () => {
           ammConfig: ammConfig,
           tokenMint0: token0.publicKey,
           tokenMint1: token1.publicKey,
-          feeState,
           poolState: poolAState,
           initialFirstObservation: initialObservationStateA,
           tokenVault0: vaultA0,
@@ -960,7 +809,6 @@ describe("amm-core", async () => {
           ammConfig: ammConfig,
           tokenMint0: token0.publicKey,
           tokenMint1: token1.publicKey,
-          feeState,
           poolState: poolAState,
           initialFirstObservation: initialObservationStateA,
           tokenVault0: vaultA0,
@@ -977,7 +825,6 @@ describe("amm-core", async () => {
           ammConfig: ammConfig,
           tokenMint0: token0.publicKey,
           tokenMint1: token1.publicKey,
-          feeState,
           poolState: poolAState,
           initialFirstObservation: initialObservationStateA,
           tokenVault0: vaultA0,
@@ -1034,7 +881,6 @@ describe("amm-core", async () => {
         ammConfig: ammConfig,
         tokenMint0: token0.publicKey,
         tokenMint1: token1.publicKey,
-        feeState,
         poolState: poolAState,
         initialFirstObservation: initialObservationStateA,
         tokenVault0: vaultA0,
@@ -1092,7 +938,6 @@ describe("amm-core", async () => {
           ammConfig: ammConfig,
           tokenMint0: token0.publicKey,
           tokenMint1: token1.publicKey,
-          feeState,
           poolState: poolAState,
           initialFirstObservation: initialObservationStateA,
           tokenVault0: vaultA0,
@@ -1769,8 +1614,7 @@ describe("amm-core", async () => {
       await expect(
         program.rpc.collectProtocolFee(MaxU64, MaxU64, {
           accounts: {
-            owner: notOwner.publicKey,
-            ammConfig,
+            owner: notOwner.publicKey, 
             poolState: poolAState,
             tokenVault0: vaultA0,
             tokenVault1: vaultA1,
@@ -1787,7 +1631,6 @@ describe("amm-core", async () => {
         program.rpc.collectProtocolFee(MaxU64, MaxU64, {
           accounts: {
             owner: notOwner.publicKey,
-            ammConfig,
             poolState: poolAState,
             tokenVault0: new Keypair().publicKey,
             tokenVault1: vaultA1,
@@ -1804,7 +1647,6 @@ describe("amm-core", async () => {
         program.rpc.collectProtocolFee(MaxU64, MaxU64, {
           accounts: {
             owner: notOwner.publicKey,
-            ammConfig,
             poolState: poolAState,
             tokenVault0: vaultA0,
             tokenVault1: new Keypair().publicKey,
@@ -1850,7 +1692,6 @@ describe("amm-core", async () => {
         .collectProtocolFee(MaxU64, MaxU64)
         .accounts({
           owner: superAdmin.publicKey,
-          ammConfig,
           poolState: poolAState,
           tokenVault0: vaultA0,
           tokenVault1: vaultA1,
@@ -3351,7 +3192,6 @@ describe("amm-core", async () => {
         .collectProtocolFee(MaxU64, MaxU64)
         .accounts({
           owner: superAdmin.publicKey,
-          ammConfig,
           poolState: poolAState,
           tokenVault0: vaultA0,
           tokenVault1: vaultA1,
@@ -3833,7 +3673,6 @@ describe("amm-core", async () => {
         .swapRouterBaseIn(amountIn, amountOutMinimum, Buffer.from([2]))
         .accounts({
           payer: owner,
-          ammConfig,
           inputTokenAccount: minterWallet0,
           tokenProgram: TOKEN_PROGRAM_ID,
         })
@@ -3890,7 +3729,6 @@ describe("amm-core", async () => {
           ammConfig: ammConfig,
           tokenMint0: token1.publicKey,
           tokenMint1: token2.publicKey,
-          feeState,
           poolState: poolBState,
           initialFirstObservation: initialObservationStateB,
           tokenVault0: vaultB1,
@@ -3988,8 +3826,8 @@ describe("amm-core", async () => {
         [additionalComputeBudgetInstruction, openIx],
         [ownerKeyPair, nftMintBKeypair]
       );
-      console.log("seconde position:", tx)
-      await sleep(2000)
+      console.log("seconde position:", tx);
+     
     });
 
     it("perform a two pool swap", async () => {
@@ -4505,7 +4343,6 @@ describe("amm-core", async () => {
           positionNftMint: nftMintAKeypair.publicKey,
           positionNftAccount: positionANftAccount,
           personalPosition: personalPositionAState,
-          ammConfig,
           // metadataAccount: metadataAccount,
           tokenProgram: TOKEN_PROGRAM_ID,
         })

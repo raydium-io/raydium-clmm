@@ -4,9 +4,6 @@ pub use create_amm_config::*;
 pub mod set_new_owner;
 pub use set_new_owner::*;
 
-pub mod create_fee_account;
-pub use create_fee_account::*;
-
 pub mod set_protocol_fee_rate;
 pub use set_protocol_fee_rate::*;
 
