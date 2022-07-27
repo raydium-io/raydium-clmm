@@ -25,7 +25,9 @@ use configparser::ini::Ini;
 mod instructions;
 use instructions::token_instructions::*;
 use instructions::amm_instructions::*;
-use raydium_amm_v3::libraries::{tick_math, fixed_point_64};
+use raydium_amm_v3::{
+    libraries::{tick_math, fixed_point_64},
+};
 
 const Q_RATIO: f64 = 1.0001;
 fn tick_to_price(tick: i32) -> f64 {
@@ -36,10 +38,6 @@ fn price_to_tick(price: f64) -> i32 {
 }
 fn tick_to_sqrt_price(tick: i32) -> f64 {
     Q_RATIO.powi(tick).sqrt()
-}
-fn tick_to_bitmap_pos(tick: i32, tick_spacing: u16) -> i16 {
-    let word_pos = ((tick / (tick_spacing as i32)) >> 8) as i16;
-    word_pos
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -284,9 +282,12 @@ fn main() -> Result<()> {
                 }
             }
             "create_config" | "ccfg" => {
-                if v.len() == 2 {
+                if v.len() == 5 {
+                    let config_index = v[1].parse::<u16>().unwrap();
+                    let tick_spacing = v[1].parse::<u16>().unwrap();
                     let protocol_fee_rate = v[1].parse::<u32>().unwrap();
-                    let sig = create_amm_config_tx(&client, &config.raydium_v3_program, &admin, protocol_fee_rate)?;
+                    let trade_fee_rate = v[1].parse::<u32>().unwrap();
+                    let sig = create_amm_config_tx(&client, &config.raydium_v3_program, &admin, config_index, tick_spacing, protocol_fee_rate, trade_fee_rate)?;
                     println!("sig:{}", sig);
                 }
                 else {
@@ -294,65 +295,60 @@ fn main() -> Result<()> {
                 }
             }
             "pcfg" => {
-                let program = client.program(config.raydium_v3_program);
-                let (amm_config_key, __bump) = Pubkey::find_program_address(&[raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes()], &program.id());
-                let amm_config_account: raydium_amm_v3::states::AmmConfig = program.account(amm_config_key)?;
-                println!("{:#?}", amm_config_account);
+                if v.len() == 2 {
+                    let config_index = v[1].parse::<u16>().unwrap();
+                    let program = client.program(config.raydium_v3_program);
+                    let (amm_config_key, __bump) = Pubkey::find_program_address(&[raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(), &config_index.to_be_bytes()], &program.id());
+                    println!("{}", amm_config_key);
+                    let amm_config_account: raydium_amm_v3::states::AmmConfig = program.account(amm_config_key)?;
+                    println!("{:#?}", amm_config_account);
+                }
+                else {
+                    println!("invalid command: [pcfg config_index]");
+                }
             }
             "set_new_cfg_owner" => {
-                if v.len() == 2 {
-                    let new_owner = Pubkey::from_str(&v[1]).unwrap();
-                    let sig = set_new_config_owner_tx(&client, &config.raydium_v3_program, &admin, &new_owner)?;
+                if v.len() == 3 {
+                    let config_index = v[1].parse::<u16>().unwrap();
+                    let new_owner = Pubkey::from_str(&v[2]).unwrap();
+                    let (amm_config_key, __bump) = Pubkey::find_program_address(&[raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(), &config_index.to_be_bytes()], &config.raydium_v3_program);
+                    let sig = set_new_config_owner_tx(&client, &config.raydium_v3_program, amm_config_key, &admin, &new_owner)?;
                     println!("sig:{}", sig);
                 }
                 else {
-                    println!("invalid command: [set_new_cfg_owner new_owner]");
+                    println!("invalid command: [set_new_cfg_owner config_index new_owner]");
                 }
             }
             "set_protocol_fee_rate" => {
-                if v.len() == 2 {
-                    let protocol_fee_rate = v[1].parse::<u32>().unwrap();
-                    let sig = set_protocol_fee_rate_tx(&client, &config.raydium_v3_program, &admin, protocol_fee_rate)?;
-                    println!("sig:{}", sig);
-                }
-                else {
-                    println!("invalid command: [set_protocol_fee_rate protocol_fee_rate]");
-                }
-            }
-            "create_fee_account" | "cfeeaccount" => {
                 if v.len() == 3 {
-                    let fee = v[1].parse::<u32>().unwrap();
-                    let tick_spacing = v[2].parse::<u16>().unwrap();
-                    let sig = create_fee_account_tx(&client, &config.raydium_v3_program, &admin, fee, tick_spacing)?;
+                    let config_index = v[1].parse::<u16>().unwrap();
+                    let protocol_fee_rate = v[2].parse::<u32>().unwrap();
+                    let (amm_config_key, __bump) = Pubkey::find_program_address(&[raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(), &config_index.to_be_bytes()], &config.raydium_v3_program);
+                    let sig = set_protocol_fee_rate_tx(&client, &config.raydium_v3_program, amm_config_key, &admin, protocol_fee_rate)?;
                     println!("sig:{}", sig);
                 }
                 else {
-                    println!("invalid command: [create_fee_account fee tick_spacing]");
+                    println!("invalid command: [set_protocol_fee_rate config_index protocol_fee_rate]");
                 }
-            }
-            "pfeeaccount" => {
-                let program = client.program(config.raydium_v3_program);
-                let (fee_account_key, __bump) = Pubkey::find_program_address(&[raydium_amm_v3::states::FEE_SEED.as_bytes(), &config.fee.to_be_bytes()], &program.id());
-                
-                let fee_account: raydium_amm_v3::states::FeeState = program.account(fee_account_key)?;
-                println!("{:#?}", fee_account);
             }
             "create_pool" | "cpool" => {
                 if v.len() == 3 {
-                    let fee = v[1].parse::<u32>().unwrap();
+                    let config_index = v[1].parse::<u16>().unwrap();
                     let tick = v[2].parse::<i32>().unwrap();
                     let price = tick_to_price(tick);
                     let sqrt_price_x64 = tick_math::get_sqrt_ratio_at_tick(tick)?;
-                    println!("tick:{}, price:{}, sqrt_price_x64:{}", tick, price, sqrt_price_x64);
-                    let sig = create_pool_tx(&client, config.raydium_v3_program, config.mint0.unwrap(), config.mint1.unwrap(), sqrt_price_x64, fee)?;
+                    let (amm_config_key, __bump) = Pubkey::find_program_address(&[raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(), &config_index.to_be_bytes()], &config.raydium_v3_program);
+                    println!("tick:{}, price:{}, sqrt_price_x64:{}, amm_config_key:{}", tick, price, sqrt_price_x64, amm_config_key);
+                    let sig = create_pool_tx(&client, config.raydium_v3_program, amm_config_key, config.mint0.unwrap(), config.mint1.unwrap(), sqrt_price_x64)?;
                     println!("sig:{}", sig);
                 }
                 else {
-                    println!("invalid command: [create_fee_account fee tick_spacing]");
+                    println!("invalid command: [create_pool config_index tick_spacing]");
                 }
             }
             "ppool" => {
                 let program = client.program(config.raydium_v3_program);
+                println!("{}", config.pool_id_account.unwrap());
                 let pool_account: raydium_amm_v3::states::PoolState = program.account(config.pool_id_account.unwrap())?;
                 println!("{:#?}", pool_account);
             }
@@ -365,13 +361,11 @@ fn main() -> Result<()> {
                     let amount_0_min = v[5].parse::<u64>().unwrap();
                     let amount_1_min = v[6].parse::<u64>().unwrap();
 
-                    let word_lower_index = tick_to_bitmap_pos(tick_lower_index, config.tick_spacing);
-                    let word_upper_index = tick_to_bitmap_pos(tick_upper_index, config.tick_spacing);
+                    let tick_array_lower_start_index = raydium_amm_v3::states::TickArrayState::get_arrary_start_index(tick_lower_index, config.tick_spacing.into());
+                    let tick_array_upper_start_index = raydium_amm_v3::states::TickArrayState::get_arrary_start_index(tick_upper_index, config.tick_spacing.into());
                     // load pool to get observation
                     let program = client.program(config.raydium_v3_program);
                     let pool: raydium_amm_v3::states::PoolState = program.account(config.pool_id_account.unwrap())?;
-                    let last_observation_account = Pubkey::find_program_address(&[raydium_amm_v3::states::OBSERVATION_SEED.as_bytes(), config.pool_id_account.unwrap().to_bytes().as_ref(), &pool.observation_index.to_be_bytes()], &config.raydium_v3_program).0;
-                    let next_observation_account = Pubkey::find_program_address(&[raydium_amm_v3::states::OBSERVATION_SEED.as_bytes(), config.pool_id_account.unwrap().to_bytes().as_ref(), &pool.next_observation_index().to_be_bytes()], &config.raydium_v3_program).0;
                     // load position
                     let cfg = pool_config.clone();
                     let load_client = RpcClient::new(cfg.http_url.to_string());
@@ -401,11 +395,10 @@ fn main() -> Result<()> {
                         open_position_tx(
                             &client,
                             config.raydium_v3_program,
+                            pool.amm_config,
                             config.pool_id_account.unwrap(),
                             pool.token_vault_0,
                             pool.token_vault_1,
-                            last_observation_account,
-                            next_observation_account,
                             nft_mint.pubkey(),
                             payer.pubkey(),
                             spl_associated_token_account::get_associated_token_address(&payer.pubkey(), &config.mint0.unwrap()),
@@ -416,8 +409,8 @@ fn main() -> Result<()> {
                             amount_1_min,
                             tick_lower_index,
                             tick_upper_index,
-                            word_lower_index,
-                            word_upper_index,
+                            tick_array_lower_start_index,
+                            tick_array_upper_start_index,
                         )?; 
                     }
                     else {
@@ -438,13 +431,11 @@ fn main() -> Result<()> {
                     let amount_0_min = v[5].parse::<u64>().unwrap();
                     let amount_1_min = v[6].parse::<u64>().unwrap();
 
-                    let word_lower_index = tick_to_bitmap_pos(tick_lower_index, config.tick_spacing);
-                    let word_upper_index = tick_to_bitmap_pos(tick_upper_index, config.tick_spacing);
+                    let tick_array_lower_start_index = raydium_amm_v3::states::TickArrayState::get_arrary_start_index(tick_lower_index, config.tick_spacing.into());
+                    let tick_array_upper_start_index = raydium_amm_v3::states::TickArrayState::get_arrary_start_index(tick_upper_index, config.tick_spacing.into());
                     // load pool to get observation
                     let program = client.program(config.raydium_v3_program);
                     let pool: raydium_amm_v3::states::PoolState = program.account(config.pool_id_account.unwrap())?;
-                    let last_observation_account = Pubkey::find_program_address(&[raydium_amm_v3::states::OBSERVATION_SEED.as_bytes(), config.pool_id_account.unwrap().to_bytes().as_ref(), &pool.observation_index.to_be_bytes()], &config.raydium_v3_program).0;
-                    let next_observation_account = Pubkey::find_program_address(&[raydium_amm_v3::states::OBSERVATION_SEED.as_bytes(), config.pool_id_account.unwrap().to_bytes().as_ref(), &pool.next_observation_index().to_be_bytes()], &config.raydium_v3_program).0;
                     // load position
                     let cfg = pool_config.clone();
                     let load_client = RpcClient::new(cfg.http_url.to_string());
@@ -472,11 +463,10 @@ fn main() -> Result<()> {
                         increase_liquidity_tx(
                             &client,
                             config.raydium_v3_program,
+                            pool.amm_config,
                             config.pool_id_account.unwrap(),
                             pool.token_vault_0,
                             pool.token_vault_1,
-                            last_observation_account,
-                            next_observation_account,
                             find_position.nft_mint,
                             spl_associated_token_account::get_associated_token_address(&payer.pubkey(), &config.mint0.unwrap()),
                             spl_associated_token_account::get_associated_token_address(&payer.pubkey(), &config.mint1.unwrap()),
@@ -486,8 +476,8 @@ fn main() -> Result<()> {
                             amount_1_min,
                             tick_lower_index,
                             tick_upper_index,
-                            word_lower_index,
-                            word_upper_index,
+                            tick_array_lower_start_index,
+                            tick_array_upper_start_index,
                         )?; 
                     }
                     else {
@@ -507,13 +497,11 @@ fn main() -> Result<()> {
                     let amount_0_min = v[4].parse::<u64>().unwrap();
                     let amount_1_min = v[5].parse::<u64>().unwrap();
 
-                    let word_lower_index = tick_to_bitmap_pos(tick_lower_index, config.tick_spacing);
-                    let word_upper_index = tick_to_bitmap_pos(tick_upper_index, config.tick_spacing);
+                    let tick_array_lower_start_index = raydium_amm_v3::states::TickArrayState::get_arrary_start_index(tick_lower_index, config.tick_spacing.into());
+                    let tick_array_upper_start_index = raydium_amm_v3::states::TickArrayState::get_arrary_start_index(tick_upper_index, config.tick_spacing.into());
                     // load pool to get observation
                     let program = client.program(config.raydium_v3_program);
                     let pool: raydium_amm_v3::states::PoolState = program.account(config.pool_id_account.unwrap())?;
-                    let last_observation_account = Pubkey::find_program_address(&[raydium_amm_v3::states::OBSERVATION_SEED.as_bytes(), config.pool_id_account.unwrap().to_bytes().as_ref(), &pool.observation_index.to_be_bytes()], &config.raydium_v3_program).0;
-                    let next_observation_account = Pubkey::find_program_address(&[raydium_amm_v3::states::OBSERVATION_SEED.as_bytes(), config.pool_id_account.unwrap().to_bytes().as_ref(), &pool.next_observation_index().to_be_bytes()], &config.raydium_v3_program).0;
                     // load position
                     let cfg = pool_config.clone();
                     let load_client = RpcClient::new(cfg.http_url.to_string());
@@ -541,11 +529,10 @@ fn main() -> Result<()> {
                         decrease_liquidity_tx(
                             &client,
                             config.raydium_v3_program,
+                            pool.amm_config,
                             config.pool_id_account.unwrap(),
                             pool.token_vault_0,
                             pool.token_vault_1,
-                            last_observation_account,
-                            next_observation_account,
                             find_position.nft_mint,
                             spl_associated_token_account::get_associated_token_address(&payer.pubkey(), &config.mint0.unwrap()),
                             spl_associated_token_account::get_associated_token_address(&payer.pubkey(), &config.mint1.unwrap()),
@@ -554,8 +541,8 @@ fn main() -> Result<()> {
                             amount_1_min,
                             tick_lower_index,
                             tick_upper_index,
-                            word_lower_index,
-                            word_upper_index,
+                            tick_array_lower_start_index,
+                            tick_array_upper_start_index,
                         )?; 
                     }
                     else {
@@ -566,6 +553,27 @@ fn main() -> Result<()> {
                 else {
                     println!("invalid command: [decrease_liquidity tick_lower_index tick_upper_index liquidity amount_0_min amount_1_min]");
                 }
+            }
+            "ptick_state" => {
+                if v.len() == 2 {
+                    let tick = v[1].parse::<i32>().unwrap();
+                    let tick_array_start_index = raydium_amm_v3::states::TickArrayState::get_arrary_start_index(tick, config.tick_spacing.into());
+                    let program = client.program(config.raydium_v3_program);
+                    let (tick_array_key, __bump) = Pubkey::find_program_address(&[raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(), config.pool_id_account.unwrap().to_bytes().as_ref(), &tick_array_start_index.to_be_bytes()], &program.id());
+                    let mut tick_array_account: raydium_amm_v3::states::TickArrayState = program.account(tick_array_key)?;
+                    let tick_state = tick_array_account.get_tick_state_mut(tick, config.tick_spacing.into()).unwrap();
+                    println!("{:?}", tick_state);
+                }
+            }
+            "single_swap" => {
+                let tick1 = tick_math::get_tick_at_sqrt_ratio(18446744073709551616)?;
+                let tick2 = tick_math::get_tick_at_sqrt_ratio(18446744073709541616)?;
+                println!("tick1:{}, tick2:{}", tick1, tick2);
+                let ret = raydium_amm_v3::libraries::get_amount_0_for_liquidity(18446744073709551616, 18446744073709541616, 52022602764);
+                println!("{}", ret);
+                // load pool to get observation
+                let program = client.program(config.raydium_v3_program);
+                let _pool: raydium_amm_v3::states::PoolState = program.account(config.pool_id_account.unwrap())?;
             }
             "tick_to_x64" => {
                 if v.len() == 2 {
