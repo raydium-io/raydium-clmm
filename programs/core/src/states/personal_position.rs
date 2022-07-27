@@ -29,10 +29,10 @@ pub struct PersonalPositionState {
     pub liquidity: u128,
 
     /// The token_0 fee growth of the aggregate position as of the last action on the individual position
-    pub fee_growth_inside_0_last: u128,
+    pub fee_growth_inside_0_last_x64: u128,
 
-    /// The token_0 fee growth of the aggregate position as of the last action on the individual position
-    pub fee_growth_inside_1_last: u128,
+    /// The token_1 fee growth of the aggregate position as of the last action on the individual position
+    pub fee_growth_inside_1_last_x64: u128,
 
     /// The fees owed to the position owner in token_0, as of the last computation
     pub token_fees_owed_0: u64,
@@ -59,14 +59,14 @@ impl PersonalPositionState {
             // If reward delta overflows, default to a zero value. This means the position loses all
             // rewards earned since the last time the position was modified or rewards were collected.
             let reward_growth_delta = reward_growth_inside
-                .checked_sub(curr_reward_info.growth_inside_last)
+                .checked_sub(curr_reward_info.growth_inside_last_x64)
                 .unwrap_or(0);
 
             let amount_owed_delta = U128::from(reward_growth_delta)
                 .mul_div_floor(U128::from(self.liquidity), U128::from(fixed_point_64::Q64))
                 .unwrap()
                 .as_u64();
-            self.reward_infos[i].growth_inside_last = reward_growth_inside;
+            self.reward_infos[i].growth_inside_last_x64 = reward_growth_inside;
 
             // Overflows allowed. Must collect rewards owed before overflow.
             self.reward_infos[i].reward_amount_owed = curr_reward_info
@@ -83,7 +83,7 @@ impl PersonalPositionState {
 #[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Default, Debug, PartialEq)]
 pub struct PositionRewardInfo {
     // Q64.64
-    pub growth_inside_last: u128,
+    pub growth_inside_last_x64: u128,
     pub reward_amount_owed: u64,
 }
 
@@ -91,10 +91,41 @@ impl PositionRewardInfo {
     pub const LEN: usize = 16 + 8;
 }
 
+/// Emitted when liquidity is minted for a given position
+#[event]
+pub struct CreatePersonalPositionEvent {
+    /// The pool for which liquidity was minted
+    #[index]
+    pub pool_state: Pubkey,
+
+    /// The address that minted the liquidity
+    pub minter: Pubkey,
+
+    /// The owner of the position and recipient of any minted liquidity
+    pub nft_owner: Pubkey,
+
+    /// The lower tick of the position
+    #[index]
+    pub tick_lower_index: i32,
+
+    /// The upper tick of the position
+    #[index]
+    pub tick_upper_index: i32,
+
+    /// The amount of liquidity minted to the position range
+    pub liquidity: u128,
+
+    /// How much token_0 was required for the minted liquidity
+    pub deposit_amount_0: u64,
+
+    /// How much token_1 was required for the minted liquidity
+    pub deposit_amount_1: u64,
+}
+
 /// Emitted when liquidity is increased for a position NFT.
 /// Also emitted when a token is minted
 #[event]
-pub struct IncreaseLiquidityEvent {
+pub struct ChangeLiquidityEvent {
     /// The ID of the token for which liquidity was increased
     #[index]
     pub position_nft_mint: Pubkey,
@@ -106,23 +137,6 @@ pub struct IncreaseLiquidityEvent {
     pub amount_0: u64,
 
     /// The amount of token_1 that was paid for the increase in liquidity
-    pub amount_1: u64,
-}
-
-/// Emitted when liquidity is decreased for a position NFT
-#[event]
-pub struct DecreaseLiquidityEvent {
-    /// The ID of the token for which liquidity was decreased
-    #[index]
-    pub position_nft_mint: Pubkey,
-
-    /// The amount by which liquidity for the NFT position was decreased
-    pub liquidity: u128,
-
-    /// The amount of token_0 that was accounted for the decrease in liquidity
-    pub amount_0: u64,
-
-    /// The amount of token_1 that was accounted for the decrease in liquidity
     pub amount_1: u64,
 }
 

@@ -1,7 +1,7 @@
 use crate::error::ErrorCode;
 use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::states::{
-    position::POSITION_SEED,
+    protocol_position::POSITION_SEED,
 };
 use anchor_lang::prelude::*;
 
@@ -66,8 +66,8 @@ pub struct PoolState {
     /// The fee growth as a Q64.64 number, i.e. fees of token_0 and token_1 collected per
     /// unit of liquidity for the entire life of the pool.
     /// These values can overflow u64
-    pub fee_growth_global_0: u128,
-    pub fee_growth_global_1: u128,
+    pub fee_growth_global_0_x64: u128,
+    pub fee_growth_global_1_x64: u128,
 
     /// The amounts of token_0 and token_1 that are owed to the protocol.
     /// Protocol fees will never exceed u64::MAX in either token

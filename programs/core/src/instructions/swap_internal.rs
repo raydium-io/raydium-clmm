@@ -125,9 +125,9 @@ pub fn swap_internal<'b, 'info>(
         sqrt_price_x64: ctx.pool_state.sqrt_price_x64,
         tick: ctx.pool_state.tick_current,
         fee_growth_global_x64: if zero_for_one {
-            ctx.pool_state.fee_growth_global_0
+            ctx.pool_state.fee_growth_global_0_x64
         } else {
-            ctx.pool_state.fee_growth_global_1
+            ctx.pool_state.fee_growth_global_1_x64
         },
         protocol_fee: 0,
         liquidity: cache.liquidity_start,
@@ -195,7 +195,6 @@ pub fn swap_internal<'b, 'info>(
         step.tick_next = next_initialized_tick.tick;
         step.initialized = next_initialized_tick.is_initialized();
 
-        // ensure that we do not overshoot the min/max tick, as the tick bitmap is not aware of these bounds
         if step.tick_next < tick_math::MIN_TICK {
             step.tick_next = tick_math::MIN_TICK;
         } else if step.tick_next > tick_math::MAX_TICK {
@@ -273,10 +272,10 @@ pub fn swap_internal<'b, 'info>(
                     if zero_for_one {
                         state.fee_growth_global_x64
                     } else {
-                        ctx.pool_state.fee_growth_global_0
+                        ctx.pool_state.fee_growth_global_0_x64
                     },
                     if zero_for_one {
-                        ctx.pool_state.fee_growth_global_1
+                        ctx.pool_state.fee_growth_global_1_x64
                     } else {
                         state.fee_growth_global_x64
                     },
@@ -337,12 +336,12 @@ pub fn swap_internal<'b, 'info>(
     // update fee growth global and, if necessary, protocol fees
     // overflow is acceptable, protocol has to withdraw before it hit u64::MAX fees
     if zero_for_one {
-        ctx.pool_state.fee_growth_global_0 = state.fee_growth_global_x64;
+        ctx.pool_state.fee_growth_global_0_x64 = state.fee_growth_global_x64;
         if state.protocol_fee > 0 {
             ctx.pool_state.protocol_fees_token_0 += state.protocol_fee;
         }
     } else {
-        ctx.pool_state.fee_growth_global_1 = state.fee_growth_global_x64;
+        ctx.pool_state.fee_growth_global_1_x64 = state.fee_growth_global_x64;
         if state.protocol_fee > 0 {
             ctx.pool_state.protocol_fees_token_1 += state.protocol_fee;
         }

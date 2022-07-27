@@ -11,7 +11,7 @@ pub struct CollectParam<'b, 'info> {
     pub pool_state: &'b mut Account<'info, PoolState>,
 
     /// The position program account to collect fees from
-    pub position_state: &'b mut Account<'info, ProcotolPositionState>,
+    pub position_state: &'b mut Account<'info, ProtocolPositionState>,
 
     /// The address that holds pool tokens for token_0
     pub vault_0: &'b mut Account<'info, TokenAccount>,
@@ -62,7 +62,7 @@ pub struct CollectFee<'info> {
         ],
         bump,
     )]
-    pub protocol_position: Box<Account<'info, ProcotolPositionState>>,
+    pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
 
     /// The bitmap program account for the init state of the lower tick
     #[account(mut)]
@@ -128,7 +128,7 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
             .checked_add(
                 U128::from(
                     updated_protocol_position.fee_growth_inside_0_last
-                        - personal_position.fee_growth_inside_0_last,
+                        - personal_position.fee_growth_inside_0_last_x64,
                 )
                 .mul_div_floor(
                     U128::from(personal_position.liquidity),
@@ -142,7 +142,7 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
             .checked_add(
                 U128::from(
                     updated_protocol_position.fee_growth_inside_1_last
-                        - personal_position.fee_growth_inside_1_last,
+                        - personal_position.fee_growth_inside_1_last_x64,
                 )
                 .mul_div_floor(
                     U128::from(personal_position.liquidity),
@@ -153,9 +153,9 @@ pub fn collect_fee<'a, 'b, 'c, 'info>(
             )
             .unwrap();
 
-        personal_position.fee_growth_inside_0_last =
+        personal_position.fee_growth_inside_0_last_x64 =
             updated_protocol_position.fee_growth_inside_0_last;
-        personal_position.fee_growth_inside_1_last =
+        personal_position.fee_growth_inside_1_last_x64 =
             updated_protocol_position.fee_growth_inside_1_last;
 
         personal_position.update_rewards(updated_protocol_position.reward_growth_inside)?;

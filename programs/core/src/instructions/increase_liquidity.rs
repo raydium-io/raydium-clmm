@@ -34,7 +34,7 @@ pub struct IncreaseLiquidity<'info> {
         ],
         bump,
     )]
-    pub protocol_position: Box<Account<'info, ProcotolPositionState>>,
+    pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
 
     /// Increase liquidity for this position
     #[account(mut)]
@@ -123,7 +123,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         .checked_add(
             U128::from(
                 fee_growth_inside_0_last_x64
-                    .saturating_sub(personal_position.fee_growth_inside_0_last),
+                    .saturating_sub(personal_position.fee_growth_inside_0_last_x64),
             )
             .mul_div_floor(
                 U128::from(personal_position.liquidity),
@@ -139,7 +139,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         .checked_add(
             U128::from(
                 fee_growth_inside_1_last_x64
-                    .saturating_sub(personal_position.fee_growth_inside_1_last),
+                    .saturating_sub(personal_position.fee_growth_inside_1_last_x64),
             )
             .mul_div_floor(
                 U128::from(personal_position.liquidity),
@@ -150,14 +150,14 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         )
         .unwrap();
 
-    personal_position.fee_growth_inside_0_last = fee_growth_inside_0_last_x64;
-    personal_position.fee_growth_inside_1_last = fee_growth_inside_1_last_x64;
+    personal_position.fee_growth_inside_0_last_x64 = fee_growth_inside_0_last_x64;
+    personal_position.fee_growth_inside_1_last_x64 = fee_growth_inside_1_last_x64;
 
     // update rewards, must update before increase liquidity
     personal_position.update_rewards(updated_procotol_position.reward_growth_inside)?;
     personal_position.liquidity = personal_position.liquidity.checked_add(liquidity).unwrap();
 
-    emit!(IncreaseLiquidityEvent {
+    emit!(ChangeLiquidityEvent {
         position_nft_mint: personal_position.nft_mint,
         liquidity,
         amount_0,

@@ -40,7 +40,7 @@ pub struct DecreaseLiquidity<'info> {
         ],
         bump,
     )]
-    pub protocol_position: Box<Account<'info, ProcotolPositionState>>,
+    pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
 
     /// Token_0 vault
     #[account(
@@ -151,7 +151,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         .checked_add(
             U128::from(
                 fee_growth_inside_0_last_x64
-                    .saturating_sub(personal_position.fee_growth_inside_0_last),
+                    .saturating_sub(personal_position.fee_growth_inside_0_last_x64),
             )
             .mul_div_floor(
                 U128::from(personal_position.liquidity),
@@ -167,7 +167,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         .checked_add(
             U128::from(
                 fee_growth_inside_1_last_x64
-                    .saturating_sub(personal_position.fee_growth_inside_1_last),
+                    .saturating_sub(personal_position.fee_growth_inside_1_last_x64),
             )
             .mul_div_floor(
                 U128::from(personal_position.liquidity),
@@ -177,14 +177,14 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
             .as_u64(),
         )
         .unwrap();
-    personal_position.fee_growth_inside_0_last = fee_growth_inside_0_last_x64;
-    personal_position.fee_growth_inside_1_last = fee_growth_inside_1_last_x64;
+    personal_position.fee_growth_inside_0_last_x64 = fee_growth_inside_0_last_x64;
+    personal_position.fee_growth_inside_1_last_x64 = fee_growth_inside_1_last_x64;
 
     // update rewards, must update before decrease liquidity
     personal_position.update_rewards(updated_procotol_position.reward_growth_inside)?;
     personal_position.liquidity = personal_position.liquidity.checked_sub(liquidity).unwrap();
 
-    emit!(DecreaseLiquidityEvent {
+    emit!(ChangeLiquidityEvent {
         position_nft_mint: personal_position.nft_mint,
         liquidity,
         amount_0: decrease_amount_0,
@@ -205,7 +205,7 @@ pub struct BurnParam<'b, 'info> {
     pub tick_array_upper_state: &'b AccountLoader<'info, TickArrayState>,
 
     /// Burn liquidity from this position
-    pub procotol_position_state: &'b mut Account<'info, ProcotolPositionState>,
+    pub procotol_position_state: &'b mut Account<'info, ProtocolPositionState>,
 }
 
 pub fn burn<'b, 'info>(

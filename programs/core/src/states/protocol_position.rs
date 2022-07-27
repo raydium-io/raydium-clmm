@@ -13,12 +13,9 @@ use anchor_lang::prelude::*;
 pub const POSITION_SEED: &str = "position";
 
 /// Info stored for each user's position
-///
-/// PDA of `[POSITION_SEED, token_0, token_1, fee, owner, tick_lower, tick_upper]`
-///
 #[account]
 #[derive(Default, Debug)]
-pub struct ProcotolPositionState {
+pub struct ProtocolPositionState {
     /// Bump to identify PDA
     pub bump: u8,
 
@@ -49,7 +46,7 @@ pub struct ProcotolPositionState {
                                                   // pub padding: [u64; 8],
 }
 
-impl ProcotolPositionState {
+impl ProtocolPositionState {
     pub const LEN: usize = 8 + 1 + 4 + 4 + 16 + 16 + 16 + 8 + 8 + 16 * REWARD_NUM + 64;
     /// Credits accumulated fees to a user's position
     ///
@@ -112,64 +109,4 @@ impl ProcotolPositionState {
         // just record, calculate reward owed in persional position
         self.reward_growth_inside = reward_growths_inside;
     }
-}
-
-/// Emitted when liquidity is minted for a given position
-#[event]
-pub struct CreatePersonalPositionEvent {
-    /// The pool for which liquidity was minted
-    #[index]
-    pub pool_state: Pubkey,
-
-    /// The address that minted the liquidity
-    pub minter: Pubkey,
-
-    /// The owner of the position and recipient of any minted liquidity
-    pub nft_owner: Pubkey,
-
-    /// The lower tick of the position
-    #[index]
-    pub tick_lower_index: i32,
-
-    /// The upper tick of the position
-    #[index]
-    pub tick_upper_index: i32,
-
-    /// The amount of liquidity minted to the position range
-    pub liquidity: u128,
-
-    /// How much token_0 was required for the minted liquidity
-    pub deposit_amount_0: u64,
-
-    /// How much token_1 was required for the minted liquidity
-    pub deposit_amount_1: u64,
-}
-
-/// Emitted when a position's liquidity is removed.
-/// Does not withdraw any fees earned by the liquidity position, which must be withdrawn via #collect
-#[event]
-pub struct BurnEvent {
-    /// The pool from where liquidity was removed
-    #[index]
-    pub pool_state: Pubkey,
-
-    /// The owner of the position for which liquidity is removed
-    pub owner: Pubkey,
-
-    /// The lower tick of the position
-    #[index]
-    pub tick_lower_index: i32,
-
-    /// The upper tick of the position
-    #[index]
-    pub tick_upper_index: i32,
-
-    /// The amount of liquidity to remove
-    pub amount: u64,
-
-    /// The amount of token_0 withdrawn
-    pub amount_0: u64,
-
-    /// The amount of token_1 withdrawn
-    pub amount_1: u64,
 }

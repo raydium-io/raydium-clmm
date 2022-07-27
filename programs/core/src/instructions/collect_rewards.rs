@@ -25,7 +25,7 @@ pub struct CollectRewards<'info> {
         ],
         bump,
     )]
-    pub protocol_position: Box<Account<'info, ProcotolPositionState>>,
+    pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
 
     /// The program account of the NFT for which tokens are being collected
     #[account(mut)]
@@ -134,7 +134,7 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
 }
 
 fn get_updated_reward_growths_inside<'info>(
-    procotol_position_state: &mut Account<'info, ProcotolPositionState>,
+    procotol_position_state: &mut Account<'info, ProtocolPositionState>,
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,
     current_tick: i32,

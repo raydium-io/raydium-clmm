@@ -2,7 +2,7 @@
 
 use super::full_math::MulDiv;
 use super::sqrt_price_math;
-use crate::states::fee::FEE_RATE_DENOMINATOR_VALUE;
+use crate::states::config::FEE_RATE_DENOMINATOR_VALUE;
 // use anchor_lang::prelude::msg;
 /// Result of a swap step
 #[derive(Default, Debug)]

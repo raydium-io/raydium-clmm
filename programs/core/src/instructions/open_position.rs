@@ -37,7 +37,7 @@ pub struct MintParam<'b, 'info> {
     pub tick_array_upper: &'b AccountLoader<'info, TickArrayState>,
 
     /// The position into which liquidity is minted
-    pub protocol_position: &'b mut Account<'info, ProcotolPositionState>,
+    pub protocol_position: &'b mut Account<'info, ProtocolPositionState>,
 
     /// The SPL program to perform token transfers
     pub token_program: Program<'info, Token>,
@@ -97,9 +97,9 @@ pub struct OpenPosition<'info> {
         ],
         bump,
         payer = payer,
-        space = ProcotolPositionState::LEN
+        space = ProtocolPositionState::LEN
     )]
-    pub protocol_position: Box<Account<'info, ProcotolPositionState>>,
+    pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
 
     /// CHECK: Account to mark the lower tick as initialized
     #[account(
@@ -349,8 +349,8 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     personal_position.liquidity = liquidity;
 
     let updated_core_position = mint_accounts.protocol_position;
-    personal_position.fee_growth_inside_0_last = updated_core_position.fee_growth_inside_0_last;
-    personal_position.fee_growth_inside_1_last = updated_core_position.fee_growth_inside_1_last;
+    personal_position.fee_growth_inside_0_last_x64 = updated_core_position.fee_growth_inside_0_last;
+    personal_position.fee_growth_inside_1_last_x64 = updated_core_position.fee_growth_inside_1_last;
     personal_position.update_rewards(updated_core_position.reward_growth_inside)?;
 
     emit!(CreatePersonalPositionEvent {
@@ -479,7 +479,7 @@ pub fn add_liquidity<'b, 'info>(
 pub fn _modify_position<'info>(
     liquidity_delta: i128,
     pool_state: &mut Account<'info, PoolState>,
-    protocol_position_state: &mut Account<'info, ProcotolPositionState>,
+    protocol_position_state: &mut Account<'info, ProtocolPositionState>,
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,
 ) -> Result<(i64, i64)> {
@@ -552,7 +552,7 @@ pub fn _modify_position<'info>(
 pub fn _update_position<'info>(
     liquidity_delta: i128,
     pool_state: &mut Account<'info, PoolState>,
-    protocol_position_state: &mut Account<'info, ProcotolPositionState>,
+    protocol_position_state: &mut Account<'info, ProtocolPositionState>,
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,
 ) -> Result<()> {
@@ -577,8 +577,8 @@ pub fn _update_position<'info>(
         flipped_lower = tick_lower_state.update(
             pool_state.tick_current,
             liquidity_delta,
-            pool_state.fee_growth_global_0,
-            pool_state.fee_growth_global_1,
+            pool_state.fee_growth_global_0_x64,
+            pool_state.fee_growth_global_1_x64,
             false,
             max_liquidity_per_tick,
             reward_growths_outside,
@@ -586,8 +586,8 @@ pub fn _update_position<'info>(
         flipped_upper = tick_upper_state.update(
             pool_state.tick_current,
             liquidity_delta,
-            pool_state.fee_growth_global_0,
-            pool_state.fee_growth_global_1,
+            pool_state.fee_growth_global_0_x64,
+            pool_state.fee_growth_global_1_x64,
             true,
             max_liquidity_per_tick,
             reward_growths_outside,
@@ -604,8 +604,8 @@ pub fn _update_position<'info>(
         tick_lower_state.deref(),
         tick_upper_state.deref(),
         pool_state.tick_current,
-        pool_state.fee_growth_global_0,
-        pool_state.fee_growth_global_1,
+        pool_state.fee_growth_global_0_x64,
+        pool_state.fee_growth_global_1_x64,
     );
 
     // Update reward accrued to the position
