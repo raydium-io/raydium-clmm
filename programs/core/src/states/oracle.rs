@@ -110,7 +110,7 @@ impl ObservationState {
             // cumulative_time_price_x64 may be flipped because of 'observation.cumulative_time_price_x64 + delta_price_x64' is larger than std::u128::MAX;
             // if the current observation's cumulative_time_price_x64 is smaller then the previous's,
             // the previous's real cumulative_time_price_x64 will be "cumulative_time_price_x64 + std::u128::MAX"
-            self.observations[next_observation_index as usize].cumulative_time_price_x64 = observation.cumulative_time_price_x64 + delta_price_x64;
+            self.observations[next_observation_index as usize].cumulative_time_price_x64 = observation.cumulative_time_price_x64.wrapping_add(delta_price_x64);
             Ok(Some(next_observation_index))
         }
     }
@@ -127,6 +127,7 @@ mod test {
     use super::*;
     use crate::libraries::{
         get_sqrt_ratio_at_tick,
+        big_num::U256,
     };
     use crate::states::pool::OBSERVATION_UPDATE_DURATION_DEFAULT;
         #[test]
@@ -232,6 +233,51 @@ mod test {
         let delta_price_x64 = cur_price_x64.checked_mul(delta_time.into()).unwrap();
         let expected = observation.cumulative_time_price_x64 + delta_price_x64;
     
+        observation_index = next_observation_index.unwrap();
+        next_observation_index = observation_state.update_check(block_timestamp, sqrt_price_x64, observation_index, observation_update_duration.into()).unwrap();
+        assert!(next_observation_index == Some(observation_index + 1));
+        observation_index = next_observation_index.unwrap();
+        assert!(observation_state.observations[observation_index as usize].block_timestamp == block_timestamp);
+        assert!(observation_state.observations[observation_index as usize].sqrt_price_x64 == sqrt_price_x64);
+        assert!(observation_state.observations[observation_index as usize].cumulative_time_price_x64 == expected);
+    }
+
+    #[test]
+    fn test_update_check_flipped() {
+        // init
+        let mut block_timestamp = 1647424834 as u32;
+        let mut sqrt_price_x64 = get_sqrt_ratio_at_tick(0).unwrap();
+        let mut observation_index = 0u16;
+        let observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
+        let mut observation_state = ObservationState::default();
+        let mut next_observation_index = observation_state.update_check(block_timestamp, sqrt_price_x64, observation_index, observation_update_duration.into()).unwrap();
+        assert!(next_observation_index == Some(observation_index));
+        assert!(observation_state.initialized == true);
+        assert!(observation_state.observations[observation_index as usize].block_timestamp == block_timestamp);
+        assert!(observation_state.observations[observation_index as usize].sqrt_price_x64 == sqrt_price_x64);
+        assert!(observation_state.observations[observation_index as usize].cumulative_time_price_x64 == 0);
+        observation_state.observations[observation_index as usize].cumulative_time_price_x64 = u128::max_value() - 100;
+        // update
+        block_timestamp += 100;
+        sqrt_price_x64 = get_sqrt_ratio_at_tick(10).unwrap();
+
+        let observation = observation_state.observations[observation_index as usize];
+        let delta_time = block_timestamp.saturating_sub(observation.block_timestamp);
+        if delta_time < OBSERVATION_UPDATE_DURATION_DEFAULT as u32 || sqrt_price_x64 == observation.sqrt_price_x64 {
+            assert!(false)
+        }
+        let cur_price_x64 = U128::from(sqrt_price_x64).mul_div_floor(
+            U128::from(sqrt_price_x64),
+            U128::from(fixed_point_64::Q64),
+        ).unwrap()
+        .as_u128();
+        let delta_price_x64 = cur_price_x64.checked_mul(delta_time.into()).unwrap();
+        let expected = observation.cumulative_time_price_x64.wrapping_add(delta_price_x64);
+        let real_expected = U256::from(observation.cumulative_time_price_x64) + U256::from(delta_price_x64);
+        let expected_restore = U256::from(u128::max_value()) + U256::from(expected + 1);
+        println!("delta_price_x64: {}, expected: {}, u128_max: {}", delta_price_x64, expected, u128::max_value());
+        println!("real_expected: {}, expected_restore:{}", real_expected, expected_restore);
+
         observation_index = next_observation_index.unwrap();
         next_observation_index = observation_state.update_check(block_timestamp, sqrt_price_x64, observation_index, observation_update_duration.into()).unwrap();
         assert!(next_observation_index == Some(observation_index + 1));
