@@ -81,7 +81,6 @@ describe("amm-core", async () => {
 
   const program = anchor.workspace.AmmCore as Program<AmmCore>;
 
-
   console.log("program init");
   // const additionalComputeBudgetInstruction = ComputeBudgetProgram.requestUnits({
   //   units: 400000,

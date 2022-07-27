@@ -188,7 +188,7 @@ impl Default for TickArrayState {
 ///
 /// PDA of `[TICK_SEED, token_0, token_1, fee, tick]`
 ///
-#[account(zero_copy)]
+#[zero_copy]
 #[repr(packed)]
 #[derive(Default, Debug)]
 pub struct TickState {

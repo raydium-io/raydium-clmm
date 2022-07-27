@@ -47,7 +47,7 @@ impl Default for ObservationState {
     }
 }
 /// The element of observations in ObservationState
-#[account(zero_copy)]
+#[zero_copy]
 #[repr(packed)]
 #[derive(Default, Debug)]
 pub struct Observation {
