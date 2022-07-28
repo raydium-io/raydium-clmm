@@ -54,6 +54,8 @@ pub enum ErrorCode {
     TooMuchInputPaid,
     #[msg("Swap special amount can not be zero")]
     InvaildSwapAmountSpecified,
+    #[msg("Input pool vault is invalid")]
+    InvalidInputPoolVault,
 
     /// reward errors
     #[msg("Invalid reward index")]

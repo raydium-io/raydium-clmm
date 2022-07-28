@@ -37,15 +37,15 @@ pub struct IncreaseLiquidity<'info> {
     pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
 
     /// Increase liquidity for this position
-    #[account(mut)]
+    #[account(mut, constraint = personal_position.pool_id == pool_state.key())]
     pub personal_position: Box<Account<'info, PersonalPositionState>>,
 
     /// Stores init state for the lower tick
-    #[account(mut)]
+    #[account(mut, constraint = tick_array_lower.load()?.amm_pool == pool_state.key())]
     pub tick_array_lower: AccountLoader<'info, TickArrayState>,
 
     /// Stores init state for the upper tick
-    #[account(mut)]
+    #[account(mut, constraint = tick_array_upper.load()?.amm_pool == pool_state.key())]
     pub tick_array_upper: AccountLoader<'info, TickArrayState>,
 
     /// The payer's token account for token_0
@@ -101,7 +101,6 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         protocol_position: ctx.accounts.protocol_position.as_mut(),
         token_program: ctx.accounts.token_program.clone(),
     };
-    msg!("MintParam```````````````````````````````````````");
     let (liquidity, amount_0, amount_1) = add_liquidity(
         &mut accounts,
         amount_0_desired,
@@ -111,7 +110,6 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         tick_lower,
         tick_upper,
     )?;
-    msg!("add_liquidity```````````````````````````````````````");
     let updated_procotol_position = accounts.protocol_position;
     let fee_growth_inside_0_last_x64 = updated_procotol_position.fee_growth_inside_0_last;
     let fee_growth_inside_1_last_x64 = updated_procotol_position.fee_growth_inside_1_last;

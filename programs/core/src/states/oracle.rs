@@ -15,7 +15,7 @@ use anchor_lang::prelude::*;
 /// Seed to derive account address and signature
 pub const OBSERVATION_SEED: &str = "observation";
 // Number of ObservationState element
-pub const OBSERVATION_NUM: usize = 100;
+pub const OBSERVATION_NUM: usize = 1000;
 
 /// Returns data about a specific observation index
 ///
@@ -26,6 +26,7 @@ pub const OBSERVATION_NUM: usize = 100;
 pub struct ObservationState {
     /// Whether the ObservationState is initialized
     pub initialized: bool,
+    pub amm_pool: Pubkey,
     /// observation array
     pub observations: [Observation; OBSERVATION_NUM],
     /// padding for feature update
@@ -36,6 +37,7 @@ impl Default for ObservationState {
     fn default() -> ObservationState {
         ObservationState {
             initialized: false,
+            amm_pool: Pubkey::default(),
             observations: [Observation::default(); OBSERVATION_NUM],
             padding: [0u128; 5],
         }

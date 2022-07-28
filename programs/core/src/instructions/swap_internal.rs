@@ -104,6 +104,14 @@ pub fn swap_internal<'b, 'info>(
         },
         ErrorCode::SqrtPriceLimitOverflow
     );
+    require!(
+        if zero_for_one {
+            ctx.input_vault.key() ==  ctx.pool_state.token_vault_0 && ctx.output_vault.key() ==  ctx.pool_state.token_vault_1
+        } else {
+            ctx.input_vault.key() ==  ctx.pool_state.token_vault_1 && ctx.output_vault.key() ==  ctx.pool_state.token_vault_0
+        },
+        ErrorCode::InvalidInputPoolVault
+    );
 
     let amm_config = ctx.amm_config.deref();
 
@@ -137,6 +145,8 @@ pub fn swap_internal<'b, 'info>(
     let mut remaining_accounts_iter = remaining_accounts.iter();
 
     let mut tick_array_current_loader = ctx.tick_array_state.load_mut()?;
+    // check tick_array account is owned by the pool
+    require_keys_eq!(tick_array_current_loader.amm_pool, ctx.pool_state.key());
 
     // let mut tick_array_loader_next: AccountLoader<TickArrayState>;
     // continue swapping as long as we haven't used the entire input/output and haven't

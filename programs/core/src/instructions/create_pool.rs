@@ -2,7 +2,7 @@ use crate::libraries::tick_math;
 use crate::states::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use std::{mem::size_of, ops::DerefMut};
+use std::{ops::DerefMut};
 
 #[derive(Accounts)]
 pub struct CreatePool<'info> {
@@ -60,16 +60,6 @@ pub struct CreatePool<'info> {
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
     /// Initialize an account to store oracle observations
-    #[account(
-        init,
-        seeds = [
-            &OBSERVATION_SEED.as_bytes(),
-            pool_state.key().as_ref(),
-        ],
-        bump,
-        payer = pool_creator,
-        space = 8 + size_of::<ObservationState>()
-    )]
     pub observation_state: AccountLoader<'info, ObservationState>,
     /// Spl token program
     pub token_program: Program<'info, Token>,
@@ -81,6 +71,7 @@ pub struct CreatePool<'info> {
 
 pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()> {
     let pool_state = ctx.accounts.pool_state.deref_mut();
+    let mut observation_state = ctx.accounts.observation_state.load_mut()?;
 
     let tick = tick_math::get_tick_at_sqrt_ratio(sqrt_price_x64)?;
     #[cfg(feature = "enable-log")]
@@ -103,7 +94,10 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
     pool_state.tick_current = tick;
     pool_state.observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
     pool_state.reward_infos = [RewardInfo::new(ctx.accounts.pool_creator.key()); REWARD_NUM];
+    assert!(observation_state.initialized == false);
+    assert!(observation_state.amm_pool == Pubkey::default());
     pool_state.observation_key = ctx.accounts.observation_state.key();
+    observation_state.amm_pool = ctx.accounts.pool_state.key();
 
     emit!(PoolCreatedEvent {
         token_mint_0: ctx.accounts.token_mint_0.key(),

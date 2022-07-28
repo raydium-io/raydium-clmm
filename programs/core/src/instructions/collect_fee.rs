@@ -41,10 +41,11 @@ pub struct CollectFee<'info> {
     pub nft_account: Box<Account<'info, TokenAccount>>,
 
     /// The program account of the NFT for which tokens are being collected
-    #[account(mut)]
+    #[account(mut, constraint = personal_position.pool_id == pool_state.key())]
     pub personal_position: Box<Account<'info, PersonalPositionState>>,
 
     /// The program account acting as the core liquidity custodian for token holder
+    #[account(address = pool_state.amm_config)]
     pub amm_config: Box<Account<'info, AmmConfig>>,
 
     /// The program account for the liquidity pool from which fees are collected
@@ -64,20 +65,26 @@ pub struct CollectFee<'info> {
     )]
     pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
 
-    /// The bitmap program account for the init state of the lower tick
-    #[account(mut)]
+    //// Stores init state for the lower tick
+    #[account(mut, constraint = tick_array_lower.load()?.amm_pool == pool_state.key())]
     pub tick_array_lower: AccountLoader<'info, TickArrayState>,
 
     /// Stores init state for the upper tick
-    #[account(mut)]
+    #[account(mut, constraint = tick_array_upper.load()?.amm_pool == pool_state.key())]
     pub tick_array_upper: AccountLoader<'info, TickArrayState>,
 
     /// The pool's token account for token_0
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = token_vault_0.key() == pool_state.token_vault_0
+    )]
     pub token_vault_0: Account<'info, TokenAccount>,
 
     /// The pool's token account for token_1
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = token_vault_1.key() == pool_state.token_vault_1
+    )]
     pub token_vault_1: Account<'info, TokenAccount>,
 
     /// The destination token account for the collected amount_0

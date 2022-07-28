@@ -40,6 +40,7 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
         let output_vault = Account::<TokenAccount>::try_from(remaining_accounts.next().unwrap())?;
         let mut tick_array =  AccountLoader::<TickArrayState>::try_from(remaining_accounts.next().unwrap())?;
         let mut observation_state = AccountLoader::<ObservationState>::try_from(remaining_accounts.next().unwrap())?;
+        // check observation account is owned by the pool
         require_keys_eq!(pool_state.observation_key, observation_state.key());
         solana_program::log::sol_log_compute_units();
         amount_in_internal = exact_internal(

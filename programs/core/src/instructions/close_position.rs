@@ -31,7 +31,6 @@ pub struct ClosePosition<'info> {
     // pub metadata_account: UncheckedAccount<'info>,
 
     /// Metadata for the tokenized position
-    #[account(mut)]
     pub personal_position: Box<Account<'info, PersonalPositionState>>,
 
     /// Program to create the position manager state account

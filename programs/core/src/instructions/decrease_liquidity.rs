@@ -18,7 +18,7 @@ pub struct DecreaseLiquidity<'info> {
     pub nft_account: Box<Account<'info, TokenAccount>>,
 
     /// Decrease liquidity for this position
-    #[account(mut)]
+    #[account(mut, constraint = personal_position.pool_id == pool_state.key())]
     pub personal_position: Account<'info, PersonalPositionState>,
 
     /// The program account acting as the core liquidity custodian for token holder
@@ -57,11 +57,11 @@ pub struct DecreaseLiquidity<'info> {
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
     /// Stores init state for the lower tick
-    #[account(mut)]
+    #[account(mut, constraint = tick_array_lower.load()?.amm_pool == pool_state.key())]
     pub tick_array_lower: AccountLoader<'info, TickArrayState>,
 
     /// Stores init state for the upper tick
-    #[account(mut)]
+    #[account(mut, constraint = tick_array_upper.load()?.amm_pool == pool_state.key())]
     pub tick_array_upper: AccountLoader<'info, TickArrayState>,
 
     /// The destination token account for the collected amount_0

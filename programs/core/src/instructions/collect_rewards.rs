@@ -28,7 +28,7 @@ pub struct CollectRewards<'info> {
     pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
 
     /// The program account of the NFT for which tokens are being collected
-    #[account(mut)]
+    #[account(mut, constraint = personal_position.pool_id == pool_state.key())]
     pub personal_position: Box<Account<'info, PersonalPositionState>>,
 
     /// The program account for the liquidity pool from which fees are collected
@@ -36,11 +36,11 @@ pub struct CollectRewards<'info> {
     pub pool_state: Box<Account<'info, PoolState>>,
 
     /// Stores init state for the lower tick
-    #[account(mut)]
+    #[account(mut, constraint = tick_array_lower.load()?.amm_pool == pool_state.key())]
     pub tick_array_lower: AccountLoader<'info, TickArrayState>,
 
     /// Stores init state for the upper tick
-    #[account(mut)]
+    #[account(mut, constraint = tick_array_upper.load()?.amm_pool == pool_state.key())]
     pub tick_array_upper: AccountLoader<'info, TickArrayState>,
 
     /// SPL program to transfer out tokens
