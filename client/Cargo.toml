@@ -7,8 +7,7 @@ edition = "2021"
 [dependencies]
 anchor-client = "0.24.2"
 anchor-lang = "0.24.2"
-anchor-syn = { version = "0.24.2", features = ["hash"] }
-raydium-amm-v3 = {path = "../programs/core", features = ["no-entrypoint"]}
+raydium-amm-v3 = {path = "../programs/amm", features = ["no-entrypoint"]}
 solana-sdk = "1.9.29"
 solana-client = "1.9.29"
 solana-account-decoder = "1.9.29"

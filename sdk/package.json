@@ -1,0 +1,40 @@
+{
+  "name": "raydium-v3-sdk",
+  "version": "1.0.0",
+  "description": "raydium v3 sdk",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@metaplex/js": "4.9.0",
+    "@project-serum/anchor": "^0.23.0",
+    "@raydium-io/raydium-sdk": "^1.1.0-beta.6",
+    "@solana/spl-token": "^0.1.8",
+    "@solana/web3.js": "1.47.3",
+    "decimal.js": "^10.3.1",
+    "jsbi": "^4.2.0",
+    "node-fetch": "^2.6.7",
+    "ts-node": "^10.8.2"
+},
+"devDependencies": {
+  "@types/chai": "^4.2.22",
+  "@types/chai-as-promised": "^7.1.4",
+  "@types/mocha": "^8.2.3",
+  "chai": "^4.3.4",
+  "chai-as-promised": "^7.1.1",
+  "mocha": "^8.4.0",
+  "ts-mocha": "^8.0.0",
+  "typescript": "^4.7.4"
+},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/raydium-io/raydium-v3-sdk.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/raydium-io/raydium-v3-sdk/issues"
+  },
+  "homepage": "https://github.com/raydium-io/raydium-v3-sdk#readme"
+}

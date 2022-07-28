@@ -4,13 +4,11 @@ anchor_version = "0.24.2"
 seeds = false
 
 [programs.localnet]
-amm_core = "Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3"
+amm_v3 = "DEvgL6xhASESaETKSepvprNLKGXfkhVEpkhfASRFWZRb"
 
 [programs.devnet]
-amm_core = "Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3"
+amm_v3 = "DEvgL6xhASESaETKSepvprNLKGXfkhVEpkhfASRFWZRb"
 
-[programs.mainnet]
-amm_core = "Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3"
 
 [registry]
 url = "https://github.com/raydium-io/raydium-amm-v3"
@@ -20,7 +18,7 @@ cluster = "localnet"
 wallet = "~/.config/solana/id.json" 
 
 [scripts]
-test = "yarn run ts-mocha -p ./tsconfig.json -t 100000 tests/**/*.ts"
+# test = "yarn run ts-mocha -p ./tsconfig.json -t 100000 tests/**/*.ts"
 
 [test]
 startup_wait = 20000
