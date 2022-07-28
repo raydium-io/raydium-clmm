@@ -158,6 +158,7 @@ pub fn exact_internal<'b, 'info>(
                 &ctx.token_program,
                 amount_0 as u64,
             )?;
+            ctx.pool_state.swap_in_amount_token_0 += amount_0 as u128;
         }
         // x -> y，transfer y token from pool vault to user.
         if amount_1 < 0 {
@@ -168,6 +169,7 @@ pub fn exact_internal<'b, 'info>(
                 &ctx.token_program,
                 amount_1.neg() as u64,
             )?;
+            ctx.pool_state.swap_out_amount_token_1 += amount_1.neg() as u128;
         }
     } else {
         if amount_1 > 0 {
@@ -178,6 +180,7 @@ pub fn exact_internal<'b, 'info>(
                 &ctx.token_program,
                 amount_1 as u64,
             )?;
+            ctx.pool_state.swap_in_amount_token_1 += amount_1 as u128;
         }
         if amount_0 < 0 {
             transfer_from_pool_vault_to_user(
@@ -187,6 +190,7 @@ pub fn exact_internal<'b, 'info>(
                 &ctx.token_program,
                 amount_0.neg() as u64,
             )?;
+            ctx.pool_state.swap_out_amount_token_0 += amount_0.neg() as u128;
         }
     }
 

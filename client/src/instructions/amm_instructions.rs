@@ -39,7 +39,7 @@ pub fn create_amm_config_tx(
             index: config_index,
             tick_spacing,
             protocol_fee_rate,
-            global_fee_rate: trade_fee_rate
+            trade_fee_rate
         })
         .signer(admin)
         .send()?;

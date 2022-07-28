@@ -38,13 +38,13 @@ pub mod amm_core {
         ctx: Context<CreateAmmConfig>,
         index: u16,
         tick_spacing: u16,
-        global_fee_rate: u32,
+        trade_fee_rate: u32,
         protocol_fee_rate: u32,
     ) -> Result<()> {
         assert!(protocol_fee_rate > 0 && protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
-        assert!(global_fee_rate < 1_000_000); // 100%
+        assert!(trade_fee_rate < 1_000_000); // 100%
         assert!(tick_spacing > 0 && tick_spacing < 16384);
-        instructions::create_amm_config(ctx, index, tick_spacing,protocol_fee_rate, global_fee_rate)
+        instructions::create_amm_config(ctx, index, tick_spacing,protocol_fee_rate, trade_fee_rate)
     }
 
     /// Updates the owner of the factory

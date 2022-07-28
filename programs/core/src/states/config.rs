@@ -26,7 +26,7 @@ pub struct AmmConfig {
     /// The global protocol fee
     pub protocol_fee_rate: u32,
     /// The enabled fee, denominated in hundredths of a bip (10^-6)
-    pub global_fee_rate: u32,
+    pub trade_fee_rate: u32,
     /// The minimum number of ticks between initialized ticks for pools
     /// created with the given fee
     pub tick_spacing: u16,

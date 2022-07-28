@@ -74,6 +74,12 @@ pub struct PoolState {
     pub protocol_fees_token_0: u64,
     pub protocol_fees_token_1: u64,
 
+    /// The amounts in and out of swap token_0 and token_1
+    pub swap_in_amount_token_0: u128,
+    pub swap_out_amount_token_1: u128,
+    pub swap_in_amount_token_1: u128,
+    pub swap_out_amount_token_0: u128,
+
     pub reward_last_updated_timestamp: u64,
     pub reward_infos: [RewardInfo; REWARD_NUM],
     // padding space for upgrade

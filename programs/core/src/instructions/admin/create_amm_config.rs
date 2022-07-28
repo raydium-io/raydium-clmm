@@ -31,14 +31,14 @@ pub fn create_amm_config(
     index: u16,
     tick_spacing: u16,
     protocol_fee_rate: u32,
-    global_fee_rate: u32,
+    trade_fee_rate: u32,
 ) -> Result<()> {
     let amm_config = ctx.accounts.amm_config.deref_mut();
     amm_config.owner = crate::admin::id();
     amm_config.bump = *ctx.bumps.get("amm_config").unwrap();
     amm_config.index = index;
     amm_config.protocol_fee_rate = protocol_fee_rate;
-    amm_config.global_fee_rate = global_fee_rate;
+    amm_config.trade_fee_rate = trade_fee_rate;
     amm_config.tick_spacing = tick_spacing;
 
     emit!(CreateConfigEvent {

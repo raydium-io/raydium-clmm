@@ -3,19 +3,13 @@ use crate::libraries::{
     full_math::MulDiv,
     big_num::U128,
 };
-/// Oracle provides price and liquidity data useful for a wide variety of system designs
+/// Oracle provides price data useful for a wide variety of system designs
 ///
-/// Instances of stored oracle data, "observations", are collected in the oracle array,
-/// represented as PDAs with array index as seed.
+/// Instances of stored oracle data, "observations", are collected in the oracle array.
 ///
-/// Every pool is initialized with an oracle array length of 1. Anyone can pay to increase the
-/// max length of the array, by initializing new accounts. New slots will be added when the
-/// array is fully populated.
+/// Every pool is initialized with an oracle array length of 1000.
 ///
 /// Observations are overwritten when the full length of the oracle array is populated.
-///
-/// The most recent observation is available, independent of the length of the oracle array,
-/// by passing 0 as the index seed.
 ///
 use anchor_lang::prelude::*;
 /// Seed to derive account address and signature
@@ -25,13 +19,14 @@ pub const OBSERVATION_NUM: usize = 1000;
 
 /// Returns data about a specific observation index
 ///
-/// PDA of `[OBSERVATION_SEED, token_0, token_1, fee, index]`
+/// PDA of `[OBSERVATION_SEED, pool_id]`
 ///
 #[account(zero_copy)]
 #[repr(packed)]
 pub struct ObservationState {
     /// Whether the ObservationState is initialized
     pub initialized: bool,
+    /// observation array
     pub observations: [Observation; OBSERVATION_NUM],
     /// padding for feature update
     pub padding: [u128; 5],
@@ -64,20 +59,17 @@ pub struct Observation {
 impl ObservationState {
     // Writes an oracle observation to the account, returning the next observation_index.
     /// Writable at most once per second. Index represents the most recently written element.
-    /// cardinality and index must be tracked externally.
-    /// If the index is at the end of the allowable array length (according to cardinality),
-    /// and the next cardinality is greater than the current one, cardinality may be increased.
-    /// This restriction is created to preserve ordering.
+    /// If the index is at the end of the allowable array length (1000 - 1), the next index will turn to 0.
     ///
     /// # Arguments
     ///
     /// * `self` - The ObservationState account to write in
     /// * `block_timestamp` - The current timestamp of to update
     /// * `sqrt_price_x64` - The sqrt_price_x64 at the time of the new observation
-    /// * `observation_index` - The number of populated elements in the oracle array
+    /// * `observation_index` - The last update index of element in the oracle array
     /// 
     /// # Return
-    /// * `next_observation_index` - The next index of the oracle array
+    /// * `next_observation_index` - The new index of element to update in the oracle array
     ///
     pub fn update_check(&mut self, block_timestamp: u32, sqrt_price_x64: u128, observation_index: u16, observation_update_duration: u32) -> Result<Option<u16>> {
         if !self.initialized {
