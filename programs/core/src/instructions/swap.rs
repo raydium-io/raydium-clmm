@@ -121,6 +121,7 @@ pub fn exact_internal<'b, 'info>(
         },
         zero_for_one,
     )?;
+    require!(amount_0 == 0 || amount_1 == 0, ErrorCode::TooSmallInputOrOutputAmount);
 
     #[cfg(feature = "enable-log")]
     msg!(

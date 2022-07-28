@@ -56,6 +56,8 @@ pub enum ErrorCode {
     InvaildSwapAmountSpecified,
     #[msg("Input pool vault is invalid")]
     InvalidInputPoolVault,
+    #[msg("Swap input or output amount is too small")]
+    TooSmallInputOrOutputAmount,
 
     /// reward errors
     #[msg("Invalid reward index")]

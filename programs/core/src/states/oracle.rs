@@ -17,6 +17,23 @@ pub const OBSERVATION_SEED: &str = "observation";
 // Number of ObservationState element
 pub const OBSERVATION_NUM: usize = 1000;
 
+/// The element of observations in ObservationState
+#[zero_copy]
+#[repr(packed)]
+#[derive(Default, Debug)]
+pub struct Observation {
+    /// The block timestamp of the observation
+    pub block_timestamp: u32,
+    /// the price of the observation timestamp, Q64.64
+    pub sqrt_price_x64: u128,
+    /// the cumulative of price during the duration time, Q64.64
+    pub cumulative_time_price_x64: u128,
+    /// padding for feature update
+    pub padding: u128,
+}
+impl Observation {
+    pub const LEN: usize = 4 + 16 + 16 + 16;
+}
 /// Returns data about a specific observation index
 ///
 /// PDA of `[OBSERVATION_SEED, pool_id]`
@@ -43,22 +60,10 @@ impl Default for ObservationState {
         }
     }
 }
-/// The element of observations in ObservationState
-#[zero_copy]
-#[repr(packed)]
-#[derive(Default, Debug)]
-pub struct Observation {
-    /// The block timestamp of the observation
-    pub block_timestamp: u32,
-    /// the price of the observation timestamp, Q64.64
-    pub sqrt_price_x64: u128,
-    /// the cumulative of price during the duration time, Q64.64
-    pub cumulative_time_price_x64: u128,
-    /// padding for feature update
-    pub padding: u128,
-}
 
 impl ObservationState {
+    pub const LEN: usize = 1 + 32 + (Observation::LEN * OBSERVATION_NUM) + 16 * 5;
+
     // Writes an oracle observation to the account, returning the next observation_index.
     /// Writable at most once per second. Index represents the most recently written element.
     /// If the index is at the end of the allowable array length (1000 - 1), the next index will turn to 0.
