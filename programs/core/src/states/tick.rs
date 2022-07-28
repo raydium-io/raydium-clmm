@@ -8,8 +8,8 @@ use anchor_lang::{prelude::*, system_program};
 
 /// Seed to derive account address and signature
 pub const TICK_ARRAY_SEED: &str = "tick_array";
-pub const TICK_ARRAY_SIZE_USIZE: usize = 100;
-pub const TICK_ARRAY_SIZE: i32 = 100;
+pub const TICK_ARRAY_SIZE_USIZE: usize = 80;
+pub const TICK_ARRAY_SIZE: i32 = 80;
 
 #[account(zero_copy)]
 #[repr(packed)]
@@ -212,7 +212,7 @@ pub struct TickState {
 }
 
 impl TickState {
-    pub const LEN: usize = 8 + 4 + 16 + 16 + 16 + 16 + 16 * REWARD_NUM + 64;
+    pub const LEN: usize = 4 + 16 + 16 + 16 + 16 + 16 * REWARD_NUM;
 
     pub fn initialize(&mut self, tick: i32, tick_spacing: u16) -> Result<()> {
         check_tick_boundary(tick, tick_spacing)?;
@@ -529,6 +529,16 @@ mod test {
             println!(
                 "tick -1002 array start index {}",
                 TickArrayState::get_arrary_start_index(-1002, 30)
+            );
+
+            println!(
+                "tick -20 array start index {}",
+                TickArrayState::get_arrary_start_index(-20, 10)
+            );
+
+            println!(
+                "tick 20 array start index {}",
+                TickArrayState::get_arrary_start_index(20, 10)
             );
         }
 

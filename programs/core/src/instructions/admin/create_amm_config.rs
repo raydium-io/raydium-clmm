@@ -3,7 +3,7 @@ use anchor_lang::prelude::*;
 use std::ops::DerefMut;
 
 #[derive(Accounts)]
-#[instruction(index: u8)]
+#[instruction(index: u16)]
 pub struct CreateAmmConfig<'info> {
     /// Address to be set as protocol owner. It pays to create factory state account.
     #[account(mut)]

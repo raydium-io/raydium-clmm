@@ -15,7 +15,7 @@ use anchor_lang::prelude::*;
 /// Seed to derive account address and signature
 pub const OBSERVATION_SEED: &str = "observation";
 // Number of ObservationState element
-pub const OBSERVATION_NUM: usize = 1000;
+pub const OBSERVATION_NUM: usize = 100;
 
 /// Returns data about a specific observation index
 ///

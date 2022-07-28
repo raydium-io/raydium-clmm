@@ -101,7 +101,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         protocol_position: ctx.accounts.protocol_position.as_mut(),
         token_program: ctx.accounts.token_program.clone(),
     };
-
+    msg!("MintParam```````````````````````````````````````");
     let (liquidity, amount_0, amount_1) = add_liquidity(
         &mut accounts,
         amount_0_desired,
@@ -111,7 +111,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         tick_lower,
         tick_upper,
     )?;
-
+    msg!("add_liquidity```````````````````````````````````````");
     let updated_procotol_position = accounts.protocol_position;
     let fee_growth_inside_0_last_x64 = updated_procotol_position.fee_growth_inside_0_last;
     let fee_growth_inside_1_last_x64 = updated_procotol_position.fee_growth_inside_1_last;

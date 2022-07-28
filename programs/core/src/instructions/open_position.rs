@@ -63,7 +63,7 @@ pub struct OpenPosition<'info> {
     #[account(
         init,
         mint::decimals = 0,
-        mint::authority = amm_config,
+        mint::authority = pool_state,
         payer = payer
     )]
     pub position_nft_mint: Box<Account<'info, Mint>>,
@@ -202,16 +202,14 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     }
 
     let tick_spacing = ctx.accounts.pool_state.tick_spacing;
-    let max_start_index = (tick_math::MAX_TICK / tick_spacing as i32) / TICK_ARRAY_SIZE;
-    let min_start_index = (tick_math::MIN_TICK / tick_spacing as i32) / TICK_ARRAY_SIZE;
     let start_lower_index =
         TickArrayState::get_arrary_start_index(tick_lower_index, tick_spacing as i32);
     let start_upper_index =
         TickArrayState::get_arrary_start_index(tick_upper_index, tick_spacing as i32);
-    assert!(tick_array_lower_start_index == start_lower_index);
-    assert!(tick_array_upper_start_index == start_upper_index);
-    assert!(start_lower_index >= min_start_index && start_lower_index <= max_start_index);
-    assert!(start_upper_index >= min_start_index && start_upper_index <= max_start_index);
+    require_eq!(tick_array_lower_start_index, start_lower_index);
+    require_eq!(tick_array_upper_start_index, start_upper_index);
+    assert!(start_lower_index >= tick_math::MIN_TICK && start_lower_index <= tick_math::MAX_TICK);
+    assert!(start_upper_index >= tick_math::MIN_TICK && start_upper_index <= tick_math::MAX_TICK);
 
     let tick_array_lower_state = TickArrayState::get_or_create_tick_array(
         ctx.accounts.payer.to_account_info(),
