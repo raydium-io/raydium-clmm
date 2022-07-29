@@ -1,5 +1,6 @@
 use crate::libraries::tick_math;
 use crate::states::*;
+// use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use std::{ops::DerefMut};
@@ -60,7 +61,7 @@ pub struct CreatePool<'info> {
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
     /// Initialize an account to store oracle observations
-    pub observation_state: AccountLoader<'info, ObservationState>,
+    pub observation_state: UncheckedAccount<'info>,
     /// Spl token program
     pub token_program: Program<'info, Token>,
     /// To create a new program account
@@ -71,7 +72,33 @@ pub struct CreatePool<'info> {
 
 pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()> {
     let pool_state = ctx.accounts.pool_state.deref_mut();
-    let mut observation_state = ctx.accounts.observation_state.load_mut()?;
+    {
+        // Noted: ObservationState must zero copy account
+        let observation_info = ctx.accounts.observation_state.to_account_info();
+        require_keys_eq!(*observation_info.owner, crate::id());
+        require_eq!(observation_info.data_len(), ObservationState::LEN);
+        let mut observation_data = observation_info.try_borrow_mut_data()?;
+        // The discriminator should be zero, since we're initializing.
+        let mut disc_bytes = [0u8; 8];
+        disc_bytes.copy_from_slice(&observation_data[..8]);
+        let account_discriminator = u64::from_le_bytes(disc_bytes);
+        require_eq!(account_discriminator, 0);
+        if account_discriminator == 0 {
+            let observation_account_name = "ObservationState";
+            let mut discriminator = [0u8; 8];
+            let discriminator_preimage = {
+                // For now, zero copy accounts can't be namespaced.
+                format!("account:{}", observation_account_name)
+            };
+            discriminator.copy_from_slice(&solana_program::hash::hash(discriminator_preimage.as_bytes()).to_bytes()[..8]);
+            observation_data[..8].copy_from_slice(&discriminator);
+        }
+    }
+    let observation_state_loader = AccountLoader::<ObservationState>::try_from_unchecked(
+        &crate::id(),
+        &ctx.accounts.observation_state.to_account_info()
+    )?;
+    let mut observation_state = observation_state_loader.load_mut()?;
 
     let tick = tick_math::get_tick_at_sqrt_ratio(sqrt_price_x64)?;
     #[cfg(feature = "enable-log")]
@@ -94,8 +121,8 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
     pool_state.tick_current = tick;
     pool_state.observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
     pool_state.reward_infos = [RewardInfo::new(ctx.accounts.pool_creator.key()); REWARD_NUM];
-    assert!(observation_state.initialized == false);
-    assert!(observation_state.amm_pool == Pubkey::default());
+    require_eq!(observation_state.initialized, false);
+    require_keys_eq!(observation_state.amm_pool, Pubkey::default());
     pool_state.observation_key = ctx.accounts.observation_state.key();
     observation_state.amm_pool = ctx.accounts.pool_state.key();
 

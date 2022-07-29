@@ -62,7 +62,7 @@ impl Default for ObservationState {
 }
 
 impl ObservationState {
-    pub const LEN: usize = 1 + 32 + (Observation::LEN * OBSERVATION_NUM) + 16 * 5;
+    pub const LEN: usize = 8 + 1 + 32 + (Observation::LEN * OBSERVATION_NUM) + 16 * 5;
 
     // Writes an oracle observation to the account, returning the next observation_index.
     /// Writable at most once per second. Index represents the most recently written element.
