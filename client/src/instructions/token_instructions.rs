@@ -1,28 +1,33 @@
-use anchor_client::Client;
+use anchor_client::{Client, Cluster};
 use anyhow::Result;
 use solana_sdk::{
     program_pack::Pack,
-    signature::{Keypair, Signer, Signature},
+    signature::{Keypair, Signer},
     pubkey::Pubkey,
-    system_instruction
+    system_instruction,
+    instruction::Instruction,
 };
+use std::rc::Rc;
+use super::super::{ClientConfig, read_keypair_file};
 
-use rand::rngs::OsRng;
-
-pub fn create_and_init_mint(
-    client: &Client,
+pub fn create_and_init_mint_instr(
+    config: &ClientConfig,
+    mint_key: &Pubkey,
     mint_authority: &Pubkey,
     decimals: u8,
-) ->  Result<(Keypair, Signature)> {
+) ->  Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
     let program = client.program(spl_token::id());
-    let mint = Keypair::generate(&mut OsRng);
 
-    let signature = program
+    let instructions = program
         .request()
         .instruction(
             system_instruction::create_account(
                 &program.payer(),
-                &mint.pubkey(),
+                mint_key,
                 program.rpc().get_minimum_balance_for_rent_exemption(spl_token::state::Mint::LEN)?,
                 spl_token::state::Mint::LEN as u64,
                 &program.id(),
@@ -31,47 +36,53 @@ pub fn create_and_init_mint(
         .instruction(
             spl_token::instruction::initialize_mint(
                 &program.id(),
-                &mint.pubkey(),
+                mint_key,
                 mint_authority,
                 None,
                 decimals,
             )?
         )
-        .signer(&mint)
-        .send()?;
-    Ok((mint, signature))
+        .instructions()?;
+    Ok(instructions)
 }
 
-pub fn create_account_rent_exmpt(
-    client: &Client,
+pub fn create_account_rent_exmpt_instr(
+    config: &ClientConfig,
+    new_account_key: &Pubkey,
     owner: Pubkey,
     data_size: usize,
-) -> Result<Signature> {
-    let new_account = Keypair::generate(&mut OsRng);
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
     let program = client.program(owner);
-    let signature = program
+    let instructions = program
         .request()
         .instruction(
             system_instruction::create_account(
                 &program.payer(),
-                &new_account.pubkey(),
+                &new_account_key,
                 program.rpc().get_minimum_balance_for_rent_exemption(data_size)?,
                 data_size as u64,
                 &program.id(),
             )
         )
-        .signer(&new_account)
-        .send()?;
-    Ok(signature)
+        .instructions()?;
+    Ok(instructions)
 }
 
-pub fn create_ata_token_account(
-    client: &Client,
+pub fn create_ata_token_account_instr(
+    config: &ClientConfig,
     mint: &Pubkey,
     owner: &Pubkey,
-) -> Result<Signature> {
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
     let program = client.program(spl_token::id());
-    let signature = program
+    let instructions = program
             .request()
             .instruction(
                 spl_associated_token_account::create_associated_token_account(
@@ -80,19 +91,23 @@ pub fn create_ata_token_account(
                     mint
                 )
             )
-            .send()?;
-    Ok(signature)
+            .instructions()?;
+    Ok(instructions)
 }
 
 pub fn create_and_init_spl_token(
-    client: &Client,
+    config: &ClientConfig,
+    new_account_key: &Pubkey,
     mint: &Pubkey,
     owner: &Pubkey,
-) -> Result<Signature> {
-    let new_account = Keypair::generate(&mut OsRng);
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
     let program = client.program(spl_associated_token_account::id());
 
-    let signature = program
+    let instructions = program
         .request()
         .instruction(
             system_instruction::create_account(
@@ -106,24 +121,27 @@ pub fn create_and_init_spl_token(
         .instruction(
             spl_token::instruction::initialize_account(
                 &program.id(),
-                &new_account.pubkey(),
+                new_account_key,
                 mint,
                 owner,
             )?
         )
-        .signer(&new_account)
-        .send()?;
-    Ok(signature)
+        .instructions()?;
+    Ok(instructions)
 }
 
 pub fn close_token_account(
-    client: &Client,
+    config: &ClientConfig,
     close_account: &Pubkey,
     destination: &Pubkey,
     owner: &Keypair,
-) -> Result<Signature> {
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
     let program = client.program(spl_token::id());
-    let signature = program
+    let instructions = program
         .request()
         .instruction(
             spl_token::instruction::close_account(
@@ -135,19 +153,23 @@ pub fn close_token_account(
             )?
         )
         .signer(owner)
-        .send()?;
-    Ok(signature)
+        .instructions()?;
+    Ok(instructions)
 }
 
-pub fn spl_token_transfer(
-    client: &Client,
+pub fn spl_token_transfer_instr(
+    config: &ClientConfig,
     from: &Pubkey,
     to: &Pubkey,
     amount: u64,
     from_authority: &Keypair,
-) -> Result<Signature> {
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
     let program = client.program(spl_token::id());
-    let signature = program
+    let instructions = program
         .request()
         .instruction(
             spl_token::instruction::transfer(
@@ -160,19 +182,23 @@ pub fn spl_token_transfer(
             )?
         )
         .signer(from_authority)
-        .send()?;
-    Ok(signature)
+        .instructions()?;
+    Ok(instructions)
 }
 
-pub fn spl_token_mint_to(
-    client: &Client,
+pub fn spl_token_mint_to_instr(
+    config: &ClientConfig,
     mint: &Pubkey,
     to: &Pubkey,
     amount: u64,
     mint_authority: &Keypair,
-) -> Result<Signature> {
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
     let program = client.program(spl_token::id());
-    let signature = program
+    let instructions = program
         .request()
         .instruction(
             spl_token::instruction::mint_to(
@@ -185,6 +211,6 @@ pub fn spl_token_mint_to(
             )?
         )
         .signer(mint_authority)
-        .send()?;
-    Ok(signature)
+        .instructions()?;
+    Ok(instructions)
 }
