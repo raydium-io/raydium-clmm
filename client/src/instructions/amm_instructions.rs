@@ -1,11 +1,12 @@
-use anchor_client::Client;
+use anchor_client::{Client, Cluster};
 use anchor_lang::prelude::AccountMeta;
 use anyhow::Result;
 use solana_sdk::{
     system_program,
     sysvar,
-    signature::{Signature, Keypair, Signer},
+    signature::{Signer},
     pubkey::Pubkey,
+    instruction::Instruction,
 };
 use mpl_token_metadata::{state::PREFIX as MPL_PREFIX};
 
@@ -14,23 +15,28 @@ use raydium_amm_v3::accounts as raydium_accounts;
 use raydium_amm_v3::{
     states::{AMM_CONFIG_SEED, POOL_SEED, POOL_VAULT_SEED, OBSERVATION_SEED, TICK_ARRAY_SEED, POSITION_SEED},
 };
+use std::rc::Rc;
 
-pub fn create_amm_config_tx(
-    client: &Client,
-    raydium_program: &Pubkey,
-    admin: &Keypair,
+use super::super::{ClientConfig, read_keypair_file};
+
+pub fn create_amm_config_instr(
+    config: &ClientConfig,
     config_index: u16,
     tick_spacing: u16,
     protocol_fee_rate: u32,
     trade_fee_rate: u32,
-) -> Result<Signature> {
-    let program = client.program(*raydium_program);
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
+    let program = client.program(config.raydium_v3_program);
     let (amm_config_key, __bump) = Pubkey::find_program_address(&[AMM_CONFIG_SEED.as_bytes(), &config_index.to_be_bytes()], &program.id());
-    let signature = program
+    let instructions = program
         .request()
         .accounts(
             raydium_accounts::CreateAmmConfig{
-                owner: admin.pubkey(),
+                owner: program.payer(),
                 amm_config: amm_config_key,
                 system_program: system_program::id(),
             }
@@ -41,20 +47,22 @@ pub fn create_amm_config_tx(
             protocol_fee_rate,
             trade_fee_rate
         })
-        .signer(admin)
-        .send()?;
-    Ok(signature)
+        .instructions()?;
+    Ok(instructions)
 }
 
-pub fn set_new_config_owner_tx(
-    client: &Client,
-    raydium_program: &Pubkey,
+pub fn set_new_config_owner_instr(
+    config: &ClientConfig,
     amm_config: Pubkey,
-    admin: &Keypair,
     new_owner: &Pubkey,
-) -> Result<Signature> {
-    let program = client.program(*raydium_program);
-    let signature = program
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let admin = read_keypair_file(&config.admin_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
+    let program = client.program(config.raydium_v3_program);
+    let instructions = program
         .request()
         .accounts(
             raydium_accounts::SetNewOwner{
@@ -63,20 +71,22 @@ pub fn set_new_config_owner_tx(
                 amm_config,
             }
         )
-        .signer(admin)
-        .send()?;
-    Ok(signature)
+        .instructions()?;
+    Ok(instructions)
 }
 
-pub fn set_protocol_fee_rate_tx(
-    client: &Client,
-    raydium_program: &Pubkey,
+pub fn set_protocol_fee_rate_instr(
+    config: &ClientConfig,
     amm_config: Pubkey,
-    admin: &Keypair,
     protocol_fee_rate: u32,
-) -> Result<Signature> {
-    let program = client.program(*raydium_program);
-    let signature = program
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let admin = read_keypair_file(&config.admin_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
+    let program = client.program(config.raydium_v3_program);
+    let instructions = program
         .request()
         .accounts(
             raydium_accounts::SetProtocolFeeRate{
@@ -85,25 +95,27 @@ pub fn set_protocol_fee_rate_tx(
             }
         )
         .args(raydium_instruction::SetProtocolFeeRate{protocol_fee_rate})
-        .signer(admin)
-        .send()?;
-    Ok(signature)
+        .instructions()?;
+    Ok(instructions)
 }
 
-pub fn create_pool_tx(
-    client: &Client,
-    raydium_program: Pubkey,
+pub fn create_pool_instr(
+    config: &ClientConfig,
     amm_config: Pubkey,
     token_mint_0: Pubkey,
     token_mint_1: Pubkey,
     sqrt_price_x64: u128,
-) -> Result<Signature> {
-    let program = client.program(raydium_program);
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
+    let program = client.program(config.raydium_v3_program);
     let (pool_account_key, __bump) = Pubkey::find_program_address(&[POOL_SEED.as_bytes(), amm_config.to_bytes().as_ref(), token_mint_0.to_bytes().as_ref(), token_mint_1.to_bytes().as_ref()], &program.id());
     let (token_vault_0, __bump) = Pubkey::find_program_address(&[POOL_VAULT_SEED.as_bytes(), pool_account_key.to_bytes().as_ref(), token_mint_0.to_bytes().as_ref()], &program.id());
     let (token_vault_1, __bump) = Pubkey::find_program_address(&[POOL_VAULT_SEED.as_bytes(), pool_account_key.to_bytes().as_ref(), token_mint_1.to_bytes().as_ref()], &program.id());
     let (observation_account_key, __bump) = Pubkey::find_program_address(&[OBSERVATION_SEED.as_bytes(), pool_account_key.to_bytes().as_ref()], &program.id());
-    let signature = program
+    let instructions = program
         .request()
         .accounts(
             raydium_accounts::CreatePool{
@@ -121,13 +133,12 @@ pub fn create_pool_tx(
             }
         )
         .args(raydium_instruction::CreatePool{sqrt_price_x64})
-        .send()?;
-    Ok(signature)
+        .instructions()?;
+    Ok(instructions)
 }
 
-pub fn open_position_tx(
-    client: &Client,
-    raydium_program: Pubkey,
+pub fn open_position_instr(
+    config: &ClientConfig,
     amm_config: Pubkey,
     pool_account_key: Pubkey,
     token_vault_0: Pubkey,
@@ -144,15 +155,19 @@ pub fn open_position_tx(
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
-) -> Result<Signature> {
-    let program = client.program(raydium_program);
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
+    let program = client.program(config.raydium_v3_program);
     let nft_ata_token_account = spl_associated_token_account::get_associated_token_address(&program.payer(), &nft_mint_key);
     let (metadata_account_key, _bump) = Pubkey::find_program_address(&[MPL_PREFIX.as_bytes(), mpl_token_metadata::id().to_bytes().as_ref(), nft_mint_key.to_bytes().as_ref()], &mpl_token_metadata::id());
     let (protocol_position_key, __bump) = Pubkey::find_program_address(&[POSITION_SEED.as_bytes(), pool_account_key.to_bytes().as_ref(), &tick_lower_index.to_be_bytes(), &tick_upper_index.to_be_bytes()], &program.id());
     let (tick_array_lower, __bump) = Pubkey::find_program_address(&[TICK_ARRAY_SEED.as_bytes(), pool_account_key.to_bytes().as_ref(), &tick_array_lower_start_index.to_be_bytes()], &program.id());
     let (tick_array_upper, __bump) = Pubkey::find_program_address(&[TICK_ARRAY_SEED.as_bytes(), pool_account_key.to_bytes().as_ref(), &tick_array_upper_start_index.to_be_bytes()], &program.id());
     let (personal_position_key, __bump) = Pubkey::find_program_address(&[POSITION_SEED.as_bytes(), nft_mint_key.to_bytes().as_ref()], &program.id());
-    let signature = program
+    let instructions = program
         .request()
         .accounts(
             raydium_accounts::OpenPosition{
@@ -179,13 +194,12 @@ pub fn open_position_tx(
             }
         )
         .args(raydium_instruction::OpenPosition{amount_0_desired, amount_1_desired, amount_0_min, amount_1_min, tick_lower_index, tick_upper_index, tick_array_lower_start_index, tick_array_upper_start_index})
-        .send()?;
-    Ok(signature)
+        .instructions()?;
+    Ok(instructions)
 }
 
-pub fn increase_liquidity_tx(
-    client: &Client,
-    raydium_program: Pubkey,
+pub fn increase_liquidity_instr(
+    config: &ClientConfig,
     amm_config: Pubkey,
     pool_account_key: Pubkey,
     token_vault_0: Pubkey,
@@ -201,15 +215,19 @@ pub fn increase_liquidity_tx(
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
-) -> Result<Signature> {
-    let program = client.program(raydium_program);
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
+    let program = client.program(config.raydium_v3_program);
     let nft_ata_token_account = spl_associated_token_account::get_associated_token_address(&program.payer(), &nft_mint_key);
     let (tick_array_lower, __bump) = Pubkey::find_program_address(&[TICK_ARRAY_SEED.as_bytes(), pool_account_key.to_bytes().as_ref(), &tick_array_lower_start_index.to_be_bytes()], &program.id());
     let (tick_array_upper, __bump) = Pubkey::find_program_address(&[TICK_ARRAY_SEED.as_bytes(), pool_account_key.to_bytes().as_ref(), &tick_array_upper_start_index.to_be_bytes()], &program.id());
     let (protocol_position_key, __bump) = Pubkey::find_program_address(&[POSITION_SEED.as_bytes(), pool_account_key.to_bytes().as_ref(), &tick_lower_index.to_be_bytes(), &tick_upper_index.to_be_bytes()], &program.id());
     let (personal_position_key, __bump) = Pubkey::find_program_address(&[POSITION_SEED.as_bytes(), nft_mint_key.to_bytes().as_ref()], &program.id());
 
-    let signature = program
+    let instructions = program
         .request()
         .accounts(
             raydium_accounts::IncreaseLiquidity{
@@ -229,13 +247,12 @@ pub fn increase_liquidity_tx(
             }
         )
         .args(raydium_instruction::IncreaseLiquidity{amount_0_desired, amount_1_desired, amount_0_min, amount_1_min})
-        .send()?;
-    Ok(signature)
+        .instructions()?;
+    Ok(instructions)
 }
 
-pub fn decrease_liquidity_tx(
-    client: &Client,
-    raydium_program: Pubkey,
+pub fn decrease_liquidity_instr(
+    config: &ClientConfig,
     amm_config: Pubkey,
     pool_account_key: Pubkey,
     token_vault_0: Pubkey,
@@ -250,14 +267,18 @@ pub fn decrease_liquidity_tx(
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
-) -> Result<Signature> {
-    let program = client.program(raydium_program);
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
+    let program = client.program(config.raydium_v3_program);
     let nft_ata_token_account = spl_associated_token_account::get_associated_token_address(&program.payer(), &nft_mint_key);
     let (personal_position_key, __bump) = Pubkey::find_program_address(&[POSITION_SEED.as_bytes(), nft_mint_key.to_bytes().as_ref()], &program.id());
     let (protocol_position_key, __bump) = Pubkey::find_program_address(&[POSITION_SEED.as_bytes(), pool_account_key.to_bytes().as_ref(), &tick_lower_index.to_be_bytes(), &tick_upper_index.to_be_bytes()], &program.id());
     let (tick_array_lower, __bump) = Pubkey::find_program_address(&[TICK_ARRAY_SEED.as_bytes(), pool_account_key.to_bytes().as_ref(), &tick_array_lower_start_index.to_be_bytes()], &program.id());
     let (tick_array_upper, __bump) = Pubkey::find_program_address(&[TICK_ARRAY_SEED.as_bytes(), pool_account_key.to_bytes().as_ref(), &tick_array_upper_start_index.to_be_bytes()], &program.id());
-    let signature = program
+    let instructions = program
         .request()
         .accounts(
             raydium_accounts::DecreaseLiquidity{
@@ -277,13 +298,12 @@ pub fn decrease_liquidity_tx(
             }
         )
         .args(raydium_instruction::DecreaseLiquidity{liquidity, amount_0_min, amount_1_min})
-        .send()?;
-    Ok(signature)
+        .instructions()?;
+    Ok(instructions)
 }
 
-pub fn swap_tx(
-    client: &Client,
-    raydium_program: Pubkey,
+pub fn swap_instr(
+    config: &ClientConfig,
     amm_config: Pubkey,
     pool_account_key: Pubkey,
     input_vault: Pubkey,
@@ -297,9 +317,13 @@ pub fn swap_tx(
     other_amount_threshold: u64,
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
-) -> Result<Signature> {
-    let program = client.program(raydium_program);
-    let signature = program
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
+    let program = client.program(config.raydium_v3_program);
+    let instructions = program
         .request()
         .accounts(
             raydium_accounts::SwapSingle{
@@ -317,6 +341,6 @@ pub fn swap_tx(
         )
         .accounts(remaining_accounts)
         .args(raydium_instruction::Swap{amount, other_amount_threshold, sqrt_price_limit_x64, is_base_input})
-        .send()?;
-    Ok(signature)
+        .instructions()?;
+    Ok(instructions)
 }
