@@ -19,16 +19,3 @@ export async function accountExist(connection: anchor.web3.Connection, account: 
   }
   return alreadCreatedMarket;
 }
-
-export const getUnixTs = () => {
-  return new Date().getTime() / 1000;
-};
-
-export async function getBlockTimestamp(connection :anchor.web3.Connection){
-  const slot = await connection.getSlot();
-  return await connection.getBlockTime(slot);
-} 
-
-export async function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}

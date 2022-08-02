@@ -1,1 +1,1 @@
-yarn run ts-mocha -p ./tsconfig.json -t 100000 ./*.ts
+ts-node all-in-one-example.ts

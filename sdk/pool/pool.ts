@@ -29,26 +29,29 @@ export class AmmPool {
     poolState: PoolState,
     ammConfig: AmmConfig,
     stateFetcher: StateFetcher,
-    cacheDataProvider: CacheDataProviderImpl
   ) {
-    this.address = address;
     this.ctx = ctx;
     this.stateFetcher = stateFetcher;
-    this.cacheDataProvider = cacheDataProvider;
+    this.address = address;
     this.poolState = poolState;
     this.ammConfig = ammConfig;
+    this.cacheDataProvider = new CacheDataProviderImpl(
+      ctx.program,
+      address
+    );
   }
 
-  public async reload(readLoadCache?: boolean): Promise<PoolState> {
+  public async reloadPoolState(): Promise<PoolState> {
     const newState = await this.stateFetcher.getPoolState(this.address);
-    if (readLoadCache) {
-      await this.cacheDataProvider.loadTickArrayCache(
-        this.poolState.tickCurrent,
-        this.poolState.tickSpacing
-      );
-    }
     this.poolState = newState;
     return this.poolState;
+  }
+
+  public async reloadCache() {
+    await this.cacheDataProvider.loadTickArrayCache(
+      this.poolState.tickCurrent,
+      this.poolState.tickSpacing
+    );
   }
 
   public isContain(tokenMint: PublicKey): boolean {
@@ -58,12 +61,12 @@ export class AmmPool {
     );
   }
 
-  public get token0Price(): Decimal {
+  public token0Price(): Decimal {
     return Math.x64ToDecimal(this.poolState.sqrtPriceX64);
   }
 
-  public get token1Price(): Decimal {
-    return new Decimal(1).div(this.token0Price);
+  public token1Price(): Decimal {
+    return new Decimal(1).div(this.token0Price());
   }
 
   /**
@@ -84,7 +87,7 @@ export class AmmPool {
       throw new Error("token is not in pool");
     }
     if (reload) {
-      await this.reload();
+      await this.reloadPoolState();
     }
     const zeroForOne = inputTokenMint.equals(this.poolState.tokenMint0);
     const {
@@ -129,7 +132,7 @@ export class AmmPool {
     }
 
     if (reload) {
-      this.reload();
+      this.reloadPoolState();
     }
 
     const zeroForOne = outputTokenMint.equals(this.poolState.tokenMint1);

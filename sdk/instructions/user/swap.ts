@@ -4,7 +4,7 @@ import {
   AccountMeta,
 } from "@solana/web3.js";
 import { Program, BN } from "@project-serum/anchor";
-import { AmmV3 } from "../anchor/amm_v3";
+import { AmmV3 } from "../../anchor/amm_v3";
 
 type SwapAccounts = {
   payer: PublicKey;

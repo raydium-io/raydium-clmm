@@ -4,7 +4,7 @@ import {
   AccountMeta,
 } from "@solana/web3.js";
 import { Program } from "@project-serum/anchor";
-import { AmmV3 } from "../anchor/amm_v3";
+import { AmmV3 } from "../../anchor/amm_v3";
 
 export type CollectRewardsAccounts = {
   nftOwner: PublicKey;

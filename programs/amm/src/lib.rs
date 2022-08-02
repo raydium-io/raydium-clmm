@@ -22,17 +22,14 @@ pub mod amm_v3 {
 
     use super::*;
 
-    // ---------------------------------------------------------------------
-    // Factory instructions
-
-    // The Factory facilitates creation of pools and control over the protocol fees
-
-    /// Initialize the factory state and set the protocol owner
-    ///
+    // The configuation of AMM protocol, include trade fee and protocol fee
     /// # Arguments
     ///
-    /// * `ctx`- Initializes the factory state account
-    /// * `amm_config_bump` - Bump to validate factory state address
+    /// * `ctx`- The accounts needed by instruction.
+    /// * `index` - The index of amm config, there may be multiple config.
+    /// * `tick_spacing` - The tickspacing binding with config.
+    /// * `trade_fee_rate` - Trade fee rate, can be changed.
+    /// * `protocol_fee_rate` - The rate of protocol fee within tarde fee.
     ///
     pub fn create_amm_config(
         ctx: Context<CreateAmmConfig>,
