@@ -1,6 +1,4 @@
 export * from "./closePosition";
-export * from "./collectFee";
-export * from "./collectRewards";
 export * from "./createPool";
 export * from "./decreaseLiquidity";
 export * from "./increaseLiquidity";

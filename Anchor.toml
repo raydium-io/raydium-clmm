@@ -4,10 +4,10 @@ anchor_version = "0.24.2"
 seeds = false
 
 [programs.localnet]
-amm_v3 = "DEvgL6xhASESaETKSepvprNLKGXfkhVEpkhfASRFWZRb"
+amm_v3 = "devak2cXRFHdv44nPBxVEBubRYLUvmr9tkpJ7EvVm4A"
 
 [programs.devnet]
-amm_v3 = "DEvgL6xhASESaETKSepvprNLKGXfkhVEpkhfASRFWZRb"
+amm_v3 = "devak2cXRFHdv44nPBxVEBubRYLUvmr9tkpJ7EvVm4A"
 
 
 [registry]

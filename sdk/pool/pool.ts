@@ -1,4 +1,3 @@
-import { Token } from "@raydium-io/raydium-sdk";
 import { BN } from "@project-serum/anchor";
 import { AccountMeta, PublicKey } from "@solana/web3.js";
 import { AmmConfig, PoolState, StateFetcher } from "../states";
@@ -15,13 +14,14 @@ export class AmmPool {
   public readonly stateFetcher: StateFetcher;
   public poolState: PoolState;
   public ammConfig: AmmConfig;
+
   /**
-   *
-   * @param ctx
-   * @param address
-   * @param poolState
-   * @param stateFetcher
-   * @param cacheDataProvider
+   * 
+   * @param ctx 
+   * @param address 
+   * @param poolState 
+   * @param ammConfig 
+   * @param stateFetcher 
    */
   public constructor(
     ctx: Context,

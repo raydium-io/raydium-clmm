@@ -56,6 +56,7 @@ export class StateFetcher {
       observationKey,
       observationUpdateDuration,
     } = await this.program.account.poolState.fetch(address);
+    const rewards = rewardInfos as RewardInfo[];
 
     return {
       bump,
@@ -74,7 +75,7 @@ export class StateFetcher {
       protocolFeesToken0,
       protocolFeesToken1,
       rewardLastUpdatedTimestamp,
-      // rewardInfos,
+      rewardInfos: rewards,
       observationIndex,
       observationKey,
       observationUpdateDuration,
@@ -121,10 +122,8 @@ export class StateFetcher {
       rewardInfos,
     } = await this.program.account.personalPositionState.fetch(address);
 
-    // if (rewardInfos instanceof PositionRewardInfo){
+    const rewards = rewardInfos as PositionRewardInfo[];
 
-    // }
-    // const [] = rewardInfos[Symbol.iterator]()
     return {
       bump,
       nftMint,
@@ -136,7 +135,7 @@ export class StateFetcher {
       feeGrowthInside1LastX64: feeGrowthInside1Last,
       tokenFeesOwed0,
       tokenFeesOwed1,
-      // rewardInfos,
+      rewardInfos: rewards,
     };
   }
 

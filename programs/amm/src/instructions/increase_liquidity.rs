@@ -155,7 +155,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     personal_position.update_rewards(updated_procotol_position.reward_growth_inside)?;
     personal_position.liquidity = personal_position.liquidity.checked_add(liquidity).unwrap();
 
-    emit!(ChangeLiquidityEvent {
+    emit!(IncreaseLiquidityEvent {
         position_nft_mint: personal_position.nft_mint,
         liquidity,
         amount_0,

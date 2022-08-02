@@ -1,5 +1,5 @@
 import { ONE, ZERO, MaxU64, U64Resolution, Q64 } from "./constants";
-import { Math} from "./math";
+import { Math } from "./math";
 // import { } from "../math/constants";
 import { BN } from "@project-serum/anchor";
 
@@ -19,7 +19,6 @@ export abstract class LiquidityMath {
     return x.add(y);
   }
 
-  
   /**
    * Calculates Δx = ΔL (√P_upper - √P_lower) / (√P_upper x √P_lower)
    * @param sqrtPriceAX64
@@ -28,7 +27,7 @@ export abstract class LiquidityMath {
    * @param roundUp
    * @returns
    */
-   public static getToken0AmountForLiquidity(
+  public static getToken0AmountFromLiquidity(
     sqrtPriceAX64: BN,
     sqrtPriceBX64: BN,
     liquidity: BN,
@@ -64,7 +63,7 @@ export abstract class LiquidityMath {
    * @param roundUp
    * @returns
    */
-  public static getToken1AmountForLiquidity(
+  public static getToken1AmountFromLiquidity(
     sqrtPriceAX64: BN,
     sqrtPriceBX64: BN,
     liquidity: BN,
@@ -89,7 +88,7 @@ export abstract class LiquidityMath {
    * @param amount0
    * @returns
    */
-  public static maxLiquidityFromToken0Amount(
+  public static getLiquidityFromToken0Amount(
     sqrtPriceAX64: BN,
     sqrtPriceBX64: BN,
     amount0: BN,
@@ -117,7 +116,7 @@ export abstract class LiquidityMath {
    * @param amount1 The token1 amount
    * @returns liquidity for amount1
    */
-  public static maxLiquidityFromToken1Amount(
+  public static getLiquidityFromToken1Amount(
     sqrtPriceAX64: BN,
     sqrtPriceBX64: BN,
     amount1: BN
@@ -138,7 +137,7 @@ export abstract class LiquidityMath {
    * @param amount1 token1 amount
    * not what core can theoretically support
    */
-  public static maxLiquidityFromTokenAmounts(
+  public static getLiquidityFromTokenAmounts(
     sqrtPriceCurrentX64: BN,
     sqrtPriceAX64: BN,
     sqrtPriceBX64: BN,
@@ -150,31 +149,78 @@ export abstract class LiquidityMath {
     }
 
     if (sqrtPriceCurrentX64.lte(sqrtPriceAX64)) {
-      return LiquidityMath.maxLiquidityFromToken0Amount(
+      return LiquidityMath.getLiquidityFromToken0Amount(
         sqrtPriceAX64,
         sqrtPriceBX64,
         amount0,
         false
       );
     } else if (sqrtPriceCurrentX64.lt(sqrtPriceBX64)) {
-      const liquidity0 = LiquidityMath.maxLiquidityFromToken0Amount(
+      const liquidity0 = LiquidityMath.getLiquidityFromToken0Amount(
         sqrtPriceCurrentX64,
         sqrtPriceBX64,
         amount0,
         false
       );
-      const liquidity1 = LiquidityMath.maxLiquidityFromToken1Amount(
+      const liquidity1 = LiquidityMath.getLiquidityFromToken1Amount(
         sqrtPriceAX64,
         sqrtPriceCurrentX64,
         amount1
       );
       return liquidity0.lt(liquidity1) ? liquidity0 : liquidity1;
     } else {
-      return LiquidityMath.maxLiquidityFromToken1Amount(
+      return LiquidityMath.getLiquidityFromToken1Amount(
         sqrtPriceAX64,
         sqrtPriceBX64,
         amount1
       );
+    }
+  }
+
+  public static getAmountsFromLiquidity(
+    sqrtPriceCurrentX64: BN,
+    sqrtPriceAX64: BN,
+    sqrtPriceBX64: BN,
+    liquidity: BN
+  ): [BN, BN] {
+    if (sqrtPriceAX64.gt(sqrtPriceBX64)) {
+      [sqrtPriceAX64, sqrtPriceBX64] = [sqrtPriceBX64, sqrtPriceAX64];
+    }
+
+    if (sqrtPriceCurrentX64.lte(sqrtPriceAX64)) {
+      return [
+        LiquidityMath.getToken0AmountFromLiquidity(
+          sqrtPriceAX64,
+          sqrtPriceBX64,
+          liquidity,
+          false
+        ),
+        new BN(0),
+      ];
+    } else if (sqrtPriceCurrentX64.lt(sqrtPriceBX64)) {
+      const amount0 = LiquidityMath.getToken0AmountFromLiquidity(
+        sqrtPriceCurrentX64,
+        sqrtPriceBX64,
+        liquidity,
+        false
+      );
+      const amount1 = LiquidityMath.getToken1AmountFromLiquidity(
+        sqrtPriceAX64,
+        sqrtPriceCurrentX64,
+        liquidity,
+        false
+      );
+      return [amount0, amount1];
+    } else {
+      return [
+        new BN(0),
+        LiquidityMath.getToken1AmountFromLiquidity(
+          sqrtPriceAX64,
+          sqrtPriceBX64,
+          liquidity,
+          false
+        ),
+      ];
     }
   }
 }

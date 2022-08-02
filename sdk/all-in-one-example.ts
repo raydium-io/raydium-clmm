@@ -5,7 +5,11 @@ import * as chai from "chai";
 import chaiAsPromised from "chai-as-promised";
 chai.use(chaiAsPromised);
 import { AmmPool, CacheDataProviderImpl } from "./pool";
-import { getTickWithPriceAndTickspacing, SqrtPriceMath } from "./math";
+import {
+  getTickWithPriceAndTickspacing,
+  LiquidityMath,
+  SqrtPriceMath,
+} from "./math";
 import { StateFetcher, OBSERVATION_STATE_LEN } from "./states";
 import { accountExist, getAmmConfigAddress, sendTransaction } from "./utils";
 import { AmmInstruction, RouterPoolParam } from "./instructions";
@@ -28,24 +32,15 @@ import {
 import { Context, NodeWallet } from "./base";
 import Decimal from "decimal.js";
 
-const SUPER_ADMIN_SECRET_KEY = new Uint8Array([
-  18, 52, 81, 206, 137, 36, 192, 182, 13, 66, 109, 118, 114, 207, 71, 49, 105,
-  175, 72, 36, 151, 192, 249, 96, 106, 164, 193, 202, 163, 193, 97, 220, 159,
-  76, 221, 255, 199, 94, 34, 216, 103, 234, 235, 214, 208, 220, 7, 49, 93, 218,
-  5, 14, 106, 72, 212, 32, 27, 82, 57, 7, 173, 143, 104, 159,
-]);
-
 function localWallet(): Keypair {
-  const payer = Keypair.fromSecretKey(
-    Buffer.from(
-      JSON.parse(
-        require("fs").readFileSync("./keypair.json", {
-          encoding: "utf-8",
-        })
-      )
-    )
+  return Keypair.fromSecretKey(
+    new Uint8Array([
+      12, 14, 221, 123, 106, 110, 90, 126, 26, 140, 181, 162, 148, 212, 32, 1,
+      59, 85, 4, 75, 39, 92, 134, 194, 81, 99, 237, 93, 16, 209, 25, 93, 89, 83,
+      9, 155, 52, 216, 158, 126, 151, 206, 205, 63, 159, 129, 183, 145, 213,
+      243, 142, 90, 227, 81, 149, 67, 240, 245, 14, 175, 230, 215, 89, 253,
+    ])
   );
-  return payer;
 }
 
 async function getContext(programId: PublicKey, wallet: Keypair, url: string) {
@@ -64,14 +59,12 @@ async function getContext(programId: PublicKey, wallet: Keypair, url: string) {
 }
 
 export async function main() {
-  const programId = new PublicKey(
-    "Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3"
-  );
-
-  const url = "http://localhost:8899";
-  // const url = "https://api.devnet.solana.com";
   const owner = localWallet();
-
+  console.log("owner: ", owner.publicKey.toString());
+  const programId = new PublicKey(
+    "devak2cXRFHdv44nPBxVEBubRYLUvmr9tkpJ7EvVm4A"
+  );
+  const url = "https://api.devnet.solana.com";
   const ctx = await getContext(programId, owner, url);
   const stateFetcher = new StateFetcher(ctx.program);
 
@@ -129,7 +122,7 @@ export async function main() {
     new BN(1_000_000)
   );
   console.log("createPersonalPosition tx:", positionTx);
-  
+
   // Increase liquitidity with existed position
   let tx = await increaseLiquidity(
     ctx,
@@ -142,7 +135,7 @@ export async function main() {
     new BN(1_000_000),
     0.005
   );
-  console.log("increaseLiquidity tx:", positionTx);
+  console.log("increaseLiquidity tx:", tx);
 
   // Decrease liquitidity with existed position
   tx = await decreaseLiquidity(
@@ -156,7 +149,7 @@ export async function main() {
     new BN(1_000_000),
     0.005
   );
-  console.log("decreaseLiquidity tx:", positionTx);
+  console.log("decreaseLiquidity tx:", tx);
 
   // swapBaseIn with limit price
   let limitPrice = ammPoolA.token0Price().sub(new Decimal("0.0000002"));
@@ -173,7 +166,7 @@ export async function main() {
     0.005,
     limitPrice
   );
-  console.log("swapBaseIn with limit price tx:", positionTx);
+  console.log("swapBaseIn with limit price tx:", tx);
 
   // swapBaseIn without limit price
   tx = await swapBaseIn(
@@ -186,7 +179,7 @@ export async function main() {
     new BN(100_000),
     0.005
   );
-  console.log("swapBaseIn without limit price tx:", positionTx);
+  console.log("swapBaseIn without limit price tx:", tx);
 
   tx = await swapBaseOut(
     ctx,
@@ -198,8 +191,21 @@ export async function main() {
     new BN(100_000),
     0.005
   );
-  console.log("swapBaseOut tx:", positionTx);
+  console.log("swapBaseOut tx:", tx);
 
+  // only collect fee
+  tx = await decreaseLiquidity(
+    ctx,
+    owner,
+    ammPoolA,
+    positionAccountAddress,
+    ownerToken0Account,
+    ownerToken1Account,
+    new BN(0),
+    new BN(0)
+  );
+  console.log("collect fee tx:", tx);
+  return;
   // create a second pool for swap router
   const [poolBAddress, poolBTx] = await createPool(
     ctx,
@@ -231,7 +237,7 @@ export async function main() {
     new BN(1_000_000),
     new BN(1_000_000)
   );
-  console.log("open second position with pool B, tx:", positionTx);
+  console.log("open second position with pool B, tx:", positionBTx);
 
   // because open position and add liquidity to the pool, we should reload tickArray cache data
   await ammPoolB.reloadCache();
@@ -351,11 +357,10 @@ async function createAmmConfig(
   confirmOptions?: ConfirmOptions
 ): Promise<PublicKey> {
   // Only for test, you needn't do it
-  const [address1, _] = await getAmmConfigAddress(1, ctx.program.programId);
-  if (accountExist(ctx.connection, address1)) {
+  const [address1, _] = await getAmmConfigAddress(0, ctx.program.programId);
+  if (await accountExist(ctx.connection, address1)) {
     return address1;
   }
-
   // Build instrcution
   const [address, ix] = await AmmInstruction.createAmmConfig(
     ctx,
@@ -508,7 +513,7 @@ async function decreaseLiquidity(
 ): Promise<TransactionSignature> {
   const personalPositionData =
     await ammPool.stateFetcher.getPersonalPositionState(personalPosition);
-  const ix = await AmmInstruction.increaseLiquidity(
+  const ix = await AmmInstruction.decreaseLiquidityWithInputAmount(
     {
       positionNftOwner: owner.publicKey,
       token0Account: ownerToken0Account,

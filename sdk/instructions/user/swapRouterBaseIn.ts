@@ -6,30 +6,25 @@ import {
 import { Program, BN } from "@project-serum/anchor";
 import { AmmV3 } from "../../anchor/amm_v3";
 
-export type SwapRouterBaseInAccounts = {
-  payer: PublicKey;
-  inputTokenAccount: PublicKey;
-  tokenProgram: PublicKey;
-  remainings: AccountMeta[];
-};
-
-export type SwapRouterBaseInArgs = {
-  amountIn: BN;
-  amountOutMinimum: BN;
-  additionalAccountsPerPool: Buffer;
-};
-
 export function swapRouterBaseInInstruction(
   program: Program<AmmV3>,
-  args: SwapRouterBaseInArgs,
-  accounts: SwapRouterBaseInAccounts
+  args: {
+    amountIn: BN;
+    amountOutMinimum: BN;
+  },
+  accounts:  {
+    payer: PublicKey;
+    inputTokenAccount: PublicKey;
+    tokenProgram: PublicKey;
+    remainings: AccountMeta[];
+  }
 ): Promise<TransactionInstruction> {
-  const { amountIn, amountOutMinimum, additionalAccountsPerPool } = args;
+  const { amountIn, amountOutMinimum } = args;
 
   const { payer, inputTokenAccount, tokenProgram } = accounts;
 
   return program.methods
-    .swapRouterBaseIn(amountIn, amountOutMinimum, additionalAccountsPerPool)
+    .swapRouterBaseIn(amountIn, amountOutMinimum)
     .accounts({
       payer,
       inputTokenAccount,

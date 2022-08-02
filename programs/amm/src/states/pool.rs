@@ -212,7 +212,6 @@ impl PoolState {
             return Ok(self.reward_infos);
         }
 
-        // Calculate new global reward growth
         let mut next_reward_infos = self.reward_infos;
 
         for i in 0..REWARD_NUM {
@@ -230,9 +229,7 @@ impl PoolState {
 
             let reward_info = &mut next_reward_infos[i];
             let time_delta = latest_update_timestamp - reward_info.last_update_time;
-            // Calculate the new reward growth delta.
-            // If the calculation overflows, set the delta value to zero.
-            // This will halt reward distributions for this reward.
+
             let reward_growth_delta = U128::from(time_delta)
                 .mul_div_floor(
                     U128::from(reward_info.emissions_per_second_x64),
@@ -240,7 +237,6 @@ impl PoolState {
                 )
                 .unwrap();
 
-            // Add the reward growth delta to the global reward growth.
             reward_info.reward_growth_global_x64 = reward_info
                 .reward_growth_global_x64
                 .checked_add(reward_growth_delta.as_u128())

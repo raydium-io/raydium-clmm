@@ -326,6 +326,7 @@ impl TickState {
         self.liquidity_gross = 0;
         self.fee_growth_outside_0_x64 = 0;
         self.fee_growth_outside_1_x64 = 0;
+        self.reward_growths_outside_x64 = [0; REWARD_NUM];
     }
 
     pub fn is_initialized(self) -> bool {

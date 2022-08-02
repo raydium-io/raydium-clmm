@@ -47,7 +47,6 @@ import {
   createPoolInstruction,
   increaseLiquidityInstruction,
   decreaseLiquidityInstruction,
-  collectFeeInstruction,
   swapInstruction,
   swapRouterBaseInInstruction,
 } from "./user";
@@ -75,10 +74,17 @@ export type OpenPositionAccounts = {
   token1Account: PublicKey;
 };
 
-export type LiquidityChangeAccounts = {
+export type IncreaseLiquidityAccounts = {
   positionNftOwner: PublicKey;
   token0Account: PublicKey;
   token1Account: PublicKey;
+};
+
+export type DecreaseLiquidityAccounts = {
+  positionNftOwner: PublicKey;
+  token0Account: PublicKey;
+  token1Account: PublicKey;
+  // recipientRewardTokenAccountA: PublicKey[];
 };
 
 export type SwapAccounts = {
@@ -131,10 +137,12 @@ export class AmmInstruction {
       address,
       await createAmmConfigInstruction(
         ctx.program,
-        index,
-        tickSpacing,
-        globalFeeRate,
-        protocolFeeRate,
+        {
+          index,
+          tickSpacing,
+          globalFeeRate,
+          protocolFeeRate,
+        },
         {
           owner: owner,
           ammConfig: address,
@@ -369,7 +377,7 @@ export class AmmInstruction {
    * @returns
    */
   public static async increaseLiquidity(
-    accounts: LiquidityChangeAccounts,
+    accounts: IncreaseLiquidityAccounts,
     ammPool: AmmPool,
     positionState: PositionState,
     token0Amount: BN,
@@ -454,7 +462,47 @@ export class AmmInstruction {
   }
 
   /**
-   *
+   *  decrease liquidity, collect fee and rewards
+   * @param accounts
+   * @param ammPool
+   * @param positionState
+   * @param token0AmountDesired
+   * @param token1AmountDesired
+   * @param amountSlippage
+   * @returns
+   */
+  public static async decreaseLiquidityWithInputAmount(
+    accounts: DecreaseLiquidityAccounts,
+    ammPool: AmmPool,
+    positionState: PositionState,
+    token0AmountDesired: BN,
+    token1AmountDesired: BN,
+    amountSlippage?: number
+  ): Promise<TransactionInstruction> {
+    const price_lower = SqrtPriceMath.getSqrtPriceX64FromTick(
+      positionState.tickLowerIndex
+    );
+    const price_upper = SqrtPriceMath.getSqrtPriceX64FromTick(
+      positionState.tickUpperIndex
+    );
+    const liquidity = LiquidityMath.getLiquidityFromTokenAmounts(
+      ammPool.poolState.sqrtPriceX64,
+      price_lower,
+      price_upper,
+      token0AmountDesired,
+      token1AmountDesired
+    );
+    return AmmInstruction.decreaseLiquidity(
+      accounts,
+      ammPool,
+      positionState,
+      liquidity,
+      amountSlippage
+    );
+  }
+
+  /**
+   * decrease liquidity, collect fee and rewards
    * @param accounts
    * @param ammPool
    * @param positionState
@@ -463,13 +511,12 @@ export class AmmInstruction {
    * @returns
    */
   public static async decreaseLiquidity(
-    accounts: LiquidityChangeAccounts,
+    accounts: DecreaseLiquidityAccounts,
     ammPool: AmmPool,
     positionState: PositionState,
     liquidity: BN,
     amountSlippage?: number
   ): Promise<TransactionInstruction> {
-    const poolState = ammPool.poolState;
     const ctx = ammPool.ctx;
     const tickLowerIndex = positionState.tickLowerIndex;
     const tickUpperIndex = positionState.tickUpperIndex;
@@ -478,17 +525,11 @@ export class AmmInstruction {
     const sqrtPriceUpperX64 =
       SqrtPriceMath.getSqrtPriceX64FromTick(tickUpperIndex);
 
-    const token0Amount = LiquidityMath.getToken0AmountForLiquidity(
+    const [token0Amount, token1Amount] = LiquidityMath.getAmountsFromLiquidity(
+      ammPool.poolState.sqrtPriceX64,
       sqrtPriceLowerX64,
       sqrtPriceUpperX64,
-      liquidity,
-      false
-    );
-    const token1Amount = LiquidityMath.getToken1AmountForLiquidity(
-      sqrtPriceLowerX64,
-      sqrtPriceUpperX64,
-      liquidity,
-      false
+      liquidity
     );
     let amount0Min: BN = new BN(0);
     let amount1Min: BN = new BN(0);
@@ -544,7 +585,7 @@ export class AmmInstruction {
       },
       {
         nftOwner: accounts.positionNftOwner,
-        ammConfig: poolState.ammConfig,
+        ammConfig: ammPool.poolState.ammConfig,
         nftAccount: positionANftAccount,
         poolState: ammPool.address,
         protocolPosition,
@@ -552,11 +593,12 @@ export class AmmInstruction {
         tickArrayUpper,
         recipientTokenAccount0: accounts.token0Account,
         recipientTokenAccount1: accounts.token1Account,
-        tokenVault0: poolState.tokenVault0,
-        tokenVault1: poolState.tokenVault1,
+        tokenVault0: ammPool.poolState.tokenVault0,
+        tokenVault1: ammPool.poolState.tokenVault1,
         personalPosition,
         tokenProgram: TOKEN_PROGRAM_ID,
-      }
+      },
+      []
     );
   }
 
@@ -680,7 +722,6 @@ export class AmmInstruction {
     amountIn: BN,
     amountOutSlippage?: number
   ): Promise<TransactionInstruction> {
-    let additionalAccountsArray: number[] = [];
     let remainingAccounts: AccountMeta[] = [];
 
     let result = await AmmInstruction.prepareOnePool(amountIn, firstPoolParam);
@@ -693,7 +734,6 @@ export class AmmInstruction {
         outputTokenAccount: remainRouterPools[i].outputTokenAccount,
       };
       result = await AmmInstruction.prepareOnePool(result.amountOut, param);
-      additionalAccountsArray.push(result.additionLength);
       remainingAccounts.push(...result.remains);
     }
     let amountOutMin = new BN(0);
@@ -705,97 +745,12 @@ export class AmmInstruction {
       {
         amountIn,
         amountOutMinimum: amountOutMin,
-        additionalAccountsPerPool: Buffer.from(additionalAccountsArray),
       },
       {
         payer,
         inputTokenAccount: firstPoolParam.inputTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
         remainings: remainingAccounts,
-      }
-    );
-  }
-
-  /**
-   *
-   * @param accounts
-   * @param ammPool
-   * @param positionState
-   * @param amount0Max
-   * @param amount1Max
-   * @returns
-   */
-  public static async collectFee(
-    accounts: LiquidityChangeAccounts,
-    ammPool: AmmPool,
-    positionState: PositionState,
-    amount0Max: BN,
-    amount1Max: BN
-  ): Promise<TransactionInstruction> {
-    const poolState = ammPool.poolState;
-    const ctx = ammPool.ctx;
-    const tickLowerIndex = positionState.tickLowerIndex;
-    const tickUpperIndex = positionState.tickUpperIndex;
-
-    // prepare tickArray
-    const tickArrayLowerStartIndex = getArrayStartIndex(
-      tickLowerIndex,
-      ammPool.poolState.tickSpacing
-    );
-    const [tickArrayLower] = await getTickArrayAddress(
-      ammPool.address,
-      ctx.program.programId,
-      tickArrayLowerStartIndex
-    );
-    const tickArrayUpperStartIndex = getArrayStartIndex(
-      tickUpperIndex,
-      ammPool.poolState.tickSpacing
-    );
-    const [tickArrayUpper] = await getTickArrayAddress(
-      ammPool.address,
-      ctx.program.programId,
-      tickArrayUpperStartIndex
-    );
-
-    const positionANftAccount = await Token.getAssociatedTokenAddress(
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
-      positionState.nftMint,
-      accounts.positionNftOwner
-    );
-
-    const [personalPosition] = await getPersonalPositionAddress(
-      positionState.nftMint,
-      ctx.program.programId
-    );
-
-    const [protocolPosition] = await getProtocolPositionAddress(
-      ammPool.address,
-      ctx.program.programId,
-      tickLowerIndex,
-      tickUpperIndex
-    );
-
-    return await collectFeeInstruction(
-      ctx.program,
-      {
-        amount0Max,
-        amount1Max,
-      },
-      {
-        nftOwner: accounts.positionNftOwner,
-        ammConfig: poolState.ammConfig,
-        nftAccount: positionANftAccount,
-        poolState: ammPool.address,
-        protocolPosition,
-        tickArrayLower,
-        tickArrayUpper,
-        recipientTokenAccount0: accounts.token0Account,
-        recipientTokenAccount1: accounts.token1Account,
-        tokenVault0: poolState.tokenVault0,
-        tokenVault1: poolState.tokenVault1,
-        personalPosition,
-        tokenProgram: TOKEN_PROGRAM_ID,
       }
     );
   }
