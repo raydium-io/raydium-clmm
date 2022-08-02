@@ -9,7 +9,7 @@ use anchor_spl::token;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use mpl_token_metadata::{instruction::create_metadata_accounts_v2, state::Creator};
 use spl_token::instruction::AuthorityType;
-use std::ops::{Deref};
+use std::ops::Deref;
 
 pub struct MintParam<'b, 'info> {
     /// Pays to mint liquidity
@@ -419,11 +419,6 @@ pub fn add_liquidity<'b, 'info>(
         tick_lower_state,
         tick_upper_state,
     )?;
-    // msg!(
-    //     "amount_0_init:{},amount_1_init:{}",
-    //     amount_0_int,
-    //     amount_1_int
-    // );
     let amount_0 = amount_0_int as u64;
     let amount_1 = amount_1_int as u64;
 
@@ -448,8 +443,8 @@ pub fn add_liquidity<'b, 'info>(
 
     accounts.token_vault_0.reload()?;
     accounts.token_vault_1.reload()?;
-    let amount_0 = accounts.token_vault_0.amount - balance_0_before;
-    let amount_1 = accounts.token_vault_1.amount - balance_1_before;
+    require_eq!(amount_0, accounts.token_vault_0.amount - balance_0_before);
+    require_eq!(amount_1, accounts.token_vault_1.amount - balance_1_before);
     require!(
         amount_0 >= amount_0_min && amount_1 >= amount_1_min,
         ErrorCode::PriceSlippageCheck
@@ -556,11 +551,11 @@ pub fn _update_position<'info>(
 ) -> Result<()> {
     let clock = Clock::get()?;
     let updated_reward_infos = pool_state.update_reward_infos(clock.unix_timestamp as u64)?;
-    let reward_growths_outside = RewardInfo::to_reward_growths(&updated_reward_infos);
+    let reward_growths_outside_x64 = RewardInfo::to_reward_growths(&updated_reward_infos);
     #[cfg(feature = "enable-log")]
     msg!(
         "_update_position: update_rewared_info:{:?}",
-        reward_growths_outside
+        reward_growths_outside_x64
     );
 
     let mut flipped_lower = false;
@@ -579,7 +574,7 @@ pub fn _update_position<'info>(
             pool_state.fee_growth_global_1_x64,
             false,
             max_liquidity_per_tick,
-            reward_growths_outside,
+            reward_growths_outside_x64,
         )?;
         flipped_upper = tick_upper_state.update(
             pool_state.tick_current,
@@ -588,13 +583,13 @@ pub fn _update_position<'info>(
             pool_state.fee_growth_global_1_x64,
             true,
             max_liquidity_per_tick,
-            reward_growths_outside,
+            reward_growths_outside_x64,
         )?;
         #[cfg(feature = "enable-log")]
         msg!(
-            "tick_upper.reward_growths_outside:{:?}, tick_lower.reward_growths_outside:{:?}",
-            tick_upper_state.reward_growths_outside,
-            tick_lower_state.reward_growths_outside
+            "tick_upper.reward_growths_outside_x64:{:?}, tick_lower.reward_growths_outside_x64:{:?}",
+            tick_upper_state.reward_growths_outside_x64,
+            tick_lower_state.reward_growths_outside_x64
         );
     }
     // Update fees accrued to the position

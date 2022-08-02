@@ -100,8 +100,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         procotol_position_state: ctx.accounts.protocol_position.as_mut(),
     };
 
-    let (decrease_amount_0, decrease_amount_1) =
-        burn(&mut accounts, liquidity)?;
+    let (decrease_amount_0, decrease_amount_1) = burn(&mut accounts, liquidity)?;
     require!(
         decrease_amount_0 >= amount_0_min && decrease_amount_1 >= amount_1_min,
         ErrorCode::PriceSlippageCheck
@@ -208,10 +207,7 @@ pub struct BurnParam<'b, 'info> {
     pub procotol_position_state: &'b mut Account<'info, ProtocolPositionState>,
 }
 
-pub fn burn<'b, 'info>(
-    ctx: &mut BurnParam<'b, 'info>,
-    liquidity: u128,
-) -> Result<(u64, u64)> {
+pub fn burn<'b, 'info>(ctx: &mut BurnParam<'b, 'info>, liquidity: u128) -> Result<(u64, u64)> {
     let mut tick_array_lower = ctx.tick_array_lower_state.load_mut()?;
     let tick_lower_state = tick_array_lower.get_tick_state_mut(
         ctx.procotol_position_state.tick_lower_index,

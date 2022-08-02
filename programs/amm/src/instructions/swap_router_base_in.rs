@@ -1,4 +1,4 @@
-use super::{exact_internal, SwapContext};
+use super::{exact_internal, SwapAccounts};
 use crate::error::ErrorCode;
 use crate::states::*;
 use anchor_lang::prelude::*;
@@ -21,20 +21,24 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, SwapRouterBaseIn<'info>>,
     amount_in: u64,
     amount_out_minimum: u64,
-    additional_accounts_per_pool: Vec<u8>,
 ) -> Result<()> {
-    let mut remaining_accounts = ctx.remaining_accounts.iter();
     let mut amount_in_internal = amount_in;
     let mut input_token_account = ctx.accounts.input_token_account.clone();
-
-    for i in 0..additional_accounts_per_pool.len() {
-        let mut amm_config = Box::new(Account::<AmmConfig>::try_from(
-            remaining_accounts.next().unwrap(),
-        )?);
+    let mut accounts: &[AccountInfo] = ctx.remaining_accounts;
+    while !accounts.is_empty() {
+        let mut remaining_accounts = accounts.iter();
+        let account_info = remaining_accounts.next().unwrap();
+        if accounts.len() != ctx.remaining_accounts.len()
+            && account_info.data_len() != AmmConfig::LEN
+        {
+            accounts = remaining_accounts.as_slice();
+            continue;
+        }
+        let mut amm_config = Box::new(Account::<AmmConfig>::try_from(account_info)?);
         let mut pool_state = Box::new(Account::<PoolState>::try_from(
             remaining_accounts.next().unwrap(),
         )?);
-        let mut output_token_account =
+        let output_token_account =
             Account::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
         let input_vault = Account::<TokenAccount>::try_from(remaining_accounts.next().unwrap())?;
         let output_vault = Account::<TokenAccount>::try_from(remaining_accounts.next().unwrap())?;
@@ -46,8 +50,9 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
         let mut tick_array =
             AccountLoader::<TickArrayState>::try_from(remaining_accounts.next().unwrap())?;
         // solana_program::log::sol_log_compute_units();
+        accounts = remaining_accounts.as_slice();
         amount_in_internal = exact_internal(
-            &mut SwapContext {
+            &mut SwapAccounts {
                 signer: ctx.accounts.payer.clone(),
                 amm_config: amm_config.as_mut(),
                 input_token_account: input_token_account.clone(),
@@ -59,25 +64,13 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
                 observation_state: &mut observation_state,
                 token_program: ctx.accounts.token_program.clone(),
             },
-            remaining_accounts.as_slice(),
+            accounts,
             amount_in_internal,
             0,
             true,
         )?;
-        // solana_program::log::sol_log_compute_units();
-        output_token_account.reload()?;
-        pool_state.exit(&crate::id())?;
-        observation_state.exit(&crate::id())?;
-
-        if i < additional_accounts_per_pool.len() - 1 {
-            // reach accounts needed for the next swap
-            for _j in 0..additional_accounts_per_pool[i] {
-                let ss = remaining_accounts.next();
-                msg!("ss:{}", ss.unwrap().key().to_string())
-            }
-            // output token account is the new input
-            input_token_account = output_token_account;
-        }
+        // output token is the new swap input token
+        input_token_account = output_token_account;
     }
     require!(
         amount_in_internal >= amount_out_minimum,

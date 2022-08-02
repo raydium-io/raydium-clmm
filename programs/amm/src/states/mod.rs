@@ -11,4 +11,3 @@ pub use personal_position::*;
 pub use pool::*;
 pub use protocol_position::*;
 pub use tick::*;
-

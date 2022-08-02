@@ -1,8 +1,6 @@
 use crate::error::ErrorCode;
 use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
-use crate::states::{
-    protocol_position::POSITION_SEED,
-};
+use crate::states::protocol_position::POSITION_SEED;
 use anchor_lang::prelude::*;
 
 /// Seed to derive account address and signature
@@ -108,7 +106,7 @@ impl PoolState {
         + 8
         + RewardInfo::LEN * REWARD_NUM
         + 512;
-        
+
     pub fn key(&self) -> Pubkey {
         Pubkey::create_program_address(
             &[
@@ -122,7 +120,6 @@ impl PoolState {
         )
         .unwrap()
     }
-
 
     /// Validates the public key of a bitmap account
     ///

@@ -71,7 +71,7 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
         ctx.accounts.personal_position.tick_upper_index,
         ctx.accounts.pool_state.tick_spacing as i32,
     )?;
-    
+
     let pool_state = ctx.accounts.pool_state.as_mut();
     // update global reward info
     let updated_reward_infos = pool_state.update_reward_infos(clock.unix_timestamp as u64)?;

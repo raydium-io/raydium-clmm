@@ -10,11 +10,11 @@ use anchor_lang::prelude::*;
 use instructions::*;
 use states::*;
 
-declare_id!("Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3");
+declare_id!("devak2cXRFHdv44nPBxVEBubRYLUvmr9tkpJ7EvVm4A");
 
 pub mod admin {
     use anchor_lang::prelude::declare_id;
-    declare_id!("BiqojH9aSwnY56SUSb3hj2gCea5F1CG38oihKWfFHr6z");
+    declare_id!("adMCyoCgfkg7bQiJ9aBJ59H3BXLY3r5LNLfPpQfMzBe");
 }
 
 #[program]
@@ -44,7 +44,7 @@ pub mod amm_v3 {
         assert!(protocol_fee_rate > 0 && protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
         assert!(trade_fee_rate < 1_000_000); // 100%
         assert!(tick_spacing > 0 && tick_spacing < 16384);
-        instructions::create_amm_config(ctx, index, tick_spacing,protocol_fee_rate, trade_fee_rate)
+        instructions::create_amm_config(ctx, index, tick_spacing, protocol_fee_rate, trade_fee_rate)
     }
 
     /// Updates the owner of the factory
@@ -57,7 +57,7 @@ pub mod amm_v3 {
     pub fn set_new_owner(ctx: Context<SetNewOwner>) -> Result<()> {
         instructions::set_new_owner(ctx)
     }
-    
+
     // ---------------------------------------------------------------------
     // Pool instructions
 
@@ -235,7 +235,7 @@ pub mod amm_v3 {
             tick_lower_index,
             tick_upper_index,
             tick_array_lower_start_index,
-            tick_array_upper_start_index
+            tick_array_upper_start_index,
         )
     }
 
@@ -359,14 +359,8 @@ pub mod amm_v3 {
         ctx: Context<'a, 'b, 'c, 'info, SwapRouterBaseIn<'info>>,
         amount_in: u64,
         amount_out_minimum: u64,
-        additional_accounts_per_pool: Vec<u8>,
     ) -> Result<()> {
-        instructions::swap_router_base_in(
-            ctx,
-            amount_in,
-            amount_out_minimum,
-            additional_accounts_per_pool,
-        )
+        instructions::swap_router_base_in(ctx, amount_in, amount_out_minimum)
     }
 
     // /// Swaps as little as possible of one token for `amount_out` of another
@@ -388,5 +382,3 @@ pub mod amm_v3 {
     //     todo!()
     // }
 }
-
-

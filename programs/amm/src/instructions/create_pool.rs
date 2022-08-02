@@ -3,7 +3,7 @@ use crate::states::*;
 // use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use std::{ops::DerefMut};
+use std::ops::DerefMut;
 
 #[derive(Accounts)]
 pub struct CreatePool<'info> {
@@ -90,13 +90,15 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
                 // For now, zero copy accounts can't be namespaced.
                 format!("account:{}", observation_account_name)
             };
-            discriminator.copy_from_slice(&solana_program::hash::hash(discriminator_preimage.as_bytes()).to_bytes()[..8]);
+            discriminator.copy_from_slice(
+                &solana_program::hash::hash(discriminator_preimage.as_bytes()).to_bytes()[..8],
+            );
             observation_data[..8].copy_from_slice(&discriminator);
         }
     }
     let observation_state_loader = AccountLoader::<ObservationState>::try_from_unchecked(
         &crate::id(),
-        &ctx.accounts.observation_state.to_account_info()
+        &ctx.accounts.observation_state.to_account_info(),
     )?;
     let mut observation_state = observation_state_loader.load_mut()?;
 

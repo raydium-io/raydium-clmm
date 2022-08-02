@@ -207,7 +207,7 @@ pub struct TickState {
     pub fee_growth_outside_1_x64: u128,
 
     // Array of Q64.64
-    pub reward_growths_outside: [u128; REWARD_NUM],
+    pub reward_growths_outside_x64: [u128; REWARD_NUM],
     // padding space for upgrade
     // pub padding: [u64; 8],
 }
@@ -242,7 +242,7 @@ impl TickState {
         fee_growth_global_1_x64: u128,
         upper: bool,
         _max_liquidity: u128,
-        reward_growths_outside: [u128; REWARD_NUM],
+        reward_growths_outside_x64: [u128; REWARD_NUM],
     ) -> Result<bool> {
         let liquidity_gross_before = self.liquidity_gross;
         let liquidity_gross_after =
@@ -261,7 +261,7 @@ impl TickState {
             if self.tick <= tick_current {
                 self.fee_growth_outside_0_x64 = fee_growth_global_0_x64;
                 self.fee_growth_outside_1_x64 = fee_growth_global_1_x64;
-                self.reward_growths_outside = reward_growths_outside;
+                self.reward_growths_outside_x64 = reward_growths_outside_x64;
             }
         }
 
@@ -306,9 +306,9 @@ impl TickState {
                 continue;
             }
 
-            self.reward_growths_outside[i] = reward_infos[i]
+            self.reward_growths_outside_x64[i] = reward_infos[i]
                 .reward_growth_global_x64
-                .checked_sub(self.reward_growths_outside[i])
+                .checked_sub(self.reward_growths_outside_x64[i])
                 .unwrap();
         }
 
@@ -428,21 +428,21 @@ pub fn get_reward_growths_inside(
         } else if tick_current_index < tick_lower.tick {
             reward_infos[i]
                 .reward_growth_global_x64
-                .checked_sub(tick_lower.reward_growths_outside[i])
+                .checked_sub(tick_lower.reward_growths_outside_x64[i])
                 .unwrap()
         } else {
-            tick_lower.reward_growths_outside[i]
+            tick_lower.reward_growths_outside_x64[i]
         };
 
         // By convention, assume all prior growth happened below the tick, not above
         let reward_growths_above = if tick_upper.liquidity_gross == 0 {
             0
         } else if tick_current_index < tick_upper.tick {
-            tick_upper.reward_growths_outside[i]
+            tick_upper.reward_growths_outside_x64[i]
         } else {
             reward_infos[i]
                 .reward_growth_global_x64
-                .checked_sub(tick_upper.reward_growths_outside[i])
+                .checked_sub(tick_upper.reward_growths_outside_x64[i])
                 .unwrap()
         };
 
