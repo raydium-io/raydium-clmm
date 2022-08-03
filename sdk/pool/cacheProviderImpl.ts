@@ -50,7 +50,6 @@ export class CacheDataProviderImpl implements CacheDataProvider {
       startIndex
     );
     tickArraysToFetch.push(tickArrayAddress);
-
     let lastStartIndex: number = startIndex;
     for (let i = 0; i < FETCH_TICKARRAY_COUNT / 2; i++) {
       const nextStartIndex = getNextTickArrayStartIndex(
@@ -81,12 +80,10 @@ export class CacheDataProviderImpl implements CacheDataProvider {
       tickArraysToFetch.push(tickArrayAddress);
       lastStartIndex = nextStartIndex;
     }
-
     const fetchedTickArrays =
       (await this.program.account.tickArrayState.fetchMultiple(
         tickArraysToFetch
       )) as (TickArray | null)[];
-
     for (const item of fetchedTickArrays) {
       if (item) {
         this.tickArrayCache.set(item.startTickIndex, item);

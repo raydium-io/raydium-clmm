@@ -22,17 +22,14 @@ pub mod amm_v3 {
 
     use super::*;
 
-    // ---------------------------------------------------------------------
-    // Factory instructions
-
-    // The Factory facilitates creation of pools and control over the protocol fees
-
-    /// Initialize the factory state and set the protocol owner
-    ///
+    // The configuation of AMM protocol, include trade fee and protocol fee
     /// # Arguments
     ///
-    /// * `ctx`- Initializes the factory state account
-    /// * `amm_config_bump` - Bump to validate factory state address
+    /// * `ctx`- The accounts needed by instruction.
+    /// * `index` - The index of amm config, there may be multiple config.
+    /// * `tick_spacing` - The tickspacing binding with config.
+    /// * `trade_fee_rate` - Trade fee rate, can be changed.
+    /// * `protocol_fee_rate` - The rate of protocol fee within tarde fee.
     ///
     pub fn create_amm_config(
         ctx: Context<CreateAmmConfig>,
@@ -115,22 +112,6 @@ pub mod amm_v3 {
         ctx: Context<'a, 'b, 'c, 'info, UpdateRewardInfos<'info>>,
     ) -> Result<()> {
         instructions::update_reward_infos(ctx)
-    }
-
-    /// Collects up to a derired amount of reward owed to a specific tokenized position to the recipient
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - Validated addresses of the tokenized position and token accounts. Reward can be sent
-    /// to third parties
-    /// * `reward_index` - The index of reward token in the pool.
-    /// * `amount_desired` - The desired amount of reward to collect, if set 0, all will be collect.
-    ///
-    #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
-    pub fn collect_rewards<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, CollectRewards<'info>>,
-    ) -> Result<()> {
-        instructions::collect_rewards(ctx)
     }
 
     /// Set reward emission per second.
@@ -296,24 +277,6 @@ pub mod amm_v3 {
         amount_1_min: u64,
     ) -> Result<()> {
         instructions::decrease_liquidity(ctx, liquidity, amount_0_min, amount_1_min)
-    }
-
-    /// Collects up to a maximum amount of fees owed to a specific tokenized position to the recipient
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - Validated addresses of the tokenized position and token accounts. Fees can be sent
-    /// to third parties
-    /// * `amount_0_max` - The maximum amount of token0 to collect
-    /// * `amount_1_max` - The maximum amount of token0 to collect
-    ///
-    #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
-    pub fn collect_fee<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, CollectFee<'info>>,
-        amount_0_max: u64,
-        amount_1_max: u64,
-    ) -> Result<()> {
-        instructions::collect_fee(ctx, amount_0_max, amount_1_max)
     }
 
     /// Swaps `amount_in` of one token for as much as possible of another token,

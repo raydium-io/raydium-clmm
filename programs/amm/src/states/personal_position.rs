@@ -122,10 +122,9 @@ pub struct CreatePersonalPositionEvent {
     pub deposit_amount_1: u64,
 }
 
-/// Emitted when liquidity is increased for a position NFT.
-/// Also emitted when a token is minted
+/// Emitted when liquidity is increased.
 #[event]
-pub struct ChangeLiquidityEvent {
+pub struct IncreaseLiquidityEvent {
     /// The ID of the token for which liquidity was increased
     #[index]
     pub position_nft_mint: Pubkey,
@@ -138,6 +137,25 @@ pub struct ChangeLiquidityEvent {
 
     /// The amount of token_1 that was paid for the increase in liquidity
     pub amount_1: u64,
+}
+
+/// Emitted when liquidity is decreased.
+#[event]
+pub struct DecreaseLiquidityEvent {
+    /// The ID of the token for which liquidity was increased
+    pub position_nft_mint: Pubkey,
+    /// The amount by which liquidity for the NFT position was increased
+    pub liquidity: u128,
+    /// The amount of token_0 that was paid for the decrease in liquidity
+    pub decrease_amount_0: u64,
+    /// The amount of token_1 that was paid for the decrease in liquidity
+    pub decrease_amount_1: u64,
+    // The amount of token_0 fee
+    pub fee_amount_0: u64,
+    /// The amount of token_1 fee
+    pub fee_amount_1: u64,
+    /// The amount of rewards
+    pub reward_amounts: [u64; REWARD_NUM],
 }
 
 /// Emitted when tokens are collected for a position NFT

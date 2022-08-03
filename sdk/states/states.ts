@@ -41,7 +41,7 @@ export type PoolState = {
   protocolFeesToken0: BN;
   protocolFeesToken1: BN;
   rewardLastUpdatedTimestamp: BN;
-  // rewardInfos: RewardInfo[];
+  rewardInfos: RewardInfo[];
   observationIndex: number;
   observationKey: PublicKey;
   observationUpdateDuration: number;
@@ -74,7 +74,7 @@ export type PositionState = {
   feeGrowthInside1LastX64: BN;
   tokenFeesOwed0: BN;
   tokenFeesOwed1: BN;
-  // rewardInfos: PositionRewardInfo[];
+  rewardInfos: PositionRewardInfo[];
 };
 
 export type PositionRewardInfo = {

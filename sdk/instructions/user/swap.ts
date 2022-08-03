@@ -4,33 +4,30 @@ import {
   AccountMeta,
 } from "@solana/web3.js";
 import { Program, BN } from "@project-serum/anchor";
-import { AmmV3 } from "../anchor/amm_v3";
+import { AmmV3 } from "../../anchor/amm_v3";
 
-type SwapAccounts = {
-  payer: PublicKey;
-  ammConfig: PublicKey;
-  poolState: PublicKey;
-  inputTokenAccount: PublicKey;
-  outputTokenAccount: PublicKey;
-  inputVault: PublicKey;
-  outputVault: PublicKey;
-  tickArray: PublicKey;
-  observationState: PublicKey;
-  tokenProgram: PublicKey;
-  remainings: AccountMeta[];
-};
-
-type SwapArgs = {
-  amount: BN;
-  otherAmountThreshold: BN;
-  sqrtPriceLimitX64: BN;
-  isBaseInput: boolean;
-};
 
 export function swapInstruction(
   program: Program<AmmV3>,
-  args: SwapArgs,
-  accounts: SwapAccounts
+  args: {
+    amount: BN;
+    otherAmountThreshold: BN;
+    sqrtPriceLimitX64: BN;
+    isBaseInput: boolean;
+  },
+  accounts:  {
+    payer: PublicKey;
+    ammConfig: PublicKey;
+    poolState: PublicKey;
+    inputTokenAccount: PublicKey;
+    outputTokenAccount: PublicKey;
+    inputVault: PublicKey;
+    outputVault: PublicKey;
+    tickArray: PublicKey;
+    observationState: PublicKey;
+    tokenProgram: PublicKey;
+    remainings: AccountMeta[];
+  }
 ): Promise<TransactionInstruction> {
   const { amount, otherAmountThreshold, sqrtPriceLimitX64, isBaseInput } = args;
   const {

@@ -4,11 +4,8 @@ import {
   AMM_CONFIG_SEED,
   POOL_SEED,
   POOL_VAULT_SEED,
-  FEE_SEED,
   POSITION_SEED,
   TICK_ARRAY_SEED,
-  BITMAP_SEED,
-  OBSERVATION_SEED,
   POOL_REWARD_VAULT_SEED,
   u32ToBytes,
   u16ToBytes,
@@ -69,17 +66,6 @@ export async function getPoolRewardVaultAddress(
 ): Promise<[PublicKey, number]> {
   const [address, bump] = await PublicKey.findProgramAddress(
     [POOL_REWARD_VAULT_SEED, pool.toBuffer(), rewardTokenMint.toBuffer()],
-    programId
-  );
-  return [address, bump];
-}
-
-export async function getObservationAddress(
-  pool: PublicKey,
-  programId: PublicKey
-): Promise<[PublicKey, number]> {
-  const [address, bump] = await PublicKey.findProgramAddress(
-    [OBSERVATION_SEED, pool.toBuffer()],
     programId
   );
   return [address, bump];

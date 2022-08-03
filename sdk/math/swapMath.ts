@@ -228,13 +228,13 @@ export abstract class SwapMath {
         FEE_RATE_DENOMINATOR
       );
       swapStep.amountIn = zeroForOne
-        ? LiquidityMath.getToken0AmountForLiquidity(
+        ? LiquidityMath.getToken0AmountFromLiquidity(
             sqrtPriceX64Target,
             sqrtPriceX64Current,
             liquidity,
             true
           )
-        : LiquidityMath.getToken1AmountForLiquidity(
+        : LiquidityMath.getToken1AmountFromLiquidity(
             sqrtPriceX64Current,
             sqrtPriceX64Target,
             liquidity,
@@ -252,13 +252,13 @@ export abstract class SwapMath {
       }
     } else {
       swapStep.amountOut = zeroForOne
-        ? LiquidityMath.getToken1AmountForLiquidity(
+        ? LiquidityMath.getToken1AmountFromLiquidity(
             sqrtPriceX64Target,
             sqrtPriceX64Current,
             liquidity,
             false
           )
-        : LiquidityMath.getToken0AmountForLiquidity(
+        : LiquidityMath.getToken0AmountFromLiquidity(
             sqrtPriceX64Current,
             sqrtPriceX64Target,
             liquidity,
@@ -280,7 +280,7 @@ export abstract class SwapMath {
 
     if (zeroForOne) {
       if (!(reachTargetPrice && baseInput)) {
-        swapStep.amountIn = LiquidityMath.getToken0AmountForLiquidity(
+        swapStep.amountIn = LiquidityMath.getToken0AmountFromLiquidity(
           swapStep.sqrtPriceX64Next,
           sqrtPriceX64Current,
           liquidity,
@@ -289,7 +289,7 @@ export abstract class SwapMath {
       }
 
       if (!(reachTargetPrice && !baseInput)) {
-        swapStep.amountOut = LiquidityMath.getToken1AmountForLiquidity(
+        swapStep.amountOut = LiquidityMath.getToken1AmountFromLiquidity(
           swapStep.sqrtPriceX64Next,
           sqrtPriceX64Current,
           liquidity,
@@ -300,7 +300,7 @@ export abstract class SwapMath {
       swapStep.amountIn =
         reachTargetPrice && baseInput
           ? swapStep.amountIn
-          : LiquidityMath.getToken1AmountForLiquidity(
+          : LiquidityMath.getToken1AmountFromLiquidity(
               sqrtPriceX64Current,
               swapStep.sqrtPriceX64Next,
               liquidity,
@@ -309,7 +309,7 @@ export abstract class SwapMath {
       swapStep.amountOut =
         reachTargetPrice && !baseInput
           ? swapStep.amountOut
-          : LiquidityMath.getToken0AmountForLiquidity(
+          : LiquidityMath.getToken0AmountFromLiquidity(
               sqrtPriceX64Current,
               swapStep.sqrtPriceX64Next,
               liquidity,

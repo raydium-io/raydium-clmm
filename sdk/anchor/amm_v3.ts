@@ -911,10 +911,6 @@ export type AmmV3 = {
         {
           "name": "amountOutMinimum",
           "type": "u64"
-        },
-        {
-          "name": "additionalAccountsPerPool",
-          "type": "bytes"
         }
       ]
     }
@@ -1386,7 +1382,7 @@ export type AmmV3 = {
             "type": "u128"
           },
           {
-            "name": "rewardGrowthsOutside",
+            "name": "rewardGrowthsOutsideX64",
             "type": {
               "array": [
                 "u128",
@@ -2764,10 +2760,6 @@ export const IDL: AmmV3 = {
         {
           "name": "amountOutMinimum",
           "type": "u64"
-        },
-        {
-          "name": "additionalAccountsPerPool",
-          "type": "bytes"
         }
       ]
     }
@@ -3239,7 +3231,7 @@ export const IDL: AmmV3 = {
             "type": "u128"
           },
           {
-            "name": "rewardGrowthsOutside",
+            "name": "rewardGrowthsOutsideX64",
             "type": {
               "array": [
                 "u128",

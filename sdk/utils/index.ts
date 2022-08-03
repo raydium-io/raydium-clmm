@@ -1,5 +1,5 @@
 
 export * from './seed'
-export * from './util'
+export * from './web3'
 export * from "./pda"
 export * from "./transaction"

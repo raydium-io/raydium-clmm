@@ -911,10 +911,6 @@
         {
           "name": "amountOutMinimum",
           "type": "u64"
-        },
-        {
-          "name": "additionalAccountsPerPool",
-          "type": "bytes"
         }
       ]
     }
@@ -1386,7 +1382,7 @@
             "type": "u128"
           },
           {
-            "name": "rewardGrowthsOutside",
+            "name": "rewardGrowthsOutsideX64",
             "type": {
               "array": [
                 "u128",
