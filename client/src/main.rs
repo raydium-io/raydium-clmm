@@ -429,7 +429,7 @@ fn main() -> Result<()> {
                     let config_index = v[1].parse::<u16>().unwrap();
                     let tick = v[2].parse::<i32>().unwrap();
                     let price = tick_to_price(tick);
-                    let sqrt_price_x64 = tick_math::get_sqrt_ratio_at_tick(tick)?;
+                    let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick)?;
                     let (amm_config_key, __bump) = Pubkey::find_program_address(&[raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(), &config_index.to_be_bytes()], &pool_config.raydium_v3_program);
                     println!("tick:{}, price:{}, sqrt_price_x64:{}, amm_config_key:{}", tick, price, sqrt_price_x64, amm_config_key);
                     let observation_account = Keypair::generate(&mut OsRng);
@@ -697,8 +697,8 @@ fn main() -> Result<()> {
                 }
             }
             "single_swap" => {
-                let tick1 = tick_math::get_tick_at_sqrt_ratio(18446744073709551616)?;
-                let tick2 = tick_math::get_tick_at_sqrt_ratio(18446744073709541616)?;
+                let tick1 = tick_math::get_tick_at_sqrt_price(18446744073709551616)?;
+                let tick2 = tick_math::get_tick_at_sqrt_price(18446744073709541616)?;
                 println!("tick1:{}, tick2:{}", tick1, tick2);
                 let ret = raydium_amm_v3::libraries::get_amount_0_for_liquidity(18446744073709551616, 18446744073709541616, 52022602764);
                 println!("{}", ret);
@@ -709,7 +709,7 @@ fn main() -> Result<()> {
             "tick_to_x64" => {
                 if v.len() == 2 {
                     let tick = v[1].parse::<i32>().unwrap();
-                    let sqrt_price_x64 = tick_math::get_sqrt_ratio_at_tick(tick)?;
+                    let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick)?;
                     let sqrt_price_f = (sqrt_price_x64 >> fixed_point_64::RESOLUTION) as f64 +  (sqrt_price_x64 % fixed_point_64::Q64) as f64 / fixed_point_64::Q64 as f64;
                     println!("{}-{}", sqrt_price_x64, sqrt_price_f * sqrt_price_f);
                 }
@@ -717,7 +717,7 @@ fn main() -> Result<()> {
             "sqrt_price_x64_to_tick" => {
                 if v.len() == 2 {
                     let sqrt_price_x64 = v[1].parse::<u128>().unwrap();
-                    let tick = tick_math::get_tick_at_sqrt_ratio(sqrt_price_x64)?;
+                    let tick = tick_math::get_tick_at_sqrt_price(sqrt_price_x64)?;
                     println!("sqrt_price_x64:{}, tick:{}", sqrt_price_x64, tick);
                 }
             }

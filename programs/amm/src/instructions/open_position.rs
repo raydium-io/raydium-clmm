@@ -9,7 +9,7 @@ use anchor_spl::token;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use mpl_token_metadata::{instruction::create_metadata_accounts_v2, state::Creator};
 use spl_token::instruction::AuthorityType;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 pub struct MintParam<'b, 'info> {
     /// Pays to mint liquidity
@@ -215,9 +215,8 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         ctx.accounts.payer.to_account_info(),
         ctx.accounts.tick_array_lower.to_account_info(),
         ctx.accounts.system_program.to_account_info(),
-        ctx.accounts.pool_state.key(),
+        ctx.accounts.pool_state.deref_mut(),
         start_lower_index,
-        ctx.accounts.pool_state.tick_spacing,
     )?;
 
     let tick_array_upper_state = if start_lower_index == start_upper_index {
@@ -227,9 +226,8 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             ctx.accounts.payer.to_account_info(),
             ctx.accounts.tick_array_upper.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
-            ctx.accounts.pool_state.key(),
+            ctx.accounts.pool_state.deref_mut(),
             start_upper_index,
-            ctx.accounts.pool_state.tick_spacing,
         )?
     };
 
@@ -388,8 +386,8 @@ pub fn add_liquidity<'b, 'info>(
 ) -> Result<(u128, u64, u64)> {
     let sqrt_price_x64 = accounts.pool_state.sqrt_price_x64;
 
-    let sqrt_ratio_a_x64 = tick_math::get_sqrt_ratio_at_tick(tick_lower_index)?;
-    let sqrt_ratio_b_x64 = tick_math::get_sqrt_ratio_at_tick(tick_upper_index)?;
+    let sqrt_ratio_a_x64 = tick_math::get_sqrt_price_at_tick(tick_lower_index)?;
+    let sqrt_ratio_b_x64 = tick_math::get_sqrt_price_at_tick(tick_upper_index)?;
     let liquidity = liquidity_amounts::get_liquidity_for_amounts(
         sqrt_price_x64,
         sqrt_ratio_a_x64,
@@ -495,19 +493,19 @@ pub fn _modify_position<'info>(
             // current tick is below the passed range; liquidity can only become in range by crossing from left to
             // right, when we'll need _more_ token_0 (it's becoming more valuable) so user must provide it
             amount_0 = sqrt_price_math::get_amount_0_delta_signed(
-                tick_math::get_sqrt_ratio_at_tick(tick_lower)?,
-                tick_math::get_sqrt_ratio_at_tick(tick_upper)?,
+                tick_math::get_sqrt_price_at_tick(tick_lower)?,
+                tick_math::get_sqrt_price_at_tick(tick_upper)?,
                 liquidity_delta,
             );
         } else if pool_state.tick_current < tick_upper {
             // Both Δtoken_0 and Δtoken_1 will be needed in current price
             amount_0 = sqrt_price_math::get_amount_0_delta_signed(
                 pool_state.sqrt_price_x64,
-                tick_math::get_sqrt_ratio_at_tick(tick_upper)?,
+                tick_math::get_sqrt_price_at_tick(tick_upper)?,
                 liquidity_delta,
             );
             amount_1 = sqrt_price_math::get_amount_1_delta_signed(
-                tick_math::get_sqrt_ratio_at_tick(tick_lower)?,
+                tick_math::get_sqrt_price_at_tick(tick_lower)?,
                 pool_state.sqrt_price_x64,
                 liquidity_delta,
             );
@@ -517,8 +515,8 @@ pub fn _modify_position<'info>(
         // current tick is above the range
         else {
             amount_1 = sqrt_price_math::get_amount_1_delta_signed(
-                tick_math::get_sqrt_ratio_at_tick(tick_lower)?,
-                tick_math::get_sqrt_ratio_at_tick(tick_upper)?,
+                tick_math::get_sqrt_price_at_tick(tick_lower)?,
+                tick_math::get_sqrt_price_at_tick(tick_upper)?,
                 liquidity_delta,
             );
         }

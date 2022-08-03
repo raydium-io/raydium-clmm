@@ -6,6 +6,8 @@ use crate::pool::{RewardInfo, REWARD_NUM};
 use crate::util::*;
 use anchor_lang::{prelude::*, system_program};
 
+use super::pool::PoolState;
+
 /// Seed to derive account address and signature
 pub const TICK_ARRAY_SEED: &str = "tick_array";
 pub const TICK_ARRAY_SIZE_USIZE: usize = 80;
@@ -26,17 +28,16 @@ impl TickArrayState {
         payer: AccountInfo<'info>,
         tick_array_account_info: AccountInfo<'info>,
         system_program: AccountInfo<'info>,
-        pool_key: Pubkey,
-        start_index: i32,
-        tick_spacing: u16,
+        pool_state: &mut Account<'info, PoolState>,
+        tick_array_start_index: i32,
     ) -> Result<AccountLoader<'info, TickArrayState>> {
         let mut is_create = false;
         let tick_array_state = if tick_array_account_info.owner == &system_program::ID {
             let (expect_pda_address, bump) = Pubkey::find_program_address(
                 &[
                     TICK_ARRAY_SEED.as_bytes(),
-                    pool_key.as_ref(),
-                    &start_index.to_be_bytes(),
+                    pool_state.key().as_ref(),
+                    &tick_array_start_index.to_be_bytes(),
                 ],
                 &crate::id(),
             );
@@ -48,8 +49,8 @@ impl TickArrayState {
                 tick_array_account_info.clone(),
                 &[
                     TICK_ARRAY_SEED.as_bytes(),
-                    pool_key.as_ref(),
-                    &start_index.to_be_bytes(),
+                    pool_state.key().as_ref(),
+                    &tick_array_start_index.to_be_bytes(),
                     &[bump],
                 ],
                 TickArrayState::LEN,
@@ -66,9 +67,16 @@ impl TickArrayState {
         if is_create {
             {
                 let mut tick_array_account = tick_array_state.load_init()?;
-                tick_array_account.initialize(start_index, tick_spacing, pool_key)?;
+                tick_array_account.initialize(
+                    tick_array_start_index,
+                    pool_state.tick_spacing,
+                    pool_state.key(),
+                )?;
             }
+            // save the 8 byte discriminator
             tick_array_state.exit(&crate::id())?;
+
+            pool_state.flip_tick_array_bit(tick_array_start_index)?;
         }
         Ok(tick_array_state)
     }
@@ -331,13 +339,6 @@ impl TickState {
 
     pub fn is_initialized(self) -> bool {
         self.liquidity_gross != 0
-    }
-
-    pub fn is_clear(self) -> bool {
-        self.liquidity_net == 0
-            && self.liquidity_gross == 0
-            && self.fee_growth_outside_0_x64 == 0
-            && self.fee_growth_outside_1_x64 == 0
     }
 }
 

@@ -128,12 +128,12 @@ pub fn _block_timestamp() -> u32 {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::libraries::{big_num::U256, get_sqrt_ratio_at_tick};
+    use crate::libraries::{big_num::U256, get_sqrt_price_at_tick};
     use crate::states::pool::OBSERVATION_UPDATE_DURATION_DEFAULT;
     #[test]
     fn test_update_check_init() {
         let block_timestamp = 1647424834 as u32;
-        let sqrt_price_x64 = get_sqrt_ratio_at_tick(1000).unwrap();
+        let sqrt_price_x64 = get_sqrt_price_at_tick(1000).unwrap();
         let observation_index = 0u16;
         let observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
         let mut observation_state = ObservationState::default();
@@ -163,7 +163,7 @@ mod test {
     #[test]
     fn test_update_check_init_turn_around() {
         let block_timestamp = 1647424834 as u32;
-        let sqrt_price_x64 = get_sqrt_ratio_at_tick(1000).unwrap();
+        let sqrt_price_x64 = get_sqrt_price_at_tick(1000).unwrap();
         let observation_index = (OBSERVATION_NUM - 1) as u16;
         let observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
         let mut observation_state = ObservationState::default();
@@ -194,7 +194,7 @@ mod test {
     fn test_update_check_time_within_duration() {
         // init
         let mut block_timestamp = 1647424834 as u32;
-        let mut sqrt_price_x64 = get_sqrt_ratio_at_tick(1000).unwrap();
+        let mut sqrt_price_x64 = get_sqrt_price_at_tick(1000).unwrap();
         let mut observation_index = 0u16;
         let observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
         let mut observation_state = ObservationState::default();
@@ -222,7 +222,7 @@ mod test {
         );
         // update
         block_timestamp += 10;
-        sqrt_price_x64 = get_sqrt_ratio_at_tick(1001).unwrap();
+        sqrt_price_x64 = get_sqrt_price_at_tick(1001).unwrap();
         observation_index = next_observation_index.unwrap();
         let next_observation_index = observation_state
             .update_check(
@@ -239,7 +239,7 @@ mod test {
     fn test_update_check_time_out_duration_same_price() {
         // init
         let mut block_timestamp = 1647424834 as u32;
-        let mut sqrt_price_x64 = get_sqrt_ratio_at_tick(1000).unwrap();
+        let mut sqrt_price_x64 = get_sqrt_price_at_tick(1000).unwrap();
         let mut observation_index = 0u16;
         let observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
         let mut observation_state = ObservationState::default();
@@ -267,7 +267,7 @@ mod test {
         );
         // update
         block_timestamp += OBSERVATION_UPDATE_DURATION_DEFAULT as u32;
-        sqrt_price_x64 = get_sqrt_ratio_at_tick(1000).unwrap();
+        sqrt_price_x64 = get_sqrt_price_at_tick(1000).unwrap();
         observation_index = next_observation_index.unwrap();
         let next_observation_index = observation_state
             .update_check(
@@ -284,7 +284,7 @@ mod test {
     fn test_update_check_ok() {
         // init
         let mut block_timestamp = 1647424834 as u32;
-        let mut sqrt_price_x64 = get_sqrt_ratio_at_tick(1000).unwrap();
+        let mut sqrt_price_x64 = get_sqrt_price_at_tick(1000).unwrap();
         let mut observation_index = 0u16;
         let observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
         let mut observation_state = ObservationState::default();
@@ -312,7 +312,7 @@ mod test {
         );
         // update
         block_timestamp += OBSERVATION_UPDATE_DURATION_DEFAULT as u32;
-        sqrt_price_x64 = get_sqrt_ratio_at_tick(1001).unwrap();
+        sqrt_price_x64 = get_sqrt_price_at_tick(1001).unwrap();
 
         let observation = observation_state.observations[observation_index as usize];
         let delta_time = block_timestamp.saturating_sub(observation.block_timestamp);
@@ -357,7 +357,7 @@ mod test {
     fn test_update_check_flipped() {
         // init
         let mut block_timestamp = 1647424834 as u32;
-        let mut sqrt_price_x64 = get_sqrt_ratio_at_tick(0).unwrap();
+        let mut sqrt_price_x64 = get_sqrt_price_at_tick(0).unwrap();
         let mut observation_index = 0u16;
         let observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
         let mut observation_state = ObservationState::default();
@@ -387,7 +387,7 @@ mod test {
             u128::max_value() - 100;
         // update
         block_timestamp += 100;
-        sqrt_price_x64 = get_sqrt_ratio_at_tick(10).unwrap();
+        sqrt_price_x64 = get_sqrt_price_at_tick(10).unwrap();
 
         let observation = observation_state.observations[observation_index as usize];
         let delta_time = block_timestamp.saturating_sub(observation.block_timestamp);

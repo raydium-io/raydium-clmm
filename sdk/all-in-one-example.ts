@@ -62,9 +62,11 @@ export async function main() {
   const owner = localWallet();
   console.log("owner: ", owner.publicKey.toString());
   const programId = new PublicKey(
-    "devak2cXRFHdv44nPBxVEBubRYLUvmr9tkpJ7EvVm4A"
+    // "devak2cXRFHdv44nPBxVEBubRYLUvmr9tkpJ7EvVm4A"
+    "Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3"
   );
-  const url = "https://api.devnet.solana.com";
+  // const url = "https://api.devnet.solana.com";
+  const url = "http://localhost:8899";
   const ctx = await getContext(programId, owner, url);
   const stateFetcher = new StateFetcher(ctx.program);
 
@@ -205,7 +207,7 @@ export async function main() {
     new BN(0)
   );
   console.log("collect fee tx:", tx);
-  return;
+
   // create a second pool for swap router
   const [poolBAddress, poolBTx] = await createPool(
     ctx,

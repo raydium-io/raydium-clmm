@@ -254,7 +254,7 @@ pub fn swap_internal<'b, 'info>(
             step.tick_next = tick_math::MAX_TICK;
         }
 
-        step.sqrt_price_next_x64 = tick_math::get_sqrt_ratio_at_tick(step.tick_next)?;
+        step.sqrt_price_next_x64 = tick_math::get_sqrt_price_at_tick(step.tick_next)?;
         let target_price = if (zero_for_one && step.sqrt_price_next_x64 < sqrt_price_limit_x64)
             || (!zero_for_one && step.sqrt_price_next_x64 > sqrt_price_limit_x64)
         {
@@ -351,7 +351,7 @@ pub fn swap_internal<'b, 'info>(
             };
         } else if state.sqrt_price_x64 != step.sqrt_price_start_x64 {
             // recompute unless we're on a lower tick boundary (i.e. already transitioned ticks), and haven't moved
-            state.tick = tick_math::get_tick_at_sqrt_ratio(state.sqrt_price_x64)?;
+            state.tick = tick_math::get_tick_at_sqrt_price(state.sqrt_price_x64)?;
         }
 
         #[cfg(feature = "enable-log")]
