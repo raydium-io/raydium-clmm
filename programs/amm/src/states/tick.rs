@@ -1,3 +1,4 @@
+use super::pool::PoolState;
 use crate::error::ErrorCode;
 ///! Contains functions for managing tick processes and relevant calculations
 ///!
@@ -6,12 +7,12 @@ use crate::pool::{RewardInfo, REWARD_NUM};
 use crate::util::*;
 use anchor_lang::{prelude::*, system_program};
 
-use super::pool::PoolState;
-
 /// Seed to derive account address and signature
 pub const TICK_ARRAY_SEED: &str = "tick_array";
 pub const TICK_ARRAY_SIZE_USIZE: usize = 80;
 pub const TICK_ARRAY_SIZE: i32 = 80;
+pub const MIN_TICK_ARRAY_START_INDEX: i32 = -409600;
+pub const MAX_TICK_ARRAY_START_INDEX: i32 = 408800;
 
 #[account(zero_copy)]
 #[repr(packed)]
@@ -19,10 +20,11 @@ pub struct TickArrayState {
     pub amm_pool: Pubkey,
     pub start_tick_index: i32,
     pub ticks: [TickState; TICK_ARRAY_SIZE_USIZE],
+    pub initialized_tick_count: u8,
 }
 
 impl TickArrayState {
-    pub const LEN: usize = 8 + 32 + 4 + TickState::LEN * TICK_ARRAY_SIZE_USIZE;
+    pub const LEN: usize = 8 + 32 + 4 + TickState::LEN * TICK_ARRAY_SIZE_USIZE + 1;
 
     pub fn get_or_create_tick_array<'info>(
         payer: AccountInfo<'info>,
@@ -75,12 +77,14 @@ impl TickArrayState {
             }
             // save the 8 byte discriminator
             tick_array_state.exit(&crate::id())?;
-
             pool_state.flip_tick_array_bit(tick_array_start_index)?;
         }
         Ok(tick_array_state)
     }
 
+    /**
+     * Initialize only can be called when first created
+     */
     pub fn initialize(
         &mut self,
         start_index: i32,
@@ -91,6 +95,44 @@ impl TickArrayState {
         self.start_tick_index = start_index;
         self.amm_pool = pool_key;
         Ok(())
+    }
+
+    pub fn update_initialized_tick_count(
+        &mut self,
+        tick_index: i32,
+        tick_spacing: i32,
+        add: bool,
+    ) -> Result<()> {
+        let offset_in_array = self.get_tick_offset_in_array(tick_index, tick_spacing)?;
+        if add {
+            if !self.ticks[offset_in_array].is_initialized() {
+                self.initialized_tick_count += 1;
+            }
+        } else {
+            self.initialized_tick_count -= 1;
+        }
+        Ok(())
+    }
+
+    pub fn get_tick_state_mut(
+        &mut self,
+        tick_index: i32,
+        tick_spacing: i32,
+    ) -> Result<&mut TickState> {
+        let offset_in_array = self.get_tick_offset_in_array(tick_index, tick_spacing)?;
+        Ok(&mut self.ticks[offset_in_array])
+    }
+
+    fn get_tick_offset_in_array(self, tick_index: i32, tick_spacing: i32) -> Result<usize> {
+        require_eq!(0, tick_index % tick_spacing);
+        let start_tick_index = TickArrayState::get_arrary_start_index(tick_index, tick_spacing);
+        require_eq!(
+            start_tick_index,
+            self.start_tick_index,
+            ErrorCode::InvalidTickArray
+        );
+        let offset_in_array = ((tick_index - self.start_tick_index) / tick_spacing) as usize;
+        Ok(offset_in_array)
     }
 
     pub fn first_initialized_tick(&mut self, zero_for_one: bool) -> Result<&mut TickState> {
@@ -123,46 +165,30 @@ impl TickArrayState {
         let start_tick_index =
             TickArrayState::get_arrary_start_index(currenct_tick_index, tick_spacing as i32);
         let is_start_index = start_tick_index == currenct_tick_index;
-        let mut index_in_array =
+        let mut offset_in_array =
             (currenct_tick_index - self.start_tick_index) / (tick_spacing as i32);
         if zero_for_one {
             if is_start_index {
-                index_in_array = index_in_array - 1;
+                offset_in_array = offset_in_array - 1;
             }
-            while index_in_array >= 0 {
-                if self.ticks[index_in_array as usize].is_initialized() {
-                    return Ok(self.ticks.get_mut(index_in_array as usize));
+            while offset_in_array >= 0 {
+                if self.ticks[offset_in_array as usize].is_initialized() {
+                    return Ok(self.ticks.get_mut(offset_in_array as usize));
                 }
-                index_in_array = index_in_array - 1;
+                offset_in_array = offset_in_array - 1;
             }
         } else {
             if is_start_index {
-                index_in_array = index_in_array + 1;
+                offset_in_array = offset_in_array + 1;
             }
-            while index_in_array < TICK_ARRAY_SIZE {
-                if self.ticks[index_in_array as usize].is_initialized() {
-                    return Ok(self.ticks.get_mut(index_in_array as usize));
+            while offset_in_array < TICK_ARRAY_SIZE {
+                if self.ticks[offset_in_array as usize].is_initialized() {
+                    return Ok(self.ticks.get_mut(offset_in_array as usize));
                 }
-                index_in_array = index_in_array + 1;
+                offset_in_array = offset_in_array + 1;
             }
         }
         Ok(None)
-    }
-
-    pub fn get_tick_state_mut(
-        &mut self,
-        tick_index: i32,
-        tick_spacing: i32,
-    ) -> Result<&mut TickState> {
-        require_eq!(0, tick_index % tick_spacing);
-        let start_tick_index = TickArrayState::get_arrary_start_index(tick_index, tick_spacing);
-        require_eq!(
-            start_tick_index,
-            self.start_tick_index,
-            ErrorCode::InvalidTickArray
-        );
-        let index_in_array = ((tick_index - self.start_tick_index) / tick_spacing) as usize;
-        Ok(&mut self.ticks[index_in_array])
     }
 
     pub fn next_tick_arrary_start_index(&self, tick_spacing: u16, zero_for_one: bool) -> i32 {
@@ -189,6 +215,7 @@ impl Default for TickArrayState {
             amm_pool: Pubkey::default(),
             ticks: [TickState::default(); TICK_ARRAY_SIZE_USIZE],
             start_tick_index: 0,
+            initialized_tick_count: 0,
         }
     }
 }
@@ -255,10 +282,6 @@ impl TickState {
         let liquidity_gross_before = self.liquidity_gross;
         let liquidity_gross_after =
             liquidity_math::add_delta(liquidity_gross_before, liquidity_delta)?;
-
-        // Overflow should not happen for sane pools
-        // entire tick range can never be traversed
-        // require!(liquidity_gross_after <= max_liquidity, ErrorCode::LO);
 
         // Either liquidity_gross_after becomes 0 (uninitialized) XOR liquidity_gross_before
         // was zero (initialized)

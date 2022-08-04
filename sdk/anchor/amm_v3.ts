@@ -238,52 +238,6 @@ export type AmmV3 = {
       "args": []
     },
     {
-      "name": "collectRewards",
-      "accounts": [
-        {
-          "name": "nftOwner",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
-          "name": "nftAccount",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "protocolPosition",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "personalPosition",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "poolState",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickArrayLower",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickArrayUpper",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tokenProgram",
-          "isMut": false,
-          "isSigner": false
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "setRewardEmissions",
       "accounts": [
         {
@@ -732,86 +686,6 @@ export type AmmV3 = {
       ]
     },
     {
-      "name": "collectFee",
-      "accounts": [
-        {
-          "name": "nftOwner",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
-          "name": "nftAccount",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "personalPosition",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "poolState",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "protocolPosition",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickArrayLower",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickArrayUpper",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tokenVault0",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tokenVault1",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "recipientTokenAccount0",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "recipientTokenAccount1",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tokenProgram",
-          "isMut": false,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "amount0Max",
-          "type": "u64"
-        },
-        {
-          "name": "amount1Max",
-          "type": "u64"
-        }
-      ]
-    },
-    {
       "name": "swap",
       "accounts": [
         {
@@ -1158,6 +1032,24 @@ export type AmmV3 = {
                 3
               ]
             }
+          },
+          {
+            "name": "tickArrayBitmapPositive",
+            "type": {
+              "array": [
+                "u64",
+                8
+              ]
+            }
+          },
+          {
+            "name": "tickArrayBitmapNegative",
+            "type": {
+              "array": [
+                "u64",
+                8
+              ]
+            }
           }
         ]
       }
@@ -1234,6 +1126,10 @@ export type AmmV3 = {
                 80
               ]
             }
+          },
+          {
+            "name": "initializedTickCount",
+            "type": "u8"
           }
         ]
       }
@@ -1506,7 +1402,7 @@ export type AmmV3 = {
       ]
     },
     {
-      "name": "ChangeLiquidityEvent",
+      "name": "IncreaseLiquidityEvent",
       "fields": [
         {
           "name": "positionNftMint",
@@ -1526,6 +1422,51 @@ export type AmmV3 = {
         {
           "name": "amount1",
           "type": "u64",
+          "index": false
+        }
+      ]
+    },
+    {
+      "name": "DecreaseLiquidityEvent",
+      "fields": [
+        {
+          "name": "positionNftMint",
+          "type": "publicKey",
+          "index": false
+        },
+        {
+          "name": "liquidity",
+          "type": "u128",
+          "index": false
+        },
+        {
+          "name": "decreaseAmount0",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "decreaseAmount1",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "feeAmount0",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "feeAmount1",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "rewardAmounts",
+          "type": {
+            "array": [
+              "u64",
+              3
+            ]
+          },
           "index": false
         }
       ]
@@ -2087,52 +2028,6 @@ export const IDL: AmmV3 = {
       "args": []
     },
     {
-      "name": "collectRewards",
-      "accounts": [
-        {
-          "name": "nftOwner",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
-          "name": "nftAccount",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "protocolPosition",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "personalPosition",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "poolState",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickArrayLower",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickArrayUpper",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tokenProgram",
-          "isMut": false,
-          "isSigner": false
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "setRewardEmissions",
       "accounts": [
         {
@@ -2581,86 +2476,6 @@ export const IDL: AmmV3 = {
       ]
     },
     {
-      "name": "collectFee",
-      "accounts": [
-        {
-          "name": "nftOwner",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
-          "name": "nftAccount",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "personalPosition",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "poolState",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "protocolPosition",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickArrayLower",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tickArrayUpper",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tokenVault0",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tokenVault1",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "recipientTokenAccount0",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "recipientTokenAccount1",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "tokenProgram",
-          "isMut": false,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "amount0Max",
-          "type": "u64"
-        },
-        {
-          "name": "amount1Max",
-          "type": "u64"
-        }
-      ]
-    },
-    {
       "name": "swap",
       "accounts": [
         {
@@ -3007,6 +2822,24 @@ export const IDL: AmmV3 = {
                 3
               ]
             }
+          },
+          {
+            "name": "tickArrayBitmapPositive",
+            "type": {
+              "array": [
+                "u64",
+                8
+              ]
+            }
+          },
+          {
+            "name": "tickArrayBitmapNegative",
+            "type": {
+              "array": [
+                "u64",
+                8
+              ]
+            }
           }
         ]
       }
@@ -3083,6 +2916,10 @@ export const IDL: AmmV3 = {
                 80
               ]
             }
+          },
+          {
+            "name": "initializedTickCount",
+            "type": "u8"
           }
         ]
       }
@@ -3355,7 +3192,7 @@ export const IDL: AmmV3 = {
       ]
     },
     {
-      "name": "ChangeLiquidityEvent",
+      "name": "IncreaseLiquidityEvent",
       "fields": [
         {
           "name": "positionNftMint",
@@ -3375,6 +3212,51 @@ export const IDL: AmmV3 = {
         {
           "name": "amount1",
           "type": "u64",
+          "index": false
+        }
+      ]
+    },
+    {
+      "name": "DecreaseLiquidityEvent",
+      "fields": [
+        {
+          "name": "positionNftMint",
+          "type": "publicKey",
+          "index": false
+        },
+        {
+          "name": "liquidity",
+          "type": "u128",
+          "index": false
+        },
+        {
+          "name": "decreaseAmount0",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "decreaseAmount1",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "feeAmount0",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "feeAmount1",
+          "type": "u64",
+          "index": false
+        },
+        {
+          "name": "rewardAmounts",
+          "type": {
+            "array": [
+              "u64",
+              3
+            ]
+          },
           "index": false
         }
       ]

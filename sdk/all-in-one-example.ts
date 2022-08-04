@@ -155,8 +155,9 @@ export async function main() {
 
   // swapBaseIn with limit price
   let limitPrice = ammPoolA.token0Price().sub(new Decimal("0.0000002"));
-  // because open position and add liquidity to the pool, we should reload tickArray cache data
-  await ammPoolA.reloadCache();
+  // because open position and add liquidity to the pool, we should load tickArray cache data
+  await ammPoolA.loadCache(true);
+  return;
   tx = await swapBaseIn(
     ctx,
     owner,
@@ -242,7 +243,7 @@ export async function main() {
   console.log("open second position with pool B, tx:", positionBTx);
 
   // because open position and add liquidity to the pool, we should reload tickArray cache data
-  await ammPoolB.reloadCache();
+  await ammPoolB.loadCache();
   tx = await swapRouterBaseIn(
     ctx,
     owner,

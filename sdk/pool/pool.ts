@@ -5,6 +5,7 @@ import { Context } from "../base";
 import { NEGATIVE_ONE, SwapMath, Math } from "../math";
 import { CacheDataProviderImpl } from "./cacheProviderImpl";
 import Decimal from "decimal.js";
+import { getArrayStartIndex, TickArray } from "../entities";
 
 export class AmmPool {
   // public readonly fee: Fee;
@@ -16,44 +17,83 @@ export class AmmPool {
   public ammConfig: AmmConfig;
 
   /**
-   * 
-   * @param ctx 
-   * @param address 
-   * @param poolState 
-   * @param ammConfig 
-   * @param stateFetcher 
+   *
+   * @param ctx
+   * @param address
+   * @param poolState
+   * @param ammConfig
+   * @param stateFetcher
    */
   public constructor(
     ctx: Context,
     address: PublicKey,
     poolState: PoolState,
     ammConfig: AmmConfig,
-    stateFetcher: StateFetcher,
+    stateFetcher: StateFetcher
   ) {
     this.ctx = ctx;
     this.stateFetcher = stateFetcher;
     this.address = address;
     this.poolState = poolState;
     this.ammConfig = ammConfig;
-    this.cacheDataProvider = new CacheDataProviderImpl(
-      ctx.program,
-      address
-    );
+    this.cacheDataProvider = new CacheDataProviderImpl(ctx.program, address);
   }
 
+  /**
+   * Restset pool state from external
+   * @param poolState
+   */
+  public setPoolState(poolState: PoolState) {
+    this.poolState = poolState;
+  }
+
+  /**
+   * Rsetset tick array datas from external
+   * @param cachedTickArraies
+   */
+  public setTickArrayCache(cachedTickArraies: TickArray[]) {
+    this.cacheDataProvider.setTickArrayCache(cachedTickArraies);
+  }
+
+  /**
+   * 
+   * @returns 
+   */
   public async reloadPoolState(): Promise<PoolState> {
     const newState = await this.stateFetcher.getPoolState(this.address);
     this.poolState = newState;
     return this.poolState;
   }
 
-  public async reloadCache() {
+  /**
+   * 
+   * @param reloadPool 
+   */
+  public async loadCache(reloadPool?: boolean) {
+    if (reloadPool) {
+      await this.reloadPoolState();
+    }
+    console.log(
+      "this.poolState.tickArrayBitmapPositive:",
+      this.poolState.tickArrayBitmapPositive
+    );
+    console.log(
+      "this.poolState.tickArrayBitmapNegative:",
+      this.poolState.tickArrayBitmapNegative
+    );
     await this.cacheDataProvider.loadTickArrayCache(
       this.poolState.tickCurrent,
-      this.poolState.tickSpacing
+      this.poolState.tickSpacing,
+      this.poolState.tickArrayBitmapPositive,
+      this.poolState.tickArrayBitmapNegative
     );
   }
 
+  /**
+   * 
+   * @param tokenMint 
+   * @returns 
+   */
   public isContain(tokenMint: PublicKey): boolean {
     return (
       tokenMint.equals(this.poolState.tokenMint0) ||
@@ -61,10 +101,18 @@ export class AmmPool {
     );
   }
 
+  /**
+   *  
+   * @returns token0 price
+   */
   public token0Price(): Decimal {
     return Math.x64ToDecimal(this.poolState.sqrtPriceX64);
   }
 
+  /**
+   * 
+   * @returns token1 price
+   */
   public token1Price(): Decimal {
     return new Decimal(1).div(this.token0Price());
   }

@@ -45,6 +45,8 @@ export type PoolState = {
   observationIndex: number;
   observationKey: PublicKey;
   observationUpdateDuration: number;
+  tickArrayBitmapPositive: BN[];
+  tickArrayBitmapNegative: BN[];
 };
 
 export type RewardInfo = {
@@ -87,6 +89,7 @@ export type TickArrayState = {
   ammPool: PublicKey;
   startTickIndex: number;
   ticks: TickState[];
+  initializedTickCount: number;
 };
 
 export type TickState = {

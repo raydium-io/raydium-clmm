@@ -1,7 +1,7 @@
 use crate::error::ErrorCode;
 use crate::libraries::U512;
 use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
-use crate::states::tick::TICK_ARRAY_SIZE;
+use crate::states::{TICK_ARRAY_SIZE,MIN_TICK_ARRAY_START_INDEX,MAX_TICK_ARRAY_START_INDEX};
 use anchor_lang::prelude::*;
 use std::ops::{BitXor, Mul};
 
@@ -263,18 +263,18 @@ impl PoolState {
             0,
             tick_array_start_index % (TICK_ARRAY_SIZE * (self.tick_spacing) as i32)
         );
-        assert!(tick_array_start_index >= -409600);
-        assert!(tick_array_start_index <= 408800);
-        let mut tick_array_index_in_bitmap =
+        assert!(tick_array_start_index >= MIN_TICK_ARRAY_START_INDEX);
+        assert!(tick_array_start_index <= MAX_TICK_ARRAY_START_INDEX);
+        let mut tick_array_offset_in_bitmap =
             tick_array_start_index / (self.tick_spacing as i32 * TICK_ARRAY_SIZE);
         if tick_array_start_index >= 0 {
             let tick_array_bitmap_positive = U512(self.tick_array_bitmap_positive);
-            let mask = U512::from(1) << (tick_array_index_in_bitmap as u16);
+            let mask = U512::from(1) << (tick_array_offset_in_bitmap as u16);
             self.tick_array_bitmap_positive = tick_array_bitmap_positive.bitxor(mask).0;
         } else {
-            tick_array_index_in_bitmap = tick_array_index_in_bitmap.mul(-1) - 1;
+            tick_array_offset_in_bitmap = tick_array_offset_in_bitmap.mul(-1) - 1;
             let tick_array_bitmap_negative = U512(self.tick_array_bitmap_negative);
-            let mask = U512::from(1) << (tick_array_index_in_bitmap as u16);
+            let mask = U512::from(1) << (tick_array_offset_in_bitmap as u16);
             self.tick_array_bitmap_negative = tick_array_bitmap_negative.bitxor(mask).0;
         }
         Ok(())
@@ -464,6 +464,11 @@ mod test {
             assert_eq!(
                 pool_state.tick_array_bitmap_negative,
                 [7, 0, 0, 0, 0, 0, 0, 9223372036854775808]
+            );
+            pool_state.flip_tick_array_bit(-409600).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap_negative,
+                [7, 0, 0, 0, 0, 0, 0, 0]
             )
         }
 
@@ -490,6 +495,11 @@ mod test {
             assert_eq!(
                 pool_state.tick_array_bitmap_positive,
                 [7, 0, 0, 0, 0, 0, 0, 9223372036854775808]
+            );
+            pool_state.flip_tick_array_bit(408800).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap_positive,
+                [7, 0, 0, 0, 0, 0, 0, 0]
             )
         }
     }

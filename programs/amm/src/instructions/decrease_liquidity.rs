@@ -238,13 +238,36 @@ pub fn burn<'b, 'info>(ctx: &mut BurnParam<'b, 'info>, liquidity: u128) -> Resul
         ctx.pool_state.tick_spacing as i32,
     )?;
 
-    let (amount_0_int, amount_1_int) = _modify_position(
+    let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = _modify_position(
         -i128::try_from(liquidity).unwrap(),
         ctx.pool_state,
         ctx.procotol_position_state,
         tick_lower_state,
         tick_upper_state,
     )?;
+
+    if flip_tick_lower {
+        tick_array_lower.update_initialized_tick_count(
+            ctx.procotol_position_state.tick_lower_index,
+            ctx.pool_state.tick_spacing as i32,
+            false,
+        )?;
+        if tick_array_lower.initialized_tick_count <= 0 {
+            ctx.pool_state
+                .flip_tick_array_bit(tick_array_lower.start_tick_index)?;
+        }
+    }
+    if flip_tick_upper {
+        tick_array_upper.update_initialized_tick_count(
+            ctx.procotol_position_state.tick_upper_index,
+            ctx.pool_state.tick_spacing as i32,
+            false,
+        )?;
+        if tick_array_upper.initialized_tick_count <= 0 {
+            ctx.pool_state
+                .flip_tick_array_bit(tick_array_upper.start_tick_index)?;
+        }
+    }
 
     let amount_0 = (-amount_0_int) as u64;
     let amount_1 = (-amount_1_int) as u64;

@@ -400,17 +400,27 @@ pub fn add_liquidity<'b, 'info>(
     let balance_1_before = accounts.token_vault_1.amount;
 
     let mut tick_array_lower = accounts.tick_array_lower.load_mut()?;
+    tick_array_lower.update_initialized_tick_count(
+        tick_lower_index,
+        accounts.pool_state.tick_spacing as i32,
+        true,
+    )?;
     let tick_lower_state = tick_array_lower
         .get_tick_state_mut(tick_lower_index, accounts.pool_state.tick_spacing as i32)?;
 
     let mut tick_array_upper = accounts.tick_array_upper.load_mut()?;
+    tick_array_upper.update_initialized_tick_count(
+        tick_upper_index,
+        accounts.pool_state.tick_spacing as i32,
+        true,
+    )?;
     let tick_upper_state = tick_array_upper
         .get_tick_state_mut(tick_upper_index, accounts.pool_state.tick_spacing as i32)?;
 
     tick_lower_state.tick = tick_lower_index;
     tick_upper_state.tick = tick_upper_index;
 
-    let (amount_0_int, amount_1_int) = _modify_position(
+    let (amount_0_int, amount_1_int, _, _) = _modify_position(
         i128::try_from(liquidity).unwrap(),
         accounts.pool_state,
         accounts.protocol_position,
@@ -473,8 +483,8 @@ pub fn _modify_position<'info>(
     protocol_position_state: &mut Account<'info, ProtocolPositionState>,
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,
-) -> Result<(i64, i64)> {
-    _update_position(
+) -> Result<(i64, i64, bool, bool)> {
+    let (flip_tick_lower, flip_tick_upper) = update_position(
         liquidity_delta,
         pool_state,
         protocol_position_state,
@@ -522,31 +532,25 @@ pub fn _modify_position<'info>(
         }
     }
 
-    Ok((amount_0, amount_1))
+    Ok((amount_0, amount_1, flip_tick_lower, flip_tick_upper))
 }
 
-/// Updates a position with the given liquidity delta
+/// Updates a position with the given liquidity delta and tick
 ///
 /// # Arguments
-///
+/// * `liquidity_delta` - The change in liquidity. Can be 0 to perform a poke.
 /// * `pool_state` - Current pool state
 /// * `position_state` - Effect change to this position
 /// * `tick_lower_state`- Program account for the lower tick boundary
 /// * `tick_upper_state`- Program account for the upper tick boundary
-/// * `bitmap_lower` - Bitmap account for the lower tick
-/// * `bitmap_upper` - Bitmap account for the upper tick, if it is different from
-/// `bitmap_lower`
-/// * `lamport_destination` - Destination account for freed lamports when a tick state is
-/// un-initialized
-/// * `liquidity_delta` - The change in liquidity. Can be 0 to perform a poke.
 ///
-pub fn _update_position<'info>(
+pub fn update_position<'info>(
     liquidity_delta: i128,
     pool_state: &mut Account<'info, PoolState>,
     protocol_position_state: &mut Account<'info, ProtocolPositionState>,
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,
-) -> Result<()> {
+) -> Result<(bool, bool)> {
     let clock = Clock::get()?;
     let updated_reward_infos = pool_state.update_reward_infos(clock.unix_timestamp as u64)?;
     let reward_growths_outside_x64 = RewardInfo::to_reward_growths(&updated_reward_infos);
@@ -626,5 +630,5 @@ pub fn _update_position<'info>(
             tick_upper_state.clear();
         }
     }
-    Ok(())
+    Ok((flipped_lower, flipped_upper))
 }
