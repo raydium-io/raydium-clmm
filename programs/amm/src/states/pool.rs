@@ -1,7 +1,10 @@
 use crate::error::ErrorCode;
-use crate::libraries::U512;
-use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
-use crate::states::{TICK_ARRAY_SIZE,MIN_TICK_ARRAY_START_INDEX,MAX_TICK_ARRAY_START_INDEX};
+use crate::libraries::{
+    big_num::{U128, U512},
+    fixed_point_64,
+    full_math::MulDiv,
+};
+use crate::states::{MAX_TICK_ARRAY_START_INDEX, MIN_TICK_ARRAY_START_INDEX, TICK_ARRAY_SIZE};
 use anchor_lang::prelude::*;
 use std::ops::{BitXor, Mul};
 
@@ -279,6 +282,84 @@ impl PoolState {
         }
         Ok(())
     }
+
+    fn left_one_index(bit_map: U512) -> Option<u16> {
+        assert!(bit_map > U512::default());
+        if bit_map.is_zero() {
+            None
+        } else {
+            Some(bit_map.leading_zeros() as u16)
+        }
+    }
+
+    fn right_one_index(bit_map: U512) -> Option<u16> {
+        assert!(bit_map > U512::default());
+        if bit_map.is_zero() {
+            None
+        } else {
+            Some(511 - bit_map.trailing_zeros() as u16)
+        }
+    }
+
+    pub fn find_next_init_pos_in_bit_map(
+        &self,
+        bit_map: U512,
+        tick_array_start_index: i32,
+    ) -> Vec<u16> {
+        let mut bit_index = if tick_array_start_index >= 0 {
+            (tick_array_start_index / (self.tick_spacing as i32 * TICK_ARRAY_SIZE)) as u16
+        } else {
+            (tick_array_start_index.abs() / (self.tick_spacing as i32 * TICK_ARRAY_SIZE)) as u16 - 1
+        };
+        let mut pos_vec = Vec::new();
+        // current bit
+        let mut off_set_bit_map = bit_map << (bit_index + 1);
+        // println!("{:x}", off_set_bit_map);
+        // find bit from left towards right
+        let mut find_pos = PoolState::left_one_index(off_set_bit_map);
+        while find_pos.is_some() {
+            let pos = find_pos.unwrap();
+            bit_index += pos + 1;
+            pos_vec.push(bit_index);
+            if pos_vec.len() == 5 {
+                break;
+            }
+            off_set_bit_map = bit_map << (bit_index + 1);
+            // println!("{:x}", off_set_bit_map);
+            find_pos = PoolState::left_one_index(off_set_bit_map);
+        }
+        pos_vec
+    }
+
+    pub fn find_previous_init_pos_in_bit_map(
+        &self,
+        bit_map: U512,
+        tick_array_start_index: i32,
+    ) -> Vec<u16> {
+        let mut bit_index = if tick_array_start_index >= 0 {
+            (tick_array_start_index / (self.tick_spacing as i32 * TICK_ARRAY_SIZE)) as u16
+        } else {
+            (tick_array_start_index.abs() / (self.tick_spacing as i32 * TICK_ARRAY_SIZE)) as u16 - 1
+        };
+        let mut pos_vec = Vec::new();
+        // current bit
+        let mut off_set_bit_map = bit_map >> (512 - bit_index);
+        // println!("{:x}", off_set_bit_map);
+        // find bit from right towards left
+        let mut find_pos = PoolState::right_one_index(off_set_bit_map);
+        while find_pos.is_some() {
+            let pos = find_pos.unwrap();
+            bit_index -= 512 - pos;
+            pos_vec.push(bit_index);
+            if pos_vec.len() == 5 {
+                break;
+            }
+            off_set_bit_map = bit_map >> (512 - bit_index);
+            // println!("{:x}", off_set_bit_map);
+            find_pos = PoolState::right_one_index(off_set_bit_map);
+        }
+        pos_vec
+    }
 }
 
 #[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Debug, PartialEq)]
@@ -501,6 +582,50 @@ mod test {
                 pool_state.tick_array_bitmap_positive,
                 [7, 0, 0, 0, 0, 0, 0, 0]
             )
+        }
+
+        #[test]
+        fn find_next_init_pos_in_bit_map_positive() {
+            let mut pool_state = PoolState::default();
+            pool_state.tick_spacing = 10;
+            let bit_map = U512::max_value();
+            let tick_array_start_index = 0;
+            let array_bit_pos =
+                pool_state.find_next_init_pos_in_bit_map(bit_map, tick_array_start_index);
+            println!("{:?}", array_bit_pos);
+        }
+
+        #[test]
+        fn find_next_init_pos_in_bit_map_negative() {
+            let mut pool_state = PoolState::default();
+            pool_state.tick_spacing = 10;
+            let bit_map = U512::max_value();
+            let tick_array_start_index = -800;
+            let array_bit_pos =
+                pool_state.find_next_init_pos_in_bit_map(bit_map, tick_array_start_index);
+            println!("{:?}", array_bit_pos);
+        }
+
+        #[test]
+        fn find_previous_init_pos_in_bit_map_positive() {
+            let mut pool_state = PoolState::default();
+            pool_state.tick_spacing = 10;
+            let bit_map = U512::max_value();
+            let tick_array_start_index = 408800;
+            let array_bit_pos =
+                pool_state.find_previous_init_pos_in_bit_map(bit_map, tick_array_start_index);
+            println!("{:?}", array_bit_pos);
+        }
+
+        #[test]
+        fn find_previous_init_pos_in_bit_map_negative() {
+            let mut pool_state = PoolState::default();
+            pool_state.tick_spacing = 10;
+            let bit_map = U512::max_value();
+            let tick_array_start_index = -409600;
+            let array_bit_pos =
+                pool_state.find_previous_init_pos_in_bit_map(bit_map, tick_array_start_index);
+            println!("{:?}", array_bit_pos);
         }
     }
 }
