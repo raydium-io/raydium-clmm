@@ -541,16 +541,29 @@ mod test {
                 pool_state.tick_array_bitmap_negative,
                 [7, 0, 0, 0, 0, 0, 0, 0]
             );
+            pool_state.flip_tick_array_bit(-51200).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap_negative,
+                [9223372036854775815, 0, 0, 0, 0, 0, 0, 0]
+            );
+            println!("{:b}",pool_state.tick_array_bitmap_negative[0]);
+            pool_state.flip_tick_array_bit(-52000).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap_negative,
+                [9223372036854775815, 1, 0, 0, 0, 0, 0, 0]
+            );
+            println!("{:b}",pool_state.tick_array_bitmap_negative[1]);
             pool_state.flip_tick_array_bit(-409600).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap_negative,
-                [7, 0, 0, 0, 0, 0, 0, 9223372036854775808]
+                [9223372036854775815, 1, 0, 0, 0, 0, 0, 9223372036854775808]
             );
             pool_state.flip_tick_array_bit(-409600).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap_negative,
-                [7, 0, 0, 0, 0, 0, 0, 0]
+                [9223372036854775815, 1, 0, 0, 0, 0, 0, 0]
             )
+            // pool_state.tick_array_bitmap_negative.
         }
 
         #[test]
