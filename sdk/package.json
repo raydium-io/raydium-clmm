@@ -11,7 +11,6 @@
     "@project-serum/anchor": "^0.23.0",
     "@solana/spl-token": "^0.1.8",
     "@solana/web3.js": "1.47.3",
-    "bitwise": "^2.1.0",
     "decimal.js": "^10.3.1",
     "node-fetch": "^2.6.7",
     "ts-node": "^10.8.2"

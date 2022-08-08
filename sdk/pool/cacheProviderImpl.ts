@@ -1,19 +1,16 @@
 import * as anchor from "@project-serum/anchor";
 import { PublicKey } from "@solana/web3.js";
 import { BN } from "@project-serum/anchor";
-import bitwise from "bitwise";
-import integer from "bitwise/integer";
-import string from "bitwise/string";
-import toBits from "bitwise/string/to-bits";
-import { MAX_TICK, MIN_TICK } from "../math";
 import { CacheDataProvider } from "../entities/cacheProvider";
 import { getTickArrayAddress } from "../utils";
 import {
   TICK_ARRAY_SIZE,
   Tick,
   TickArray,
-  getArrayStartIndex,
+  getTickArrayStartIndexByTick,
   getNextTickArrayStartIndex,
+  mergeTickArrayBitmap,
+  getInitializedTickArrayInRange,
 } from "../entities";
 
 const FETCH_TICKARRAY_COUNT = 15;
@@ -52,105 +49,35 @@ export class CacheDataProviderImpl implements CacheDataProvider {
     tickArrayBitmapPositive: BN[],
     tickArrayBitmapNegative: BN[]
   ) {
-    let tickArrayBitmapPositiveArray: number[] = [];
-    for (let i = 0; i < tickArrayBitmapPositive.length; i++) {
-      tickArrayBitmapPositiveArray.push(
-        ...tickArrayBitmapPositive[i].toArray()
-      );
-    }
-    console.log("tickArrayBitmapPositiveArray:",tickArrayBitmapPositiveArray)
-    let tickArrayBitmapPositiveBuffer = Buffer.of(
-      ...tickArrayBitmapPositiveArray
+    const tickArrayBitmapPositiveArray = mergeTickArrayBitmap(
+      tickArrayBitmapPositive
     );
-   console.log("tickArrayBitmapPositiveBuffer.toString():",tickArrayBitmapPositiveBuffer.toString('binary'))
-   console.log("tickArrayBitmapPositiveBuffer.toString():",tickArrayBitmapPositiveBuffer.toString('hex'))
-   console.log("tickArrayBitmapPositiveBuffer.toString():",tickArrayBitmapPositiveBuffer.toString('latin1'))
-
-    let tickArrayBitmapNegativeArray: number[] = [];
-    for (let i = 0; i < tickArrayBitmapNegative.length; i++) {
-      tickArrayBitmapNegativeArray.push(
-        ...tickArrayBitmapNegative[i].toArray()
-      );
-    }
-    let tickArrayBitmapNegativeBuffer = Buffer.of(
-      ...tickArrayBitmapNegativeArray
+    const tickArrayBitmapNegativeArray = mergeTickArrayBitmap(
+      tickArrayBitmapNegative
     );
-    
-    console.log(
-      "tickArrayBitmapPositiveBuffer:",
-      tickArrayBitmapPositiveBuffer
-    );
-    console.log(
-      "tickArrayBitmapNegativeBuffer:",
-      tickArrayBitmapNegativeBuffer
-    );
-
-    console.log(tickArrayBitmapPositiveBuffer[0]);
-    console.log(tickArrayBitmapNegativeBuffer[0]);
-
-    console.log(bitwise.integer.getBit(tickArrayBitmapPositiveBuffer[0], 0));
-    console.log(
-      "tickArrayBitmapPositive[0].toNumber():",
-      bitwise.integer.getBit(tickArrayBitmapPositive[0].toNumber(), 0)
-    );
-    console.log(bitwise.integer.getBit(tickArrayBitmapPositiveBuffer[0], 7));
-    console.log(bitwise.integer.getBit(tickArrayBitmapPositiveBuffer[7], 0));
-    console.log(bitwise.integer.getBit(tickArrayBitmapPositiveBuffer[7], 7));
 
     const tickArraysToFetch = [];
-    const tickArrayStartIndex = getArrayStartIndex(tickCurrent, tickSpacing);
-
-    let offset = Math.floor(
-      tickArrayStartIndex / (tickSpacing * TICK_ARRAY_SIZE)
+    const currentTickArrayStartIndex = getTickArrayStartIndexByTick(
+      tickCurrent,
+      tickSpacing
     );
-    if (tickArrayStartIndex < 0) {
-      offset = Math.imul(offset, -1) - 1;
-    }
 
-     Math.floor(offset / 64)
-    return;
-    const [tickArrayAddress, _] = await getTickArrayAddress(
-      this.poolAddress,
-      this.program.programId,
-      tickArrayStartIndex
+    let startIndexArray = getInitializedTickArrayInRange(
+      tickArrayBitmapPositiveArray,
+      tickArrayBitmapNegativeArray,
+      tickSpacing,
+      currentTickArrayStartIndex,
+      Math.floor(FETCH_TICKARRAY_COUNT / 2),
     );
-    tickArraysToFetch.push(tickArrayAddress);
-    let lastStartIndex: number = tickArrayStartIndex;
-
-    let tickArrayOffset = Math.floor(
-      tickArrayStartIndex / (tickSpacing * TICK_ARRAY_SIZE)
-    );
-    let index = Math.floor(tickArrayOffset / 64);
-
-    for (let i = 0; i < FETCH_TICKARRAY_COUNT / 2; i++) {
-      const nextStartIndex = getNextTickArrayStartIndex(
-        lastStartIndex,
-        tickSpacing,
-        true
-      );
+    for (let i = 0; i < startIndexArray.length; i++) {
       const [tickArrayAddress, _] = await getTickArrayAddress(
         this.poolAddress,
         this.program.programId,
-        nextStartIndex
+        startIndexArray[i]
       );
       tickArraysToFetch.push(tickArrayAddress);
-      lastStartIndex = nextStartIndex;
     }
-    lastStartIndex = tickArrayStartIndex;
-    for (let i = 0; i < FETCH_TICKARRAY_COUNT / 2; i++) {
-      const nextStartIndex = getNextTickArrayStartIndex(
-        lastStartIndex,
-        tickSpacing,
-        false
-      );
-      const [tickArrayAddress, _] = await getTickArrayAddress(
-        this.poolAddress,
-        this.program.programId,
-        nextStartIndex
-      );
-      tickArraysToFetch.push(tickArrayAddress);
-      lastStartIndex = nextStartIndex;
-    }
+
     const fetchedTickArrays =
       (await this.program.account.tickArrayState.fetchMultiple(
         tickArraysToFetch
@@ -160,6 +87,7 @@ export class CacheDataProviderImpl implements CacheDataProvider {
         this.tickArrayCache.set(item.startTickIndex, item);
       }
     }
+    // console.log(this.tickArrayCache);
   }
 
   public setTickArrayCache(cachedTickArraies: TickArray[]) {
@@ -261,7 +189,7 @@ export class CacheDataProviderImpl implements CacheDataProvider {
     tickSpacing: number,
     zeroForOne: boolean
   ): Promise<[Tick, PublicKey, number]> {
-    const startIndex = getArrayStartIndex(tickIndex, tickSpacing);
+    const startIndex = getTickArrayStartIndexByTick(tickIndex, tickSpacing);
     let isStartIndex = startIndex == tickIndex;
     let tickPositionInArray = Math.floor(
       (tickIndex - startIndex) / tickSpacing

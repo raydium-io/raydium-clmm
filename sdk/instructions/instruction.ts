@@ -8,7 +8,7 @@ import {
 } from "@solana/web3.js";
 
 import { programs } from "@metaplex/js";
-import { getArrayStartIndex } from "../entities";
+import { getTickArrayStartIndexByTick } from "../entities";
 import {
   SqrtPriceMath,
   LiquidityMath,
@@ -284,7 +284,7 @@ export class AmmInstruction {
     }
 
     // prepare tickArray
-    const tickArrayLowerStartIndex = getArrayStartIndex(
+    const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
       tickLowerIndex,
       ammPool.poolState.tickSpacing
     );
@@ -293,7 +293,7 @@ export class AmmInstruction {
       ctx.program.programId,
       tickArrayLowerStartIndex
     );
-    const tickArrayUpperStartIndex = getArrayStartIndex(
+    const tickArrayUpperStartIndex = getTickArrayStartIndexByTick(
       tickUpperIndex,
       ammPool.poolState.tickSpacing
     );
@@ -397,7 +397,7 @@ export class AmmInstruction {
     }
 
     // prepare tickArray
-    const tickArrayLowerStartIndex = getArrayStartIndex(
+    const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
       tickLowerIndex,
       ammPool.poolState.tickSpacing
     );
@@ -406,7 +406,7 @@ export class AmmInstruction {
       ctx.program.programId,
       tickArrayLowerStartIndex
     );
-    const tickArrayUpperStartIndex = getArrayStartIndex(
+    const tickArrayUpperStartIndex = getTickArrayStartIndexByTick(
       tickUpperIndex,
       ammPool.poolState.tickSpacing
     );
@@ -538,7 +538,7 @@ export class AmmInstruction {
       amount1Min = token1Amount.muln(1 - amountSlippage);
     }
     // prepare tickArray
-    const tickArrayLowerStartIndex = getArrayStartIndex(
+    const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
       tickLowerIndex,
       ammPool.poolState.tickSpacing
     );
@@ -547,7 +547,7 @@ export class AmmInstruction {
       ctx.program.programId,
       tickArrayLowerStartIndex
     );
-    const tickArrayUpperStartIndex = getArrayStartIndex(
+    const tickArrayUpperStartIndex = getTickArrayStartIndexByTick(
       tickUpperIndex,
       ammPool.poolState.tickSpacing
     );
@@ -768,7 +768,7 @@ export class AmmInstruction {
     const poolState = ammPool.poolState;
     const ctx = ammPool.ctx;
 
-    const tickArrayStartIndex = getArrayStartIndex(
+    const tickArrayStartIndex = getTickArrayStartIndexByTick(
       ammPool.poolState.tickCurrent,
       ammPool.poolState.tickSpacing
     );

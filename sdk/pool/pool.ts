@@ -5,7 +5,7 @@ import { Context } from "../base";
 import { NEGATIVE_ONE, SwapMath, Math } from "../math";
 import { CacheDataProviderImpl } from "./cacheProviderImpl";
 import Decimal from "decimal.js";
-import { getArrayStartIndex, TickArray } from "../entities";
+import { getTickArrayStartIndexByTick, TickArray } from "../entities";
 
 export class AmmPool {
   // public readonly fee: Fee;
@@ -73,14 +73,6 @@ export class AmmPool {
     if (reloadPool) {
       await this.reloadPoolState();
     }
-    console.log(
-      "this.poolState.tickArrayBitmapPositive:",
-      this.poolState.tickArrayBitmapPositive
-    );
-    console.log(
-      "this.poolState.tickArrayBitmapNegative:",
-      this.poolState.tickArrayBitmapNegative
-    );
     await this.cacheDataProvider.loadTickArrayCache(
       this.poolState.tickCurrent,
       this.poolState.tickSpacing,

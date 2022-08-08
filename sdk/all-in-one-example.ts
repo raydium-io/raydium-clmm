@@ -1,23 +1,11 @@
 import { web3, BN } from "@project-serum/anchor";
 import * as metaplex from "@metaplex/js";
 import { Token, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import * as chai from "chai";
-import chaiAsPromised from "chai-as-promised";
-chai.use(chaiAsPromised);
-import { AmmPool, CacheDataProviderImpl } from "./pool";
-import {
-  getTickWithPriceAndTickspacing,
-  LiquidityMath,
-  SqrtPriceMath,
-} from "./math";
+import { AmmPool } from "./pool";
+import { getTickWithPriceAndTickspacing } from "./math";
 import { StateFetcher, OBSERVATION_STATE_LEN } from "./states";
 import { accountExist, getAmmConfigAddress, sendTransaction } from "./utils";
 import { AmmInstruction, RouterPoolParam } from "./instructions";
-
-const {
-  metadata: { Metadata },
-} = metaplex.programs;
-
 import {
   Connection,
   ConfirmOptions,
@@ -56,6 +44,10 @@ async function getContext(programId: PublicKey, wallet: Keypair, url: string) {
     programId,
     confirmOptions
   );
+}
+
+function getBit(num: number, position: number) {
+  return (num >> position) & 1;
 }
 
 export async function main() {
@@ -157,7 +149,7 @@ export async function main() {
   let limitPrice = ammPoolA.token0Price().sub(new Decimal("0.0000002"));
   // because open position and add liquidity to the pool, we should load tickArray cache data
   await ammPoolA.loadCache(true);
-  return;
+
   tx = await swapBaseIn(
     ctx,
     owner,
@@ -243,7 +235,7 @@ export async function main() {
   console.log("open second position with pool B, tx:", positionBTx);
 
   // because open position and add liquidity to the pool, we should reload tickArray cache data
-  await ammPoolB.loadCache();
+  await ammPoolB.loadCache(true);
   tx = await swapRouterBaseIn(
     ctx,
     owner,
@@ -279,51 +271,54 @@ async function createTokenMintAndAssociatedTokenAccount(
     })
   );
   await sendTransaction(ctx.connection, ixs, [payer]);
-
-  let token0 = await Token.createMint(
-    ctx.connection,
-    mintAuthority,
-    mintAuthority.publicKey,
-    null,
-    6,
-    TOKEN_PROGRAM_ID
-  );
-  let token1 = await Token.createMint(
-    ctx.connection,
-    mintAuthority,
-    mintAuthority.publicKey,
-    null,
-    6,
-    TOKEN_PROGRAM_ID
-  );
-  let token2 = await Token.createMint(
-    ctx.connection,
-    mintAuthority,
-    mintAuthority.publicKey,
-    null,
-    6,
-    TOKEN_PROGRAM_ID
-  );
-  if (token0.publicKey > token1.publicKey) {
-    // swap token mints
-    const temp = token0;
-    token0 = token1;
-    token1 = temp;
-  }
-
-  console.log("Token 0", token0.publicKey.toString());
-  console.log("Token 1", token1.publicKey.toString());
-
-  while (token1.publicKey >= token2.publicKey) {
-    token2 = await Token.createMint(
+  let tokenArray: Token[] = [];
+  tokenArray.push(
+    await Token.createMint(
       ctx.connection,
       mintAuthority,
       mintAuthority.publicKey,
       null,
-      8,
+      6,
       TOKEN_PROGRAM_ID
-    );
-  }
+    )
+  );
+  tokenArray.push(
+    await Token.createMint(
+      ctx.connection,
+      mintAuthority,
+      mintAuthority.publicKey,
+      null,
+      6,
+      TOKEN_PROGRAM_ID
+    )
+  );
+  tokenArray.push(
+    await Token.createMint(
+      ctx.connection,
+      mintAuthority,
+      mintAuthority.publicKey,
+      null,
+      6,
+      TOKEN_PROGRAM_ID
+    )
+  );
+
+  tokenArray.sort(function (x, y) {
+    if (x.publicKey < y.publicKey) {
+      return -1;
+    }
+    if (x.publicKey > y.publicKey) {
+      return 1;
+    }
+    return 0;
+  });
+
+  const token0 = tokenArray[0];
+  const token1 = tokenArray[1];
+  const token2 = tokenArray[2];
+
+  console.log("Token 0", token0.publicKey.toString());
+  console.log("Token 1", token1.publicKey.toString());
   console.log("Token 2", token2.publicKey.toString());
 
   const ownerToken0Account = await token0.createAssociatedTokenAccount(
