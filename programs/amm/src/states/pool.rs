@@ -1,12 +1,12 @@
 use crate::error::ErrorCode;
 use crate::libraries::{
-    big_num::{U128, U512},
+    big_num::{U1024, U128},
     fixed_point_64,
     full_math::MulDiv,
 };
 use crate::states::{MAX_TICK_ARRAY_START_INDEX, MIN_TICK_ARRAY_START_INDEX, TICK_ARRAY_SIZE};
 use anchor_lang::prelude::*;
-use std::ops::{BitXor, Mul};
+use std::ops::BitXor;
 
 /// Seed to derive account address and signature
 pub const POOL_SEED: &str = "pool";
@@ -77,10 +77,8 @@ pub struct PoolState {
     pub reward_last_updated_timestamp: u64,
     pub reward_infos: [RewardInfo; REWARD_NUM],
 
-    /// Packed positive initialized tick array state
-    pub tick_array_bitmap_positive: [u64; 8],
-    /// Packed negative initialized tick array state
-    pub tick_array_bitmap_negative: [u64; 8],
+    /// Packed initialized tick array state
+    pub tick_array_bitmap: [u64; 16],
     // padding space for upgrade
     // pub padding_1: [u64; 16],
     // pub padding_2: [u64; 16],
@@ -110,8 +108,7 @@ impl PoolState {
         + 16
         + 8
         + RewardInfo::LEN * REWARD_NUM
-        + 64
-        + 64
+        + 8 * 64
         + 512;
 
     pub fn key(&self) -> Pubkey {
@@ -268,97 +265,14 @@ impl PoolState {
         );
         assert!(tick_array_start_index >= MIN_TICK_ARRAY_START_INDEX);
         assert!(tick_array_start_index <= MAX_TICK_ARRAY_START_INDEX);
-        let mut tick_array_offset_in_bitmap =
-            tick_array_start_index / (self.tick_spacing as i32 * TICK_ARRAY_SIZE);
-        if tick_array_start_index >= 0 {
-            let tick_array_bitmap_positive = U512(self.tick_array_bitmap_positive);
-            let mask = U512::from(1) << (tick_array_offset_in_bitmap as u16);
-            self.tick_array_bitmap_positive = tick_array_bitmap_positive.bitxor(mask).0;
-        } else {
-            tick_array_offset_in_bitmap = tick_array_offset_in_bitmap.mul(-1) - 1;
-            let tick_array_bitmap_negative = U512(self.tick_array_bitmap_negative);
-            let mask = U512::from(1) << (tick_array_offset_in_bitmap as u16);
-            self.tick_array_bitmap_negative = tick_array_bitmap_negative.bitxor(mask).0;
-        }
+        let tick_array_offset_in_bitmap =
+            tick_array_start_index / (self.tick_spacing as i32 * TICK_ARRAY_SIZE) + 512;
+
+        let last_tick_array_bitmap = U1024(self.tick_array_bitmap);
+        let mask = U1024::from(1) << (tick_array_offset_in_bitmap as u16);
+        self.tick_array_bitmap = last_tick_array_bitmap.bitxor(mask).0;
+
         Ok(())
-    }
-
-    fn left_one_index(bit_map: U512) -> Option<u16> {
-        assert!(bit_map > U512::default());
-        if bit_map.is_zero() {
-            None
-        } else {
-            Some(bit_map.leading_zeros() as u16)
-        }
-    }
-
-    fn right_one_index(bit_map: U512) -> Option<u16> {
-        assert!(bit_map > U512::default());
-        if bit_map.is_zero() {
-            None
-        } else {
-            Some(511 - bit_map.trailing_zeros() as u16)
-        }
-    }
-
-    pub fn find_next_init_pos_in_bit_map(
-        &self,
-        bit_map: U512,
-        tick_array_start_index: i32,
-    ) -> Vec<u16> {
-        let mut bit_index = if tick_array_start_index >= 0 {
-            (tick_array_start_index / (self.tick_spacing as i32 * TICK_ARRAY_SIZE)) as u16
-        } else {
-            (tick_array_start_index.abs() / (self.tick_spacing as i32 * TICK_ARRAY_SIZE)) as u16 - 1
-        };
-        let mut pos_vec = Vec::new();
-        // current bit
-        let mut off_set_bit_map = bit_map << (bit_index + 1);
-        // println!("{:x}", off_set_bit_map);
-        // find bit from left towards right
-        let mut find_pos = PoolState::left_one_index(off_set_bit_map);
-        while find_pos.is_some() {
-            let pos = find_pos.unwrap();
-            bit_index += pos + 1;
-            pos_vec.push(bit_index);
-            if pos_vec.len() == 5 {
-                break;
-            }
-            off_set_bit_map = bit_map << (bit_index + 1);
-            // println!("{:x}", off_set_bit_map);
-            find_pos = PoolState::left_one_index(off_set_bit_map);
-        }
-        pos_vec
-    }
-
-    pub fn find_previous_init_pos_in_bit_map(
-        &self,
-        bit_map: U512,
-        tick_array_start_index: i32,
-    ) -> Vec<u16> {
-        let mut bit_index = if tick_array_start_index >= 0 {
-            (tick_array_start_index / (self.tick_spacing as i32 * TICK_ARRAY_SIZE)) as u16
-        } else {
-            (tick_array_start_index.abs() / (self.tick_spacing as i32 * TICK_ARRAY_SIZE)) as u16 - 1
-        };
-        let mut pos_vec = Vec::new();
-        // current bit
-        let mut off_set_bit_map = bit_map >> (512 - bit_index);
-        // println!("{:x}", off_set_bit_map);
-        // find bit from right towards left
-        let mut find_pos = PoolState::right_one_index(off_set_bit_map);
-        while find_pos.is_some() {
-            let pos = find_pos.unwrap();
-            bit_index -= 512 - pos;
-            pos_vec.push(bit_index);
-            if pos_vec.len() == 5 {
-                break;
-            }
-            off_set_bit_map = bit_map >> (512 - bit_index);
-            // println!("{:x}", off_set_bit_map);
-            find_pos = PoolState::right_one_index(off_set_bit_map);
-        }
-        pos_vec
     }
 }
 
@@ -515,6 +429,99 @@ pub struct SwapEvent {
     pub tick: i32,
 }
 
+// pub fn most_significant_bit(x: U128) -> Option<u8> {
+//     assert!(x > U128::default());
+//     if x.is_zero() {
+//         None
+//     } else {
+//         Some(127 - x.leading_zeros() as u8)
+//     }
+// }
+// pub fn least_significant_bit(x: U128) -> Option<u8> {
+//     assert!(x > U128::default());
+//     if x.is_zero() {
+//         None
+//     } else {
+//         Some(x.trailing_zeros() as u8)
+//     }
+// }
+// pub fn next_initialized_bit(bit_map: U128, bit_pos: u8, lte: bool) -> (u8, bool) {
+//     let word = bit_map;
+//     if lte {
+//         // all the 1s at or to the right of the current bit_pos
+//         let mask = (U128::from(1) << bit_pos) - 1 + (U128::from(1) << bit_pos);
+//         let masked = word & mask;
+//         let initialized = masked != U128::default();
+//         println!("{:#b}", masked.as_u128());
+
+//         // if there are no initialized ticks to the right of or at the current tick, return rightmost in the word
+//         let next = if initialized {
+//             most_significant_bit(masked)
+//         } else {
+//             0
+//         };
+
+//         (next, initialized)
+//     } else {
+//         // all the 1s at or to the left of the bit_pos
+//         let mask = !((U128::from(1) << bit_pos) - 1);
+//         let masked = word & mask;
+//         let initialized = masked != U128::default();
+//         println!("{:#b}", masked.as_u128());
+
+//         // if there are no initialized ticks to the left of the current tick, return leftmost in the word
+//         let next = if initialized {
+//             least_significant_bit(masked)
+//         } else {
+//             u8::MAX
+//         };
+
+//         (next, initialized)
+//     }
+// }
+
+// pub fn uni_next_initialized_bit(
+//     bit_map: U128,
+//     tick_array_start_index: i32,
+//     tick_spacing: i32,
+//     lte: bool,
+// ) -> Option<i32> {
+//     let mut compressed = tick_array_start_index / (tick_spacing as i32 * TICK_ARRAY_SIZE);
+//     if tick_array_start_index < 0 {
+//         compressed -= 1;
+//     }
+//     let bit_pos = compressed.abs();
+//     if lte {
+//         // all the 1s at or to the right of the current bit_pos
+//         let mask = (U128::from(1) << bit_pos) - 1 + (U128::from(1) << bit_pos);
+//         let masked = bit_map & mask;
+//         let initialized = masked != U128::default();
+//         println!("{:#b}", masked.as_u128());
+
+//         // if there are no initialized ticks to the right of or at the current tick, return rightmost in the word
+//         let next_bit = most_significant_bit(masked);
+//         if initialized && next_bit.is_some() {
+//             Some(compressed - (bit_pos - next_bit.unwrap() as i32))
+//         } else {
+//             None
+//         }
+//     } else {
+//         compressed += 1;
+//         // all the 1s at or to the left of the bit_pos
+//         let mask = !((U128::from(1) << bit_pos) - 1);
+//         let masked = bit_map & mask;
+//         let initialized = masked != U128::default();
+//         println!("{:#b}", masked.as_u128());
+
+//         // if there are no initialized ticks to the left of the current tick, return leftmost in the word
+//         if initialized {
+//             Some(compressed + 1 + (least_significant_bit(masked) - ) as i32)
+//         } else {
+//             None
+//         }
+//     }
+// }
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -584,48 +591,83 @@ mod test {
             )
         }
 
-        #[test]
-        fn find_next_init_pos_in_bit_map_positive() {
-            let mut pool_state = PoolState::default();
-            pool_state.tick_spacing = 10;
-            let bit_map = U512::max_value();
-            let tick_array_start_index = 0;
-            let array_bit_pos =
-                pool_state.find_next_init_pos_in_bit_map(bit_map, tick_array_start_index);
-            println!("{:?}", array_bit_pos);
-        }
+        // #[test]
+        // fn find_next_init_pos_in_bit_map_positive() {
+        //     let mut pool_state = PoolState::default();
+        //     pool_state.tick_spacing = 10;
+        //     let bit_map = U512::max_value();
+        //     let tick_array_start_index = 0;
+        //     let array_bit_pos =
+        //         pool_state.find_next_init_pos_in_bit_map(bit_map, tick_array_start_index);
+        //     println!("{:?}", array_bit_pos);
+        // }
 
-        #[test]
-        fn find_next_init_pos_in_bit_map_negative() {
-            let mut pool_state = PoolState::default();
-            pool_state.tick_spacing = 10;
-            let bit_map = U512::max_value();
-            let tick_array_start_index = -800;
-            let array_bit_pos =
-                pool_state.find_next_init_pos_in_bit_map(bit_map, tick_array_start_index);
-            println!("{:?}", array_bit_pos);
-        }
+        // #[test]
+        // fn find_next_init_pos_in_bit_map_negative() {
+        //     let mut pool_state = PoolState::default();
+        //     pool_state.tick_spacing = 10;
+        //     let bit_map = U512::max_value();
+        //     let tick_array_start_index = -800;
+        //     let array_bit_pos =
+        //         pool_state.find_next_init_pos_in_bit_map(bit_map, tick_array_start_index);
+        //     println!("{:?}", array_bit_pos);
+        // }
 
-        #[test]
-        fn find_previous_init_pos_in_bit_map_positive() {
-            let mut pool_state = PoolState::default();
-            pool_state.tick_spacing = 10;
-            let bit_map = U512::max_value();
-            let tick_array_start_index = 408800;
-            let array_bit_pos =
-                pool_state.find_previous_init_pos_in_bit_map(bit_map, tick_array_start_index);
-            println!("{:?}", array_bit_pos);
-        }
+        // #[test]
+        // fn find_previous_init_pos_in_bit_map_positive() {
+        //     let mut pool_state = PoolState::default();
+        //     pool_state.tick_spacing = 10;
+        //     let bit_map = U512::max_value();
+        //     let tick_array_start_index = 408800;
+        //     let array_bit_pos =
+        //         pool_state.find_previous_init_pos_in_bit_map(bit_map, tick_array_start_index);
+        //     println!("{:?}", array_bit_pos);
+        // }
 
-        #[test]
-        fn find_previous_init_pos_in_bit_map_negative() {
-            let mut pool_state = PoolState::default();
-            pool_state.tick_spacing = 10;
-            let bit_map = U512::max_value();
-            let tick_array_start_index = -409600;
-            let array_bit_pos =
-                pool_state.find_previous_init_pos_in_bit_map(bit_map, tick_array_start_index);
-            println!("{:?}", array_bit_pos);
-        }
+        // #[test]
+        // fn find_previous_init_pos_in_bit_map_negative() {
+        //     let mut pool_state = PoolState::default();
+        //     pool_state.tick_spacing = 10;
+        //     let bit_map = U512::max_value();
+        //     let tick_array_start_index = -409600;
+        //     let array_bit_pos =
+        //         pool_state.find_previous_init_pos_in_bit_map(bit_map, tick_array_start_index);
+        //     println!("{:?}", array_bit_pos);
+        // }
+        // // #[test]
+        // // fn test_next_initialized_bit() {
+        // //     let bit_map: u128 = 0xff123456789abcdeff123456789abcde;
+        // //     println!("{:#b}", bit_map);
+        // //     let ret = next_initialized_bit(bit_map.into(), 127, true);
+        // //     println!("{:?}", ret);
+        // // }
+        // #[test]
+        // fn test_u512() {
+        //     println!("===========");
+        //     let orign: [u64; 8] = [0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8];
+        //     // let value: [u8; 64] = bytemuck::cast(orign);
+        //     // println!("{:b}", orign[0]);
+        //     println!("{:b}", orign[0]);
+        //     println!("{:b}", orign[1]);
+        //     println!("{:b}", orign[2]);
+        //     println!("{:b}", orign[3]);
+        //     let convert = U512(orign);
+        //     println!("{:x}", convert);
+        //     println!("===========");
+        //     let convert1 = convert >> 1;
+        //     println!("{:x}", convert1);
+        //     println!("===========");
+        //     let mut bytes = [0u8; 64];
+        //     convert.to_big_endian(&mut bytes);
+        //     println!("{:?}", bytes);
+        //     let convert = U512::from(&bytes[..]);
+        //     println!("{:x}", convert);
+        //     println!("===========");
+        //     let mut bytes = [0u8; 64];
+        //     convert.to_little_endian(&mut bytes);
+        //     println!("{:?}", bytes);
+        //     let convert = U512::from(&bytes[..]);
+        //     println!("{:x}", convert);
+        // }
     }
 }

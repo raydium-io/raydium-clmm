@@ -201,7 +201,7 @@ impl TickArrayState {
 
     pub fn get_arrary_start_index(tick_index: i32, tick_spacing: i32) -> i32 {
         let mut start = tick_index / (tick_spacing * TICK_ARRAY_SIZE);
-        if tick_index < 0 {
+        if tick_index < 0 && tick_index % (tick_spacing * TICK_ARRAY_SIZE) != 0 {
             start = start - 1
         }
         start * (tick_spacing * TICK_ARRAY_SIZE)

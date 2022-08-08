@@ -1,34 +1,29 @@
 #![allow(dead_code)]
 use anchor_client::{Client, Cluster};
+use anyhow::{format_err, Result};
+use solana_account_decoder::{
+    parse_token::{TokenAccountType, UiAccountState},
+    UiAccountData,
+};
+use solana_client::{rpc_client::RpcClient, rpc_request::TokenAccountsFilter};
 use solana_sdk::{
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     transaction::Transaction,
 };
-use solana_client::{
-    rpc_client::RpcClient,
-    rpc_request::TokenAccountsFilter,
-};
-use solana_account_decoder::{
-    parse_token::{TokenAccountType, UiAccountState},
-    UiAccountData,
-};
-use anyhow::{format_err, Result};
 
-use std::str::FromStr;
-use std::path::{Path};
-use std::rc::Rc;
-use rand::rngs::OsRng;
-use arrayref::{ array_refs };
+use arrayref::array_refs;
 use configparser::ini::Ini;
+use rand::rngs::OsRng;
+use std::path::Path;
+use std::rc::Rc;
+use std::str::FromStr;
 
 mod instructions;
-use instructions::token_instructions::*;
 use instructions::amm_instructions::*;
 use instructions::rpc::*;
-use raydium_amm_v3::{
-    libraries::{tick_math, fixed_point_64},
-};
+use instructions::token_instructions::*;
+use raydium_amm_v3::libraries::{fixed_point_64, tick_math};
 
 const Q_RATIO: f64 = 1.0001;
 fn tick_to_price(tick: i32) -> f64 {
@@ -82,7 +77,10 @@ fn load_cfg(client_config: &String) -> Result<ClientConfig> {
         panic!("raydium_v3_program must not be empty");
     }
     let raydium_v3_program = Pubkey::from_str(&raydium_v3_program_str).unwrap();
-    let (amm_config_key, __bump) = Pubkey::find_program_address(&[raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes()], &raydium_v3_program);
+    let (amm_config_key, __bump) = Pubkey::find_program_address(
+        &[raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes()],
+        &raydium_v3_program,
+    );
 
     let mut mint0 = None;
     let mint0_str = config.get("Pool", "mint0").unwrap();
@@ -98,13 +96,23 @@ fn load_cfg(client_config: &String) -> Result<ClientConfig> {
     let tick_spacing = config.getuint("Pool", "tick_spacing").unwrap().unwrap() as u16;
 
     let pool_id_account = if mint0 != None && mint1 != None {
-        Some(Pubkey::find_program_address(&[raydium_amm_v3::states::POOL_SEED.as_bytes(), amm_config_key.to_bytes().as_ref(), mint0.unwrap().to_bytes().as_ref(), mint1.unwrap().to_bytes().as_ref(), &fee.to_be_bytes()], &raydium_v3_program).0)
-    }
-    else {
+        Some(
+            Pubkey::find_program_address(
+                &[
+                    raydium_amm_v3::states::POOL_SEED.as_bytes(),
+                    amm_config_key.to_bytes().as_ref(),
+                    mint0.unwrap().to_bytes().as_ref(),
+                    mint1.unwrap().to_bytes().as_ref(),
+                ],
+                &raydium_v3_program,
+            )
+            .0,
+        )
+    } else {
         None
     };
 
-    Ok(ClientConfig{
+    Ok(ClientConfig {
         http_url,
         ws_url,
         payer_path,
@@ -130,7 +138,7 @@ fn path_is_exist(path: &str) -> bool {
     Path::new(path).exists()
 }
 
-#[derive(Clone, Debug, PartialEq, Eq,)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct TokenInfo {
     key: Pubkey,
     mint: Pubkey,
@@ -140,9 +148,11 @@ struct TokenInfo {
 fn get_nft_account_and_position_by_owner(
     client: &RpcClient,
     owner: &Pubkey,
-    raydium_amm_v3_program: &Pubkey
-)-> (Vec<TokenInfo>, Vec<Pubkey>) {
-    let all_tokens = client.get_token_accounts_by_owner(owner, TokenAccountsFilter::ProgramId(spl_token::id())).unwrap();
+    raydium_amm_v3_program: &Pubkey,
+) -> (Vec<TokenInfo>, Vec<Pubkey>) {
+    let all_tokens = client
+        .get_token_accounts_by_owner(owner, TokenAccountsFilter::ProgramId(spl_token::id()))
+        .unwrap();
     let mut nft_account = Vec::new();
     let mut user_position_account = Vec::new();
     for keyed_account in all_tokens {
@@ -173,8 +183,14 @@ fn get_nft_account_and_position_by_owner(
                     });
 
                     if ui_token_account.token_amount.decimals == 0 && token_amount == 1 {
-                        let (position_pda, _) = Pubkey::find_program_address(&[raydium_amm_v3::states::POSITION_SEED.as_bytes(), token.to_bytes().as_ref()], &raydium_amm_v3_program);
-                        nft_account.push(TokenInfo{
+                        let (position_pda, _) = Pubkey::find_program_address(
+                            &[
+                                raydium_amm_v3::states::POSITION_SEED.as_bytes(),
+                                token.to_bytes().as_ref(),
+                            ],
+                            &raydium_amm_v3_program,
+                        );
+                        nft_account.push(TokenInfo {
                             key: token_account,
                             mint: token,
                             amount: token_amount,
@@ -211,16 +227,16 @@ fn main() -> Result<()> {
         let v: Vec<&str> = line.trim().split(' ').collect();
         match &v[0][..] {
             "gene_discriminator_zero_copy_account" => {
-                let account_name = v[1];
-                let mut discriminator = [0u8; 8];
-                let discriminator_preimage = {
-                    // For now, zero copy accounts can't be namespaced.
-                    format!("account:{}", account_name)
-                };
-                discriminator.copy_from_slice(
-                    &anchor_syn::hash::hash(discriminator_preimage.as_bytes()).to_bytes()[..8],
-                );
-                println!("{:?}", discriminator);
+                // let account_name = v[1];
+                // let mut discriminator = [0u8; 8];
+                // let discriminator_preimage = {
+                //     // For now, zero copy accounts can't be namespaced.
+                //     format!("account:{}", account_name)
+                // };
+                // discriminator.copy_from_slice(
+                //     &anchor_syn::hash::hash(discriminator_preimage.as_bytes()).to_bytes()[..8],
+                // );
+                // println!("{:?}", discriminator);
             }
             "mint0" => {
                 let keypair_path = "KeyPairs/mint0_keypair.json";
@@ -228,7 +244,12 @@ fn main() -> Result<()> {
                     if v.len() == 2 {
                         let decimals = v[1].parse::<u64>().unwrap();
                         let mint0 = Keypair::generate(&mut OsRng);
-                        let create_and_init_instr = create_and_init_mint_instr(&pool_config.clone(), &mint0.pubkey(), &payer.pubkey(), decimals as u8)?;
+                        let create_and_init_instr = create_and_init_mint_instr(
+                            &pool_config.clone(),
+                            &mint0.pubkey(),
+                            &payer.pubkey(),
+                            decimals as u8,
+                        )?;
                         // send
                         let signers = vec![&payer, &mint0];
                         let recent_hash = rpc_client.get_latest_blockhash()?;
@@ -244,12 +265,10 @@ fn main() -> Result<()> {
                         write_keypair_file(&mint0, keypair_path).unwrap();
                         println!("mint0: {}", &mint0.pubkey());
                         pool_config.mint0 = Some(mint0.pubkey());
-                    }
-                    else {
+                    } else {
                         println!("invalid command: [mint0 decimals]");
                     }
-                }
-                else {
+                } else {
                     let mint0 = read_keypair_file(keypair_path).unwrap();
                     println!("mint0: {}", &mint0.pubkey());
                     pool_config.mint0 = Some(mint0.pubkey());
@@ -261,7 +280,12 @@ fn main() -> Result<()> {
                     if v.len() == 2 {
                         let decimals = v[1].parse::<u64>().unwrap();
                         let mint1 = Keypair::generate(&mut OsRng);
-                        let create_and_init_instr = create_and_init_mint_instr(&pool_config.clone(), &mint1.pubkey(), &payer.pubkey(), decimals as u8)?;
+                        let create_and_init_instr = create_and_init_mint_instr(
+                            &pool_config.clone(),
+                            &mint1.pubkey(),
+                            &payer.pubkey(),
+                            decimals as u8,
+                        )?;
 
                         // send
                         let signers = vec![&payer, &mint1];
@@ -278,12 +302,10 @@ fn main() -> Result<()> {
                         write_keypair_file(&mint1, keypair_path).unwrap();
                         println!("mint1: {}", &mint1.pubkey());
                         pool_config.mint1 = Some(mint1.pubkey());
-                    }
-                    else {
+                    } else {
                         println!("invalid command: [mint1 decimals]");
                     }
-                }
-                else {
+                } else {
                     let mint1 = read_keypair_file(keypair_path).unwrap();
                     println!("mint1: {}", &mint1.pubkey());
                     pool_config.mint1 = Some(mint1.pubkey());
@@ -293,7 +315,8 @@ fn main() -> Result<()> {
                 if v.len() == 3 {
                     let mint = Pubkey::from_str(&v[1]).unwrap();
                     let owner = Pubkey::from_str(&v[2]).unwrap();
-                    let create_ata_instr = create_ata_token_account_instr(&pool_config.clone(), &mint, &owner)?;
+                    let create_ata_instr =
+                        create_ata_token_account_instr(&pool_config.clone(), &mint, &owner)?;
                     // send
                     let signers = vec![&payer];
                     let recent_hash = rpc_client.get_latest_blockhash()?;
@@ -305,8 +328,7 @@ fn main() -> Result<()> {
                     );
                     let signature = send_txn(&rpc_client, &txn, true)?;
                     println!("{}", signature);
-                }
-                else {
+                } else {
                     println!("invalid command: [create_ata_token mint owner]");
                 }
             }
@@ -317,8 +339,7 @@ fn main() -> Result<()> {
                     let client = RpcClient::new(cfg.http_url.to_string());
                     let token_data = &mut client.get_account_data(&token)?;
                     println!("token_data:{:?}", token_data);
-                }
-                else {
+                } else {
                     println!("invalid command: [ptoken token]");
                 }
             }
@@ -327,7 +348,13 @@ fn main() -> Result<()> {
                     let mint = Pubkey::from_str(&v[1]).unwrap();
                     let to_token = Pubkey::from_str(&v[2]).unwrap();
                     let amount = v[3].parse::<u64>().unwrap();
-                    let mint_to_instr = spl_token_mint_to_instr(&pool_config.clone(), &mint, &to_token, amount, &payer)?;
+                    let mint_to_instr = spl_token_mint_to_instr(
+                        &pool_config.clone(),
+                        &mint,
+                        &to_token,
+                        amount,
+                        &payer,
+                    )?;
                     // send
                     let signers = vec![&payer];
                     let recent_hash = rpc_client.get_latest_blockhash()?;
@@ -339,8 +366,7 @@ fn main() -> Result<()> {
                     );
                     let signature = send_txn(&rpc_client, &txn, true)?;
                     println!("{}", signature);
-                }
-                else {
+                } else {
                     println!("invalid command: [mint_to mint to_token amount]");
                 }
             }
@@ -350,7 +376,13 @@ fn main() -> Result<()> {
                     let tick_spacing = v[2].parse::<u16>().unwrap();
                     let protocol_fee_rate = v[3].parse::<u32>().unwrap();
                     let trade_fee_rate = v[4].parse::<u32>().unwrap();
-                    let create_instr = create_amm_config_instr(&pool_config.clone(), config_index, tick_spacing, protocol_fee_rate, trade_fee_rate)?;
+                    let create_instr = create_amm_config_instr(
+                        &pool_config.clone(),
+                        config_index,
+                        tick_spacing,
+                        protocol_fee_rate,
+                        trade_fee_rate,
+                    )?;
                     // send
                     let signers = vec![&payer];
                     let recent_hash = rpc_client.get_latest_blockhash()?;
@@ -362,8 +394,7 @@ fn main() -> Result<()> {
                     );
                     let signature = send_txn(&rpc_client, &txn, true)?;
                     println!("{}", signature);
-                }
-                else {
+                } else {
                     println!("invalid command: [ccfg mint protocol_fee_rate]");
                 }
             }
@@ -371,12 +402,18 @@ fn main() -> Result<()> {
                 if v.len() == 2 {
                     let config_index = v[1].parse::<u16>().unwrap();
                     let program = anchor_client.program(pool_config.raydium_v3_program);
-                    let (amm_config_key, __bump) = Pubkey::find_program_address(&[raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(), &config_index.to_be_bytes()], &program.id());
+                    let (amm_config_key, __bump) = Pubkey::find_program_address(
+                        &[
+                            raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(),
+                            &config_index.to_be_bytes(),
+                        ],
+                        &program.id(),
+                    );
                     println!("{}", amm_config_key);
-                    let amm_config_account: raydium_amm_v3::states::AmmConfig = program.account(amm_config_key)?;
+                    let amm_config_account: raydium_amm_v3::states::AmmConfig =
+                        program.account(amm_config_key)?;
                     println!("{:#?}", amm_config_account);
-                }
-                else {
+                } else {
                     println!("invalid command: [pcfg config_index]");
                 }
             }
@@ -384,8 +421,18 @@ fn main() -> Result<()> {
                 if v.len() == 3 {
                     let config_index = v[1].parse::<u16>().unwrap();
                     let new_owner = Pubkey::from_str(&v[2]).unwrap();
-                    let (amm_config_key, __bump) = Pubkey::find_program_address(&[raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(), &config_index.to_be_bytes()], &pool_config.raydium_v3_program);
-                    let set_new_owner_instr = set_new_config_owner_instr(&pool_config.clone(), amm_config_key, &new_owner)?;
+                    let (amm_config_key, __bump) = Pubkey::find_program_address(
+                        &[
+                            raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(),
+                            &config_index.to_be_bytes(),
+                        ],
+                        &pool_config.raydium_v3_program,
+                    );
+                    let set_new_owner_instr = set_new_config_owner_instr(
+                        &pool_config.clone(),
+                        amm_config_key,
+                        &new_owner,
+                    )?;
                     // send
                     let signers = vec![&payer, &admin];
                     let recent_hash = rpc_client.get_latest_blockhash()?;
@@ -397,8 +444,7 @@ fn main() -> Result<()> {
                     );
                     let signature = send_txn(&rpc_client, &txn, true)?;
                     println!("{}", signature);
-                }
-                else {
+                } else {
                     println!("invalid command: [set_new_cfg_owner config_index new_owner]");
                 }
             }
@@ -406,8 +452,18 @@ fn main() -> Result<()> {
                 if v.len() == 3 {
                     let config_index = v[1].parse::<u16>().unwrap();
                     let protocol_fee_rate = v[2].parse::<u32>().unwrap();
-                    let (amm_config_key, __bump) = Pubkey::find_program_address(&[raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(), &config_index.to_be_bytes()], &pool_config.raydium_v3_program);
-                    let set_protocol_fee_instr = set_protocol_fee_rate_instr(&pool_config.clone(), amm_config_key, protocol_fee_rate)?;
+                    let (amm_config_key, __bump) = Pubkey::find_program_address(
+                        &[
+                            raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(),
+                            &config_index.to_be_bytes(),
+                        ],
+                        &pool_config.raydium_v3_program,
+                    );
+                    let set_protocol_fee_instr = set_protocol_fee_rate_instr(
+                        &pool_config.clone(),
+                        amm_config_key,
+                        protocol_fee_rate,
+                    )?;
                     // send
                     let signers = vec![&payer, &admin];
                     let recent_hash = rpc_client.get_latest_blockhash()?;
@@ -419,9 +475,10 @@ fn main() -> Result<()> {
                     );
                     let signature = send_txn(&rpc_client, &txn, true)?;
                     println!("{}", signature);
-                }
-                else {
-                    println!("invalid command: [set_protocol_fee_rate config_index protocol_fee_rate]");
+                } else {
+                    println!(
+                        "invalid command: [set_protocol_fee_rate config_index protocol_fee_rate]"
+                    );
                 }
             }
             "create_pool" | "cpool" => {
@@ -430,13 +487,33 @@ fn main() -> Result<()> {
                     let tick = v[2].parse::<i32>().unwrap();
                     let price = tick_to_price(tick);
                     let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick)?;
-                    let (amm_config_key, __bump) = Pubkey::find_program_address(&[raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(), &config_index.to_be_bytes()], &pool_config.raydium_v3_program);
-                    println!("tick:{}, price:{}, sqrt_price_x64:{}, amm_config_key:{}", tick, price, sqrt_price_x64, amm_config_key);
+                    let (amm_config_key, __bump) = Pubkey::find_program_address(
+                        &[
+                            raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(),
+                            &config_index.to_be_bytes(),
+                        ],
+                        &pool_config.raydium_v3_program,
+                    );
+                    println!(
+                        "tick:{}, price:{}, sqrt_price_x64:{}, amm_config_key:{}",
+                        tick, price, sqrt_price_x64, amm_config_key
+                    );
                     let observation_account = Keypair::generate(&mut OsRng);
-                    let mut create_observation_instr = create_account_rent_exmpt_instr(&pool_config.clone(), &observation_account.pubkey(), pool_config.raydium_v3_program, raydium_amm_v3::states::ObservationState::LEN)?;
-                    let create_pool_instr = create_pool_instr(&pool_config.clone(), amm_config_key, pool_config.mint0.unwrap(), pool_config.mint1.unwrap(), sqrt_price_x64)?;
+                    let mut create_observation_instr = create_account_rent_exmpt_instr(
+                        &pool_config.clone(),
+                        &observation_account.pubkey(),
+                        pool_config.raydium_v3_program,
+                        raydium_amm_v3::states::ObservationState::LEN,
+                    )?;
+                    let create_pool_instr = create_pool_instr(
+                        &pool_config.clone(),
+                        amm_config_key,
+                        pool_config.mint0.unwrap(),
+                        pool_config.mint1.unwrap(),
+                        sqrt_price_x64,
+                    )?;
                     create_observation_instr.extend(create_pool_instr);
-                    
+
                     // send
                     let signers = vec![&payer, &observation_account];
                     let recent_hash = rpc_client.get_latest_blockhash()?;
@@ -448,15 +525,15 @@ fn main() -> Result<()> {
                     );
                     let signature = send_txn(&rpc_client, &txn, true)?;
                     println!("{}", signature);
-                }
-                else {
+                } else {
                     println!("invalid command: [create_pool config_index tick_spacing]");
                 }
             }
             "ppool" => {
                 let program = anchor_client.program(pool_config.raydium_v3_program);
                 println!("{}", pool_config.pool_id_account.unwrap());
-                let pool_account: raydium_amm_v3::states::PoolState = program.account(pool_config.pool_id_account.unwrap())?;
+                let pool_account: raydium_amm_v3::states::PoolState =
+                    program.account(pool_config.pool_id_account.unwrap())?;
                 println!("{:#?}", pool_account);
             }
             "open_position" | "open" => {
@@ -468,28 +545,52 @@ fn main() -> Result<()> {
                     let amount_0_min = v[5].parse::<u64>().unwrap();
                     let amount_1_min = v[6].parse::<u64>().unwrap();
 
-                    let tick_array_lower_start_index = raydium_amm_v3::states::TickArrayState::get_arrary_start_index(tick_lower_index, pool_config.tick_spacing.into());
-                    let tick_array_upper_start_index = raydium_amm_v3::states::TickArrayState::get_arrary_start_index(tick_upper_index, pool_config.tick_spacing.into());
+                    let tick_array_lower_start_index =
+                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                            tick_lower_index,
+                            pool_config.tick_spacing.into(),
+                        );
+                    let tick_array_upper_start_index =
+                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                            tick_upper_index,
+                            pool_config.tick_spacing.into(),
+                        );
                     // load pool to get observation
                     let program = anchor_client.program(pool_config.raydium_v3_program);
-                    let pool: raydium_amm_v3::states::PoolState = program.account(pool_config.pool_id_account.unwrap())?;
+                    let pool: raydium_amm_v3::states::PoolState =
+                        program.account(pool_config.pool_id_account.unwrap())?;
                     // load position
-                    let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(&rpc_client, &payer.pubkey(), &pool_config.raydium_v3_program);
+                    let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(
+                        &rpc_client,
+                        &payer.pubkey(),
+                        &pool_config.raydium_v3_program,
+                    );
                     let rsps = rpc_client.get_multiple_accounts(&positions)?;
                     let mut user_positions = Vec::new();
                     for rsp in rsps {
                         match rsp {
                             None => continue,
                             Some(rsp) => {
-                                let (_,data,_) = array_refs![&*rsp.data, 8, std::mem::size_of::<raydium_amm_v3::states::PersonalPositionState>();..;];
-                                let position = unsafe { std::mem::transmute::<&[u8; std::mem::size_of::<raydium_amm_v3::states::PersonalPositionState>()], &raydium_amm_v3::states::PersonalPositionState>(data) };
+                                let (_, data, _) = array_refs![&*rsp.data, 8, std::mem::size_of::<raydium_amm_v3::states::PersonalPositionState>();..;];
+                                let position = unsafe {
+                                    std::mem::transmute::<
+                                        &[u8; std::mem::size_of::<
+                                            raydium_amm_v3::states::PersonalPositionState,
+                                        >()],
+                                        &raydium_amm_v3::states::PersonalPositionState,
+                                    >(data)
+                                };
                                 user_positions.push(position);
                             }
                         }
                     }
-                    let mut find_position = raydium_amm_v3::states::PersonalPositionState::default();
+                    let mut find_position =
+                        raydium_amm_v3::states::PersonalPositionState::default();
                     for position in user_positions {
-                        if position.pool_id == pool_config.pool_id_account.unwrap() && position.tick_lower_index == tick_lower_index && position.tick_upper_index == tick_upper_index {
+                        if position.pool_id == pool_config.pool_id_account.unwrap()
+                            && position.tick_lower_index == tick_lower_index
+                            && position.tick_upper_index == tick_upper_index
+                        {
                             find_position = position.clone();
                         }
                     }
@@ -505,8 +606,14 @@ fn main() -> Result<()> {
                             pool.token_vault_1,
                             nft_mint.pubkey(),
                             payer.pubkey(),
-                            spl_associated_token_account::get_associated_token_address(&payer.pubkey(), &pool_config.mint0.unwrap()),
-                            spl_associated_token_account::get_associated_token_address(&payer.pubkey(), &pool_config.mint1.unwrap()),
+                            spl_associated_token_account::get_associated_token_address(
+                                &payer.pubkey(),
+                                &pool_config.mint0.unwrap(),
+                            ),
+                            spl_associated_token_account::get_associated_token_address(
+                                &payer.pubkey(),
+                                &pool_config.mint1.unwrap(),
+                            ),
                             amount_0_desired,
                             amount_1_desired,
                             amount_0_min,
@@ -515,7 +622,7 @@ fn main() -> Result<()> {
                             tick_upper_index,
                             tick_array_lower_start_index,
                             tick_array_upper_start_index,
-                        )?; 
+                        )?;
                         // send
                         let signers = vec![&payer];
                         let recent_hash = rpc_client.get_latest_blockhash()?;
@@ -527,13 +634,11 @@ fn main() -> Result<()> {
                         );
                         let signature = send_txn(&rpc_client, &txn, true)?;
                         println!("{}", signature);
-                    }
-                    else {
+                    } else {
                         // personal position exist
                         println!("personal position exist:{:?}", find_position);
                     }
-                }
-                else {
+                } else {
                     println!("invalid command: [open_position tick_lower_index tick_upper_index amount_0_desired amount_1_desired amount_0_min amount_1_min]");
                 }
             }
@@ -546,32 +651,58 @@ fn main() -> Result<()> {
                     let amount_0_min = v[5].parse::<u64>().unwrap();
                     let amount_1_min = v[6].parse::<u64>().unwrap();
 
-                    let tick_array_lower_start_index = raydium_amm_v3::states::TickArrayState::get_arrary_start_index(tick_lower_index, pool_config.tick_spacing.into());
-                    let tick_array_upper_start_index = raydium_amm_v3::states::TickArrayState::get_arrary_start_index(tick_upper_index, pool_config.tick_spacing.into());
+                    let tick_array_lower_start_index =
+                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                            tick_lower_index,
+                            pool_config.tick_spacing.into(),
+                        );
+                    let tick_array_upper_start_index =
+                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                            tick_upper_index,
+                            pool_config.tick_spacing.into(),
+                        );
                     // load pool to get observation
                     let program = anchor_client.program(pool_config.raydium_v3_program);
-                    let pool: raydium_amm_v3::states::PoolState = program.account(pool_config.pool_id_account.unwrap())?;
+                    let pool: raydium_amm_v3::states::PoolState =
+                        program.account(pool_config.pool_id_account.unwrap())?;
                     // load position
-                    let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(&rpc_client, &payer.pubkey(), &pool_config.raydium_v3_program);
+                    let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(
+                        &rpc_client,
+                        &payer.pubkey(),
+                        &pool_config.raydium_v3_program,
+                    );
                     let rsps = rpc_client.get_multiple_accounts(&positions)?;
                     let mut user_positions = Vec::new();
                     for rsp in rsps {
                         match rsp {
                             None => continue,
                             Some(rsp) => {
-                                let (_,data,_) = array_refs![&*rsp.data, 8, std::mem::size_of::<raydium_amm_v3::states::PersonalPositionState>();..;];
-                                let position = unsafe { std::mem::transmute::<&[u8; std::mem::size_of::<raydium_amm_v3::states::PersonalPositionState>()], &raydium_amm_v3::states::PersonalPositionState>(data) };
+                                let (_, data, _) = array_refs![&*rsp.data, 8, std::mem::size_of::<raydium_amm_v3::states::PersonalPositionState>();..;];
+                                let position = unsafe {
+                                    std::mem::transmute::<
+                                        &[u8; std::mem::size_of::<
+                                            raydium_amm_v3::states::PersonalPositionState,
+                                        >()],
+                                        &raydium_amm_v3::states::PersonalPositionState,
+                                    >(data)
+                                };
                                 user_positions.push(position);
                             }
                         }
                     }
-                    let mut find_position = raydium_amm_v3::states::PersonalPositionState::default();
+                    let mut find_position =
+                        raydium_amm_v3::states::PersonalPositionState::default();
                     for position in user_positions {
-                        if position.pool_id == pool_config.pool_id_account.unwrap() && position.tick_lower_index == tick_lower_index && position.tick_upper_index == tick_upper_index {
+                        if position.pool_id == pool_config.pool_id_account.unwrap()
+                            && position.tick_lower_index == tick_lower_index
+                            && position.tick_upper_index == tick_upper_index
+                        {
                             find_position = position.clone();
                         }
                     }
-                    if find_position.nft_mint != Pubkey::default() && find_position.pool_id == pool_config.pool_id_account.unwrap() {
+                    if find_position.nft_mint != Pubkey::default()
+                        && find_position.pool_id == pool_config.pool_id_account.unwrap()
+                    {
                         // personal position exist
                         let increase_instr = increase_liquidity_instr(
                             &pool_config.clone(),
@@ -580,8 +711,14 @@ fn main() -> Result<()> {
                             pool.token_vault_0,
                             pool.token_vault_1,
                             find_position.nft_mint,
-                            spl_associated_token_account::get_associated_token_address(&payer.pubkey(), &pool_config.mint0.unwrap()),
-                            spl_associated_token_account::get_associated_token_address(&payer.pubkey(), &pool_config.mint1.unwrap()),
+                            spl_associated_token_account::get_associated_token_address(
+                                &payer.pubkey(),
+                                &pool_config.mint0.unwrap(),
+                            ),
+                            spl_associated_token_account::get_associated_token_address(
+                                &payer.pubkey(),
+                                &pool_config.mint1.unwrap(),
+                            ),
                             amount_0_desired,
                             amount_1_desired,
                             amount_0_min,
@@ -602,13 +739,11 @@ fn main() -> Result<()> {
                         );
                         let signature = send_txn(&rpc_client, &txn, true)?;
                         println!("{}", signature);
-                    }
-                    else {
+                    } else {
                         // personal position not exist
                         println!("personal position exist:{:?}", find_position);
                     }
-                }
-                else {
+                } else {
                     println!("invalid command: [increase_liquidity tick_lower_index tick_upper_index amount_0_desired amount_1_desired amount_0_min amount_1_min]");
                 }
             }
@@ -620,32 +755,58 @@ fn main() -> Result<()> {
                     let amount_0_min = v[4].parse::<u64>().unwrap();
                     let amount_1_min = v[5].parse::<u64>().unwrap();
 
-                    let tick_array_lower_start_index = raydium_amm_v3::states::TickArrayState::get_arrary_start_index(tick_lower_index, pool_config.tick_spacing.into());
-                    let tick_array_upper_start_index = raydium_amm_v3::states::TickArrayState::get_arrary_start_index(tick_upper_index, pool_config.tick_spacing.into());
+                    let tick_array_lower_start_index =
+                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                            tick_lower_index,
+                            pool_config.tick_spacing.into(),
+                        );
+                    let tick_array_upper_start_index =
+                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                            tick_upper_index,
+                            pool_config.tick_spacing.into(),
+                        );
                     // load pool to get observation
                     let program = anchor_client.program(pool_config.raydium_v3_program);
-                    let pool: raydium_amm_v3::states::PoolState = program.account(pool_config.pool_id_account.unwrap())?;
+                    let pool: raydium_amm_v3::states::PoolState =
+                        program.account(pool_config.pool_id_account.unwrap())?;
                     // load position
-                    let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(&rpc_client, &payer.pubkey(), &pool_config.raydium_v3_program);
+                    let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(
+                        &rpc_client,
+                        &payer.pubkey(),
+                        &pool_config.raydium_v3_program,
+                    );
                     let rsps = rpc_client.get_multiple_accounts(&positions)?;
                     let mut user_positions = Vec::new();
                     for rsp in rsps {
                         match rsp {
                             None => continue,
                             Some(rsp) => {
-                                let (_,data,_) = array_refs![&*rsp.data, 8, std::mem::size_of::<raydium_amm_v3::states::PersonalPositionState>();..;];
-                                let position = unsafe { std::mem::transmute::<&[u8; std::mem::size_of::<raydium_amm_v3::states::PersonalPositionState>()], &raydium_amm_v3::states::PersonalPositionState>(data) };
+                                let (_, data, _) = array_refs![&*rsp.data, 8, std::mem::size_of::<raydium_amm_v3::states::PersonalPositionState>();..;];
+                                let position = unsafe {
+                                    std::mem::transmute::<
+                                        &[u8; std::mem::size_of::<
+                                            raydium_amm_v3::states::PersonalPositionState,
+                                        >()],
+                                        &raydium_amm_v3::states::PersonalPositionState,
+                                    >(data)
+                                };
                                 user_positions.push(position);
                             }
                         }
                     }
-                    let mut find_position = raydium_amm_v3::states::PersonalPositionState::default();
+                    let mut find_position =
+                        raydium_amm_v3::states::PersonalPositionState::default();
                     for position in user_positions {
-                        if position.pool_id == pool_config.pool_id_account.unwrap() && position.tick_lower_index == tick_lower_index && position.tick_upper_index == tick_upper_index {
+                        if position.pool_id == pool_config.pool_id_account.unwrap()
+                            && position.tick_lower_index == tick_lower_index
+                            && position.tick_upper_index == tick_upper_index
+                        {
                             find_position = position.clone();
                         }
                     }
-                    if find_position.nft_mint != Pubkey::default() && find_position.pool_id == pool_config.pool_id_account.unwrap() {
+                    if find_position.nft_mint != Pubkey::default()
+                        && find_position.pool_id == pool_config.pool_id_account.unwrap()
+                    {
                         // personal position exist
                         let decrease_instr = decrease_liquidity_instr(
                             &pool_config.clone(),
@@ -654,8 +815,14 @@ fn main() -> Result<()> {
                             pool.token_vault_0,
                             pool.token_vault_1,
                             find_position.nft_mint,
-                            spl_associated_token_account::get_associated_token_address(&payer.pubkey(), &pool_config.mint0.unwrap()),
-                            spl_associated_token_account::get_associated_token_address(&payer.pubkey(), &pool_config.mint1.unwrap()),
+                            spl_associated_token_account::get_associated_token_address(
+                                &payer.pubkey(),
+                                &pool_config.mint0.unwrap(),
+                            ),
+                            spl_associated_token_account::get_associated_token_address(
+                                &payer.pubkey(),
+                                &pool_config.mint1.unwrap(),
+                            ),
                             liquidity,
                             amount_0_min,
                             amount_1_min,
@@ -674,25 +841,37 @@ fn main() -> Result<()> {
                             recent_hash,
                         );
                         let signature = send_txn(&rpc_client, &txn, true)?;
-                        println!("{}", signature); 
-                    }
-                    else {
+                        println!("{}", signature);
+                    } else {
                         // personal position not exist
                         println!("personal position exist:{:?}", find_position);
                     }
-                }
-                else {
+                } else {
                     println!("invalid command: [decrease_liquidity tick_lower_index tick_upper_index liquidity amount_0_min amount_1_min]");
                 }
             }
             "ptick_state" => {
                 if v.len() == 2 {
                     let tick = v[1].parse::<i32>().unwrap();
-                    let tick_array_start_index = raydium_amm_v3::states::TickArrayState::get_arrary_start_index(tick, pool_config.tick_spacing.into());
+                    let tick_array_start_index =
+                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                            tick,
+                            pool_config.tick_spacing.into(),
+                        );
                     let program = anchor_client.program(pool_config.raydium_v3_program);
-                    let (tick_array_key, __bump) = Pubkey::find_program_address(&[raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(), pool_config.pool_id_account.unwrap().to_bytes().as_ref(), &tick_array_start_index.to_be_bytes()], &program.id());
-                    let mut tick_array_account: raydium_amm_v3::states::TickArrayState = program.account(tick_array_key)?;
-                    let tick_state = tick_array_account.get_tick_state_mut(tick, pool_config.tick_spacing.into()).unwrap();
+                    let (tick_array_key, __bump) = Pubkey::find_program_address(
+                        &[
+                            raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                            pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
+                            &tick_array_start_index.to_be_bytes(),
+                        ],
+                        &program.id(),
+                    );
+                    let mut tick_array_account: raydium_amm_v3::states::TickArrayState =
+                        program.account(tick_array_key)?;
+                    let tick_state = tick_array_account
+                        .get_tick_state_mut(tick, pool_config.tick_spacing.into())
+                        .unwrap();
                     println!("{:?}", tick_state);
                 }
             }
@@ -700,17 +879,24 @@ fn main() -> Result<()> {
                 let tick1 = tick_math::get_tick_at_sqrt_price(18446744073709551616)?;
                 let tick2 = tick_math::get_tick_at_sqrt_price(18446744073709541616)?;
                 println!("tick1:{}, tick2:{}", tick1, tick2);
-                let ret = raydium_amm_v3::libraries::get_amount_0_for_liquidity(18446744073709551616, 18446744073709541616, 52022602764);
+                let ret = raydium_amm_v3::libraries::get_amount_0_for_liquidity(
+                    18446744073709551616,
+                    18446744073709541616,
+                    52022602764,
+                );
                 println!("{}", ret);
                 // load pool to get observation
                 let program = anchor_client.program(pool_config.raydium_v3_program);
-                let _pool: raydium_amm_v3::states::PoolState = program.account(pool_config.pool_id_account.unwrap())?;
+                let _pool: raydium_amm_v3::states::PoolState =
+                    program.account(pool_config.pool_id_account.unwrap())?;
             }
             "tick_to_x64" => {
                 if v.len() == 2 {
                     let tick = v[1].parse::<i32>().unwrap();
                     let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick)?;
-                    let sqrt_price_f = (sqrt_price_x64 >> fixed_point_64::RESOLUTION) as f64 +  (sqrt_price_x64 % fixed_point_64::Q64) as f64 / fixed_point_64::Q64 as f64;
+                    let sqrt_price_f = (sqrt_price_x64 >> fixed_point_64::RESOLUTION) as f64
+                        + (sqrt_price_x64 % fixed_point_64::Q64) as f64
+                            / fixed_point_64::Q64 as f64;
                     println!("{}-{}", sqrt_price_x64, sqrt_price_f * sqrt_price_f);
                 }
             }
@@ -724,9 +910,16 @@ fn main() -> Result<()> {
             "sqrt_price_x64_to_tick_by_self" => {
                 if v.len() == 2 {
                     let sqrt_price_x64 = v[1].parse::<u128>().unwrap();
-                    let sqrt_price_f = (sqrt_price_x64 >> fixed_point_64::RESOLUTION) as f64 +  (sqrt_price_x64 % fixed_point_64::Q64) as f64 / fixed_point_64::Q64 as f64;
+                    let sqrt_price_f = (sqrt_price_x64 >> fixed_point_64::RESOLUTION) as f64
+                        + (sqrt_price_x64 % fixed_point_64::Q64) as f64
+                            / fixed_point_64::Q64 as f64;
                     let tick = (sqrt_price_f * sqrt_price_f).log(Q_RATIO) as i32;
-                    println!("tick:{}, sqrt_price_f:{}, price:{}", tick, sqrt_price_f, sqrt_price_f*sqrt_price_f);
+                    println!(
+                        "tick:{}, sqrt_price_f:{}, price:{}",
+                        tick,
+                        sqrt_price_f,
+                        sqrt_price_f * sqrt_price_f
+                    );
                 }
             }
             "tick_test" => {

@@ -1,6 +1,9 @@
 use crate::error::ErrorCode;
 use crate::libraries::{
-    big_num::U128, fixed_point_64, full_math::MulDiv, liquidity_math, swap_math, tick_math,
+    big_num::{U1024, U128},
+    fixed_point_64,
+    full_math::MulDiv,
+    liquidity_math, swap_math, tick_array_bit_map, tick_math,
 };
 use crate::states::*;
 use crate::util::*;
@@ -192,6 +195,23 @@ pub fn swap_internal<'b, 'info>(
     let mut tick_array_current_loader = ctx.tick_array_state.load_mut()?;
     // check tick_array account is owned by the pool
     require_keys_eq!(tick_array_current_loader.amm_pool, ctx.pool_state.key());
+    let current_tick_array_start_index = TickArrayState::get_arrary_start_index(
+        ctx.pool_state.tick_current,
+        ctx.pool_state.tick_spacing.into(),
+    );
+    // check tick_array account is correct
+    require_keys_eq!(
+        ctx.tick_array_state.key(),
+        Pubkey::find_program_address(
+            &[
+                TICK_ARRAY_SEED.as_bytes(),
+                ctx.pool_state.key().as_ref(),
+                &current_tick_array_start_index.to_be_bytes(),
+            ],
+            &crate::id()
+        )
+        .0
+    );
 
     // let mut tick_array_loader_next: AccountLoader<TickArrayState>;
     // continue swapping as long as we haven't used the entire input/output and haven't
@@ -219,8 +239,16 @@ pub fn swap_internal<'b, 'info>(
         };
 
         if !next_initialized_tick.is_initialized() {
-            let next_array_start_index = tick_array_current_loader
-                .next_tick_arrary_start_index(ctx.pool_state.tick_spacing, zero_for_one);
+            // let next_array_start_index = tick_array_current_loader
+            //     .next_tick_arrary_start_index(ctx.pool_state.tick_spacing, zero_for_one);
+            let next_array_start_index =
+                tick_array_bit_map::next_initialized_tick_array_start_tick(
+                    U1024(ctx.pool_state.tick_array_bitmap),
+                    current_tick_array_start_index,
+                    ctx.pool_state.tick_spacing.into(),
+                    zero_for_one,
+                )
+                .unwrap();
 
             let tick_array_account_info = remaining_accounts_iter.next().unwrap();
             // ensure this is a valid PDA, even if account is not initialized

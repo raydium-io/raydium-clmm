@@ -14,3 +14,7 @@ construct_uint! {
 construct_uint! {
     pub struct U512(8);
 }
+
+construct_uint! {
+    pub struct U1024(16);
+}
