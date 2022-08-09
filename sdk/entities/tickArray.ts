@@ -26,14 +26,44 @@ export function getTickArrayStartIndexByTick(
   tickIndex: number,
   tickSpacing: number
 ): number {
-  let startIndex: number;
-  if (tickIndex < 0) {
-    startIndex = Math.ceil(tickIndex / (TICK_ARRAY_SIZE * tickSpacing));
-    startIndex = startIndex - 1;
+  let startIndex: number = tickIndex / (TICK_ARRAY_SIZE * tickSpacing);
+  if (tickIndex < 0 && tickIndex % (TICK_ARRAY_SIZE * tickSpacing) != 0) {
+    startIndex = Math.ceil(startIndex) - 1;
   } else {
-    startIndex = Math.floor(tickIndex / (TICK_ARRAY_SIZE * tickSpacing));
+    startIndex = Math.floor(startIndex);
   }
   return startIndex * (tickSpacing * TICK_ARRAY_SIZE);
+}
+
+export function getTickArrayOffsetInBitmapByTick(
+  tick: number,
+  tickSpacing: number
+): number {
+  let multiplier = tickSpacing * TICK_ARRAY_SIZE;
+  let compressed = Math.floor(tick / multiplier) + 512;
+  if (tick < 0 && tick % multiplier != 0) {
+    // round towards negative infinity
+    compressed -= 1;
+  }
+  return Math.abs(compressed);
+}
+
+/**
+ * 
+ * @param bitmap 
+ * @param tick 
+ * @param tickSpacing 
+ * @returns if the special bit is initialized and tick array start index
+ */
+export function checkTickArrayIsInitialized(
+  bitmap: BN,
+  tick: number,
+  tickSpacing: number
+): [boolean, number] {
+  let multiplier = tickSpacing * TICK_ARRAY_SIZE;
+  let compressed = Math.floor(tick / multiplier) + 512;
+  let bit_pos = Math.abs(compressed);
+  return [bitmap.testn(bit_pos), (bit_pos - 512) * multiplier];
 }
 
 /**
@@ -90,35 +120,34 @@ export function getInitializedTickArrayInRange(
   tickArrayStartIndex: number,
   expectedCount: number
 ): number[] {
+  if (tickArrayStartIndex % (tickSpacing * TICK_ARRAY_SIZE) != 0) {
+    throw new Error("Invild tickArrayStartIndex");
+  }
   let tickArrayOffset =
     Math.floor(tickArrayStartIndex / (tickSpacing * TICK_ARRAY_SIZE)) + 512;
   let result: number[] = [];
-  let isPositive = true;
-  if (tickArrayStartIndex < 0) {
-    isPositive = false;
-  }
-  // find left of current offset
-  result.push(
-    ...searchLeftFromStart(
-      tickArrayBitmap,
-      tickArrayOffset,
-      1024,
-      expectedCount,
-      tickSpacing,
-      isPositive
-    )
-  );
+
   // find right of currenct offset
   result.push(
-    ...searchRightFromStart(
+    ...searchLowBitFromStart(
       tickArrayBitmap,
       tickArrayOffset - 1,
       0,
       expectedCount,
-      tickSpacing,
-      isPositive
+      tickSpacing
     )
   );
+  // find left of current offset
+  result.push(
+    ...searchHightBitFromStart(
+      tickArrayBitmap,
+      tickArrayOffset,
+      1024,
+      expectedCount,
+      tickSpacing
+    )
+  );
+
   return result;
 }
 
@@ -129,27 +158,20 @@ export function getInitializedTickArrayInRange(
  * @param end
  * @param expectedCount
  * @param tickSpacing
- * @param isPositive
  * @returns
  */
-function searchRightFromStart(
+export function searchLowBitFromStart(
   tickArrayBitmap: BN,
   start: number,
   end: number,
   expectedCount: number,
-  tickSpacing: number,
-  isPositive: boolean
+  tickSpacing: number
 ): number[] {
   let fetchNum: number = 0;
   let result: number[] = [];
   for (let i = start; i >= end; i--) {
     if (tickArrayBitmap.shrn(i).and(new BN(1)).eqn(1)) {
-      let nextStartIndex = 0;
-      if (isPositive) {
-        nextStartIndex = (i - 512) * (tickSpacing * TICK_ARRAY_SIZE);
-      } else {
-        nextStartIndex = (-i - 1 - 512) * (tickSpacing * TICK_ARRAY_SIZE);
-      }
+      let nextStartIndex = (i - 512) * (tickSpacing * TICK_ARRAY_SIZE);
       result.push(nextStartIndex);
       fetchNum++;
     }
@@ -157,28 +179,21 @@ function searchRightFromStart(
       break;
     }
   }
-  console.log("searchRightFromStart:", result);
   return result;
 }
 
-function searchLeftFromStart(
+export function searchHightBitFromStart(
   tickArrayBitmap: BN,
   start: number,
   end: number,
   expectedCount: number,
-  tickSpacing: number,
-  isPositive: boolean
+  tickSpacing: number
 ): number[] {
   let fetchNum: number = 0;
   let result: number[] = [];
   for (let i = start; i < end; i++) {
     if (tickArrayBitmap.shrn(i).and(new BN(1)).eqn(1)) {
-      let nextStartIndex = 0;
-      if (isPositive) {
-        nextStartIndex = (i - 512) * (tickSpacing * TICK_ARRAY_SIZE);
-      } else {
-        nextStartIndex = (-i - 1 - 512) * (tickSpacing * TICK_ARRAY_SIZE);
-      }
+      let nextStartIndex = (i - 512) * (tickSpacing * TICK_ARRAY_SIZE);
       result.push(nextStartIndex);
       fetchNum++;
     }
@@ -186,6 +201,5 @@ function searchLeftFromStart(
       break;
     }
   }
-  console.log("searchLeftFromStart:", result);
   return result;
 }

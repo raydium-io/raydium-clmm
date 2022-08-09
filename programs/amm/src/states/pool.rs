@@ -1,12 +1,13 @@
 use crate::error::ErrorCode;
 use crate::libraries::{
     big_num::{U1024, U128},
-    fixed_point_64,
+    check_current_tick_array_is_initialized, fixed_point_64,
     full_math::MulDiv,
+    next_initialized_tick_array_start_index,
 };
 use crate::states::{MAX_TICK_ARRAY_START_INDEX, MIN_TICK_ARRAY_START_INDEX, TICK_ARRAY_SIZE};
 use anchor_lang::prelude::*;
-use std::ops::{BitXor};
+use std::ops::BitXor;
 
 /// Seed to derive account address and signature
 pub const POOL_SEED: &str = "pool";
@@ -273,6 +274,22 @@ impl PoolState {
         Ok(())
     }
 
+    pub fn get_next_initialized_tick_array(&self, zero_for_one: bool) -> Option<i32> {
+        let (is_initialized, start_index) = check_current_tick_array_is_initialized(
+            U1024(self.tick_array_bitmap),
+            self.tick_current,
+            self.tick_spacing.into(),
+        );
+        if is_initialized {
+            return Some(start_index);
+        }
+        next_initialized_tick_array_start_index(
+            U1024(self.tick_array_bitmap),
+            self.tick_current,
+            self.tick_spacing.into(),
+            zero_for_one,
+        )
+    }
 }
 
 #[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Debug, PartialEq)]
@@ -428,7 +445,6 @@ pub struct SwapEvent {
     pub tick: i32,
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -443,24 +459,53 @@ mod test {
             pool_state.flip_tick_array_bit(-800).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
-                [0, 0, 0, 0, 0, 0, 0, 9223372036854775808, 0, 0, 0, 0, 0, 0, 0, 0]
+                [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    9223372036854775808,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ]
             );
             pool_state.flip_tick_array_bit(-1600).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
-                [0, 0, 0, 0, 0, 0, 0, 13835058055282163712, 0, 0, 0, 0, 0, 0, 0, 0]
+                [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    13835058055282163712,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ]
             );
             pool_state.flip_tick_array_bit(-2400).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
-                [0, 0, 0, 0, 0, 0, 0, 16140901064495857664, 0, 0, 0, 0, 0, 0, 0, 0]
-            );
-            pool_state.flip_tick_array_bit(-51200).unwrap();
-            assert_eq!(
-                pool_state.tick_array_bitmap,
                 [
                     0,
-                    1,
+                    0,
                     0,
                     0,
                     0,
@@ -477,7 +522,28 @@ mod test {
                     0
                 ]
             );
-            println!("{:b}", pool_state.tick_array_bitmap[0]);
+            pool_state.flip_tick_array_bit(-51200).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap,
+                [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    16140901064495857665,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ]
+            );
             pool_state.flip_tick_array_bit(-52000).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
@@ -488,9 +554,9 @@ mod test {
                     0,
                     0,
                     0,
+                    9223372036854775808,
+                    16140901064495857665,
                     0,
-                    9223372036854775815,
-                    1,
                     0,
                     0,
                     0,
@@ -500,19 +566,10 @@ mod test {
                     0
                 ]
             );
-            println!("{:b}", pool_state.tick_array_bitmap[1]);
             pool_state.flip_tick_array_bit(-409600).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
                 [
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    9223372036854775815,
                     1,
                     0,
                     0,
@@ -520,6 +577,14 @@ mod test {
                     0,
                     0,
                     9223372036854775808,
+                    16140901064495857665,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
                     0
                 ]
             );
@@ -533,9 +598,9 @@ mod test {
                     0,
                     0,
                     0,
+                    9223372036854775808,
+                    16140901064495857665,
                     0,
-                    9223372036854775815,
-                    1,
                     0,
                     0,
                     0,
@@ -566,6 +631,11 @@ mod test {
                 pool_state.tick_array_bitmap,
                 [0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0]
             );
+            pool_state.flip_tick_array_bit(51200).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap,
+                [0, 0, 0, 0, 0, 0, 0, 0, 7, 1, 0, 0, 0, 0, 0, 0]
+            );
             pool_state.flip_tick_array_bit(408800).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
@@ -579,7 +649,7 @@ mod test {
                     0,
                     0,
                     7,
-                    0,
+                    1,
                     0,
                     0,
                     0,
@@ -591,10 +661,8 @@ mod test {
             pool_state.flip_tick_array_bit(408800).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
-                [0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0]
+                [0, 0, 0, 0, 0, 0, 0, 0, 7, 1, 0, 0, 0, 0, 0, 0]
             )
         }
-
-   
     }
 }

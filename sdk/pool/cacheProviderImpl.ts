@@ -45,11 +45,9 @@ export class CacheDataProviderImpl implements CacheDataProvider {
   async loadTickArrayCache(
     tickCurrent: number,
     tickSpacing: number,
-    tickArrayBitmapArray: BN[],
+    tickArrayBitmapArray: BN[]
   ) {
-    const tickArrayBitmap = mergeTickArrayBitmap(
-      tickArrayBitmapArray
-    );
+    const tickArrayBitmap = mergeTickArrayBitmap(tickArrayBitmapArray);
     const tickArraysToFetch = [];
     const currentTickArrayStartIndex = getTickArrayStartIndexByTick(
       tickCurrent,
@@ -60,7 +58,7 @@ export class CacheDataProviderImpl implements CacheDataProvider {
       tickArrayBitmap,
       tickSpacing,
       currentTickArrayStartIndex,
-      Math.floor(FETCH_TICKARRAY_COUNT / 2),
+      Math.floor(FETCH_TICKARRAY_COUNT / 2)
     );
     for (let i = 0; i < startIndexArray.length; i++) {
       const [tickArrayAddress, _] = await getTickArrayAddress(
@@ -80,7 +78,7 @@ export class CacheDataProviderImpl implements CacheDataProvider {
         this.tickArrayCache.set(item.startTickIndex, item);
       }
     }
-    console.log(this.tickArrayCache);
+    // console.log(this.tickArrayCache);
   }
 
   public setTickArrayCache(cachedTickArraies: TickArray[]) {

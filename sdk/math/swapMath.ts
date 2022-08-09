@@ -4,7 +4,7 @@ import { NEGATIVE_ONE, ZERO } from "./constants";
 import { LiquidityMath } from "./liquidityMath";
 import { Math } from "./math";
 import { SqrtPriceMath } from "./sqrtPriceMath";
-import { CacheDataProvider } from "../entities";
+import { CacheDataProvider,getTickArrayStartIndexByTick } from "../entities";
 import { AccountMeta } from "@solana/web3.js";
 
 import {
@@ -54,6 +54,7 @@ export abstract class SwapMath {
     tickSpacing: number,
     currentSqrtPriceX64: BN,
     amountSpecified: BN,
+    lastSavedTickArrayStartIndex: number | undefined,
     sqrtPriceLimitX64?: BN
   ): Promise<{
     amountCalculated: BN;
@@ -98,8 +99,6 @@ export abstract class SwapMath {
       accounts: [] as AccountMeta[],
       liquidity: liquidity,
     };
-
-    let lastSavedTickArrayStartIndex: number | undefined;
 
     let loopCount = 0;
     // loop across ticks until input liquidity is consumed, or the limit price is reached

@@ -1,12 +1,10 @@
 import {
   Connection,
-  SendOptions,
   Signer,
   Transaction,
   TransactionInstruction,
   TransactionSignature,
   ConfirmOptions,
-  ComputeBudgetProgram,
 } from "@solana/web3.js";
 
 export async function sendTransaction(

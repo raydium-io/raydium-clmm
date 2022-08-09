@@ -22,7 +22,7 @@ pub fn check_current_tick_array_is_initialized(
     bit_map: U1024,
     tick_current: i32,
     tick_spacing: i32,
-) -> (bool, Option<i32>) {
+) -> (bool, i32) {
     let multiplier = tick_spacing as i32 * TICK_ARRAY_SIZE;
     let mut compressed = tick_current / multiplier + 512;
     if tick_current < 0 && tick_current % multiplier != 0 {
@@ -36,10 +36,10 @@ pub fn check_current_tick_array_is_initialized(
     // check the current bit whether initialized
     let initialized = masked != U1024::default();
     if initialized {
-        (true, Some(bit_pos))
+        (true, (compressed - 512) * multiplier)
     } else {
         // the current bit is not initialized
-        (false, None)
+        (false, (compressed - 512) * multiplier)
     }
 }
 
@@ -60,10 +60,10 @@ pub fn next_initialized_tick_array_start_index(
     if zero_for_one {
         // tick from upper to lower
         // find from highter bits to lower bits
-        let offset_bit_map = bit_map << (bit_pos + 1);
+        let offset_bit_map = bit_map << (1024 - bit_pos);
         let next_bit = most_significant_bit(offset_bit_map);
         if next_bit.is_some() {
-            Some((compressed + 1 + next_bit.unwrap() as i32 - 512) * multiplier)
+            Some((bit_pos - 1 - next_bit.unwrap() as i32 - 512) * multiplier)
         } else {
             // not found til to the end
             None
@@ -71,10 +71,10 @@ pub fn next_initialized_tick_array_start_index(
     } else {
         // tick from lower to upper
         // find from lower bits to highter bits
-        let offset_bit_map = bit_map >> (1024 - bit_pos);
+        let offset_bit_map = bit_map >> (bit_pos + 1);
         let next_bit = least_significant_bit(offset_bit_map);
         if next_bit.is_some() {
-            Some((compressed - 1 - next_bit.unwrap() as i32 - 512) * multiplier)
+            Some((bit_pos + 1 + next_bit.unwrap() as i32 - 512) * multiplier)
         } else {
             // not found til to the end
             None
@@ -109,12 +109,12 @@ mod test {
             u64::max_value() & 1 << 63,
         ]);
         let mut tick_current = -409600;
-        let mut bit_pos_index = -1;
+        let mut start_index = -1;
         for _i in 0..1024 {
             let ret = check_current_tick_array_is_initialized(bit_map, tick_current, tick_spacing);
-            if ret.0 && ret.1 != Some(bit_pos_index) {
-                bit_pos_index = ret.1.unwrap();
-                println!("{}-{}", tick_current, bit_pos_index);
+            if ret.0 && ret.1 != start_index {
+                start_index = ret.1;
+                println!("{}-{}", tick_current, start_index);
             }
             tick_current += 800;
         }
@@ -221,5 +221,59 @@ mod test {
             tick_array_start_index =
                 TickArrayState::get_arrary_start_index(array_start_index.unwrap(), tick_spacing);
         }
+    }
+
+    #[test]
+    fn find_next_init_pos_in_bit_map_with_eigenvalues() {
+        let tick_spacing = 10;
+        let bit_map: [u64; 16] = [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            9223372036854775808,
+            16140901064495857665,
+            7,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            9223372036854775808,
+        ];
+        let mut array_start_index =
+            next_initialized_tick_array_start_index(U1024(bit_map), 0, tick_spacing, true);
+        assert_eq!(array_start_index.unwrap(), -800);
+        array_start_index =
+            next_initialized_tick_array_start_index(U1024(bit_map), -800, tick_spacing, true);
+        assert_eq!(array_start_index.unwrap(), -1600);
+        array_start_index =
+            next_initialized_tick_array_start_index(U1024(bit_map), -1600, tick_spacing, true);
+        assert_eq!(array_start_index.unwrap(), -2400);
+        array_start_index =
+            next_initialized_tick_array_start_index(U1024(bit_map), -2400, tick_spacing, true);
+        assert_eq!(array_start_index.unwrap(), -51200);
+        array_start_index =
+            next_initialized_tick_array_start_index(U1024(bit_map), -51200, tick_spacing, true);
+        assert_eq!(array_start_index.unwrap(), -52000);
+        array_start_index =
+            next_initialized_tick_array_start_index(U1024(bit_map), -52000, tick_spacing, true);
+        assert_eq!(array_start_index.unwrap(), -409600);
+
+        array_start_index =
+            next_initialized_tick_array_start_index(U1024(bit_map), 0, tick_spacing, false);
+        assert_eq!(array_start_index.unwrap(), 800);
+        array_start_index =
+            next_initialized_tick_array_start_index(U1024(bit_map), 800, tick_spacing, false);
+        assert_eq!(array_start_index.unwrap(), 1600);
+        array_start_index =
+            next_initialized_tick_array_start_index(U1024(bit_map), 1600, tick_spacing, false);
+        assert_eq!(array_start_index.unwrap(), 51200);
+        array_start_index =
+            next_initialized_tick_array_start_index(U1024(bit_map), 51200, tick_spacing, false);
+        assert_eq!(array_start_index.unwrap(), 408800);
     }
 }

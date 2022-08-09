@@ -141,10 +141,10 @@ pub fn swap_internal<'b, 'info>(
     require!(
         if zero_for_one {
             sqrt_price_limit_x64 < ctx.pool_state.sqrt_price_x64
-                && sqrt_price_limit_x64 > tick_math::MIN_SQRT_RATIO_X64
+                && sqrt_price_limit_x64 > tick_math::MIN_SQRT_PRICE_X64
         } else {
             sqrt_price_limit_x64 > ctx.pool_state.sqrt_price_x64
-                && sqrt_price_limit_x64 < tick_math::MAX_SQRT_RATIO_X64
+                && sqrt_price_limit_x64 < tick_math::MAX_SQRT_PRICE_X64
         },
         ErrorCode::SqrtPriceLimitOverflow
     );
@@ -195,10 +195,12 @@ pub fn swap_internal<'b, 'info>(
     let mut tick_array_current_loader = ctx.tick_array_state.load_mut()?;
     // check tick_array account is owned by the pool
     require_keys_eq!(tick_array_current_loader.amm_pool, ctx.pool_state.key());
-    let mut current_tick_array_start_index = TickArrayState::get_arrary_start_index(
-        ctx.pool_state.tick_current,
-        ctx.pool_state.tick_spacing.into(),
-    );
+
+    let mut current_vaild_tick_array_start_index = ctx
+        .pool_state
+        .get_next_initialized_tick_array(zero_for_one)
+        .unwrap();
+
     // check tick_array account is correct
     require_keys_eq!(
         ctx.tick_array_state.key(),
@@ -206,14 +208,13 @@ pub fn swap_internal<'b, 'info>(
             &[
                 TICK_ARRAY_SEED.as_bytes(),
                 ctx.pool_state.key().as_ref(),
-                &current_tick_array_start_index.to_be_bytes(),
+                &current_vaild_tick_array_start_index.to_be_bytes(),
             ],
             &crate::id()
         )
         .0
     );
 
-    // let mut tick_array_loader_next: AccountLoader<TickArrayState>;
     // continue swapping as long as we haven't used the entire input/output and haven't
     // reached the price limit
     while state.amount_specified_remaining != 0 && state.sqrt_price_x64 != sqrt_price_limit_x64 {
@@ -239,10 +240,15 @@ pub fn swap_internal<'b, 'info>(
         };
 
         if !next_initialized_tick.is_initialized() {
-            current_tick_array_start_index =
+            msg!(
+                "current_vaild_tick_array_start_index:{},zero_for_one:{}",
+                current_vaild_tick_array_start_index,
+                zero_for_one
+            );
+            current_vaild_tick_array_start_index =
                 tick_array_bit_map::next_initialized_tick_array_start_index(
                     U1024(ctx.pool_state.tick_array_bitmap),
-                    current_tick_array_start_index,
+                    current_vaild_tick_array_start_index,
                     ctx.pool_state.tick_spacing.into(),
                     zero_for_one,
                 )
@@ -256,7 +262,7 @@ pub fn swap_internal<'b, 'info>(
                     &[
                         TICK_ARRAY_SEED.as_bytes(),
                         ctx.pool_state.key().as_ref(),
-                        &current_tick_array_start_index.to_be_bytes(),
+                        &current_vaild_tick_array_start_index.to_be_bytes(),
                     ],
                     &crate::id()
                 )
@@ -464,9 +470,9 @@ pub fn exact_internal<'b, 'info>(
         amount_specified,
         if sqrt_price_limit_x64 == 0 {
             if zero_for_one {
-                tick_math::MIN_SQRT_RATIO_X64 + 1
+                tick_math::MIN_SQRT_PRICE_X64 + 1
             } else {
-                tick_math::MAX_SQRT_RATIO_X64 - 1
+                tick_math::MAX_SQRT_PRICE_X64 - 1
             }
         } else {
             sqrt_price_limit_x64

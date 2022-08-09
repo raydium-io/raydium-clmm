@@ -2,15 +2,15 @@ use crate::{error::ErrorCode, libraries::big_num::U128};
 
 use anchor_lang::require;
 
-/// The minimum tick that may be passed to #get_sqrt_price_at_tick computed from log base 1.0001 of 2**-64
-pub const MIN_TICK: i32 = -443636;
-/// The minimum tick that may be passed to #get_sqrt_price_at_tick computed from log base 1.0001 of 2**64
+/// The minimum tick
+pub const MIN_TICK: i32 = -409600;
+/// The minimum tick
 pub const MAX_TICK: i32 = -MIN_TICK;
 
 /// The minimum value that can be returned from #get_sqrt_price_at_tick. Equivalent to get_sqrt_price_at_tick(MIN_TICK)
-pub const MIN_SQRT_RATIO_X64: u128 = 4295048016;
+pub const MIN_SQRT_PRICE_X64: u128 = 23551220632;
 /// The maximum value that can be returned from #get_sqrt_price_at_tick. Equivalent to get_sqrt_price_at_tick(MAX_TICK)
-pub const MAX_SQRT_RATIO_X64: u128 = 79226673521066979257578248091;
+pub const MAX_SQRT_PRICE_X64: u128 = 14448608513249754496350072978; 
 
 // Number 64, encoded as a U128
 const NUM_64: U128 = U128([64, 0]);
@@ -20,7 +20,7 @@ const BIT_PRECISION: u32 = 16;
 /// Calculates 1.0001^(tick/2) as a U64.64 number representing
 /// the square root of the ratio of the two assets (token_1/token_0)
 ///
-/// Calculates result as a U64.64, then rounds down to U32.32.
+/// Calculates result as a U64.64
 /// Each magic factor is `2^64 / (1.0001^(2^(i - 1)))` for i in `[0, 18)`.
 ///
 /// Throws if |tick| > MAX_TICK
@@ -132,7 +132,7 @@ pub fn get_sqrt_price_at_tick(tick: i32) -> Result<u128, anchor_lang::error::Err
 pub fn get_tick_at_sqrt_price(sqrt_price_x64: u128) -> Result<i32, anchor_lang::error::Error> {
     // second inequality must be < because the price can never reach the price at the max tick
     require!(
-        sqrt_price_x64 >= MIN_SQRT_RATIO_X64 && sqrt_price_x64 < MAX_SQRT_RATIO_X64,
+        sqrt_price_x64 >= MIN_SQRT_PRICE_X64 && sqrt_price_x64 < MAX_SQRT_PRICE_X64,
         ErrorCode::SqrtPriceX64
     );
 
@@ -187,3 +187,16 @@ pub fn get_tick_at_sqrt_price(sqrt_price_x64: u128) -> Result<i32, anchor_lang::
     })
 }
 
+#[cfg(test)]
+mod test {
+    use super::*;
+    mod get_sqrt_price_at_tick_test {
+        use super::*;
+
+        #[test]
+        fn check_get_sqrt_price_at_tick_at_min_or_max_tick() {
+            assert_eq!(get_sqrt_price_at_tick(MIN_TICK).unwrap(),MIN_SQRT_PRICE_X64);
+            assert_eq!(get_sqrt_price_at_tick(MAX_TICK).unwrap(),MAX_SQRT_PRICE_X64)
+        }
+    }
+}

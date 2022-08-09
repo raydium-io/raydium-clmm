@@ -1776,5 +1776,8 @@
       "name": "UnInitializedRewardInfo",
       "msg": "uninitialized reward info"
     }
-  ]
+  ],
+  "metadata": {
+    "address": "Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3"
+  }
 }

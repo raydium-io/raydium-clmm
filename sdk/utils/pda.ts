@@ -7,10 +7,8 @@ import {
   POSITION_SEED,
   TICK_ARRAY_SEED,
   POOL_REWARD_VAULT_SEED,
-  u32ToBytes,
   u16ToBytes,
   i32ToBytes,
-  i16ToBytes,
 } from "./seed";
 
 import * as metaplex from "@metaplex/js";

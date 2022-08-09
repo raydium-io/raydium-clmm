@@ -20,6 +20,12 @@ import {
 import { Context, NodeWallet } from "./base";
 import Decimal from "decimal.js";
 
+const defaultConfirmOptions: ConfirmOptions = {
+  preflightCommitment: "processed",
+  commitment: "processed",
+  skipPreflight: true,
+};
+
 function localWallet(): Keypair {
   return Keypair.fromSecretKey(
     new Uint8Array([
@@ -32,17 +38,12 @@ function localWallet(): Keypair {
 }
 
 async function getContext(programId: PublicKey, wallet: Keypair, url: string) {
-  const confirmOptions: ConfirmOptions = {
-    preflightCommitment: "processed",
-    commitment: "processed",
-    skipPreflight: true,
-  };
-  const connection = new Connection(url, confirmOptions.commitment);
+  const connection = new Connection(url, defaultConfirmOptions.commitment);
   return new Context(
     connection,
     NodeWallet.fromSecretKey(wallet),
     programId,
-    confirmOptions
+    defaultConfirmOptions
   );
 }
 
@@ -603,7 +604,8 @@ async function swapRouterBaseIn(
   return await sendTransaction(
     ctx.connection,
     [additionalComputeBudgetInstruction, ix],
-    [owner]
+    [owner],
+    defaultConfirmOptions
   );
 }
 
