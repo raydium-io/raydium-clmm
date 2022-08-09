@@ -2,15 +2,6 @@
 use super::big_num::U1024;
 use crate::states::tick::TICK_ARRAY_SIZE;
 
-/// Returns index of the most significant non-zero bit of the number
-///
-/// The function satisfies the property:
-///     x >= 2**most_significant_bit(x) and x < 2**(most_significant_bit(x)+1)
-///
-/// # Arguments
-///
-/// * `x` - the value for which to compute the most significant bit, must be greater than 0
-///
 pub fn most_significant_bit(x: U1024) -> Option<u16> {
     if x.is_zero() {
         None
@@ -19,21 +10,36 @@ pub fn most_significant_bit(x: U1024) -> Option<u16> {
     }
 }
 
-/// Returns index of the least significant non-zero bit of the number
-///
-/// The function satisfies the property:
-///     (x & 2**leastSignificantBit(x)) != 0 and (x & (2**(leastSignificantBit(x)) - 1)) == 0)
-///
-///
-/// # Arguments
-///
-/// * `x` - the value for which to compute the least significant bit, must be greater than 0
-///
 pub fn least_significant_bit(x: U1024) -> Option<u16> {
     if x.is_zero() {
         None
     } else {
         Some(x.trailing_zeros() as u16)
+    }
+}
+
+pub fn check_current_tick_array_is_initialized(
+    bit_map: U1024,
+    tick_current: i32,
+    tick_spacing: i32,
+) -> (bool, Option<i32>) {
+    let multiplier = tick_spacing as i32 * TICK_ARRAY_SIZE;
+    let mut compressed = tick_current / multiplier + 512;
+    if tick_current < 0 && tick_current % multiplier != 0 {
+        // round towards negative infinity
+        compressed -= 1;
+    }
+    let bit_pos = compressed.abs();
+    // set current bit
+    let mask = U1024::from(1) << bit_pos;
+    let masked = bit_map & mask;
+    // check the current bit whether initialized
+    let initialized = masked != U1024::default();
+    if initialized {
+        (true, Some(bit_pos))
+    } else {
+        // the current bit is not initialized
+        (false, None)
     }
 }
 
@@ -55,32 +61,22 @@ pub fn next_initialized_tick_array_start_index(
         // tick from upper to lower
         // find from highter bits to lower bits
         let offset_bit_map = bit_map << (bit_pos + 1);
-        // all the 1s at or to the right of the current bit_pos
-        let mask = (U1024::from(1) << bit_pos) - 1 + (U1024::from(1) << bit_pos);
-        let masked = bit_map & mask;
-        // check the current bit whether initialized
-        let initialized = masked != U1024::default();
-        // if there are no initialized ticks to the right of or at the current tick, return rightmost in the word
         let next_bit = most_significant_bit(offset_bit_map);
-        if initialized && next_bit.is_some() {
+        if next_bit.is_some() {
             Some((compressed + 1 + next_bit.unwrap() as i32 - 512) * multiplier)
         } else {
-            // the current bit is not initialized or find to the end
+            // not found til to the end
             None
         }
     } else {
         // tick from lower to upper
         // find from lower bits to highter bits
         let offset_bit_map = bit_map >> (1024 - bit_pos);
-        // all the 1s at or to the left of the bitPos
-        let mask = !((U1024::from(1) << bit_pos) - 1);
-        let masked = bit_map & mask;
-        // if there are no initialized ticks to the left of the current tick, return leftmost in the word
-        let initialized = masked != U1024::default();
         let next_bit = least_significant_bit(offset_bit_map);
-        if initialized && next_bit.is_some() {
+        if next_bit.is_some() {
             Some((compressed - 1 - next_bit.unwrap() as i32 - 512) * multiplier)
         } else {
+            // not found til to the end
             None
         }
     }
@@ -91,6 +87,38 @@ mod test {
     use super::*;
     use crate::states::TickArrayState;
 
+    #[test]
+    fn test_check_current_tick_array_is_initialized() {
+        let tick_spacing = 10;
+        let bit_map = U1024([
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            u64::max_value() & 1 << 63,
+        ]);
+        let mut tick_current = -409600;
+        let mut bit_pos_index = -1;
+        for _i in 0..1024 {
+            let ret = check_current_tick_array_is_initialized(bit_map, tick_current, tick_spacing);
+            if ret.0 && ret.1 != Some(bit_pos_index) {
+                bit_pos_index = ret.1.unwrap();
+                println!("{}-{}", tick_current, bit_pos_index);
+            }
+            tick_current += 800;
+        }
+    }
     #[test]
     fn find_next_init_pos_in_bit_map_positive_up() {
         let tick_spacing = 10;
