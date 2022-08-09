@@ -65,59 +65,74 @@ export function mergeTickArrayBitmap(bns: BN[]) {
     .add(bns[4].shln(256))
     .add(bns[5].shln(320))
     .add(bns[6].shln(384))
-    .add(bns[7].shln(448));
+    .add(bns[7].shln(448))
+    .add(bns[8].shln(512))
+    .add(bns[9].shln(576))
+    .add(bns[10].shln(640))
+    .add(bns[11].shln(704))
+    .add(bns[12].shln(768))
+    .add(bns[13].shln(832))
+    .add(bns[14].shln(896))
+    .add(bns[15].shln(960));
 }
 
 /**
  *
- * @param tickArrayBitmapPositive
- * @param tickArrayBitmapNegative
+ * @param tickArrayBitmap
  * @param tickSpacing
  * @param tickArrayStartIndex
  * @param expectedCount
  * @returns
  */
 export function getInitializedTickArrayInRange(
-  tickArrayBitmapPositive: BN,
-  tickArrayBitmapNegative: BN,
+  tickArrayBitmap: BN,
   tickSpacing: number,
   tickArrayStartIndex: number,
   expectedCount: number
 ): number[] {
-  let tickArrayOffset = Math.floor(
-    tickArrayStartIndex / (tickSpacing * TICK_ARRAY_SIZE)
-  );
-  let fetchNum: number = 0;
+  let tickArrayOffset =
+    Math.floor(tickArrayStartIndex / (tickSpacing * TICK_ARRAY_SIZE)) + 512;
   let result: number[] = [];
-  let currTickArrayBitmap = tickArrayBitmapPositive;
-  let nextTickArrayBitmap = tickArrayBitmapNegative;
-  let isPositive = true
+  let isPositive = true;
   if (tickArrayStartIndex < 0) {
-    currTickArrayBitmap = tickArrayBitmapNegative;
-    nextTickArrayBitmap = tickArrayBitmapPositive;
-    isPositive = false
+    isPositive = false;
   }
   // find left of current offset
-  result.push(...findLeft(currTickArrayBitmap,tickArrayOffset,0,expectedCount,tickSpacing,isPositive))
-  if (isPositive) {
-    // if can't find enough, we need to continue searching across the boundary
-    if (fetchNum < expectedCount) {
-      result.push(...findRight(nextTickArrayBitmap,0,512,expectedCount-fetchNum,tickSpacing,false))
-    }
-  }
-
-  fetchNum = 0;
+  result.push(
+    ...searchLeftFromStart(
+      tickArrayBitmap,
+      tickArrayOffset,
+      1024,
+      expectedCount,
+      tickSpacing,
+      isPositive
+    )
+  );
   // find right of currenct offset
-  result.push(...findRight(currTickArrayBitmap,tickArrayOffset + 1,512,expectedCount,tickSpacing,isPositive))
-  if (!isPositive) {
-    if (fetchNum < expectedCount) {
-      result.push(...findRight(nextTickArrayBitmap,0,512,expectedCount-fetchNum,tickSpacing,true))
-    }
-  }
+  result.push(
+    ...searchRightFromStart(
+      tickArrayBitmap,
+      tickArrayOffset - 1,
+      0,
+      expectedCount,
+      tickSpacing,
+      isPositive
+    )
+  );
   return result;
 }
 
-function findLeft(
+/**
+ * search for price decrease direction
+ * @param tickArrayBitmap
+ * @param start
+ * @param end
+ * @param expectedCount
+ * @param tickSpacing
+ * @param isPositive
+ * @returns
+ */
+function searchRightFromStart(
   tickArrayBitmap: BN,
   start: number,
   end: number,
@@ -131,9 +146,9 @@ function findLeft(
     if (tickArrayBitmap.shrn(i).and(new BN(1)).eqn(1)) {
       let nextStartIndex = 0;
       if (isPositive) {
-        nextStartIndex = i * (tickSpacing * TICK_ARRAY_SIZE);
+        nextStartIndex = (i - 512) * (tickSpacing * TICK_ARRAY_SIZE);
       } else {
-        nextStartIndex = (-i - 1) * (tickSpacing * TICK_ARRAY_SIZE);
+        nextStartIndex = (-i - 1 - 512) * (tickSpacing * TICK_ARRAY_SIZE);
       }
       result.push(nextStartIndex);
       fetchNum++;
@@ -142,10 +157,11 @@ function findLeft(
       break;
     }
   }
-  return result
+  console.log("searchRightFromStart:", result);
+  return result;
 }
 
-function findRight(
+function searchLeftFromStart(
   tickArrayBitmap: BN,
   start: number,
   end: number,
@@ -159,9 +175,9 @@ function findRight(
     if (tickArrayBitmap.shrn(i).and(new BN(1)).eqn(1)) {
       let nextStartIndex = 0;
       if (isPositive) {
-        nextStartIndex = i * (tickSpacing * TICK_ARRAY_SIZE);
+        nextStartIndex = (i - 512) * (tickSpacing * TICK_ARRAY_SIZE);
       } else {
-        nextStartIndex = (-i - 1) * (tickSpacing * TICK_ARRAY_SIZE);
+        nextStartIndex = (-i - 1 - 512) * (tickSpacing * TICK_ARRAY_SIZE);
       }
       result.push(nextStartIndex);
       fetchNum++;
@@ -170,5 +186,6 @@ function findRight(
       break;
     }
   }
-  return result
+  console.log("searchLeftFromStart:", result);
+  return result;
 }

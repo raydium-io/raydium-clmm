@@ -40,22 +40,16 @@ export class CacheDataProviderImpl implements CacheDataProvider {
    *  Cache tickArray accounts near the current price
    * @param tickCurrent  The current pool tick
    * @param tickSpacing  The pool tick spacing
-   * @param tickArrayBitmapPositive
-   * @param tickArrayBitmapNegative
+   * @param tickArrayBitmapArray
    */
   async loadTickArrayCache(
     tickCurrent: number,
     tickSpacing: number,
-    tickArrayBitmapPositive: BN[],
-    tickArrayBitmapNegative: BN[]
+    tickArrayBitmapArray: BN[],
   ) {
-    const tickArrayBitmapPositiveArray = mergeTickArrayBitmap(
-      tickArrayBitmapPositive
+    const tickArrayBitmap = mergeTickArrayBitmap(
+      tickArrayBitmapArray
     );
-    const tickArrayBitmapNegativeArray = mergeTickArrayBitmap(
-      tickArrayBitmapNegative
-    );
-
     const tickArraysToFetch = [];
     const currentTickArrayStartIndex = getTickArrayStartIndexByTick(
       tickCurrent,
@@ -63,8 +57,7 @@ export class CacheDataProviderImpl implements CacheDataProvider {
     );
 
     let startIndexArray = getInitializedTickArrayInRange(
-      tickArrayBitmapPositiveArray,
-      tickArrayBitmapNegativeArray,
+      tickArrayBitmap,
       tickSpacing,
       currentTickArrayStartIndex,
       Math.floor(FETCH_TICKARRAY_COUNT / 2),
@@ -87,7 +80,7 @@ export class CacheDataProviderImpl implements CacheDataProvider {
         this.tickArrayCache.set(item.startTickIndex, item);
       }
     }
-    // console.log(this.tickArrayCache);
+    console.log(this.tickArrayCache);
   }
 
   public setTickArrayCache(cachedTickArraies: TickArray[]) {

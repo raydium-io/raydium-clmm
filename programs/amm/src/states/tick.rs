@@ -548,6 +548,7 @@ mod test {
             assert_eq!(TickArrayState::get_arrary_start_index(-20, 10), -800);
             assert_eq!(TickArrayState::get_arrary_start_index(20, 10), 0);
             assert_eq!(TickArrayState::get_arrary_start_index(-1002, 10), -1600);
+            assert_eq!(TickArrayState::get_arrary_start_index(-800, 10), -800);
         }
 
         #[test]

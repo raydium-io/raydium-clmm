@@ -45,8 +45,7 @@ export type PoolState = {
   observationIndex: number;
   observationKey: PublicKey;
   observationUpdateDuration: number;
-  tickArrayBitmapPositive: BN[];
-  tickArrayBitmapNegative: BN[];
+  tickArrayBitmap: BN[];
 };
 
 export type RewardInfo = {

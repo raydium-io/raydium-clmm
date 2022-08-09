@@ -1034,20 +1034,11 @@ export type AmmV3 = {
             }
           },
           {
-            "name": "tickArrayBitmapPositive",
+            "name": "tickArrayBitmap",
             "type": {
               "array": [
                 "u64",
-                8
-              ]
-            }
-          },
-          {
-            "name": "tickArrayBitmapNegative",
-            "type": {
-              "array": [
-                "u64",
-                8
+                16
               ]
             }
           }
@@ -2824,20 +2815,11 @@ export const IDL: AmmV3 = {
             }
           },
           {
-            "name": "tickArrayBitmapPositive",
+            "name": "tickArrayBitmap",
             "type": {
               "array": [
                 "u64",
-                8
-              ]
-            }
-          },
-          {
-            "name": "tickArrayBitmapNegative",
-            "type": {
-              "array": [
-                "u64",
-                8
+                16
               ]
             }
           }

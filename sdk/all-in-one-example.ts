@@ -46,10 +46,6 @@ async function getContext(programId: PublicKey, wallet: Keypair, url: string) {
   );
 }
 
-function getBit(num: number, position: number) {
-  return (num >> position) & 1;
-}
-
 export async function main() {
   const owner = localWallet();
   console.log("owner: ", owner.publicKey.toString());

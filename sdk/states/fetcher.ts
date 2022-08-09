@@ -55,8 +55,7 @@ export class StateFetcher {
       observationIndex,
       observationKey,
       observationUpdateDuration,
-      tickArrayBitmapPositive,
-      tickArrayBitmapNegative,
+      tickArrayBitmap,
     } = await this.program.account.poolState.fetch(address);
     const rewards = rewardInfos as RewardInfo[];
     return {
@@ -80,8 +79,7 @@ export class StateFetcher {
       observationIndex,
       observationKey,
       observationUpdateDuration,
-      tickArrayBitmapPositive,
-      tickArrayBitmapNegative,
+      tickArrayBitmap,
     };
   }
 

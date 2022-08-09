@@ -37,7 +37,7 @@ pub fn least_significant_bit(x: U1024) -> Option<u16> {
     }
 }
 
-pub fn next_initialized_tick_array_start_tick(
+pub fn next_initialized_tick_array_start_index(
     bit_map: U1024,
     tick_array_start_index: i32,
     tick_spacing: i32,
@@ -97,7 +97,7 @@ mod test {
         let bit_map = U1024::max_value();
         let mut tick_array_start_index = 0;
         for _i in 0..5 {
-            let array_start_index = next_initialized_tick_array_start_tick(
+            let array_start_index = next_initialized_tick_array_start_index(
                 bit_map,
                 tick_array_start_index,
                 tick_spacing,
@@ -114,7 +114,7 @@ mod test {
         let bit_map = U1024::max_value();
         let mut tick_array_start_index = -409600;
         for _i in 0..5 {
-            let array_start_index = next_initialized_tick_array_start_tick(
+            let array_start_index = next_initialized_tick_array_start_index(
                 bit_map,
                 tick_array_start_index,
                 tick_spacing,
@@ -131,7 +131,7 @@ mod test {
         let bit_map = U1024::max_value();
         let mut tick_array_start_index = -1600;
         for _i in 0..5 {
-            let array_start_index = next_initialized_tick_array_start_tick(
+            let array_start_index = next_initialized_tick_array_start_index(
                 bit_map,
                 tick_array_start_index,
                 tick_spacing,
@@ -149,7 +149,7 @@ mod test {
         let bit_map = U1024::max_value();
         let mut tick_array_start_index = 408800;
         for _i in 0..5 {
-            let array_start_index = next_initialized_tick_array_start_tick(
+            let array_start_index = next_initialized_tick_array_start_index(
                 bit_map,
                 tick_array_start_index,
                 tick_spacing,
@@ -166,7 +166,7 @@ mod test {
         let bit_map = U1024::max_value();
         let mut tick_array_start_index = -800;
         for _i in 0..5 {
-            let array_start_index = next_initialized_tick_array_start_tick(
+            let array_start_index = next_initialized_tick_array_start_index(
                 bit_map,
                 tick_array_start_index,
                 tick_spacing,
@@ -183,7 +183,7 @@ mod test {
         let bit_map = U1024::max_value();
         let mut tick_array_start_index = 1600;
         for _i in 0..5 {
-            let array_start_index = next_initialized_tick_array_start_tick(
+            let array_start_index = next_initialized_tick_array_start_index(
                 bit_map,
                 tick_array_start_index,
                 tick_spacing,

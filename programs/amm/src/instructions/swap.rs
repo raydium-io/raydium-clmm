@@ -195,7 +195,7 @@ pub fn swap_internal<'b, 'info>(
     let mut tick_array_current_loader = ctx.tick_array_state.load_mut()?;
     // check tick_array account is owned by the pool
     require_keys_eq!(tick_array_current_loader.amm_pool, ctx.pool_state.key());
-    let current_tick_array_start_index = TickArrayState::get_arrary_start_index(
+    let mut current_tick_array_start_index = TickArrayState::get_arrary_start_index(
         ctx.pool_state.tick_current,
         ctx.pool_state.tick_spacing.into(),
     );
@@ -239,35 +239,29 @@ pub fn swap_internal<'b, 'info>(
         };
 
         if !next_initialized_tick.is_initialized() {
-            // let next_array_start_index = tick_array_current_loader
-            //     .next_tick_arrary_start_index(ctx.pool_state.tick_spacing, zero_for_one);
-            let next_array_start_index =
-                tick_array_bit_map::next_initialized_tick_array_start_tick(
+            current_tick_array_start_index =
+                tick_array_bit_map::next_initialized_tick_array_start_index(
                     U1024(ctx.pool_state.tick_array_bitmap),
                     current_tick_array_start_index,
                     ctx.pool_state.tick_spacing.into(),
                     zero_for_one,
                 )
                 .unwrap();
-
-            let tick_array_account_info = remaining_accounts_iter.next().unwrap();
-            // ensure this is a valid PDA, even if account is not initialized
+            let tick_array_loader_next =
+                AccountLoader::<TickArrayState>::try_from(remaining_accounts_iter.next().unwrap())?;
+            let mut tick_array_next = tick_array_loader_next.load_mut()?;
             require_keys_eq!(
-                tick_array_account_info.key(),
+                tick_array_loader_next.key(),
                 Pubkey::find_program_address(
                     &[
                         TICK_ARRAY_SEED.as_bytes(),
                         ctx.pool_state.key().as_ref(),
-                        &next_array_start_index.to_be_bytes(),
+                        &current_tick_array_start_index.to_be_bytes(),
                     ],
                     &crate::id()
                 )
                 .0
             );
-
-            let tick_array_loader_next =
-                AccountLoader::<TickArrayState>::try_from(remaining_accounts_iter.next().unwrap())?;
-            let mut tick_array_next = tick_array_loader_next.load_mut()?;
             let mut first_initialized_tick =
                 tick_array_next.first_initialized_tick(zero_for_one)?;
 
@@ -331,11 +325,6 @@ pub fn swap_internal<'b, 'info>(
 
         // update global fee tracker
         if state.liquidity > 0 {
-            // msg!(
-            //     "step.fee_amount:{}, state.liquidity:{}",
-            //     step.fee_amount,
-            //     state.liquidity
-            // );
             state.fee_growth_global_x64 += U128::from(step.fee_amount)
                 .mul_div_floor(U128::from(fixed_point_64::Q64), U128::from(state.liquidity))
                 .unwrap()

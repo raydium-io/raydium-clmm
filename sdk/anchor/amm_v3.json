@@ -1034,20 +1034,11 @@
             }
           },
           {
-            "name": "tickArrayBitmapPositive",
+            "name": "tickArrayBitmap",
             "type": {
               "array": [
                 "u64",
-                8
-              ]
-            }
-          },
-          {
-            "name": "tickArrayBitmapNegative",
-            "type": {
-              "array": [
-                "u64",
-                8
+                16
               ]
             }
           }

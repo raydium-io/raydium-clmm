@@ -76,8 +76,7 @@ export class AmmPool {
     await this.cacheDataProvider.loadTickArrayCache(
       this.poolState.tickCurrent,
       this.poolState.tickSpacing,
-      this.poolState.tickArrayBitmapPositive,
-      this.poolState.tickArrayBitmapNegative
+      this.poolState.tickArrayBitmap,
     );
   }
 
