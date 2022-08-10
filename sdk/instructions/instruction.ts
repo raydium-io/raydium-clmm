@@ -117,7 +117,7 @@ export class AmmInstruction {
    * @param owner
    * @param index
    * @param tickSpacing
-   * @param globalFeeRate
+   * @param tradeFeeRate
    * @param protocolFeeRate
    * @returns
    */
@@ -126,7 +126,7 @@ export class AmmInstruction {
     owner: PublicKey,
     index: number,
     tickSpacing: number,
-    globalFeeRate: number,
+    tradeFeeRate: number,
     protocolFeeRate: number
   ): Promise<[PublicKey, TransactionInstruction]> {
     const [address, _] = await getAmmConfigAddress(
@@ -140,7 +140,7 @@ export class AmmInstruction {
         {
           index,
           tickSpacing,
-          globalFeeRate,
+          tradeFeeRate: tradeFeeRate,
           protocolFeeRate,
         },
         {
