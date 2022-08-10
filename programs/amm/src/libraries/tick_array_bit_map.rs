@@ -31,7 +31,7 @@ pub fn check_current_tick_array_is_initialized(
     }
     let bit_pos = compressed.abs();
     // set current bit
-    let mask = U1024::from(1) << bit_pos;
+    let mask = U1024::one() << bit_pos.try_into().unwrap();
     let masked = bit_map & mask;
     // check the current bit whether initialized
     let initialized = masked != U1024::default();
@@ -60,7 +60,7 @@ pub fn next_initialized_tick_array_start_index(
     if zero_for_one {
         // tick from upper to lower
         // find from highter bits to lower bits
-        let offset_bit_map = bit_map << (1024 - bit_pos);
+        let offset_bit_map = bit_map << (1024 - bit_pos).try_into().unwrap();
         let next_bit = most_significant_bit(offset_bit_map);
         if next_bit.is_some() {
             Some((bit_pos - 1 - next_bit.unwrap() as i32 - 512) * multiplier)
@@ -71,7 +71,7 @@ pub fn next_initialized_tick_array_start_index(
     } else {
         // tick from lower to upper
         // find from lower bits to highter bits
-        let offset_bit_map = bit_map >> (bit_pos + 1);
+        let offset_bit_map = bit_map >> (bit_pos + 1).try_into().unwrap();
         let next_bit = least_significant_bit(offset_bit_map);
         if next_bit.is_some() {
             Some((bit_pos + 1 + next_bit.unwrap() as i32 - 512) * multiplier)
@@ -120,59 +120,7 @@ mod test {
         }
     }
     #[test]
-    fn find_next_init_pos_in_bit_map_positive_up() {
-        let tick_spacing = 10;
-        let bit_map = U1024::max_value();
-        let mut tick_array_start_index = 0;
-        for _i in 0..5 {
-            let array_start_index = next_initialized_tick_array_start_index(
-                bit_map,
-                tick_array_start_index,
-                tick_spacing,
-                true,
-            );
-            println!("{:?}", array_start_index);
-            tick_array_start_index =
-                TickArrayState::get_arrary_start_index(array_start_index.unwrap(), tick_spacing);
-        }
-    }
-    #[test]
-    fn find_next_init_pos_in_bit_map_negative_up() {
-        let tick_spacing = 10;
-        let bit_map = U1024::max_value();
-        let mut tick_array_start_index = -409600;
-        for _i in 0..5 {
-            let array_start_index = next_initialized_tick_array_start_index(
-                bit_map,
-                tick_array_start_index,
-                tick_spacing,
-                true,
-            );
-            println!("{:?}", array_start_index);
-            tick_array_start_index =
-                TickArrayState::get_arrary_start_index(array_start_index.unwrap(), tick_spacing);
-        }
-    }
-    #[test]
-    fn find_next_init_pos_in_bit_map_negative_up_crose_zero() {
-        let tick_spacing = 10;
-        let bit_map = U1024::max_value();
-        let mut tick_array_start_index = -1600;
-        for _i in 0..5 {
-            let array_start_index = next_initialized_tick_array_start_index(
-                bit_map,
-                tick_array_start_index,
-                tick_spacing,
-                true,
-            );
-            println!("{:?}", array_start_index);
-            tick_array_start_index =
-                TickArrayState::get_arrary_start_index(array_start_index.unwrap(), tick_spacing);
-        }
-    }
-
-    #[test]
-    fn find_previous_init_pos_in_bit_map_positive_down() {
+    fn find_next_init_pos_in_bit_map_positive_price_down() {
         let tick_spacing = 10;
         let bit_map = U1024::max_value();
         let mut tick_array_start_index = 408800;
@@ -181,32 +129,38 @@ mod test {
                 bit_map,
                 tick_array_start_index,
                 tick_spacing,
-                false,
+                true,
             );
             println!("{:?}", array_start_index);
+            if array_start_index.is_none() {
+                break;
+            }
             tick_array_start_index =
                 TickArrayState::get_arrary_start_index(array_start_index.unwrap(), tick_spacing);
         }
     }
     #[test]
-    fn find_previous_init_pos_in_bit_map_negative_down() {
+    fn find_next_init_pos_in_bit_map_negative_price_down() {
         let tick_spacing = 10;
         let bit_map = U1024::max_value();
-        let mut tick_array_start_index = -800;
+        let mut tick_array_start_index = -409600 + 800 + 800;
         for _i in 0..5 {
             let array_start_index = next_initialized_tick_array_start_index(
                 bit_map,
                 tick_array_start_index,
                 tick_spacing,
-                false,
+                true,
             );
             println!("{:?}", array_start_index);
+            if array_start_index.is_none() {
+                break;
+            }
             tick_array_start_index =
                 TickArrayState::get_arrary_start_index(array_start_index.unwrap(), tick_spacing);
         }
     }
     #[test]
-    fn find_previous_init_pos_in_bit_map_negative_down_crose_zero() {
+    fn find_next_init_pos_in_bit_map_negative_price_down_crose_zero() {
         let tick_spacing = 10;
         let bit_map = U1024::max_value();
         let mut tick_array_start_index = 1600;
@@ -215,9 +169,73 @@ mod test {
                 bit_map,
                 tick_array_start_index,
                 tick_spacing,
+                true,
+            );
+            println!("{:?}", array_start_index);
+            if array_start_index.is_none() {
+                break;
+            }
+            tick_array_start_index =
+                TickArrayState::get_arrary_start_index(array_start_index.unwrap(), tick_spacing);
+        }
+    }
+
+    #[test]
+    fn find_previous_init_pos_in_bit_map_positive_price_up() {
+        let tick_spacing = 10;
+        let bit_map = U1024::max_value();
+        let mut tick_array_start_index = 408800 - 800 - 800;
+        for _i in 0..5 {
+            let array_start_index = next_initialized_tick_array_start_index(
+                bit_map,
+                tick_array_start_index,
+                tick_spacing,
                 false,
             );
             println!("{:?}", array_start_index);
+            if array_start_index.is_none() {
+                break;
+            }
+            tick_array_start_index =
+                TickArrayState::get_arrary_start_index(array_start_index.unwrap(), tick_spacing);
+        }
+    }
+    #[test]
+    fn find_previous_init_pos_in_bit_map_negative_price_up() {
+        let tick_spacing = 10;
+        let bit_map = U1024::max_value();
+        let mut tick_array_start_index = -409600;
+        for _i in 0..5 {
+            let array_start_index = next_initialized_tick_array_start_index(
+                bit_map,
+                tick_array_start_index,
+                tick_spacing,
+                false,
+            );
+            println!("{:?}", array_start_index);
+            if array_start_index.is_none() {
+                break;
+            }
+            tick_array_start_index =
+                TickArrayState::get_arrary_start_index(array_start_index.unwrap(), tick_spacing);
+        }
+    }
+    #[test]
+    fn find_previous_init_pos_in_bit_map_negative_price_up_crose_zero() {
+        let tick_spacing = 10;
+        let bit_map = U1024::max_value();
+        let mut tick_array_start_index = -1600;
+        for _i in 0..5 {
+            let array_start_index = next_initialized_tick_array_start_index(
+                bit_map,
+                tick_array_start_index,
+                tick_spacing,
+                false,
+            );
+            println!("{:?}", array_start_index);
+            if array_start_index.is_none() {
+                break;
+            }
             tick_array_start_index =
                 TickArrayState::get_arrary_start_index(array_start_index.unwrap(), tick_spacing);
         }

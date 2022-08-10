@@ -269,7 +269,7 @@ impl PoolState {
         let tick_array_offset_in_bitmap =
             tick_array_start_index / (self.tick_spacing as i32 * TICK_ARRAY_SIZE) + 512;
         let tick_array_bitmap = U1024(self.tick_array_bitmap);
-        let mask = U1024::from(1) << (tick_array_offset_in_bitmap as u16);
+        let mask = U1024::one() << tick_array_offset_in_bitmap.try_into().unwrap();
         self.tick_array_bitmap = tick_array_bitmap.bitxor(mask).0;
         Ok(())
     }
