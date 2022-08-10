@@ -1,16 +1,16 @@
 import * as anchor from "@project-serum/anchor";
 import { PublicKey } from "@solana/web3.js";
 import { BN } from "@project-serum/anchor";
-
-import { MAX_TICK, MIN_TICK } from "../math";
 import { CacheDataProvider } from "../entities/cacheProvider";
 import { getTickArrayAddress } from "../utils";
 import {
   TICK_ARRAY_SIZE,
   Tick,
   TickArray,
-  getArrayStartIndex,
+  getTickArrayStartIndexByTick,
   getNextTickArrayStartIndex,
+  mergeTickArrayBitmap,
+  getInitializedTickArrayInRange,
 } from "../entities";
 
 const FETCH_TICKARRAY_COUNT = 15;
@@ -37,49 +37,38 @@ export class CacheDataProviderImpl implements CacheDataProvider {
   }
 
   /**
-   * Caches ticks and bitmap accounts near the current price
-   * @param tickCurrent The current pool tick
-   * @param tickSpacing The pool tick spacing
+   *  Cache tickArray accounts near the current price
+   * @param tickCurrent  The current pool tick
+   * @param tickSpacing  The pool tick spacing
+   * @param tickArrayBitmapArray
    */
-  async loadTickArrayCache(tickCurrent: number, tickSpacing: number) {
+  async loadTickArrayCache(
+    tickCurrent: number,
+    tickSpacing: number,
+    tickArrayBitmapArray: BN[]
+  ) {
+    const tickArrayBitmap = mergeTickArrayBitmap(tickArrayBitmapArray);
     const tickArraysToFetch = [];
-    const startIndex = getArrayStartIndex(tickCurrent, tickSpacing);
-    const [tickArrayAddress, _] = await getTickArrayAddress(
-      this.poolAddress,
-      this.program.programId,
-      startIndex
+    const currentTickArrayStartIndex = getTickArrayStartIndexByTick(
+      tickCurrent,
+      tickSpacing
     );
-    tickArraysToFetch.push(tickArrayAddress);
-    let lastStartIndex: number = startIndex;
-    for (let i = 0; i < FETCH_TICKARRAY_COUNT / 2; i++) {
-      const nextStartIndex = getNextTickArrayStartIndex(
-        lastStartIndex,
-        tickSpacing,
-        true
-      );
+
+    let startIndexArray = getInitializedTickArrayInRange(
+      tickArrayBitmap,
+      tickSpacing,
+      currentTickArrayStartIndex,
+      Math.floor(FETCH_TICKARRAY_COUNT / 2)
+    );
+    for (let i = 0; i < startIndexArray.length; i++) {
       const [tickArrayAddress, _] = await getTickArrayAddress(
         this.poolAddress,
         this.program.programId,
-        nextStartIndex
+        startIndexArray[i]
       );
       tickArraysToFetch.push(tickArrayAddress);
-      lastStartIndex = nextStartIndex;
     }
-    lastStartIndex = startIndex;
-    for (let i = 0; i < FETCH_TICKARRAY_COUNT / 2; i++) {
-      const nextStartIndex = getNextTickArrayStartIndex(
-        lastStartIndex,
-        tickSpacing,
-        false
-      );
-      const [tickArrayAddress, _] = await getTickArrayAddress(
-        this.poolAddress,
-        this.program.programId,
-        nextStartIndex
-      );
-      tickArraysToFetch.push(tickArrayAddress);
-      lastStartIndex = nextStartIndex;
-    }
+
     const fetchedTickArrays =
       (await this.program.account.tickArrayState.fetchMultiple(
         tickArraysToFetch
@@ -88,6 +77,13 @@ export class CacheDataProviderImpl implements CacheDataProvider {
       if (item) {
         this.tickArrayCache.set(item.startTickIndex, item);
       }
+    }
+    // console.log(this.tickArrayCache);
+  }
+
+  public setTickArrayCache(cachedTickArraies: TickArray[]) {
+    for (const item of cachedTickArraies) {
+      this.tickArrayCache.set(item.startTickIndex, item);
     }
   }
 
@@ -132,10 +128,8 @@ export class CacheDataProviderImpl implements CacheDataProvider {
       if (cachedTickArray == undefined) {
         throw new Error("No invaild tickArray cache");
       }
-      [nextTick, address, startIndex] = await this.firstInitializedTickInOneArray(
-        cachedTickArray,
-        zeroForOne
-      );
+      [nextTick, address, startIndex] =
+        await this.firstInitializedTickInOneArray(cachedTickArray, zeroForOne);
     }
     return [nextTick, address, startIndex];
   }
@@ -186,7 +180,7 @@ export class CacheDataProviderImpl implements CacheDataProvider {
     tickSpacing: number,
     zeroForOne: boolean
   ): Promise<[Tick, PublicKey, number]> {
-    const startIndex = getArrayStartIndex(tickIndex, tickSpacing);
+    const startIndex = getTickArrayStartIndexByTick(tickIndex, tickSpacing);
     let isStartIndex = startIndex == tickIndex;
     let tickPositionInArray = Math.floor(
       (tickIndex - startIndex) / tickSpacing

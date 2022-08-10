@@ -8,7 +8,7 @@ import {
 } from "@solana/web3.js";
 
 import { programs } from "@metaplex/js";
-import { getArrayStartIndex } from "../entities";
+import { getTickArrayStartIndexByTick } from "../entities";
 import {
   SqrtPriceMath,
   LiquidityMath,
@@ -105,7 +105,7 @@ type PrepareOnePoolResult = {
   outputTokenMint: PublicKey;
   outputTokenAccount: PublicKey;
   remains: AccountMeta[];
-  additionLength: number;
+  // additionLength: number;
 };
 
 export class AmmInstruction {
@@ -284,7 +284,7 @@ export class AmmInstruction {
     }
 
     // prepare tickArray
-    const tickArrayLowerStartIndex = getArrayStartIndex(
+    const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
       tickLowerIndex,
       ammPool.poolState.tickSpacing
     );
@@ -293,7 +293,7 @@ export class AmmInstruction {
       ctx.program.programId,
       tickArrayLowerStartIndex
     );
-    const tickArrayUpperStartIndex = getArrayStartIndex(
+    const tickArrayUpperStartIndex = getTickArrayStartIndexByTick(
       tickUpperIndex,
       ammPool.poolState.tickSpacing
     );
@@ -302,7 +302,6 @@ export class AmmInstruction {
       ctx.program.programId,
       tickArrayUpperStartIndex
     );
-
     const positionANftAccount = await Token.getAssociatedTokenAddress(
       ASSOCIATED_TOKEN_PROGRAM_ID,
       TOKEN_PROGRAM_ID,
@@ -397,7 +396,7 @@ export class AmmInstruction {
     }
 
     // prepare tickArray
-    const tickArrayLowerStartIndex = getArrayStartIndex(
+    const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
       tickLowerIndex,
       ammPool.poolState.tickSpacing
     );
@@ -406,7 +405,7 @@ export class AmmInstruction {
       ctx.program.programId,
       tickArrayLowerStartIndex
     );
-    const tickArrayUpperStartIndex = getArrayStartIndex(
+    const tickArrayUpperStartIndex = getTickArrayStartIndexByTick(
       tickUpperIndex,
       ammPool.poolState.tickSpacing
     );
@@ -538,7 +537,7 @@ export class AmmInstruction {
       amount1Min = token1Amount.muln(1 - amountSlippage);
     }
     // prepare tickArray
-    const tickArrayLowerStartIndex = getArrayStartIndex(
+    const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
       tickLowerIndex,
       ammPool.poolState.tickSpacing
     );
@@ -547,7 +546,7 @@ export class AmmInstruction {
       ctx.program.programId,
       tickArrayLowerStartIndex
     );
-    const tickArrayUpperStartIndex = getArrayStartIndex(
+    const tickArrayUpperStartIndex = getTickArrayStartIndexByTick(
       tickUpperIndex,
       ammPool.poolState.tickSpacing
     );
@@ -767,17 +766,6 @@ export class AmmInstruction {
   ): Promise<TransactionInstruction> {
     const poolState = ammPool.poolState;
     const ctx = ammPool.ctx;
-
-    const tickArrayStartIndex = getArrayStartIndex(
-      ammPool.poolState.tickCurrent,
-      ammPool.poolState.tickSpacing
-    );
-    const [tickArray] = await getTickArrayAddress(
-      ammPool.address,
-      ctx.program.programId,
-      tickArrayStartIndex
-    );
-
     // get vault
     const zeroForOne = isBaseInput
       ? inputTokenMint.equals(poolState.tokenMint0)
@@ -789,11 +777,13 @@ export class AmmInstruction {
       inputVault = poolState.tokenVault1;
       outputVault = poolState.tokenVault0;
     }
-
     if (sqrtPriceLimitX64 == undefined) {
       sqrtPriceLimitX64 = new BN(0);
     }
-
+    const tickArray = remainingAccounts[0].pubkey;
+    if (remainingAccounts.length > 1) {
+      remainingAccounts = remainingAccounts.slice(1, remainingAccounts.length);
+    }
     return await swapInstruction(
       ctx.program,
       {
@@ -879,7 +869,6 @@ export class AmmInstruction {
         },
         ...remainingAccounts,
       ],
-      additionLength: remainingAccounts.length - 1,
     };
   }
 }

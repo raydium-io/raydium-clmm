@@ -102,7 +102,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
     )?;
     let mut observation_state = observation_state_loader.load_mut()?;
 
-    let tick = tick_math::get_tick_at_sqrt_ratio(sqrt_price_x64)?;
+    let tick = tick_math::get_tick_at_sqrt_price(sqrt_price_x64)?;
     #[cfg(feature = "enable-log")]
     msg!(
         "create pool, init_price: {}, init_tick:{}",

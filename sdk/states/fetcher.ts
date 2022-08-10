@@ -55,9 +55,9 @@ export class StateFetcher {
       observationIndex,
       observationKey,
       observationUpdateDuration,
+      tickArrayBitmap,
     } = await this.program.account.poolState.fetch(address);
     const rewards = rewardInfos as RewardInfo[];
-
     return {
       bump,
       ammConfig,
@@ -79,29 +79,20 @@ export class StateFetcher {
       observationIndex,
       observationKey,
       observationUpdateDuration,
+      tickArrayBitmap,
     };
   }
 
   public async getTickArrayState(address: PublicKey): Promise<TickArrayState> {
-    const { ammPool, startTickIndex, ticks } =
+    const { ammPool, startTickIndex, ticks, initializedTickCount } =
       await this.program.account.tickArrayState.fetch(address);
-
-    // bump,
-    // tick,
-    // liquidityNet,
-    // liquidityGross,
-    // feeGrowthOutside0X64,
-    // feeGrowthOutside1X64,
-    // tickCumulativeOutside,
-    // secondsPerLiquidityOutsideX64,
-    // secondsOutside,
-    // rewardGrowthsOutside,
 
     const tickStates = ticks as TickState[];
     return {
       ammPool,
       startTickIndex,
       ticks: tickStates,
+      initializedTickCount,
     };
   }
 

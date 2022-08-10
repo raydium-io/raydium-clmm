@@ -1,6 +1,9 @@
 use crate::error::ErrorCode;
 use crate::libraries::{
-    big_num::U128, fixed_point_64, full_math::MulDiv, liquidity_math, swap_math, tick_math,
+    big_num::{U1024, U128},
+    fixed_point_64,
+    full_math::MulDiv,
+    liquidity_math, swap_math, tick_array_bit_map, tick_math,
 };
 use crate::states::*;
 use crate::util::*;
@@ -138,10 +141,10 @@ pub fn swap_internal<'b, 'info>(
     require!(
         if zero_for_one {
             sqrt_price_limit_x64 < ctx.pool_state.sqrt_price_x64
-                && sqrt_price_limit_x64 > tick_math::MIN_SQRT_RATIO_X64
+                && sqrt_price_limit_x64 > tick_math::MIN_SQRT_PRICE_X64
         } else {
             sqrt_price_limit_x64 > ctx.pool_state.sqrt_price_x64
-                && sqrt_price_limit_x64 < tick_math::MAX_SQRT_RATIO_X64
+                && sqrt_price_limit_x64 < tick_math::MAX_SQRT_PRICE_X64
         },
         ErrorCode::SqrtPriceLimitOverflow
     );
@@ -193,7 +196,25 @@ pub fn swap_internal<'b, 'info>(
     // check tick_array account is owned by the pool
     require_keys_eq!(tick_array_current_loader.amm_pool, ctx.pool_state.key());
 
-    // let mut tick_array_loader_next: AccountLoader<TickArrayState>;
+    let mut current_vaild_tick_array_start_index = ctx
+        .pool_state
+        .get_next_initialized_tick_array(zero_for_one)
+        .unwrap();
+
+    // check tick_array account is correct
+    require_keys_eq!(
+        ctx.tick_array_state.key(),
+        Pubkey::find_program_address(
+            &[
+                TICK_ARRAY_SEED.as_bytes(),
+                ctx.pool_state.key().as_ref(),
+                &current_vaild_tick_array_start_index.to_be_bytes(),
+            ],
+            &crate::id()
+        )
+        .0
+    );
+
     // continue swapping as long as we haven't used the entire input/output and haven't
     // reached the price limit
     while state.amount_specified_remaining != 0 && state.sqrt_price_x64 != sqrt_price_limit_x64 {
@@ -219,27 +240,34 @@ pub fn swap_internal<'b, 'info>(
         };
 
         if !next_initialized_tick.is_initialized() {
-            let next_array_start_index = tick_array_current_loader
-                .next_tick_arrary_start_index(ctx.pool_state.tick_spacing, zero_for_one);
-
-            let tick_array_account_info = remaining_accounts_iter.next().unwrap();
-            // ensure this is a valid PDA, even if account is not initialized
+            msg!(
+                "current_vaild_tick_array_start_index:{},zero_for_one:{}",
+                current_vaild_tick_array_start_index,
+                zero_for_one
+            );
+            current_vaild_tick_array_start_index =
+                tick_array_bit_map::next_initialized_tick_array_start_index(
+                    U1024(ctx.pool_state.tick_array_bitmap),
+                    current_vaild_tick_array_start_index,
+                    ctx.pool_state.tick_spacing.into(),
+                    zero_for_one,
+                )
+                .unwrap();
+            let tick_array_loader_next =
+                AccountLoader::<TickArrayState>::try_from(remaining_accounts_iter.next().unwrap())?;
+            let mut tick_array_next = tick_array_loader_next.load_mut()?;
             require_keys_eq!(
-                tick_array_account_info.key(),
+                tick_array_loader_next.key(),
                 Pubkey::find_program_address(
                     &[
                         TICK_ARRAY_SEED.as_bytes(),
                         ctx.pool_state.key().as_ref(),
-                        &next_array_start_index.to_be_bytes(),
+                        &current_vaild_tick_array_start_index.to_be_bytes(),
                     ],
                     &crate::id()
                 )
                 .0
             );
-
-            let tick_array_loader_next =
-                AccountLoader::<TickArrayState>::try_from(remaining_accounts_iter.next().unwrap())?;
-            let mut tick_array_next = tick_array_loader_next.load_mut()?;
             let mut first_initialized_tick =
                 tick_array_next.first_initialized_tick(zero_for_one)?;
 
@@ -254,7 +282,7 @@ pub fn swap_internal<'b, 'info>(
             step.tick_next = tick_math::MAX_TICK;
         }
 
-        step.sqrt_price_next_x64 = tick_math::get_sqrt_ratio_at_tick(step.tick_next)?;
+        step.sqrt_price_next_x64 = tick_math::get_sqrt_price_at_tick(step.tick_next)?;
         let target_price = if (zero_for_one && step.sqrt_price_next_x64 < sqrt_price_limit_x64)
             || (!zero_for_one && step.sqrt_price_next_x64 > sqrt_price_limit_x64)
         {
@@ -303,11 +331,6 @@ pub fn swap_internal<'b, 'info>(
 
         // update global fee tracker
         if state.liquidity > 0 {
-            // msg!(
-            //     "step.fee_amount:{}, state.liquidity:{}",
-            //     step.fee_amount,
-            //     state.liquidity
-            // );
             state.fee_growth_global_x64 += U128::from(step.fee_amount)
                 .mul_div_floor(U128::from(fixed_point_64::Q64), U128::from(state.liquidity))
                 .unwrap()
@@ -351,7 +374,7 @@ pub fn swap_internal<'b, 'info>(
             };
         } else if state.sqrt_price_x64 != step.sqrt_price_start_x64 {
             // recompute unless we're on a lower tick boundary (i.e. already transitioned ticks), and haven't moved
-            state.tick = tick_math::get_tick_at_sqrt_ratio(state.sqrt_price_x64)?;
+            state.tick = tick_math::get_tick_at_sqrt_price(state.sqrt_price_x64)?;
         }
 
         #[cfg(feature = "enable-log")]
@@ -447,9 +470,9 @@ pub fn exact_internal<'b, 'info>(
         amount_specified,
         if sqrt_price_limit_x64 == 0 {
             if zero_for_one {
-                tick_math::MIN_SQRT_RATIO_X64 + 1
+                tick_math::MIN_SQRT_PRICE_X64 + 1
             } else {
-                tick_math::MAX_SQRT_RATIO_X64 - 1
+                tick_math::MAX_SQRT_PRICE_X64 - 1
             }
         } else {
             sqrt_price_limit_x64

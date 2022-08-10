@@ -9,7 +9,7 @@ use anchor_spl::token;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use mpl_token_metadata::{instruction::create_metadata_accounts_v2, state::Creator};
 use spl_token::instruction::AuthorityType;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 pub struct MintParam<'b, 'info> {
     /// Pays to mint liquidity
@@ -215,9 +215,8 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         ctx.accounts.payer.to_account_info(),
         ctx.accounts.tick_array_lower.to_account_info(),
         ctx.accounts.system_program.to_account_info(),
-        ctx.accounts.pool_state.key(),
+        ctx.accounts.pool_state.deref_mut(),
         start_lower_index,
-        ctx.accounts.pool_state.tick_spacing,
     )?;
 
     let tick_array_upper_state = if start_lower_index == start_upper_index {
@@ -227,9 +226,8 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             ctx.accounts.payer.to_account_info(),
             ctx.accounts.tick_array_upper.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
-            ctx.accounts.pool_state.key(),
+            ctx.accounts.pool_state.deref_mut(),
             start_upper_index,
-            ctx.accounts.pool_state.tick_spacing,
         )?
     };
 
@@ -388,8 +386,8 @@ pub fn add_liquidity<'b, 'info>(
 ) -> Result<(u128, u64, u64)> {
     let sqrt_price_x64 = accounts.pool_state.sqrt_price_x64;
 
-    let sqrt_ratio_a_x64 = tick_math::get_sqrt_ratio_at_tick(tick_lower_index)?;
-    let sqrt_ratio_b_x64 = tick_math::get_sqrt_ratio_at_tick(tick_upper_index)?;
+    let sqrt_ratio_a_x64 = tick_math::get_sqrt_price_at_tick(tick_lower_index)?;
+    let sqrt_ratio_b_x64 = tick_math::get_sqrt_price_at_tick(tick_upper_index)?;
     let liquidity = liquidity_amounts::get_liquidity_for_amounts(
         sqrt_price_x64,
         sqrt_ratio_a_x64,
@@ -402,17 +400,27 @@ pub fn add_liquidity<'b, 'info>(
     let balance_1_before = accounts.token_vault_1.amount;
 
     let mut tick_array_lower = accounts.tick_array_lower.load_mut()?;
+    tick_array_lower.update_initialized_tick_count(
+        tick_lower_index,
+        accounts.pool_state.tick_spacing as i32,
+        true,
+    )?;
     let tick_lower_state = tick_array_lower
         .get_tick_state_mut(tick_lower_index, accounts.pool_state.tick_spacing as i32)?;
 
     let mut tick_array_upper = accounts.tick_array_upper.load_mut()?;
+    tick_array_upper.update_initialized_tick_count(
+        tick_upper_index,
+        accounts.pool_state.tick_spacing as i32,
+        true,
+    )?;
     let tick_upper_state = tick_array_upper
         .get_tick_state_mut(tick_upper_index, accounts.pool_state.tick_spacing as i32)?;
 
     tick_lower_state.tick = tick_lower_index;
     tick_upper_state.tick = tick_upper_index;
 
-    let (amount_0_int, amount_1_int) = _modify_position(
+    let (amount_0_int, amount_1_int, _, _) = _modify_position(
         i128::try_from(liquidity).unwrap(),
         accounts.pool_state,
         accounts.protocol_position,
@@ -475,8 +483,8 @@ pub fn _modify_position<'info>(
     protocol_position_state: &mut Account<'info, ProtocolPositionState>,
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,
-) -> Result<(i64, i64)> {
-    _update_position(
+) -> Result<(i64, i64, bool, bool)> {
+    let (flip_tick_lower, flip_tick_upper) = update_position(
         liquidity_delta,
         pool_state,
         protocol_position_state,
@@ -495,19 +503,19 @@ pub fn _modify_position<'info>(
             // current tick is below the passed range; liquidity can only become in range by crossing from left to
             // right, when we'll need _more_ token_0 (it's becoming more valuable) so user must provide it
             amount_0 = sqrt_price_math::get_amount_0_delta_signed(
-                tick_math::get_sqrt_ratio_at_tick(tick_lower)?,
-                tick_math::get_sqrt_ratio_at_tick(tick_upper)?,
+                tick_math::get_sqrt_price_at_tick(tick_lower)?,
+                tick_math::get_sqrt_price_at_tick(tick_upper)?,
                 liquidity_delta,
             );
         } else if pool_state.tick_current < tick_upper {
             // Both Δtoken_0 and Δtoken_1 will be needed in current price
             amount_0 = sqrt_price_math::get_amount_0_delta_signed(
                 pool_state.sqrt_price_x64,
-                tick_math::get_sqrt_ratio_at_tick(tick_upper)?,
+                tick_math::get_sqrt_price_at_tick(tick_upper)?,
                 liquidity_delta,
             );
             amount_1 = sqrt_price_math::get_amount_1_delta_signed(
-                tick_math::get_sqrt_ratio_at_tick(tick_lower)?,
+                tick_math::get_sqrt_price_at_tick(tick_lower)?,
                 pool_state.sqrt_price_x64,
                 liquidity_delta,
             );
@@ -517,38 +525,32 @@ pub fn _modify_position<'info>(
         // current tick is above the range
         else {
             amount_1 = sqrt_price_math::get_amount_1_delta_signed(
-                tick_math::get_sqrt_ratio_at_tick(tick_lower)?,
-                tick_math::get_sqrt_ratio_at_tick(tick_upper)?,
+                tick_math::get_sqrt_price_at_tick(tick_lower)?,
+                tick_math::get_sqrt_price_at_tick(tick_upper)?,
                 liquidity_delta,
             );
         }
     }
 
-    Ok((amount_0, amount_1))
+    Ok((amount_0, amount_1, flip_tick_lower, flip_tick_upper))
 }
 
-/// Updates a position with the given liquidity delta
+/// Updates a position with the given liquidity delta and tick
 ///
 /// # Arguments
-///
+/// * `liquidity_delta` - The change in liquidity. Can be 0 to perform a poke.
 /// * `pool_state` - Current pool state
 /// * `position_state` - Effect change to this position
 /// * `tick_lower_state`- Program account for the lower tick boundary
 /// * `tick_upper_state`- Program account for the upper tick boundary
-/// * `bitmap_lower` - Bitmap account for the lower tick
-/// * `bitmap_upper` - Bitmap account for the upper tick, if it is different from
-/// `bitmap_lower`
-/// * `lamport_destination` - Destination account for freed lamports when a tick state is
-/// un-initialized
-/// * `liquidity_delta` - The change in liquidity. Can be 0 to perform a poke.
 ///
-pub fn _update_position<'info>(
+pub fn update_position<'info>(
     liquidity_delta: i128,
     pool_state: &mut Account<'info, PoolState>,
     protocol_position_state: &mut Account<'info, ProtocolPositionState>,
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,
-) -> Result<()> {
+) -> Result<(bool, bool)> {
     let clock = Clock::get()?;
     let updated_reward_infos = pool_state.update_reward_infos(clock.unix_timestamp as u64)?;
     let reward_growths_outside_x64 = RewardInfo::to_reward_growths(&updated_reward_infos);
@@ -628,5 +630,5 @@ pub fn _update_position<'info>(
             tick_upper_state.clear();
         }
     }
-    Ok(())
+    Ok((flipped_lower, flipped_upper))
 }

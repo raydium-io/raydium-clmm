@@ -1,7 +1,13 @@
 use crate::error::ErrorCode;
-use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
-use crate::states::protocol_position::POSITION_SEED;
+use crate::libraries::{
+    big_num::{U1024, U128},
+    check_current_tick_array_is_initialized, fixed_point_64,
+    full_math::MulDiv,
+    next_initialized_tick_array_start_index,
+};
+use crate::states::{MAX_TICK_ARRAY_START_INDEX, MIN_TICK_ARRAY_START_INDEX, TICK_ARRAY_SIZE};
 use anchor_lang::prelude::*;
+use std::ops::BitXor;
 
 /// Seed to derive account address and signature
 pub const POOL_SEED: &str = "pool";
@@ -42,33 +48,23 @@ pub struct PoolState {
 
     /// The minimum number of ticks between initialized ticks
     pub tick_spacing: u16,
-
     /// The currently in range liquidity available to the pool.
-    /// This value has no relationship to the total liquidity across all ticks.
     pub liquidity: u128,
-
     /// The current price of the pool as a sqrt(token_1/token_0) Q64.64 value
     pub sqrt_price_x64: u128,
-
     /// The current tick of the pool, i.e. according to the last tick transition that was run.
-    /// This value may not always be equal to SqrtTickMath.getTickAtSqrtRatio(sqrtPriceX96) if the
-    /// price is on a tick boundary.
-    /// Not necessarily a multiple of tick_spacing.
     pub tick_current: i32,
 
     /// the most-recently updated index of the observations array
     pub observation_index: u16,
-
     pub observation_update_duration: u16,
 
     /// The fee growth as a Q64.64 number, i.e. fees of token_0 and token_1 collected per
     /// unit of liquidity for the entire life of the pool.
-    /// These values can overflow u64
     pub fee_growth_global_0_x64: u128,
     pub fee_growth_global_1_x64: u128,
 
     /// The amounts of token_0 and token_1 that are owed to the protocol.
-    /// Protocol fees will never exceed u64::MAX in either token
     pub protocol_fees_token_0: u64,
     pub protocol_fees_token_1: u64,
 
@@ -78,8 +74,12 @@ pub struct PoolState {
     pub swap_in_amount_token_1: u128,
     pub swap_out_amount_token_0: u128,
 
+    /// The lastest updated time of reward info.
     pub reward_last_updated_timestamp: u64,
     pub reward_infos: [RewardInfo; REWARD_NUM],
+
+    /// Packed initialized tick array state
+    pub tick_array_bitmap: [u64; 16],
     // padding space for upgrade
     // pub padding_1: [u64; 16],
     // pub padding_2: [u64; 16],
@@ -103,8 +103,13 @@ impl PoolState {
         + 16
         + 8
         + 8
+        + 16
+        + 16
+        + 16
+        + 16
         + 8
         + RewardInfo::LEN * REWARD_NUM
+        + 8 * 16
         + 512;
 
     pub fn key(&self) -> Pubkey {
@@ -119,38 +124,6 @@ impl PoolState {
             &crate::id(),
         )
         .unwrap()
-    }
-
-    /// Validates the public key of a bitmap account
-    ///
-    /// # Arguments
-    ///
-    /// * `self`- The pool to which the account belongs
-    /// * `key` - The address to validated
-    /// * `bump` - The PDA bump for the address
-    /// * `tick` - The tick from which the address should be derived
-    ///
-    pub fn validate_protocol_position_address(
-        &self,
-        key: &Pubkey,
-        bump: u8,
-        tick_lower: i32,
-        tick_upper: i32,
-    ) -> Result<()> {
-        assert!(
-            *key == Pubkey::create_program_address(
-                &[
-                    &POSITION_SEED.as_bytes(),
-                    self.key().as_ref(),
-                    &tick_lower.to_be_bytes(),
-                    &tick_upper.to_be_bytes(),
-                    &[bump],
-                ],
-                &crate::id(),
-            )
-            .unwrap(),
-        );
-        Ok(())
     }
 
     pub fn initialize_reward(
@@ -284,6 +257,38 @@ impl PoolState {
             .checked_add(amount)
             .unwrap();
         Ok(())
+    }
+
+    pub fn flip_tick_array_bit(&mut self, tick_array_start_index: i32) -> Result<()> {
+        require_eq!(
+            0,
+            tick_array_start_index % (TICK_ARRAY_SIZE * (self.tick_spacing) as i32)
+        );
+        assert!(tick_array_start_index >= MIN_TICK_ARRAY_START_INDEX);
+        assert!(tick_array_start_index <= MAX_TICK_ARRAY_START_INDEX);
+        let tick_array_offset_in_bitmap =
+            tick_array_start_index / (self.tick_spacing as i32 * TICK_ARRAY_SIZE) + 512;
+        let tick_array_bitmap = U1024(self.tick_array_bitmap);
+        let mask = U1024::one() << tick_array_offset_in_bitmap.try_into().unwrap();
+        self.tick_array_bitmap = tick_array_bitmap.bitxor(mask).0;
+        Ok(())
+    }
+
+    pub fn get_next_initialized_tick_array(&self, zero_for_one: bool) -> Option<i32> {
+        let (is_initialized, start_index) = check_current_tick_array_is_initialized(
+            U1024(self.tick_array_bitmap),
+            self.tick_current,
+            self.tick_spacing.into(),
+        );
+        if is_initialized {
+            return Some(start_index);
+        }
+        next_initialized_tick_array_start_index(
+            U1024(self.tick_array_bitmap),
+            self.tick_current,
+            self.tick_spacing.into(),
+            zero_for_one,
+        )
     }
 }
 
@@ -438,4 +443,226 @@ pub struct SwapEvent {
 
     /// The log base 1.0001 of price of the pool after the swap
     pub tick: i32,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    mod tick_array_bitmap_test {
+
+        use super::*;
+
+        #[test]
+        fn get_arrary_start_index_negative() {
+            let mut pool_state = PoolState::default();
+            pool_state.tick_spacing = 10;
+            pool_state.flip_tick_array_bit(-800).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap,
+                [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    9223372036854775808,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ]
+            );
+            pool_state.flip_tick_array_bit(-1600).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap,
+                [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    13835058055282163712,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ]
+            );
+            pool_state.flip_tick_array_bit(-2400).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap,
+                [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    16140901064495857664,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ]
+            );
+            pool_state.flip_tick_array_bit(-51200).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap,
+                [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    16140901064495857665,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ]
+            );
+            pool_state.flip_tick_array_bit(-52000).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap,
+                [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    9223372036854775808,
+                    16140901064495857665,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ]
+            );
+            pool_state.flip_tick_array_bit(-409600).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap,
+                [
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    9223372036854775808,
+                    16140901064495857665,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ]
+            );
+            pool_state.flip_tick_array_bit(-409600).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap,
+                [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    9223372036854775808,
+                    16140901064495857665,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                ]
+            )
+        }
+
+        #[test]
+        fn get_arrary_start_index_positive() {
+            let mut pool_state = PoolState::default();
+            pool_state.tick_spacing = 10;
+            pool_state.flip_tick_array_bit(0).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap,
+                [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
+            );
+            pool_state.flip_tick_array_bit(800).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap,
+                [0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0]
+            );
+            pool_state.flip_tick_array_bit(1600).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap,
+                [0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0]
+            );
+            pool_state.flip_tick_array_bit(51200).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap,
+                [0, 0, 0, 0, 0, 0, 0, 0, 7, 1, 0, 0, 0, 0, 0, 0]
+            );
+            pool_state.flip_tick_array_bit(408800).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap,
+                [
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    7,
+                    1,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    9223372036854775808
+                ]
+            );
+            pool_state.flip_tick_array_bit(408800).unwrap();
+            assert_eq!(
+                pool_state.tick_array_bitmap,
+                [0, 0, 0, 0, 0, 0, 0, 0, 7, 1, 0, 0, 0, 0, 0, 0]
+            )
+        }
+    }
 }
