@@ -274,14 +274,14 @@ impl PoolState {
         Ok(())
     }
 
-    pub fn get_next_initialized_tick_array(&self, zero_for_one: bool) -> Option<i32> {
+    pub fn get_next_initialized_tick_array(&self, zero_for_one: bool) -> Option<(i32, i32)> {
         let (is_initialized, start_index) = check_current_tick_array_is_initialized(
             U1024(self.tick_array_bitmap),
             self.tick_current,
             self.tick_spacing.into(),
         );
         if is_initialized {
-            return Some(start_index);
+            return Some((start_index, self.tick_current));
         }
         next_initialized_tick_array_start_index(
             U1024(self.tick_array_bitmap),

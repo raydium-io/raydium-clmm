@@ -1,38 +1,81 @@
-import {
-  Connection,
-  ConfirmOptions,
-  PublicKey,
-  Keypair,
-  Signer,
-  ComputeBudgetProgram,
-  TransactionInstruction,
-  SystemProgram,
-  TransactionSignature,
-} from "@solana/web3.js";
+import { BN } from "@project-serum/anchor";
+import { ConfirmOptions, PublicKey } from "@solana/web3.js";
+import Decimal from "decimal.js";
 
+export const defaultConfirmOptions: ConfirmOptions = {
+  preflightCommitment: "processed",
+  commitment: "processed",
+  skipPreflight: true,
+};
 
-export const url = "https://api.devnet.solana.com"
-
-export const programId = new PublicKey(
-  "devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU"
-);
-
-export const admin = Keypair.fromSecretKey(
-  new Uint8Array([
-    14, 86, 200, 241, 238, 214, 121, 105, 124, 164, 10, 15, 29, 30, 254, 7, 150,
-    79, 247, 251, 252, 32, 167, 84, 253, 14, 236, 200, 224, 115, 233, 183, 8,
-    157, 68, 21, 135, 51, 193, 168, 32, 35, 95, 106, 176, 244, 52, 162, 191, 34,
-    41, 150, 47, 223, 25, 191, 200, 150, 231, 200, 147, 107, 233, 13,
-  ])
-);
-
-export function localWallet(): Keypair {
-  return Keypair.fromSecretKey(
-    new Uint8Array([
-      12, 14, 221, 123, 106, 110, 90, 126, 26, 140, 181, 162, 148, 212, 32, 1,
-      59, 85, 4, 75, 39, 92, 134, 194, 81, 99, 237, 93, 16, 209, 25, 93, 89, 83,
-      9, 155, 52, 216, 158, 126, 151, 206, 205, 63, 159, 129, 183, 145, 213,
-      243, 142, 90, 227, 81, 149, 67, 240, 245, 14, 175, 230, 215, 89, 253,
-    ])
-  );
-}
+export const Config = {
+  url: "https://api.devnet.solana.com",
+  programId: new PublicKey("devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU"),
+  "create-amm-config": [
+    {
+      index: 0,
+      tickSpacing: 10,
+      tradeFeeRate: 100,
+      protocolFeeRate: 12000,
+    },
+    {
+      index: 1,
+      tickSpacing: 60,
+      tradeFeeRate: 2500,
+      protocolFeeRate: 12000,
+    },
+  ],
+  "create-pool": [
+    {
+      ammConfig: "47QDZdQvRQtAutMRWCLe7FRNGegjEmcqhG874aj3k9HT",
+      tokenMint0: "6BsnRfuAfhxPY91wF7Q14iy295Ga5V3mVzhdnBY9KfnS",
+      tokenMint1: "6ajT55d5NXQKqTjmcumTaa1AiF2t3y2XYSbjCoq66zU2",
+      initialPrice: new Decimal("1"),
+    },
+  ],
+  "open-position": [
+    {
+      poolId: "CrhoHr8h7553wzQMWzFu2KFS9cpbgPJhKTH86JD4gTAX",
+      priceLower: new Decimal("0.5"),
+      priceUpper: new Decimal("1.5"),
+      token0Amount: new BN("1000000"),
+      token1Amount: new BN("1000000"),
+    },
+  ],
+  "increase-liquidity": [
+    {
+      poolId: "CrhoHr8h7553wzQMWzFu2KFS9cpbgPJhKTH86JD4gTAX",
+      positionId: "4aG7pFXYBRNLghPQykKphkgzVsQAhUkoTB9xQ8XX21qZ",
+      token0Amount: new BN("1000000"),
+      token1Amount: new BN("1000000"),
+      amountSlippage: 0.005,
+    },
+  ],
+  "decrease-liquidity": [
+    {
+      poolId: "CrhoHr8h7553wzQMWzFu2KFS9cpbgPJhKTH86JD4gTAX",
+      positionId: "4aG7pFXYBRNLghPQykKphkgzVsQAhUkoTB9xQ8XX21qZ",
+      token0Amount: new BN("1000000"),
+      token1Amount: new BN("1000000"),
+      amountSlippage: 0.005,
+    },
+  ],
+  "swap-base-in": [
+    {
+      poolId: "CrhoHr8h7553wzQMWzFu2KFS9cpbgPJhKTH86JD4gTAX",
+      inputTokenMint: "6BsnRfuAfhxPY91wF7Q14iy295Ga5V3mVzhdnBY9KfnS",
+      amountIn: new BN("100000"),
+      priceLimit: new Decimal(0),
+      amountOutSlippage: 0.005,
+    },
+  ],
+  "swap-base-out": [
+    {
+      poolId: "CrhoHr8h7553wzQMWzFu2KFS9cpbgPJhKTH86JD4gTAX",
+      outputTokenMint: "6ajT55d5NXQKqTjmcumTaa1AiF2t3y2XYSbjCoq66zU2",
+      amountOut: new BN("100000"),
+      priceLimit: new Decimal(0),
+      amountInSlippage: 0.005,
+    },
+  ],
+};

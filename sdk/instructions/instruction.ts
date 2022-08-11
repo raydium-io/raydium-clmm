@@ -390,11 +390,10 @@ export class AmmInstruction {
 
     let amount0Min: BN = new BN(0);
     let amount1Min: BN = new BN(0);
-    if (amountSlippage !== undefined) {
+    if (amountSlippage != undefined || amountSlippage != 0) {
       amount0Min = token0Amount.muln(1 - amountSlippage);
       amount1Min = token1Amount.muln(1 - amountSlippage);
     }
-
     // prepare tickArray
     const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
       tickLowerIndex,
@@ -621,7 +620,7 @@ export class AmmInstruction {
   ): Promise<TransactionInstruction> {
     let sqrtPriceLimitX64 = new BN(0);
     const zeroForOne = inputTokenMint.equals(ammPool.poolState.tokenMint0);
-    if (priceLimit == undefined) {
+    if (priceLimit == undefined || priceLimit.eq(new Decimal(0))) {
       sqrtPriceLimitX64 = zeroForOne
         ? MIN_SQRT_PRICE_X64.add(ONE)
         : MAX_SQRT_PRICE_X64.sub(ONE);
@@ -637,7 +636,7 @@ export class AmmInstruction {
       );
 
     let amountOutMin = new BN(0);
-    if (amountOutSlippage != undefined) {
+    if (amountOutSlippage != undefined || amountOutSlippage != 0) {
       amountOutMin = expectedAmountOut.muln(1 - amountOutSlippage);
     }
     return AmmInstruction.swap(
@@ -672,7 +671,7 @@ export class AmmInstruction {
   ): Promise<TransactionInstruction> {
     let sqrtPriceLimitX64 = new BN(0);
     const zeroForOne = outputTokenMint.equals(ammPool.poolState.tokenMint1);
-    if (priceLimit == undefined) {
+    if (priceLimit == undefined || priceLimit.eq(new Decimal(0))) {
       sqrtPriceLimitX64 = zeroForOne
         ? MIN_SQRT_PRICE_X64.add(ONE)
         : MAX_SQRT_PRICE_X64.sub(ONE);
@@ -687,7 +686,7 @@ export class AmmInstruction {
         true
       );
     let amountInMax = new BN(1).shln(32);
-    if (amountInSlippage != undefined) {
+    if (amountInSlippage != undefined || amountInSlippage != 0) {
       amountInMax = expectedAmountIn.muln(1 + amountInSlippage);
     }
     return AmmInstruction.swap(
