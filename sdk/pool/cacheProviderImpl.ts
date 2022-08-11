@@ -92,7 +92,6 @@ export class CacheDataProviderImpl implements CacheDataProvider {
    * @param startIndex
    */
   getTickArray(startIndex: number): TickArray {
-    console.log("getTickArray:", startIndex);
     return this.tickArrayCache.get(startIndex);
   }
 
