@@ -196,7 +196,9 @@ pub fn swap_internal<'b, 'info>(
     // check tick_array account is owned by the pool
     require_keys_eq!(tick_array_current_loader.amm_pool, ctx.pool_state.key());
 
-    let mut current_vaild_tick_array_start_index = ctx
+    let mut current_vaild_tick_array_start_index;
+    let search_from_tick_index;
+    (current_vaild_tick_array_start_index, search_from_tick_index) = ctx
         .pool_state
         .get_next_initialized_tick_array(zero_for_one)
         .unwrap();
@@ -214,6 +216,7 @@ pub fn swap_internal<'b, 'info>(
         )
         .0
     );
+    state.tick = search_from_tick_index;
 
     // continue swapping as long as we haven't used the entire input/output and haven't
     // reached the price limit
@@ -238,14 +241,8 @@ pub fn swap_internal<'b, 'info>(
         } else {
             Box::new(TickState::default())
         };
-
         if !next_initialized_tick.is_initialized() {
-            msg!(
-                "current_vaild_tick_array_start_index:{},zero_for_one:{}",
-                current_vaild_tick_array_start_index,
-                zero_for_one
-            );
-            current_vaild_tick_array_start_index =
+            (current_vaild_tick_array_start_index, _) =
                 tick_array_bit_map::next_initialized_tick_array_start_index(
                     U1024(ctx.pool_state.tick_array_bitmap),
                     current_vaild_tick_array_start_index,

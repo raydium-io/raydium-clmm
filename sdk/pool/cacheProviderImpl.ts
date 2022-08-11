@@ -92,11 +92,7 @@ export class CacheDataProviderImpl implements CacheDataProvider {
    * @param startIndex
    */
   getTickArray(startIndex: number): TickArray {
-    let savedTickArray = this.tickArrayCache.get(startIndex);
-    if (!savedTickArray) {
-      throw new Error("tickArray not cached");
-    }
-    return savedTickArray;
+    return this.tickArrayCache.get(startIndex);
   }
 
   /**
@@ -119,17 +115,22 @@ export class CacheDataProviderImpl implements CacheDataProvider {
         zeroForOne
       );
     while (nextTick == undefined || nextTick.liquidityGross.lten(0)) {
-      const nextStartIndex = getNextTickArrayStartIndex(
+      startIndex = getNextTickArrayStartIndex(
         startIndex,
         tickSpacing,
         zeroForOne
       );
-      const cachedTickArray = this.getTickArray(nextStartIndex);
-      if (cachedTickArray == undefined) {
-        throw new Error("No invaild tickArray cache");
+      const cachedTickArray = this.getTickArray(startIndex);
+      if (cachedTickArray != undefined) {
+        [nextTick, address, startIndex] =
+          await this.firstInitializedTickInOneArray(
+            cachedTickArray,
+            zeroForOne
+          );
       }
-      [nextTick, address, startIndex] =
-        await this.firstInitializedTickInOneArray(cachedTickArray, zeroForOne);
+    }
+    if (nextTick == undefined) {
+      throw new Error("No invaild tickArray cache");
     }
     return [nextTick, address, startIndex];
   }
@@ -186,6 +187,9 @@ export class CacheDataProviderImpl implements CacheDataProvider {
       (tickIndex - startIndex) / tickSpacing
     );
     const cachedTickArray = this.getTickArray(startIndex);
+    if (cachedTickArray == undefined) {
+      return [undefined, undefined, startIndex];
+    }
     let nextInitializedTick: Tick;
     if (zeroForOne) {
       if (isStartIndex) {

@@ -453,6 +453,14 @@ pub fn add_liquidity<'b, 'info>(
     accounts.token_vault_1.reload()?;
     require_eq!(amount_0, accounts.token_vault_0.amount - balance_0_before);
     require_eq!(amount_1, accounts.token_vault_1.amount - balance_1_before);
+    #[cfg(feature = "enable-log")]
+    msg!(
+        "amount_0:{},amount_1:{},amount_0_min:{},amount_1_min:{}",
+        amount_0,
+        amount_1,
+        amount_0_min,
+        amount_1_min
+    );
     require!(
         amount_0 >= amount_0_min && amount_1 >= amount_1_min,
         ErrorCode::PriceSlippageCheck

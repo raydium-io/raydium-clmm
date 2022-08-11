@@ -6,7 +6,10 @@ use std::ops::DerefMut;
 #[instruction(index: u16)]
 pub struct CreateAmmConfig<'info> {
     /// Address to be set as protocol owner. It pays to create factory state account.
-    #[account(mut)]
+    #[account(
+        mut,
+        address = crate::admin::id()
+    )]
     pub owner: Signer<'info>,
 
     /// Initialize factory state account to store protocol owner address
@@ -34,7 +37,7 @@ pub fn create_amm_config(
     trade_fee_rate: u32,
 ) -> Result<()> {
     let amm_config = ctx.accounts.amm_config.deref_mut();
-    amm_config.owner = crate::admin::id();
+    amm_config.owner = ctx.accounts.owner.key();
     amm_config.bump = *ctx.bumps.get("amm_config").unwrap();
     amm_config.index = index;
     amm_config.protocol_fee_rate = protocol_fee_rate;

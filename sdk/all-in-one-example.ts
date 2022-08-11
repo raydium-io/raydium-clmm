@@ -51,7 +51,7 @@ export async function main() {
   const owner = localWallet();
   console.log("owner: ", owner.publicKey.toString());
   const programId = new PublicKey(
-    // "devak2cXRFHdv44nPBxVEBubRYLUvmr9tkpJ7EvVm4A"
+    // "devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU"
     "Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3"
   );
   // const url = "https://api.devnet.solana.com";
