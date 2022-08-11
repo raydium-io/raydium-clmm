@@ -13,3 +13,5 @@ Cargo.lock
 yarn.lock
 Makefile
 sdk/node_modules
+sdk/scripts/owner-keypair.json
+sdk/scripts/admin-keypair.json

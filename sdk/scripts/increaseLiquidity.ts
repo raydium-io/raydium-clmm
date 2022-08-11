@@ -87,13 +87,6 @@ async function main() {
       param.token0Amount,
       param.token1Amount
     );
-
-    const [token0Amount, token1Amount] = LiquidityMath.getAmountsFromLiquidity(
-      poolStateData.sqrtPriceX64,
-      priceLower,
-      priceUpper,
-      liquidity
-    );
     const ix = await AmmInstruction.increaseLiquidity(
       {
         positionNftOwner: owner.publicKey,
@@ -102,8 +95,7 @@ async function main() {
       },
       ammPool,
       personalPositionData,
-      token0Amount,
-      token1Amount,
+      liquidity,
       param.amountSlippage
     );
     let tx = await sendTransaction(

@@ -5,7 +5,6 @@
 use super::big_num::U128;
 use super::fixed_point_64;
 use super::full_math::MulDiv;
-
 /// Computes the amount of liquidity received for a given amount of token_0 and price range
 /// Calculates ΔL = Δx (√P_upper x √P_lower)/(√P_upper - √P_lower)
 ///
@@ -207,5 +206,98 @@ pub fn get_amounts_for_liquidity(
             0,
             get_amount_1_for_liquidity(sqrt_ratio_a_x64, sqrt_ratio_b_x64, liquidity),
         )
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::libraries::sqrt_price_math;
+    #[test]
+    fn test_liquidity_and_amounts_convert() {
+        let current_sqrt_price_x64: u128 = 226137466252783162;
+        let sqrt_price_x64_a: u128 = 189217263716712836;
+        let sqrt_price_x64_b: u128 = 278218361723627362;
+        {
+            let mut amount0: u64 = 102912736398;
+            let mut amount1: u64 = 1735327364384;
+            let liquidity = get_liquidity_for_amounts(
+                current_sqrt_price_x64,
+                sqrt_price_x64_a,
+                sqrt_price_x64_b,
+                amount0,
+                amount1,
+            );
+            println!(
+                "get_liquidity_for_amounts liquidity:{},amount0:{}, amount1:{}",
+                liquidity, amount0, amount1
+            );
+
+            (amount0, amount1) = get_amounts_for_liquidity(
+                current_sqrt_price_x64,
+                sqrt_price_x64_a,
+                sqrt_price_x64_b,
+                liquidity,
+            );
+            println!(
+                "get_amounts_for_liquidity liquidity:{},amount0:{}, amount1:{}",
+                liquidity, amount0, amount1
+            );
+            let amount0 = sqrt_price_math::get_amount_0_delta_signed(
+                current_sqrt_price_x64,
+                sqrt_price_x64_b,
+                -i128::try_from(liquidity).unwrap(),
+            );
+            let amount1 = sqrt_price_math::get_amount_1_delta_signed(
+                sqrt_price_x64_a,
+                current_sqrt_price_x64,
+                -i128::try_from(liquidity).unwrap(),
+            );
+            println!(
+                "get_amount_delta_signed   liquidity:{},amount0:{}, amount1:{}",
+                liquidity, amount0, amount1
+            );
+            let amount0 = sqrt_price_math::get_amount_0_delta_signed(
+                current_sqrt_price_x64,
+                sqrt_price_x64_b,
+                i128::try_from(liquidity).unwrap(),
+            );
+            let amount1 = sqrt_price_math::get_amount_1_delta_signed(
+                sqrt_price_x64_a,
+                current_sqrt_price_x64,
+                i128::try_from(liquidity).unwrap(),
+            );
+            println!(
+                "get_amount_delta_signed   liquidity:{},amount0:{}, amount1:{}",
+                liquidity, amount0, amount1
+            );
+        }
+
+        {
+            let mut amount0 = 47367378458;
+            let mut amount1 = 2395478753487;
+            let liquidity = get_liquidity_for_amounts(
+                current_sqrt_price_x64,
+                sqrt_price_x64_a,
+                sqrt_price_x64_b,
+                amount0,
+                amount1,
+            );
+            println!(
+                "get_liquidity_for_amounts liquidity:{},amount0:{}, amount1:{}",
+                liquidity, amount0, amount1
+            );
+
+            (amount0, amount1) = get_amounts_for_liquidity(
+                current_sqrt_price_x64,
+                sqrt_price_x64_a,
+                sqrt_price_x64_b,
+                liquidity,
+            );
+            println!(
+                "get_amounts_for_liquidity liquidity:{},amount0:{}, amount1:{}",
+                liquidity, amount0, amount1
+            );
+        }
     }
 }

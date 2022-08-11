@@ -10,7 +10,7 @@ use anchor_lang::prelude::*;
 use instructions::*;
 use states::*;
 
-declare_id!("Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3");
+declare_id!("devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU");
 
 pub mod admin {
     use anchor_lang::prelude::declare_id;
@@ -202,15 +202,13 @@ pub mod amm_v3 {
         tick_upper_index: i32,
         tick_array_lower_start_index: i32,
         tick_array_upper_start_index: i32,
-        amount_0_desired: u64,
-        amount_1_desired: u64,
+        liquidity: u128,
         amount_0_min: u64,
         amount_1_min: u64,
     ) -> Result<()> {
         instructions::open_position(
             ctx,
-            amount_0_desired,
-            amount_1_desired,
+            liquidity,
             amount_0_min,
             amount_1_min,
             tick_lower_index,
@@ -246,18 +244,11 @@ pub mod amm_v3 {
     #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
     pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, IncreaseLiquidity<'info>>,
-        amount_0_desired: u64,
-        amount_1_desired: u64,
+        liquidity: u128,
         amount_0_min: u64,
         amount_1_min: u64,
     ) -> Result<()> {
-        instructions::increase_liquidity(
-            ctx,
-            amount_0_desired,
-            amount_1_desired,
-            amount_0_min,
-            amount_1_min,
-        )
+        instructions::increase_liquidity(ctx, liquidity, amount_0_min, amount_1_min)
     }
     /// Decreases the amount of liquidity in a position and accounts it to the position
     ///

@@ -82,8 +82,7 @@ pub struct IncreaseLiquidity<'info> {
 
 pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, IncreaseLiquidity<'info>>,
-    amount_0_desired: u64,
-    amount_1_desired: u64,
+    liquidity: u128,
     amount_0_min: u64,
     amount_1_min: u64,
 ) -> Result<()> {
@@ -103,8 +102,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     };
     let (liquidity, amount_0, amount_1) = add_liquidity(
         &mut accounts,
-        amount_0_desired,
-        amount_1_desired,
+        liquidity,
         amount_0_min,
         amount_1_min,
         tick_lower,

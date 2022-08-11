@@ -460,12 +460,8 @@ export type AmmV3 = {
           "type": "i32"
         },
         {
-          "name": "amount0Desired",
-          "type": "u64"
-        },
-        {
-          "name": "amount1Desired",
-          "type": "u64"
+          "name": "liquidity",
+          "type": "u128"
         },
         {
           "name": "amount0Min",
@@ -584,12 +580,8 @@ export type AmmV3 = {
       ],
       "args": [
         {
-          "name": "amount0Desired",
-          "type": "u64"
-        },
-        {
-          "name": "amount1Desired",
-          "type": "u64"
+          "name": "liquidity",
+          "type": "u128"
         },
         {
           "name": "amount0Min",
@@ -2241,12 +2233,8 @@ export const IDL: AmmV3 = {
           "type": "i32"
         },
         {
-          "name": "amount0Desired",
-          "type": "u64"
-        },
-        {
-          "name": "amount1Desired",
-          "type": "u64"
+          "name": "liquidity",
+          "type": "u128"
         },
         {
           "name": "amount0Min",
@@ -2365,12 +2353,8 @@ export const IDL: AmmV3 = {
       ],
       "args": [
         {
-          "name": "amount0Desired",
-          "type": "u64"
-        },
-        {
-          "name": "amount1Desired",
-          "type": "u64"
+          "name": "liquidity",
+          "type": "u128"
         },
         {
           "name": "amount0Min",

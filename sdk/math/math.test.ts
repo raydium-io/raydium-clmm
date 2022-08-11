@@ -1,10 +1,81 @@
-import { Math, SqrtPriceMath } from "../math";
+import { Math, SqrtPriceMath, LiquidityMath } from "../math";
 
 import { assert, expect } from "chai";
 import { BN } from "@project-serum/anchor";
 import Decimal from "decimal.js";
 
 describe("math test", async () => {
+  describe("liquidityMath test", async () => {
+    const currentSqrtPriceX64 = new BN("226137466252783162");
+    const sqrtPriceX64A = new BN("189217263716712836");
+    const sqrtPriceX64B = new BN("278218361723627362");
+    it("getLiquidityFromTokenAmounts", () => {
+      let amount0 = new BN(102912736398);
+      let amount1 = new BN(1735327364384);
+      let liquidity = LiquidityMath.getLiquidityFromTokenAmounts(
+        currentSqrtPriceX64,
+        sqrtPriceX64A,
+        sqrtPriceX64B,
+        amount0,
+        amount1
+      );
+      console.log(
+        "getLiquidityFromTokenAmounts liquidity:",
+        liquidity.toString(),
+        "amount0:",
+        amount0.toString(),
+        "amount1:",
+        amount1.toString()
+      );
+      [amount0, amount1] = LiquidityMath.getAmountsFromLiquidity(
+        currentSqrtPriceX64,
+        sqrtPriceX64A,
+        sqrtPriceX64B,
+        liquidity
+      );
+      console.log(
+        "getAmountsFromLiquidity      liquidity:",
+        liquidity.toString(),
+        "amount0:",
+        amount0.toString(),
+        "amount1:",
+        amount1.toString()
+      );
+
+      amount0 = new BN(47367378458);
+      amount1 = new BN(2395478753487);
+      liquidity = LiquidityMath.getLiquidityFromTokenAmounts(
+        currentSqrtPriceX64,
+        sqrtPriceX64A,
+        sqrtPriceX64B,
+        amount0,
+        amount1
+      );
+      console.log(
+        "getLiquidityFromTokenAmounts liquidity:",
+        liquidity.toString(),
+        "amount0:",
+        amount0.toString(),
+        "amount1:",
+        amount1.toString()
+      );
+      [amount0, amount1] = LiquidityMath.getAmountsFromLiquidity(
+        currentSqrtPriceX64,
+        sqrtPriceX64A,
+        sqrtPriceX64B,
+        liquidity
+      );
+      console.log(
+        "getAmountsFromLiquidity      liquidity:",
+        liquidity.toString(),
+        "amount0:",
+        amount0.toString(),
+        "amount1:",
+        amount1.toString()
+      );
+    });
+  });
+
   it("mulDivRoundingUp", () => {
     assert.equal(
       Math.mulDivRoundingUp(new BN(2), new BN(5), new BN(3)).toNumber(),

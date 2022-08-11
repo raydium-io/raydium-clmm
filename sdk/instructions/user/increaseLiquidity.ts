@@ -6,8 +6,7 @@ import { AmmV3 } from "../../anchor/amm_v3";
 export function increaseLiquidityInstruction(
   program: Program<AmmV3>,
   args: {
-    amount0Desired: BN;
-    amount1Desired: BN;
+    liquidity: BN;
     amount0Min: BN;
     amount1Min: BN;
   },
@@ -27,10 +26,10 @@ export function increaseLiquidityInstruction(
     tokenProgram: PublicKey;
   }
 ): Promise<TransactionInstruction> {
-  const { amount0Desired, amount1Desired, amount0Min, amount1Min } = args;
+  const {liquidity, amount0Min, amount1Min } = args;
 
   return program.methods
-    .increaseLiquidity(amount0Desired, amount1Desired, amount0Min, amount1Min)
+    .increaseLiquidity(liquidity, amount0Min, amount1Min)
     .accounts(accounts)
     .remainingAccounts([])
     .instruction();

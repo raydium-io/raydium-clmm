@@ -9,12 +9,12 @@ import {
 import { Context, NodeWallet } from "../base";
 import { sendTransaction } from "../utils";
 import { Config, defaultConfirmOptions } from "./config";
-import keypairFile from "./keypair.json";
+import keypairFile from "./owner-keypair.json";
 import { Token, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 async function main() {
   const owner = Keypair.fromSeed(Uint8Array.from(keypairFile.slice(0, 32)));
-  console.log("owner: ", owner.publicKey.toString())
+  console.log("owner: ", owner.publicKey.toString());
   const connection = new Connection(
     Config.url,
     defaultConfirmOptions.commitment

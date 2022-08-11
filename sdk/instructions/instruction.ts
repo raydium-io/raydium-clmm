@@ -214,8 +214,7 @@ export class AmmInstruction {
    * @param ammPool
    * @param priceLower
    * @param priceUpper
-   * @param token0Amount
-   * @param token1Amount
+   * @param liquidity
    * @param amountSlippage
    * @returns
    */
@@ -224,8 +223,7 @@ export class AmmInstruction {
     ammPool: AmmPool,
     priceLower: Decimal,
     priceUpper: Decimal,
-    token0Amount: BN,
-    token1Amount: BN,
+    liquidity: BN,
     amountSlippage?: number
   ): Promise<[PublicKey, TransactionInstruction]> {
     const tickLower = SqrtPriceMath.getTickFromPrice(priceLower);
@@ -236,8 +234,7 @@ export class AmmInstruction {
       ammPool,
       tickLower,
       tickUpper,
-      token0Amount,
-      token1Amount,
+      liquidity,
       amountSlippage
     );
   }
@@ -248,8 +245,7 @@ export class AmmInstruction {
    * @param ammPool
    * @param tickLowerIndex
    * @param tickUpperIndex
-   * @param token0Amount
-   * @param token1Amount
+   * @param liquidity
    * @param amountSlippage
    * @returns
    */
@@ -258,8 +254,7 @@ export class AmmInstruction {
     ammPool: AmmPool,
     tickLowerIndex: number,
     tickUpperIndex: number,
-    token0Amount: BN,
-    token1Amount: BN,
+    liquidity: BN,
     amountSlippage?: number
   ): Promise<[PublicKey, TransactionInstruction]> {
     if (tickLowerIndex % ammPool.poolState.tickSpacing != 0) {
@@ -275,14 +270,18 @@ export class AmmInstruction {
 
     const poolState = ammPool.poolState;
     const ctx = ammPool.ctx;
-
+    const [token0Amount, token1Amount] = LiquidityMath.getAmountsFromLiquidity(
+      poolState.sqrtPriceX64,
+      SqrtPriceMath.getSqrtPriceX64FromTick(tickLowerIndex),
+      SqrtPriceMath.getSqrtPriceX64FromTick(tickUpperIndex),
+      liquidity
+    );
     let amount0Min: BN = new BN(0);
     let amount1Min: BN = new BN(0);
     if (amountSlippage !== undefined) {
       amount0Min = token0Amount.muln(1 - amountSlippage);
       amount1Min = token1Amount.muln(1 - amountSlippage);
     }
-
     // prepare tickArray
     const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
       tickLowerIndex,
@@ -334,8 +333,7 @@ export class AmmInstruction {
           tickUpperIndex,
           tickArrayLowerStartIndex: tickArrayLowerStartIndex,
           tickArrayUpperStartIndex: tickArrayUpperStartIndex,
-          amount0Desired: token0Amount,
-          amount1Desired: token1Amount,
+          liquidity: liquidity,
           amount0Min,
           amount1Min,
         },
@@ -370,8 +368,7 @@ export class AmmInstruction {
    * @param accounts
    * @param ammPool
    * @param positionState
-   * @param token0Amount
-   * @param token1Amount
+   * @param liquidity
    * @param amountSlippage
    * @returns
    */
@@ -379,8 +376,7 @@ export class AmmInstruction {
     accounts: IncreaseLiquidityAccounts,
     ammPool: AmmPool,
     positionState: PositionState,
-    token0Amount: BN,
-    token1Amount: BN,
+    liquidity: BN,
     amountSlippage?: number
   ): Promise<TransactionInstruction> {
     const poolState = ammPool.poolState;
@@ -388,9 +384,15 @@ export class AmmInstruction {
     const tickLowerIndex = positionState.tickLowerIndex;
     const tickUpperIndex = positionState.tickUpperIndex;
 
+    const [token0Amount, token1Amount] = LiquidityMath.getAmountsFromLiquidity(
+      poolState.sqrtPriceX64,
+      SqrtPriceMath.getSqrtPriceX64FromTick(tickLowerIndex),
+      SqrtPriceMath.getSqrtPriceX64FromTick(tickUpperIndex),
+      liquidity
+    );
     let amount0Min: BN = new BN(0);
     let amount1Min: BN = new BN(0);
-    if (amountSlippage != undefined || amountSlippage != 0) {
+    if (amountSlippage != undefined) {
       amount0Min = token0Amount.muln(1 - amountSlippage);
       amount1Min = token1Amount.muln(1 - amountSlippage);
     }
@@ -436,8 +438,7 @@ export class AmmInstruction {
     return await increaseLiquidityInstruction(
       ctx.program,
       {
-        amount0Desired: token0Amount,
-        amount1Desired: token1Amount,
+        liquidity,
         amount0Min,
         amount1Min,
       },
@@ -636,7 +637,7 @@ export class AmmInstruction {
       );
 
     let amountOutMin = new BN(0);
-    if (amountOutSlippage != undefined || amountOutSlippage != 0) {
+    if (amountOutSlippage != undefined) {
       amountOutMin = expectedAmountOut.muln(1 - amountOutSlippage);
     }
     return AmmInstruction.swap(
@@ -686,7 +687,7 @@ export class AmmInstruction {
         true
       );
     let amountInMax = new BN(1).shln(32);
-    if (amountInSlippage != undefined || amountInSlippage != 0) {
+    if (amountInSlippage != undefined) {
       amountInMax = expectedAmountIn.muln(1 + amountInSlippage);
     }
     return AmmInstruction.swap(

@@ -460,12 +460,8 @@
           "type": "i32"
         },
         {
-          "name": "amount0Desired",
-          "type": "u64"
-        },
-        {
-          "name": "amount1Desired",
-          "type": "u64"
+          "name": "liquidity",
+          "type": "u128"
         },
         {
           "name": "amount0Min",
@@ -584,12 +580,8 @@
       ],
       "args": [
         {
-          "name": "amount0Desired",
-          "type": "u64"
-        },
-        {
-          "name": "amount1Desired",
-          "type": "u64"
+          "name": "liquidity",
+          "type": "u128"
         },
         {
           "name": "amount0Min",
@@ -1776,8 +1768,5 @@
       "name": "UnInitializedRewardInfo",
       "msg": "uninitialized reward info"
     }
-  ],
-  "metadata": {
-    "address": "Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3"
-  }
+  ]
 }

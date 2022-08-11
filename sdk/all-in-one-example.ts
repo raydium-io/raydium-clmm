@@ -2,7 +2,11 @@ import { web3, BN } from "@project-serum/anchor";
 import * as metaplex from "@metaplex/js";
 import { Token, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { AmmPool } from "./pool";
-import { getTickWithPriceAndTickspacing } from "./math";
+import {
+  getTickWithPriceAndTickspacing,
+  LiquidityMath,
+  SqrtPriceMath,
+} from "./math";
 import { StateFetcher, OBSERVATION_STATE_LEN } from "./states";
 import { accountExist, getAmmConfigAddress, sendTransaction } from "./utils";
 import { AmmInstruction, RouterPoolParam } from "./instructions";
@@ -51,11 +55,9 @@ export async function main() {
   const owner = localWallet();
   console.log("owner: ", owner.publicKey.toString());
   const programId = new PublicKey(
-    // "devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU"
-    "Enmwn7qqmhUWhg3hhGiruY7apAJMNJscAvv8GwtzUKY3"
+    "devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU"
   );
-  // const url = "https://api.devnet.solana.com";
-  const url = "http://localhost:8899";
+  const url = "https://api.devnet.solana.com";
   const ctx = await getContext(programId, owner, url);
   const stateFetcher = new StateFetcher(ctx.program);
 
@@ -68,9 +70,11 @@ export async function main() {
   ] = await createTokenMintAndAssociatedTokenAccount(ctx, owner, mintAuthority);
 
   // First, create config account
+  // Admin key is hardcode, if you wang create a amm config with a keypair, must change it in contract.
+  const admin = owner;
   const ammConfigAddress = await createAmmConfig(
     ctx,
-    owner,
+    admin,
     0,
     10,
     1000,
@@ -425,6 +429,7 @@ async function createPersonalPosition(
   priceUpper: Decimal,
   token0Amount: BN,
   token1Amount: BN,
+  amountSlippage?: number,
   confirmOptions?: ConfirmOptions
 ): Promise<[PublicKey, TransactionSignature]> {
   const additionalComputeBudgetInstruction = ComputeBudgetProgram.requestUnits({
@@ -440,6 +445,14 @@ async function createPersonalPosition(
     priceUpper,
     ammPool.poolState.tickSpacing
   );
+
+  const liquidity = LiquidityMath.getLiquidityFromTokenAmounts(
+    ammPool.poolState.sqrtPriceX64,
+    SqrtPriceMath.getSqrtPriceX64FromTick(tickLower),
+    SqrtPriceMath.getSqrtPriceX64FromTick(tickUpper),
+    token0Amount,
+    token1Amount
+  );
   const nftMintAKeypair = new Keypair();
   const [address, openIx] = await AmmInstruction.openPosition(
     {
@@ -452,8 +465,7 @@ async function createPersonalPosition(
     ammPool,
     tickLower,
     tickUpper,
-    token0Amount,
-    token1Amount
+    liquidity
   );
 
   const tx = await sendTransaction(
@@ -479,6 +491,14 @@ async function increaseLiquidity(
 ): Promise<TransactionSignature> {
   const personalPositionData =
     await ammPool.stateFetcher.getPersonalPositionState(personalPosition);
+
+  const liquidity = LiquidityMath.getLiquidityFromTokenAmounts(
+    ammPool.poolState.sqrtPriceX64,
+    SqrtPriceMath.getSqrtPriceX64FromTick(personalPositionData.tickLowerIndex),
+    SqrtPriceMath.getSqrtPriceX64FromTick(personalPositionData.tickUpperIndex),
+    token0AmountDesired,
+    token1AmountDesired
+  );
   const ix = await AmmInstruction.increaseLiquidity(
     {
       positionNftOwner: owner.publicKey,
@@ -487,8 +507,7 @@ async function increaseLiquidity(
     },
     ammPool,
     personalPositionData,
-    token0AmountDesired,
-    token1AmountDesired,
+    liquidity,
     amountSlippage
   );
   return await sendTransaction(ctx.connection, [ix], [owner], confirmOptions);

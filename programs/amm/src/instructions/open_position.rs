@@ -1,5 +1,5 @@
 use crate::error::ErrorCode;
-use crate::libraries::{liquidity_amounts, liquidity_math, sqrt_price_math, tick_math};
+use crate::libraries::{liquidity_math, sqrt_price_math, tick_math};
 use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
@@ -9,6 +9,8 @@ use anchor_spl::token;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use mpl_token_metadata::{instruction::create_metadata_accounts_v2, state::Creator};
 use spl_token::instruction::AuthorityType;
+#[cfg(feature = "enable-log")]
+use std::convert::identity;
 use std::ops::{Deref, DerefMut};
 
 pub struct MintParam<'b, 'info> {
@@ -183,8 +185,7 @@ pub struct OpenPosition<'info> {
 
 pub fn open_position<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, OpenPosition<'info>>,
-    amount_0_desired: u64,
-    amount_1_desired: u64,
+    liquidity: u128,
     amount_0_min: u64,
     amount_1_min: u64,
     tick_lower_index: i32,
@@ -254,8 +255,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
 
     let (liquidity, amount_0, amount_1) = add_liquidity(
         &mut mint_accounts,
-        amount_0_desired,
-        amount_1_desired,
+        liquidity,
         amount_0_min,
         amount_1_min,
         tick_lower_index,
@@ -377,24 +377,12 @@ pub fn open_position<'a, 'b, 'c, 'info>(
 ///
 pub fn add_liquidity<'b, 'info>(
     accounts: &mut MintParam<'b, 'info>,
-    amount_0_desired: u64,
-    amount_1_desired: u64,
+    liquidity: u128,
     amount_0_min: u64,
     amount_1_min: u64,
     tick_lower_index: i32,
     tick_upper_index: i32,
 ) -> Result<(u128, u64, u64)> {
-    let sqrt_price_x64 = accounts.pool_state.sqrt_price_x64;
-
-    let sqrt_ratio_a_x64 = tick_math::get_sqrt_price_at_tick(tick_lower_index)?;
-    let sqrt_ratio_b_x64 = tick_math::get_sqrt_price_at_tick(tick_upper_index)?;
-    let liquidity = liquidity_amounts::get_liquidity_for_amounts(
-        sqrt_price_x64,
-        sqrt_ratio_a_x64,
-        sqrt_ratio_b_x64,
-        amount_0_desired,
-        amount_1_desired,
-    );
     assert!(liquidity > 0);
     let balance_0_before = accounts.token_vault_0.amount;
     let balance_1_before = accounts.token_vault_1.amount;
@@ -598,8 +586,8 @@ pub fn update_position<'info>(
         #[cfg(feature = "enable-log")]
         msg!(
             "tick_upper.reward_growths_outside_x64:{:?}, tick_lower.reward_growths_outside_x64:{:?}",
-            tick_upper_state.reward_growths_outside_x64,
-            tick_lower_state.reward_growths_outside_x64
+            identity(tick_upper_state.reward_growths_outside_x64),
+            identity(tick_lower_state.reward_growths_outside_x64)
         );
     }
     // Update fees accrued to the position

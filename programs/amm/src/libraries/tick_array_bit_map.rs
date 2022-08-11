@@ -140,7 +140,7 @@ mod test {
                 break;
             }
             tick_array_start_index =
-                TickArrayState::get_arrary_start_index(array_start_index.unwrap(), tick_spacing);
+                TickArrayState::get_arrary_start_index(array_start_index.unwrap().0, tick_spacing);
         }
     }
     #[test]
@@ -160,7 +160,7 @@ mod test {
                 break;
             }
             tick_array_start_index =
-                TickArrayState::get_arrary_start_index(array_start_index.unwrap(), tick_spacing);
+                TickArrayState::get_arrary_start_index(array_start_index.unwrap().0, tick_spacing);
         }
     }
     #[test]
@@ -180,7 +180,7 @@ mod test {
                 break;
             }
             tick_array_start_index =
-                TickArrayState::get_arrary_start_index(array_start_index.unwrap(), tick_spacing);
+                TickArrayState::get_arrary_start_index(array_start_index.unwrap().0, tick_spacing);
         }
     }
 
@@ -201,7 +201,7 @@ mod test {
                 break;
             }
             tick_array_start_index =
-                TickArrayState::get_arrary_start_index(array_start_index.unwrap(), tick_spacing);
+                TickArrayState::get_arrary_start_index(array_start_index.unwrap().0, tick_spacing);
         }
     }
     #[test]
@@ -221,7 +221,7 @@ mod test {
                 break;
             }
             tick_array_start_index =
-                TickArrayState::get_arrary_start_index(array_start_index.unwrap(), tick_spacing);
+                TickArrayState::get_arrary_start_index(array_start_index.unwrap().0, tick_spacing);
         }
     }
     #[test]
@@ -241,7 +241,7 @@ mod test {
                 break;
             }
             tick_array_start_index =
-                TickArrayState::get_arrary_start_index(array_start_index.unwrap(), tick_spacing);
+                TickArrayState::get_arrary_start_index(array_start_index.unwrap().0, tick_spacing);
         }
     }
 

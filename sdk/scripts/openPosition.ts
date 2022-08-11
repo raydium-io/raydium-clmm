@@ -13,7 +13,7 @@ import { getTickWithPriceAndTickspacing } from "../math";
 import { AmmInstruction } from "../instructions";
 import { Config, defaultConfirmOptions } from "./config";
 import { AmmPool } from "../pool";
-import keypairFile from "./keypair.json";
+import keypairFile from "./owner-keypair.json";
 import {
   Token,
   ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -89,7 +89,8 @@ async function main() {
       tickLower,
       tickUpper,
       param.token0Amount,
-      param.token1Amount
+      param.token1Amount,
+      param.amountSlippage
     );
 
     const tx = await sendTransaction(

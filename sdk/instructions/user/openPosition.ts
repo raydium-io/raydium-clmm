@@ -9,8 +9,7 @@ export function openPositionInstruction(
     tickUpperIndex: number;
     tickArrayLowerStartIndex: number;
     tickArrayUpperStartIndex: number;
-    amount0Desired: BN;
-    amount1Desired: BN;
+    liquidity: BN;
     amount0Min: BN;
     amount1Min: BN;
   },
@@ -35,15 +34,14 @@ export function openPositionInstruction(
     tokenProgram: PublicKey;
     associatedTokenProgram: PublicKey;
     metadataProgram: PublicKey;
-  },
+  }
 ): Promise<TransactionInstruction> {
   const {
     tickLowerIndex,
     tickUpperIndex,
     tickArrayLowerStartIndex,
     tickArrayUpperStartIndex,
-    amount0Desired,
-    amount1Desired,
+    liquidity,
     amount0Min,
     amount1Min,
   } = args;
@@ -54,8 +52,7 @@ export function openPositionInstruction(
       tickUpperIndex,
       tickArrayLowerStartIndex,
       tickArrayUpperStartIndex,
-      amount0Desired,
-      amount1Desired,
+      liquidity,
       amount0Min,
       amount1Min
     )

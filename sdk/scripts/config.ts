@@ -40,6 +40,7 @@ export const Config = {
       priceUpper: new Decimal("1.5"),
       token0Amount: new BN("1000000"),
       token1Amount: new BN("1000000"),
+      amountSlippage: 0.005,
     },
   ],
   "increase-liquidity": [
