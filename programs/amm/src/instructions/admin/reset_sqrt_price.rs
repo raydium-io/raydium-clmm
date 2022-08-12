@@ -7,17 +7,17 @@ use std::ops::DerefMut;
 
 #[derive(Accounts)]
 pub struct ResetSqrtPrice<'info> {
-    /// Address paying to create the pool
+    /// Only admin has the authority to reset initial price
     #[account(address = crate::admin::id())]
     pub owner: Signer<'info>,
-    /// Which config the pool belongs to
-    #[account(address = pool_state.amm_config)]
-    pub amm_config: Box<Account<'info, AmmConfig>>,
+
     /// Initialize an account to store the pool state
     #[account(mut)]
     pub pool_state: Box<Account<'info, PoolState>>,
+
     /// Token_0 vault
     pub token_vault_0: Box<Account<'info, TokenAccount>>,
+    
     /// Token_1 vault
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
 }

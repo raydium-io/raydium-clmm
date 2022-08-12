@@ -1,6 +1,5 @@
 use crate::libraries::tick_math;
 use crate::states::*;
-// use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use std::ops::DerefMut;
@@ -10,8 +9,10 @@ pub struct CreatePool<'info> {
     /// Address paying to create the pool. Can be anyone
     #[account(mut)]
     pub pool_creator: Signer<'info>,
+
     /// Which config the pool belongs to.
     pub amm_config: Box<Account<'info, AmmConfig>>,
+
     /// Initialize an account to store the pool state
     #[account(
         init,
@@ -26,12 +27,17 @@ pub struct CreatePool<'info> {
         space = PoolState::LEN
     )]
     pub pool_state: Box<Account<'info, PoolState>>,
+
+    /// Token_0 mint, the key must grater then token_1 mint.
     #[account(
         constraint = token_mint_0.key() < token_mint_1.key()
     )]
     pub token_mint_0: Box<Account<'info, Mint>>,
+
+    /// Token_1 mint
     pub token_mint_1: Box<Account<'info, Mint>>,
-    /// Token_0 vault
+
+    /// Token_0 vault for the pool
     #[account(
         init,
         seeds =[
@@ -45,7 +51,8 @@ pub struct CreatePool<'info> {
         token::authority = pool_state
     )]
     pub token_vault_0: Box<Account<'info, TokenAccount>>,
-    /// Token_1 vault
+
+    /// Token_1 vault for the pool
     #[account(
         init,
         seeds =[
@@ -60,8 +67,9 @@ pub struct CreatePool<'info> {
     )]
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
-    /// CHECK: Initialize an account to store oracle observations
+    /// CHECK: Initialize an account to store oracle observations, the account must be created off-chain, constract will initialzied it
     pub observation_state: UncheckedAccount<'info>,
+
     /// Spl token program
     pub token_program: Program<'info, Token>,
     /// To create a new program account
@@ -72,33 +80,9 @@ pub struct CreatePool<'info> {
 
 pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()> {
     let pool_state = ctx.accounts.pool_state.deref_mut();
-    {
-        // Noted: ObservationState must zero copy account
-        let observation_info = ctx.accounts.observation_state.to_account_info();
-        require_keys_eq!(*observation_info.owner, crate::id());
-        require_eq!(observation_info.data_len(), ObservationState::LEN);
-        let mut observation_data = observation_info.try_borrow_mut_data()?;
-        // The discriminator should be zero, since we're initializing.
-        let mut disc_bytes = [0u8; 8];
-        disc_bytes.copy_from_slice(&observation_data[..8]);
-        let account_discriminator = u64::from_le_bytes(disc_bytes);
-        require_eq!(account_discriminator, 0);
-        if account_discriminator == 0 {
-            let observation_account_name = "ObservationState";
-            let mut discriminator = [0u8; 8];
-            let discriminator_preimage = {
-                // For now, zero copy accounts can't be namespaced.
-                format!("account:{}", observation_account_name)
-            };
-            discriminator.copy_from_slice(
-                &solana_program::hash::hash(discriminator_preimage.as_bytes()).to_bytes()[..8],
-            );
-            observation_data[..8].copy_from_slice(&discriminator);
-        }
-    }
-    let observation_state_loader = AccountLoader::<ObservationState>::try_from_unchecked(
+    let observation_state_loader = initialize_observation_account(
+        ctx.accounts.observation_state.to_account_info(),
         &crate::id(),
-        &ctx.accounts.observation_state.to_account_info(),
     )?;
     let mut observation_state = observation_state_loader.load_mut()?;
 
@@ -107,7 +91,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
     msg!(
         "create pool, init_price: {}, init_tick:{}",
         sqrt_price_x64,
-        tick
+        tick_array
     );
     pool_state.bump = *ctx.bumps.get("pool_state").unwrap();
     pool_state.amm_config = ctx.accounts.amm_config.key();
@@ -123,6 +107,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
     pool_state.tick_current = tick;
     pool_state.observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
     pool_state.reward_infos = [RewardInfo::new(ctx.accounts.pool_creator.key()); REWARD_NUM];
+    
     require_eq!(observation_state.initialized, false);
     require_keys_eq!(observation_state.amm_pool, Pubkey::default());
     pool_state.observation_key = ctx.accounts.observation_state.key();
@@ -139,4 +124,16 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
         token_vault_1: ctx.accounts.token_vault_1.key(),
     });
     Ok(())
+}
+
+fn initialize_observation_account<'info>(
+    observation_account_info: AccountInfo<'info>,
+    program_id: &Pubkey,
+) -> Result<AccountLoader<'info, ObservationState>> {
+    let observation_loader = AccountLoader::<ObservationState>::try_from_unchecked(
+        program_id,
+        &observation_account_info,
+    )?;
+    observation_loader.exit(&crate::id())?;
+    Ok(observation_loader)
 }

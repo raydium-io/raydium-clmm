@@ -5,7 +5,7 @@ use anchor_spl::token::{Token, TokenAccount};
 
 #[derive(Accounts)]
 pub struct CollectProtocolFee<'info> {
-    /// Valid protocol owner
+    /// Only admin can collect fee now
     #[account(address = crate::admin::id())]
     pub owner: Signer<'info>,
 

@@ -111,7 +111,6 @@ export abstract class SwapMath {
       if (loopCount > 10) {
         throw Error("account limit");
       }
-
       let step: Partial<StepComputations> = {};
       step.sqrtPriceStartX64 = state.sqrtPriceX64;
 
@@ -124,7 +123,6 @@ export abstract class SwapMath {
         );
       step.tickNext = nextInitTick.tick;
       step.initialized = nextInitTick.liquidityGross.gtn(0);
-
       if (lastSavedTickArrayStartIndex !== tickAarrayStartIndex) {
         state.accounts.push({
           pubkey: tickArrayAddress,

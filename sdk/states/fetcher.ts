@@ -130,6 +130,14 @@ export class StateFetcher {
     };
   }
 
+  public async getMultiplePersonalPositionStates(
+    addresses: PublicKey[]
+  ): Promise<PositionState[]> {
+    const result =
+      await this.program.account.personalPositionState.fetchMultiple(addresses);
+    return result as PositionState[];
+  }
+
   public async getObservationState(
     address: PublicKey
   ): Promise<ObservationState> {

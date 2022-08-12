@@ -33,7 +33,6 @@ impl TickArrayState {
         pool_state: &mut Account<'info, PoolState>,
         tick_array_start_index: i32,
     ) -> Result<AccountLoader<'info, TickArrayState>> {
-        let mut is_create = false;
         let tick_array_state = if tick_array_account_info.owner == &system_program::ID {
             let (expect_pda_address, bump) = Pubkey::find_program_address(
                 &[
@@ -57,28 +56,31 @@ impl TickArrayState {
                 ],
                 TickArrayState::LEN,
             )?;
-            is_create = true;
-            AccountLoader::<TickArrayState>::try_from_unchecked(
+
+            let tick_array_state_loader = AccountLoader::<TickArrayState>::try_from_unchecked(
                 &crate::id(),
                 &tick_array_account_info,
-            )?
-        } else {
-            AccountLoader::<TickArrayState>::try_from(&tick_array_account_info)?
-        };
+            )?;
 
-        if is_create {
             {
-                let mut tick_array_account = tick_array_state.load_init()?;
+                let mut tick_array_account = tick_array_state_loader.load_init()?;
                 tick_array_account.initialize(
                     tick_array_start_index,
                     pool_state.tick_spacing,
                     pool_state.key(),
                 )?;
             }
+
             // save the 8 byte discriminator
-            tick_array_state.exit(&crate::id())?;
+            tick_array_state_loader.exit(&crate::id())?;
+
+            // mark the position in bitmap
             pool_state.flip_tick_array_bit(tick_array_start_index)?;
-        }
+
+            tick_array_state_loader
+        } else {
+            AccountLoader::<TickArrayState>::try_from(&tick_array_account_info)?
+        };
         Ok(tick_array_state)
     }
 
@@ -256,19 +258,7 @@ impl TickState {
         Ok(())
     }
 
-    /// Updates a tick and returns true if the tick was flipped from initialized to uninitialized, or vice versa
-    ///
-    /// # Arguments
-    ///
-    /// * `self` - The tick state that will be updated
-    /// * `tick_current` - The current tick
-    /// * `liquidity_delta` - A new amount of liquidity to be added (subtracted) when tick is crossed
-    /// from left to right (right to left)
-    /// * `fee_growth_global_0_x64` - The all-time global fee growth, per unit of liquidity, in token_0
-    /// * `fee_growth_global_1_x64` - The all-time global fee growth, per unit of liquidity, in token_1
-    /// * `upper` - true for updating a position's upper tick, or false for updating a position's lower tick
-    /// * `max_liquidity` - The maximum liquidity allocation for a single tick
-    ///
+    /// Updates a tick and returns true if the tick was flipped from initialized to uninitialized
     pub fn update(
         &mut self,
         tick_current: i32,
@@ -276,7 +266,6 @@ impl TickState {
         fee_growth_global_0_x64: u128,
         fee_growth_global_1_x64: u128,
         upper: bool,
-        _max_liquidity: u128,
         reward_growths_outside_x64: [u128; REWARD_NUM],
     ) -> Result<bool> {
         let liquidity_gross_before = self.liquidity_gross;
@@ -306,19 +295,11 @@ impl TickState {
             self.liquidity_net.checked_add(liquidity_delta)
         }
         .unwrap();
-        // msg!("tick update,liquidity_gross_before:{}, liquidity_gross_after:{},liquidity_net:{}, upper:{}", liquidity_gross_before, liquidity_gross_after, self.liquidity_net,upper);
         Ok(flipped)
     }
 
     /// Transitions to the current tick as needed by price movement, returning the amount of liquidity
     /// added (subtracted) when tick is crossed from left to right (right to left)
-    ///
-    /// # Arguments
-    ///
-    /// * `self` - The destination tick of the transition
-    /// * `fee_growth_global_0_x64` - The all-time global fee growth, per unit of liquidity, in token_0
-    /// * `fee_growth_global_1_x64` - The all-time global fee growth, per unit of liquidity, in token_1
-    ///
     pub fn cross(
         &mut self,
         fee_growth_global_0_x64: u128,
@@ -513,23 +494,6 @@ pub fn check_ticks_order(tick_lower_index: i32, tick_upper_index: i32) -> Result
         ErrorCode::TickInvaildOrder
     );
     Ok(())
-}
-
-/// Derives max liquidity per tick from given tick spacing
-///
-/// # Arguments
-///
-/// * `tick_spacing` - The amount of required tick separation, realized in multiples of `tick_sacing`
-/// e.g., a tickSpacing of 3 requires ticks to be initialized every 3rd tick i.e., ..., -6, -3, 0, 3, 6, ...
-///
-pub fn tick_spacing_to_max_liquidity_per_tick(tick_spacing: i32) -> u128 {
-    // Find min and max values permitted by tick spacing
-    let min_tick = (tick_math::MIN_TICK / tick_spacing) * tick_spacing;
-    let max_tick = (tick_math::MAX_TICK / tick_spacing) * tick_spacing;
-    let num_ticks = ((max_tick - min_tick) / tick_spacing) as u64 + 1;
-
-    println!("num ticks {}", num_ticks);
-    u128::MAX / (num_ticks as u128)
 }
 
 #[cfg(test)]

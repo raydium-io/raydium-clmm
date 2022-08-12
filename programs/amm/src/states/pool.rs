@@ -125,7 +125,7 @@ impl PoolState {
         )
         .unwrap()
     }
-
+    
     pub fn initialize_reward(
         &mut self,
         curr_timestamp: u64,

@@ -13,7 +13,6 @@ export function increaseLiquidityInstruction(
   accounts:  {
     nftOwner: PublicKey;
     nftAccount: PublicKey;
-    ammConfig: PublicKey;
     poolState: PublicKey;
     protocolPosition: PublicKey;
     personalPosition: PublicKey;

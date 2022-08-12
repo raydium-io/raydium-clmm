@@ -1,6 +1,6 @@
 ///! Helper functions to get most and least significant non-zero bits
 use super::big_num::U1024;
-use crate::states::tick::TICK_ARRAY_SIZE;
+use crate::states::tick_array::TICK_ARRAY_SIZE;
 
 pub fn most_significant_bit(x: U1024) -> Option<u16> {
     if x.is_zero() {

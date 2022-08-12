@@ -1,4 +1,4 @@
-use super::{add_liquidity, MintParam};
+use super::{add_liquidity, AddLiquidityParam};
 use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::states::*;
 use anchor_lang::prelude::*;
@@ -9,21 +9,15 @@ pub struct IncreaseLiquidity<'info> {
     /// Pays to mint the position
     pub nft_owner: Signer<'info>,
 
-    /// The token account for the tokenized position
+    /// The token account for nft
     #[account(
         constraint = nft_account.mint == personal_position.nft_mint
     )]
     pub nft_account: Box<Account<'info, TokenAccount>>,
 
-    /// Authority PDA for the NFT mint
-    #[account(address = pool_state.amm_config)]
-    pub amm_config: Account<'info, AmmConfig>,
-
-    /// Mint liquidity for this pool
     #[account(mut)]
     pub pool_state: Box<Account<'info, PoolState>>,
 
-    /// Core program account to store position data
     #[account(
         mut,
         seeds = [
@@ -88,7 +82,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
 ) -> Result<()> {
     let tick_lower = ctx.accounts.personal_position.tick_lower_index;
     let tick_upper = ctx.accounts.personal_position.tick_upper_index;
-    let mut accounts = MintParam {
+    let mut accounts = AddLiquidityParam {
         payer: &ctx.accounts.nft_owner,
         token_account_0: ctx.accounts.token_account_0.as_mut(),
         token_account_1: ctx.accounts.token_account_1.as_mut(),
@@ -109,45 +103,25 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         tick_upper,
     )?;
     let updated_procotol_position = accounts.protocol_position;
-    let fee_growth_inside_0_last_x64 = updated_procotol_position.fee_growth_inside_0_last;
-    let fee_growth_inside_1_last_x64 = updated_procotol_position.fee_growth_inside_1_last;
 
-    // Update tokenized position metadata
     let personal_position = ctx.accounts.personal_position.as_mut();
-    personal_position.token_fees_owed_0 = personal_position
-        .token_fees_owed_0
-        .checked_add(
-            U128::from(
-                fee_growth_inside_0_last_x64
-                    .saturating_sub(personal_position.fee_growth_inside_0_last_x64),
-            )
-            .mul_div_floor(
-                U128::from(personal_position.liquidity),
-                U128::from(fixed_point_64::Q64),
-            )
-            .unwrap()
-            .as_u64(),
-        )
-        .unwrap();
+    personal_position.token_fees_owed_0 = calculate_latest_token_fees(
+        personal_position.token_fees_owed_0,
+        personal_position.fee_growth_inside_0_last_x64,
+        updated_procotol_position.fee_growth_inside_0_last,
+        personal_position.liquidity,
+    );
+    personal_position.token_fees_owed_1 = calculate_latest_token_fees(
+        personal_position.token_fees_owed_1,
+        personal_position.fee_growth_inside_1_last_x64,
+        updated_procotol_position.fee_growth_inside_1_last,
+        personal_position.liquidity,
+    );
 
-    personal_position.token_fees_owed_1 = personal_position
-        .token_fees_owed_1
-        .checked_add(
-            U128::from(
-                fee_growth_inside_1_last_x64
-                    .saturating_sub(personal_position.fee_growth_inside_1_last_x64),
-            )
-            .mul_div_floor(
-                U128::from(personal_position.liquidity),
-                U128::from(fixed_point_64::Q64),
-            )
-            .unwrap()
-            .as_u64(),
-        )
-        .unwrap();
-
-    personal_position.fee_growth_inside_0_last_x64 = fee_growth_inside_0_last_x64;
-    personal_position.fee_growth_inside_1_last_x64 = fee_growth_inside_1_last_x64;
+    personal_position.fee_growth_inside_0_last_x64 =
+        updated_procotol_position.fee_growth_inside_0_last;
+    personal_position.fee_growth_inside_1_last_x64 =
+        updated_procotol_position.fee_growth_inside_1_last;
 
     // update rewards, must update before increase liquidity
     personal_position.update_rewards(updated_procotol_position.reward_growth_inside)?;
@@ -161,4 +135,19 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     });
 
     Ok(())
+}
+
+pub fn calculate_latest_token_fees(
+    last_total_fees: u64,
+    fee_growth_inside_last_x64: u128,
+    fee_growth_inside_latest_x64: u128,
+    liquidity: u128,
+) -> u64 {
+    let fee_growth_delta =
+        U128::from(fee_growth_inside_latest_x64.saturating_sub(fee_growth_inside_last_x64))
+            .mul_div_floor(U128::from(liquidity), U128::from(fixed_point_64::Q64))
+            .unwrap()
+            .as_u64();
+
+    last_total_fees.checked_add(fee_growth_delta).unwrap()
 }
