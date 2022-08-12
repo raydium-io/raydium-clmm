@@ -9,7 +9,11 @@ import {
 import { Context, NodeWallet } from "../base";
 import { StateFetcher } from "../states";
 import { sendTransaction } from "../utils";
-import { getTickWithPriceAndTickspacing } from "../math";
+import {
+  getTickWithPriceAndTickspacing,
+  LiquidityMath,
+  SqrtPriceMath,
+} from "../math";
 import { AmmInstruction } from "../instructions";
 import { Config, defaultConfirmOptions } from "./config";
 import { AmmPool } from "../pool";
@@ -76,6 +80,25 @@ async function main() {
       ammPool.poolState.tickSpacing
     );
 
+    const priceLower = SqrtPriceMath.getSqrtPriceX64FromTick(tickLower);
+    console.log("tickLower:", tickLower, "priceLower:", priceLower.toString());
+
+    const priceUpper = SqrtPriceMath.getSqrtPriceX64FromTick(tickUpper);
+    console.log(
+      "tickUpper:",
+      tickUpper,
+      "priceUpper:",
+      priceUpper.toString()
+    );
+
+    const liquidity = LiquidityMath.getLiquidityFromTokenAmounts(
+      poolStateData.sqrtPriceX64,
+      priceLower,
+      priceUpper,
+      param.token0Amount,
+      param.token1Amount
+    );
+
     const nftMintAKeypair = new Keypair();
     const [address, openIx] = await AmmInstruction.openPosition(
       {
@@ -88,8 +111,7 @@ async function main() {
       ammPool,
       tickLower,
       tickUpper,
-      param.token0Amount,
-      param.token1Amount,
+      liquidity,
       param.amountSlippage
     );
 
