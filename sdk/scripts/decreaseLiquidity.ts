@@ -13,7 +13,7 @@ import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { LiquidityMath, SqrtPriceMath } from "../math";
+import { SqrtPriceMath } from "../math";
 async function main() {
   const owner = Keypair.fromSeed(Uint8Array.from(keypairFile.slice(0, 32)));
   const connection = new Connection(
@@ -61,39 +61,25 @@ async function main() {
       await ammPool.stateFetcher.getPersonalPositionState(
         new PublicKey(param.positionId)
       );
-    const priceLower = SqrtPriceMath.getSqrtPriceX64FromTick(
-      personalPositionData.tickLowerIndex
-    );
     console.log(
       "personalPositionData.tickLowerIndex:",
       personalPositionData.tickLowerIndex,
       "priceLower:",
-      priceLower.toString()
+      SqrtPriceMath.getSqrtPriceX64FromTick(
+        personalPositionData.tickLowerIndex
+      ).toString()
     );
-    const priceUpper = SqrtPriceMath.getSqrtPriceX64FromTick(
-      personalPositionData.tickUpperIndex
-    );
+
     console.log(
       "personalPositionData.tickUpperIndex:",
       personalPositionData.tickUpperIndex,
-      "tickUpperIndex:",
-      priceLower.toString()
-    );
-    const liquidity = LiquidityMath.getLiquidityFromTokenAmounts(
-      poolStateData.sqrtPriceX64,
-      priceLower,
-      priceUpper,
-      param.token0Amount,
-      param.token1Amount
+      "priceUpper:",
+      SqrtPriceMath.getSqrtPriceX64FromTick(
+        personalPositionData.tickUpperIndex
+      ).toString()
     );
 
-    const [token0Amount, token1Amount] = LiquidityMath.getAmountsFromLiquidity(
-      poolStateData.sqrtPriceX64,
-      priceLower,
-      priceUpper,
-      liquidity
-    );
-    const ix = await AmmInstruction.decreaseLiquidityWithInputAmount(
+    const ix = await AmmInstruction.decreaseLiquidity(
       {
         positionNftOwner: owner.publicKey,
         token0Account,
@@ -101,8 +87,7 @@ async function main() {
       },
       ammPool,
       personalPositionData,
-      token0Amount,
-      token1Amount,
+      param.liquidity,
       param.amountSlippage
     );
     let tx = await sendTransaction(

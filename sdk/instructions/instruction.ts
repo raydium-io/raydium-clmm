@@ -257,6 +257,11 @@ export class AmmInstruction {
     liquidity: BN,
     amountSlippage?: number
   ): Promise<[PublicKey, TransactionInstruction]> {
+    if (amountSlippage != undefined && amountSlippage < 0) {
+      throw new Error(
+        "amountSlippage must be gtn 0"
+      );
+    }
     if (tickLowerIndex % ammPool.poolState.tickSpacing != 0) {
       throw new Error(
         "tickLowIndex must be an integer multiple of tickspacing"
@@ -379,6 +384,11 @@ export class AmmInstruction {
     liquidity: BN,
     amountSlippage?: number
   ): Promise<TransactionInstruction> {
+    if (amountSlippage != undefined && amountSlippage < 0) {
+      throw new Error(
+        "amountSlippage must be gtn 0"
+      );
+    }
     const poolState = ammPool.poolState;
     const ctx = ammPool.ctx;
     const tickLowerIndex = positionState.tickLowerIndex;
@@ -478,6 +488,11 @@ export class AmmInstruction {
     token1AmountDesired: BN,
     amountSlippage?: number
   ): Promise<TransactionInstruction> {
+    if (amountSlippage != undefined && amountSlippage < 0) {
+      throw new Error(
+        "amountSlippage must be gtn 0"
+      );
+    }
     const price_lower = SqrtPriceMath.getSqrtPriceX64FromTick(
       positionState.tickLowerIndex
     );
@@ -516,6 +531,11 @@ export class AmmInstruction {
     liquidity: BN,
     amountSlippage?: number
   ): Promise<TransactionInstruction> {
+    if (amountSlippage != undefined && amountSlippage < 0) {
+      throw new Error(
+        "amountSlippage must be gtn 0"
+      );
+    }
     const ctx = ammPool.ctx;
     const tickLowerIndex = positionState.tickLowerIndex;
     const tickUpperIndex = positionState.tickUpperIndex;
@@ -619,6 +639,11 @@ export class AmmInstruction {
     amountOutSlippage?: number,
     priceLimit?: Decimal
   ): Promise<TransactionInstruction> {
+    if (amountOutSlippage != undefined && amountOutSlippage < 0) {
+      throw new Error(
+        "amountOutSlippage must be gtn 0"
+      );
+    }
     let sqrtPriceLimitX64 = new BN(0);
     const zeroForOne = inputTokenMint.equals(ammPool.poolState.tokenMint0);
     if (priceLimit == undefined || priceLimit.eq(new Decimal(0))) {
@@ -670,6 +695,11 @@ export class AmmInstruction {
     amountInSlippage?: number,
     priceLimit?: Decimal
   ): Promise<TransactionInstruction> {
+    if (amountInSlippage != undefined && amountInSlippage < 0) {
+      throw new Error(
+        "amountInSlippage must be gtn 0"
+      );
+    }
     let sqrtPriceLimitX64 = new BN(0);
     const zeroForOne = outputTokenMint.equals(ammPool.poolState.tokenMint1);
     if (priceLimit == undefined || priceLimit.eq(new Decimal(0))) {
@@ -721,6 +751,11 @@ export class AmmInstruction {
     amountIn: BN,
     amountOutSlippage?: number
   ): Promise<TransactionInstruction> {
+    if (amountOutSlippage != undefined && amountOutSlippage < 0) {
+      throw new Error(
+        "amountOutSlippage must be gtn 0"
+      );
+    }
     let remainingAccounts: AccountMeta[] = [];
 
     let result = await AmmInstruction.prepareOnePool(amountIn, firstPoolParam);
