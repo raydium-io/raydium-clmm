@@ -78,10 +78,24 @@ async function main() {
     );
 
     const priceLower = SqrtPriceMath.getSqrtPriceX64FromTick(tickLower);
-    console.log("tickLower:", tickLower, "priceLower:", priceLower.toString());
+    console.log(
+      "tickLower:",
+      tickLower,
+      "priceLowerX64:",
+      priceLower.toString(),
+      "priceLower:",
+      param.priceLower
+    );
 
     const priceUpper = SqrtPriceMath.getSqrtPriceX64FromTick(tickUpper);
-    console.log("tickUpper:", tickUpper, "priceUpper:", priceUpper.toString());
+    console.log(
+      "tickUpper:",
+      tickUpper,
+      "priceUpperX64:",
+      priceUpper.toString(),
+      "priceLower:",
+      param.priceUpper
+    );
 
     const nftMintAKeypair = new Keypair();
     const [address, openIx] = await AmmInstruction.openPosition(
@@ -105,16 +119,7 @@ async function main() {
       [owner, nftMintAKeypair],
       defaultConfirmOptions
     );
-    console.log(
-      "openPosition tx: ",
-      tx,
-      "account:",
-      address.toBase58(),
-      "tickLower:",
-      tickLower,
-      "tickUpper:",
-      tickUpper
-    );
+    console.log("openPosition tx: ", tx, "account:", address.toBase58());
   }
 }
 

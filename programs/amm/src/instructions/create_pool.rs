@@ -91,7 +91,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
     msg!(
         "create pool, init_price: {}, init_tick:{}",
         sqrt_price_x64,
-        tick_array
+        tick
     );
     pool_state.bump = *ctx.bumps.get("pool_state").unwrap();
     pool_state.amm_config = ctx.accounts.amm_config.key();

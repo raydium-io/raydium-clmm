@@ -287,6 +287,9 @@ export class AmmInstruction {
       SqrtPriceMath.getSqrtPriceX64FromTick(tickUpperIndex),
       liquidity
     );
+    console.log(" poolState.sqrtPriceX64:", poolState.sqrtPriceX64.toString())
+    console.log(" token0Amount:", token0Amount.toString())
+    console.log(" token1Amount:", token1Amount.toString())
     let amount0Min: BN = new BN(0);
     let amount1Min: BN = new BN(0);
     if (amountSlippage !== undefined) {

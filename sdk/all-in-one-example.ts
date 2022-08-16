@@ -56,8 +56,8 @@ export async function main() {
   const programId = new PublicKey(
     "devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU"
   );
-  // const url = "https://api.devnet.solana.com";
-  const url = "http://127.0.0.1:8899";
+  const url = "https://api.devnet.solana.com";
+  // const url = "http://127.0.0.1:8899";
   const ctx = await getContext(programId, owner, url);
   const stateFetcher = new StateFetcher(ctx.program);
 
