@@ -136,11 +136,6 @@
           "isSigner": true
         },
         {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "poolState",
           "isMut": true,
           "isSigner": false
@@ -352,11 +347,6 @@
           "isSigner": false
         },
         {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "positionNftMint",
           "isMut": true,
           "isSigner": true
@@ -523,11 +513,6 @@
           "isSigner": false
         },
         {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "poolState",
           "isMut": true,
           "isSigner": false
@@ -609,11 +594,6 @@
         {
           "name": "personalPosition",
           "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "ammConfig",
-          "isMut": false,
           "isSigner": false
         },
         {
@@ -1298,13 +1278,28 @@
       "name": "CreateConfigEvent",
       "fields": [
         {
+          "name": "index",
+          "type": "u16",
+          "index": false
+        },
+        {
           "name": "owner",
           "type": "publicKey",
-          "index": false
+          "index": true
         },
         {
           "name": "protocolFeeRate",
           "type": "u32",
+          "index": false
+        },
+        {
+          "name": "tradeFeeRate",
+          "type": "u32",
+          "index": false
+        },
+        {
+          "name": "tickSpacing",
+          "type": "u16",
           "index": false
         }
       ]
@@ -1768,5 +1763,8 @@
       "name": "UnInitializedRewardInfo",
       "msg": "uninitialized reward info"
     }
-  ]
+  ],
+  "metadata": {
+    "address": "devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU"
+  }
 }

@@ -9,13 +9,11 @@ import {
 import { Context, NodeWallet } from "../base";
 import { StateFetcher } from "../states";
 import { sendTransaction } from "../utils";
-import {
-  getTickWithPriceAndTickspacing,
-  SqrtPriceMath,
-} from "../math";
+import { getTickWithPriceAndTickspacing, SqrtPriceMath } from "../math";
 import { AmmInstruction } from "../instructions";
 import { Config, defaultConfirmOptions } from "./config";
 import { AmmPool } from "../pool";
+import { Position } from "../position";
 import keypairFile from "./owner-keypair.json";
 import {
   Token,
@@ -83,12 +81,7 @@ async function main() {
     console.log("tickLower:", tickLower, "priceLower:", priceLower.toString());
 
     const priceUpper = SqrtPriceMath.getSqrtPriceX64FromTick(tickUpper);
-    console.log(
-      "tickUpper:",
-      tickUpper,
-      "priceUpper:",
-      priceUpper.toString()
-    );
+    console.log("tickUpper:", tickUpper, "priceUpper:", priceUpper.toString());
 
     const nftMintAKeypair = new Keypair();
     const [address, openIx] = await AmmInstruction.openPosition(

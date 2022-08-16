@@ -30,6 +30,7 @@ pub struct Observation {
 impl Observation {
     pub const LEN: usize = 4 + 16 + 16 + 16;
 }
+
 /// Returns data about a specific observation index
 ///
 /// PDA of `[OBSERVATION_SEED, pool_id]`
@@ -45,6 +46,7 @@ pub struct ObservationState {
     /// padding for feature update
     pub padding: [u128; 5],
 }
+
 impl Default for ObservationState {
     #[inline]
     fn default() -> ObservationState {

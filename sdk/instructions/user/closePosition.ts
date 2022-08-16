@@ -7,8 +7,6 @@ export function closePositionInstruction(
   accounts: {
     nftOwner: PublicKey;
     nftAccount: PublicKey;
-    ammConfig: PublicKey;
-    poolState: PublicKey;
     positionNftMint: PublicKey;
     personalPosition: PublicKey;
     tokenProgram: PublicKey;

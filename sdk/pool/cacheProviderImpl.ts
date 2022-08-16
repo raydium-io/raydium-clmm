@@ -12,6 +12,10 @@ import {
   mergeTickArrayBitmap,
   getInitializedTickArrayInRange,
 } from "../entities";
+import {
+  MIN_TICK_ARRAY_START_INDEX,
+  MAX_TICK_ARRAY_START_INDEX,
+} from "../math";
 
 const FETCH_TICKARRAY_COUNT = 15;
 
@@ -120,6 +124,12 @@ export class CacheDataProviderImpl implements CacheDataProvider {
         tickSpacing,
         zeroForOne
       );
+      if (
+        startIndex < MIN_TICK_ARRAY_START_INDEX ||
+        startIndex > MAX_TICK_ARRAY_START_INDEX
+      ) {
+        throw new Error("No enough initialized tickArray");
+      }
       const cachedTickArray = this.getTickArray(startIndex);
       if (cachedTickArray != undefined) {
         [nextTick, address, startIndex] =

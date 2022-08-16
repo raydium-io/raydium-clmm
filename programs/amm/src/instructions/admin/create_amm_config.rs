@@ -5,14 +5,14 @@ use std::ops::DerefMut;
 #[derive(Accounts)]
 #[instruction(index: u16)]
 pub struct CreateAmmConfig<'info> {
-    /// Address to be set as protocol owner. It pays to create factory state account.
+    /// Address to be set as protocol owner.
     #[account(
         mut,
         address = crate::admin::id()
     )]
     pub owner: Signer<'info>,
 
-    /// Initialize factory state account to store protocol owner address
+    /// Initialize config state account to store protocol owner address and fee rates.
     #[account(
         init,
         seeds = [
@@ -25,7 +25,6 @@ pub struct CreateAmmConfig<'info> {
     )]
     pub amm_config: Account<'info, AmmConfig>,
 
-    /// To create a new program account
     pub system_program: Program<'info, System>,
 }
 
@@ -45,8 +44,11 @@ pub fn create_amm_config(
     amm_config.tick_spacing = tick_spacing;
 
     emit!(CreateConfigEvent {
+        index: amm_config.index,
         owner: ctx.accounts.owner.key(),
         protocol_fee_rate: amm_config.protocol_fee_rate,
+        trade_fee_rate: amm_config.trade_fee_rate,
+        tick_spacing: amm_config.tick_spacing,
     });
 
     Ok(())

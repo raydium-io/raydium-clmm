@@ -6,14 +6,14 @@ export const ONE = new BN(1);
 export const NEGATIVE_ONE = new BN(-1);
 
 // used in liquidity amount math
-export const Q64 =  new BN(1).shln(64);
-export const Q128 = new BN(1).shln(128);;
+export const Q64 = new BN(1).shln(64);
+export const Q128 = new BN(1).shln(128);
 
 // export const MaxUint32 = JSBI.subtract(Q32, ONE)
 export const MaxU64 = Q64.sub(ONE);
 // export const MaxUint128 = JSBI.subtract(Q128, ONE)
 
-export const U64Resolution =64;
+export const U64Resolution = 64;
 
 export const MaxUint128 = Q128.subn(1);
 
@@ -30,6 +30,7 @@ export const MIN_SQRT_PRICE_X64: BN = new BN("23551220632");
 /**
  * The sqrt ratio corresponding to the maximum tick that could be used on any pool.
  */
-export const MAX_SQRT_PRICE_X64: BN = new BN(
-  "14448608513249754496350072978"
-);
+export const MAX_SQRT_PRICE_X64: BN = new BN("14448608513249754496350072978");
+
+export const MIN_TICK_ARRAY_START_INDEX = -409600;
+export const MAX_TICK_ARRAY_START_INDEX = 408800;

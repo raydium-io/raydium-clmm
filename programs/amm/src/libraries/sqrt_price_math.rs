@@ -2,8 +2,9 @@
 use super::big_num::U128;
 use super::fixed_point_64;
 use super::full_math::MulDiv;
+use super::tick_math;
 use super::unsafe_math::UnsafeMathTrait;
-
+use anchor_lang::prelude::*;
 /// Gets the next sqrt price √P' given a delta of token_0
 ///
 /// Always round up because
@@ -307,13 +308,6 @@ pub fn get_amount_0_delta_signed(
 
 /// Helper function to get signed token_1 delta between two prices,
 /// for the given change in liquidity
-///
-/// # Arguments
-///
-/// * `sqrt_ratio_a_x64` - A sqrt price
-/// * `sqrt_ratio_b_x64` - Another sqrt price
-/// * `liquidity` - The change in liquidity for which to compute amount_1 delta
-///
 pub fn get_amount_1_delta_signed(
     sqrt_ratio_a_x64: u128,
     sqrt_ratio_b_x64: u128,
@@ -327,8 +321,42 @@ pub fn get_amount_1_delta_signed(
             false,
         ) as i64)
     } else {
-        // TODO check overflow, since i64::MAX < u64::MAX
         get_amount_1_delta_unsigned(sqrt_ratio_a_x64, sqrt_ratio_b_x64, liquidity as u128, true)
             as i64
     }
+}
+
+pub fn get_amounts_delta_signed(
+    tick_current: i32,
+    tick_lower: i32,
+    tick_upper: i32,
+    liquidity_delta: i128,
+) -> Result<(i64, i64)> {
+    let mut amount_0 = 0;
+    let mut amount_1 = 0;
+    if tick_current < tick_lower {
+        amount_0 = get_amount_0_delta_signed(
+            tick_math::get_sqrt_price_at_tick(tick_lower)?,
+            tick_math::get_sqrt_price_at_tick(tick_upper)?,
+            liquidity_delta,
+        );
+    } else if tick_current < tick_upper {
+        amount_0 = get_amount_0_delta_signed(
+            tick_math::get_sqrt_price_at_tick(tick_current)?,
+            tick_math::get_sqrt_price_at_tick(tick_upper)?,
+            liquidity_delta,
+        );
+        amount_1 = get_amount_1_delta_signed(
+            tick_math::get_sqrt_price_at_tick(tick_lower)?,
+            tick_math::get_sqrt_price_at_tick(tick_current)?,
+            liquidity_delta,
+        );
+    } else {
+        amount_1 = get_amount_1_delta_signed(
+            tick_math::get_sqrt_price_at_tick(tick_lower)?,
+            tick_math::get_sqrt_price_at_tick(tick_upper)?,
+            liquidity_delta,
+        );
+    }
+    Ok((amount_0, amount_1))
 }

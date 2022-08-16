@@ -4,14 +4,15 @@ use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 pub struct SetNewOwner<'info> {
-    /// Current pro&tocol owner
+    /// Current amm config owner
     // #[account(mut)]
     pub owner: Signer<'info>,
-    /// Address to be designated as new protocol owner
+
+    /// Address to be designated as new amm config owner
     /// CHECK: This is not dangerous because we don't read or write from this account
     pub new_owner: UncheckedAccount<'info>,
 
-    /// Factory state stores the protocol owner address
+    /// Amm config account to be changed
     #[account(mut)]
     pub amm_config: Account<'info, AmmConfig>,
 }

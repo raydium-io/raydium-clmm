@@ -136,11 +136,6 @@ export type AmmV3 = {
           "isSigner": true
         },
         {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "poolState",
           "isMut": true,
           "isSigner": false
@@ -352,11 +347,6 @@ export type AmmV3 = {
           "isSigner": false
         },
         {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "positionNftMint",
           "isMut": true,
           "isSigner": true
@@ -523,11 +513,6 @@ export type AmmV3 = {
           "isSigner": false
         },
         {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "poolState",
           "isMut": true,
           "isSigner": false
@@ -609,11 +594,6 @@ export type AmmV3 = {
         {
           "name": "personalPosition",
           "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "ammConfig",
-          "isMut": false,
           "isSigner": false
         },
         {
@@ -1298,13 +1278,28 @@ export type AmmV3 = {
       "name": "CreateConfigEvent",
       "fields": [
         {
+          "name": "index",
+          "type": "u16",
+          "index": false
+        },
+        {
           "name": "owner",
           "type": "publicKey",
-          "index": false
+          "index": true
         },
         {
           "name": "protocolFeeRate",
           "type": "u32",
+          "index": false
+        },
+        {
+          "name": "tradeFeeRate",
+          "type": "u32",
+          "index": false
+        },
+        {
+          "name": "tickSpacing",
+          "type": "u16",
           "index": false
         }
       ]
@@ -1909,11 +1904,6 @@ export const IDL: AmmV3 = {
           "isSigner": true
         },
         {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "poolState",
           "isMut": true,
           "isSigner": false
@@ -2125,11 +2115,6 @@ export const IDL: AmmV3 = {
           "isSigner": false
         },
         {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "positionNftMint",
           "isMut": true,
           "isSigner": true
@@ -2296,11 +2281,6 @@ export const IDL: AmmV3 = {
           "isSigner": false
         },
         {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "poolState",
           "isMut": true,
           "isSigner": false
@@ -2382,11 +2362,6 @@ export const IDL: AmmV3 = {
         {
           "name": "personalPosition",
           "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "ammConfig",
-          "isMut": false,
           "isSigner": false
         },
         {
@@ -3071,13 +3046,28 @@ export const IDL: AmmV3 = {
       "name": "CreateConfigEvent",
       "fields": [
         {
+          "name": "index",
+          "type": "u16",
+          "index": false
+        },
+        {
           "name": "owner",
           "type": "publicKey",
-          "index": false
+          "index": true
         },
         {
           "name": "protocolFeeRate",
           "type": "u32",
+          "index": false
+        },
+        {
+          "name": "tradeFeeRate",
+          "type": "u32",
+          "index": false
+        },
+        {
+          "name": "tickSpacing",
+          "type": "u16",
           "index": false
         }
       ]

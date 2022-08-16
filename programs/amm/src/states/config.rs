@@ -23,12 +23,11 @@ pub struct AmmConfig {
     pub index: u16,
     /// Address of the protocol owner
     pub owner: Pubkey,
-    /// The global protocol fee
+    /// The protocol fee
     pub protocol_fee_rate: u32,
-    /// The enabled fee, denominated in hundredths of a bip (10^-6)
+    /// The trade fee, denominated in hundredths of a bip (10^-6)
     pub trade_fee_rate: u32,
-    /// The minimum number of ticks between initialized ticks for pools
-    /// created with the given fee
+    /// The tick spacing
     pub tick_spacing: u16,
     // padding space for upgrade
     // pub padding: [u64; 8],
@@ -50,16 +49,18 @@ impl AmmConfig {
     }
 }
 
+/// Emitted when create a config
 #[event]
 pub struct CreateConfigEvent {
-    /// The owner before the owner was changed
+    pub index: u16,
     #[index]
     pub owner: Pubkey,
-
     pub protocol_fee_rate: u32,
+    pub trade_fee_rate: u32,
+    pub tick_spacing: u16,
 }
 
-/// Emitted when the owner of the factory is changed
+/// Emitted when the owner of the config is changed
 #[event]
 pub struct OwnerChangedEvent {
     /// The owner before the owner was changed
@@ -71,7 +72,7 @@ pub struct OwnerChangedEvent {
     pub new_owner: Pubkey,
 }
 
-/// Emitted when the protocol fee is changed for a pool
+/// Emitted when the protocol fee is changed
 #[event]
 pub struct SetProtocolFeeRateEvent {
     /// The previous value of the protocol fee

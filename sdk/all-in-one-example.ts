@@ -1,5 +1,4 @@
 import { web3, BN } from "@project-serum/anchor";
-import * as metaplex from "@metaplex/js";
 import { Token, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { AmmPool } from "./pool";
 import {
@@ -57,7 +56,8 @@ export async function main() {
   const programId = new PublicKey(
     "devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU"
   );
-  const url = "https://api.devnet.solana.com";
+  // const url = "https://api.devnet.solana.com";
+  const url = "http://127.0.0.1:8899";
   const ctx = await getContext(programId, owner, url);
   const stateFetcher = new StateFetcher(ctx.program);
 
@@ -70,7 +70,7 @@ export async function main() {
   ] = await createTokenMintAndAssociatedTokenAccount(ctx, owner, mintAuthority);
 
   // First, create config account
-  // Admin key is hardcode, if you wang create a amm config with a keypair, must change it in contract.
+  // Admin key is hardcode, if you want create a amm config with a keypair, must change it in contract.
   const admin = owner;
   const ammConfigAddress = await createAmmConfig(
     ctx,
@@ -142,7 +142,8 @@ export async function main() {
     ownerToken1Account,
     new BN(1_000_000),
     new BN(1_000_000),
-    0.005
+    0.005,
+    defaultConfirmOptions
   );
   console.log("decreaseLiquidity tx:", tx);
 
@@ -566,7 +567,7 @@ async function swapBaseIn(
     priceLimit
   );
 
-  return await sendTransaction(ctx.connection, [ix], [owner]);
+  return await sendTransaction(ctx.connection, [ix], [owner],defaultConfirmOptions);
 }
 
 async function swapBaseOut(

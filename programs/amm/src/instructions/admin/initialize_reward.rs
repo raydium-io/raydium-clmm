@@ -8,24 +8,28 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount};
 #[derive(Accounts)]
 // #[instruction(reward_index: u8)]
 pub struct InitializeReward<'info> {
-    /// the
+    /// The founder deposit reward token to vault
     #[account(mut)]
     pub reward_funder: Signer<'info>,
+
+    // The funder's reward token account
     #[account(
         mut,
         token::mint = reward_token_mint
     )]
     pub funder_token_account: Box<Account<'info, TokenAccount>>,
 
-    /// Which config the pool belongs to.
+    /// For check the reward_funder authority
     #[account(address = pool_state.amm_config)]
     pub amm_config: Box<Account<'info, AmmConfig>>,
 
     /// Set reward for this pool
     #[account(mut)]
     pub pool_state: Box<Account<'info, PoolState>>,
+
     /// Reward mint
     pub reward_token_mint: Box<Account<'info, Mint>>,
+
     /// A pda, reward vault
     #[account(
         init,
@@ -40,6 +44,7 @@ pub struct InitializeReward<'info> {
         token::authority = pool_state
     )]
     pub reward_token_vault: Box<Account<'info, TokenAccount>>,
+    
     #[account(address = token::ID)]
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
