@@ -9,8 +9,10 @@ export const defaultConfirmOptions: ConfirmOptions = {
 };
 
 export const Config = {
-  url: "https://api.devnet.solana.com",
-  programId: new PublicKey("devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU"),
+  // url: "https://api.devnet.solana.com",
+  // url: "https://api.mainnet-beta.solana.com",
+  url: "https://raydium-cranking.rpcpool.com/13bb6d7c668753052cdcc23aaaf6",
+  programId: new PublicKey("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"),
   "create-amm-config": [
     {
       index: 0,
@@ -28,14 +30,14 @@ export const Config = {
   "create-pool": [
     {
       ammConfig: "47QDZdQvRQtAutMRWCLe7FRNGegjEmcqhG874aj3k9HT",
-      tokenMint0: "6BsnRfuAfhxPY91wF7Q14iy295Ga5V3mVzhdnBY9KfnS",
-      tokenMint1: "6ajT55d5NXQKqTjmcumTaa1AiF2t3y2XYSbjCoq66zU2",
+      tokenMint0: "FQKdmijah3S8j8RzBxUjGcBQ5DXQJMfHCD2FqGyh7ioC",
+      tokenMint1: "FfySf3EP8jRXNrUmoKyb1uej89ZJufLTQLEoK2kreYFQ",
       initialPrice: new Decimal("1"),
     },
   ],
   "open-position": [
     {
-      poolId: "CrhoHr8h7553wzQMWzFu2KFS9cpbgPJhKTH86JD4gTAX",
+      poolId: "61R1ndXxvsWXXkWSyNkCxnzwd3zUNB8Q2ibmkiLPC8ht",
       priceLower: new Decimal("0.5"),
       priceUpper: new Decimal("1.5"),
       liquidity: new BN("100000000"),
@@ -60,9 +62,9 @@ export const Config = {
   ],
   "swap-base-in": [
     {
-      poolId: "CrhoHr8h7553wzQMWzFu2KFS9cpbgPJhKTH86JD4gTAX",
-      inputTokenMint: "6BsnRfuAfhxPY91wF7Q14iy295Ga5V3mVzhdnBY9KfnS",
-      amountIn: new BN("100000"),
+      poolId: "61R1ndXxvsWXXkWSyNkCxnzwd3zUNB8Q2ibmkiLPC8ht",
+      inputTokenMint: "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+      amountIn: new BN("1000000"),
       priceLimit: new Decimal(0),
       amountOutSlippage: 0.005,
     },

@@ -6,6 +6,8 @@ pub enum ErrorCode {
     LOK,
     #[msg("Not approved")]
     NotApproved,
+    #[msg("invalid update amm config flag")]
+    InvalidUpdateConfigFlag,
     #[msg("Account lack")]
     AccountLack,
     #[msg("Remove liquitity, collect fees owed and reward then you can close position account")]

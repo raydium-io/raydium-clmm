@@ -41,7 +41,7 @@
       ]
     },
     {
-      "name": "setNewOwner",
+      "name": "updateAmmConfig",
       "accounts": [
         {
           "name": "owner",
@@ -49,17 +49,29 @@
           "isSigner": true
         },
         {
-          "name": "newOwner",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "ammConfig",
           "isMut": true,
           "isSigner": false
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "newOwner",
+          "type": "publicKey"
+        },
+        {
+          "name": "tradeFeeRate",
+          "type": "u32"
+        },
+        {
+          "name": "protocolFeeRate",
+          "type": "u32"
+        },
+        {
+          "name": "flag",
+          "type": "u8"
+        }
+      ]
     },
     {
       "name": "createPool",
@@ -263,27 +275,6 @@
       ]
     },
     {
-      "name": "setProtocolFeeRate",
-      "accounts": [
-        {
-          "name": "owner",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
-          "name": "ammConfig",
-          "isMut": true,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "protocolFeeRate",
-          "type": "u32"
-        }
-      ]
-    },
-    {
       "name": "collectProtocolFee",
       "accounts": [
         {
@@ -454,11 +445,11 @@
           "type": "u128"
         },
         {
-          "name": "amount0Min",
+          "name": "amount0Max",
           "type": "u64"
         },
         {
-          "name": "amount1Min",
+          "name": "amount1Max",
           "type": "u64"
         }
       ]
@@ -569,11 +560,11 @@
           "type": "u128"
         },
         {
-          "name": "amount0Min",
+          "name": "amount0Max",
           "type": "u64"
         },
         {
-          "name": "amount1Min",
+          "name": "amount1Max",
           "type": "u64"
         }
       ]
@@ -1305,30 +1296,20 @@
       ]
     },
     {
-      "name": "OwnerChangedEvent",
+      "name": "UpdaterConfigEvent",
       "fields": [
         {
-          "name": "oldOwner",
+          "name": "owner",
           "type": "publicKey",
           "index": false
         },
         {
-          "name": "newOwner",
-          "type": "publicKey",
-          "index": false
-        }
-      ]
-    },
-    {
-      "name": "SetProtocolFeeRateEvent",
-      "fields": [
-        {
-          "name": "protocolFeeRateOld",
+          "name": "protocolFeeRate",
           "type": "u32",
           "index": false
         },
         {
-          "name": "protocolFeeRateNew",
+          "name": "tradeFeeRate",
           "type": "u32",
           "index": false
         }
@@ -1635,136 +1616,138 @@
     },
     {
       "code": 6002,
+      "name": "InvalidUpdateConfigFlag",
+      "msg": "invalid update amm config flag"
+    },
+    {
+      "code": 6003,
       "name": "AccountLack",
       "msg": "Account lack"
     },
     {
-      "code": 6003,
+      "code": 6004,
       "name": "ClosePositionErr",
       "msg": "Remove liquitity, collect fees owed and reward then you can close position account"
     },
     {
-      "code": 6004,
+      "code": 6005,
       "name": "ZeroMintAmount",
       "msg": "Minting amount should be greater than 0"
     },
     {
-      "code": 6005,
+      "code": 6006,
       "name": "InvaildTickIndex",
       "msg": "Tick index of lower must be smaller than upper"
     },
     {
-      "code": 6006,
+      "code": 6007,
       "name": "TickInvaildOrder",
       "msg": "The lower tick must be below the upper tick"
     },
     {
-      "code": 6007,
+      "code": 6008,
       "name": "TickLowerOverflow",
       "msg": "The tick must be greater, or equal to the minimum tick(-221818)"
     },
     {
-      "code": 6008,
+      "code": 6009,
       "name": "TickUpperOverflow",
       "msg": "The tick must be lesser than, or equal to the maximum tick(221818)"
     },
     {
-      "code": 6009,
+      "code": 6010,
       "name": "TickAndSpacingNotMatch",
       "msg": "tick % tick_spacing must be zero"
     },
     {
-      "code": 6010,
+      "code": 6011,
       "name": "InvalidTickArray",
       "msg": "Invaild tick array account"
     },
     {
-      "code": 6011,
+      "code": 6012,
       "name": "SqrtPriceLimitOverflow",
       "msg": "Square root price limit overflow"
     },
     {
-      "code": 6012,
+      "code": 6013,
       "name": "SqrtPriceX64",
       "msg": "sqrt_price_x64 out of range"
     },
     {
-      "code": 6013,
+      "code": 6014,
       "name": "LiquiditySubValueErr",
       "msg": "Liquidity sub delta L must be smaller than before"
     },
     {
-      "code": 6014,
+      "code": 6015,
       "name": "LiquidityAddValueErr",
       "msg": "Liquidity add delta L must be greater, or equal to before"
     },
     {
-      "code": 6015,
+      "code": 6016,
       "name": "InvaildLiquidity",
       "msg": "Invaild liquidity when update position"
     },
     {
-      "code": 6016,
+      "code": 6017,
       "name": "TransactionTooOld",
       "msg": "Transaction too old"
     },
     {
-      "code": 6017,
+      "code": 6018,
       "name": "PriceSlippageCheck",
       "msg": "Price slippage check"
     },
     {
-      "code": 6018,
+      "code": 6019,
       "name": "TooLittleOutputReceived",
       "msg": "Too little output received"
     },
     {
-      "code": 6019,
+      "code": 6020,
       "name": "TooMuchInputPaid",
       "msg": "Too much input paid"
     },
     {
-      "code": 6020,
+      "code": 6021,
       "name": "InvaildSwapAmountSpecified",
       "msg": "Swap special amount can not be zero"
     },
     {
-      "code": 6021,
+      "code": 6022,
       "name": "InvalidInputPoolVault",
       "msg": "Input pool vault is invalid"
     },
     {
-      "code": 6022,
+      "code": 6023,
       "name": "TooSmallInputOrOutputAmount",
       "msg": "Swap input or output amount is too small"
     },
     {
-      "code": 6023,
+      "code": 6024,
       "name": "InvalidRewardIndex",
       "msg": "Invalid reward index"
     },
     {
-      "code": 6024,
+      "code": 6025,
       "name": "InvalidRewardInitParam",
       "msg": "Invalid reward init param"
     },
     {
-      "code": 6025,
+      "code": 6026,
       "name": "InvalidRewardDesiredAmount",
       "msg": "Invalid collect reward desired amount"
     },
     {
-      "code": 6026,
+      "code": 6027,
       "name": "InvalidRewardInputAccountNumber",
       "msg": "Invalid collect reward input account number"
     },
     {
-      "code": 6027,
+      "code": 6028,
       "name": "UnInitializedRewardInfo",
       "msg": "uninitialized reward info"
     }
-  ],
-  "metadata": {
-    "address": "devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU"
-  }
+  ]
 }

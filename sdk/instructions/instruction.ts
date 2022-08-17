@@ -51,7 +51,10 @@ import {
   swapInstruction,
   swapRouterBaseInInstruction,
 } from "./user";
-import { createAmmConfigInstruction } from "./admin";
+import {
+  createAmmConfigInstruction,
+  updateAmmConfigInstruction,
+} from "./admin";
 
 import { AmmPool } from "../pool";
 import { Context } from "../base";
@@ -158,6 +161,71 @@ export class AmmInstruction {
         }
       ),
     ];
+  }
+
+  public static async setAmmConfigNewOwner(
+    ctx: Context,
+    ammConfig: PublicKey,
+    owner: PublicKey,
+    newOwner: PublicKey,
+    tradeFeeRate: number,
+    protocolFeeRate: number
+  ): Promise<TransactionInstruction> {
+    return await updateAmmConfigInstruction(
+      ctx.program,
+      {
+        newOwner,
+        tradeFeeRate: 0,
+        protocolFeeRate: 0,
+        flag: 0,
+      },
+      {
+        owner,
+        ammConfig,
+      }
+    );
+  }
+
+  public static async setAmmConfigTradeFeeRate(
+    ctx: Context,
+    ammConfig: PublicKey,
+    owner: PublicKey,
+    tradeFeeRate: number
+  ): Promise<TransactionInstruction> {
+    return await updateAmmConfigInstruction(
+      ctx.program,
+      {
+        newOwner: PublicKey.default,
+        tradeFeeRate: tradeFeeRate,
+        protocolFeeRate: 0,
+        flag: 1,
+      },
+      {
+        owner,
+        ammConfig,
+      }
+    );
+  }
+
+  public static async setAmmConfigProtocolFeeRate(
+    ctx: Context,
+    ammConfig: PublicKey,
+    owner: PublicKey,
+    protocolFeeRate: number
+  ): Promise<TransactionInstruction> {
+    return await updateAmmConfigInstruction(
+      ctx.program,
+      {
+        newOwner: PublicKey.default,
+        tradeFeeRate: 0,
+        protocolFeeRate: protocolFeeRate,
+        flag: 2,
+      },
+      {
+        owner,
+        ammConfig,
+      }
+    );
   }
 
   /**
@@ -287,7 +355,6 @@ export class AmmInstruction {
       SqrtPriceMath.getSqrtPriceX64FromTick(tickUpperIndex),
       liquidity
     );
-    console.log("token0Amount:", token0Amount.toString(), "token1Amount:", token1Amount.toString());
     let amount0Max = token0Amount;
     let amount1Max = token1Amount;
     if (amountSlippage !== undefined) {

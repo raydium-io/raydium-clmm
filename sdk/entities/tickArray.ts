@@ -41,10 +41,6 @@ export function getTickArrayOffsetInBitmapByTick(
 ): number {
   let multiplier = tickSpacing * TICK_ARRAY_SIZE;
   let compressed = Math.floor(tick / multiplier) + 512;
-  if (tick < 0 && tick % multiplier != 0) {
-    // round towards negative infinity
-    compressed -= 1;
-  }
   return Math.abs(compressed);
 }
 

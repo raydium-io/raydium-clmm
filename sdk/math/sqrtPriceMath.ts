@@ -150,7 +150,7 @@ export abstract class SqrtPriceMath {
       );
     } else {
       let product = amount.mul(sqrtPriceX64);
-      if (liquidityLeftShift.gt(product)) {
+      if (!liquidityLeftShift.gt(product)) {
         throw new Error("too small");
       }
       const denominator = liquidityLeftShift.sub(product);
