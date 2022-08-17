@@ -48,8 +48,7 @@ pub struct ClientConfig {
     mint0: Option<Pubkey>,
     mint1: Option<Pubkey>,
     pool_id_account: Option<Pubkey>,
-    fee: u32,
-    tick_spacing: u16,
+    amm_config_index: u16,
 }
 
 fn load_cfg(client_config: &String) -> Result<ClientConfig> {
@@ -77,10 +76,6 @@ fn load_cfg(client_config: &String) -> Result<ClientConfig> {
         panic!("raydium_v3_program must not be empty");
     }
     let raydium_v3_program = Pubkey::from_str(&raydium_v3_program_str).unwrap();
-    let (amm_config_key, __bump) = Pubkey::find_program_address(
-        &[raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes()],
-        &raydium_v3_program,
-    );
 
     let mut mint0 = None;
     let mint0_str = config.get("Pool", "mint0").unwrap();
@@ -92,8 +87,15 @@ fn load_cfg(client_config: &String) -> Result<ClientConfig> {
     if !mint1_str.is_empty() {
         mint1 = Some(Pubkey::from_str(&mint1_str).unwrap());
     }
-    let fee = config.getuint("Pool", "fee").unwrap().unwrap() as u32;
-    let tick_spacing = config.getuint("Pool", "tick_spacing").unwrap().unwrap() as u16;
+    let amm_config_index = config.getuint("Pool", "amm_config_index").unwrap().unwrap() as u16;
+
+    let (amm_config_key, __bump) = Pubkey::find_program_address(
+        &[
+            raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(),
+            &amm_config_index.to_be_bytes(),
+        ],
+        &raydium_v3_program,
+    );
 
     let pool_id_account = if mint0 != None && mint1 != None {
         Some(
@@ -122,8 +124,7 @@ fn load_cfg(client_config: &String) -> Result<ClientConfig> {
         mint0,
         mint1,
         pool_id_account,
-        fee,
-        tick_spacing,
+        amm_config_index,
     })
 }
 fn read_keypair_file(s: &str) -> Result<Keypair> {
@@ -384,7 +385,7 @@ fn main() -> Result<()> {
                         trade_fee_rate,
                     )?;
                     // send
-                    let signers = vec![&payer];
+                    let signers = vec![&payer, &admin];
                     let recent_hash = rpc_client.get_latest_blockhash()?;
                     let txn = Transaction::new_signed_with_payer(
                         &create_instr,
@@ -481,6 +482,39 @@ fn main() -> Result<()> {
                     );
                 }
             }
+            "cmp_key" => {
+                if v.len() == 3 {
+                    let token_mint_0 = Pubkey::from_str(&v[1]).unwrap();
+                    let token_mint_1 = Pubkey::from_str(&v[2]).unwrap();
+                    if token_mint_0 < token_mint_1 {
+                        println!("mint_0: {}", token_mint_0);
+                        println!("mint_1: {}", token_mint_1);
+                    } else {
+                        println!("mint_0: {}", token_mint_1);
+                        println!("mint_1: {}", token_mint_0);
+                    }
+                } else {
+                    println!("cmp_key mint mint");
+                }
+            }
+            "price_to_tick" => {
+                if v.len() == 2 {
+                    let price = v[1].parse::<f64>().unwrap();
+                    let tick = price_to_tick(price);
+                    println!("price:{}, tick:{}", price, tick);
+                } else {
+                    println!("price_to_tick price");
+                }
+            }
+            "tick_to_price" => {
+                if v.len() == 2 {
+                    let tick = v[1].parse::<i32>().unwrap();
+                    let price = tick_to_price(tick);
+                    println!("price:{}, tick:{}", price, tick);
+                } else {
+                    println!("tick_to_price tick");
+                }
+            }
             "create_pool" | "cpool" => {
                 if v.len() == 3 {
                     let config_index = v[1].parse::<u16>().unwrap();
@@ -508,6 +542,7 @@ fn main() -> Result<()> {
                     let create_pool_instr = create_pool_instr(
                         &pool_config.clone(),
                         amm_config_key,
+                        observation_account.pubkey(),
                         pool_config.mint0.unwrap(),
                         pool_config.mint1.unwrap(),
                         sqrt_price_x64,
@@ -540,25 +575,25 @@ fn main() -> Result<()> {
                 if v.len() == 7 {
                     let tick_lower_index = v[1].parse::<i32>().unwrap();
                     let tick_upper_index = v[2].parse::<i32>().unwrap();
-                    let amount_0_desired = v[3].parse::<u64>().unwrap();
-                    let amount_1_desired = v[4].parse::<u64>().unwrap();
-                    let amount_0_min = v[5].parse::<u64>().unwrap();
-                    let amount_1_min = v[6].parse::<u64>().unwrap();
+                    let liquidity = v[3].parse::<u128>().unwrap();
+                    let amount_0_max = v[4].parse::<u64>().unwrap();
+                    let amount_1_max = v[5].parse::<u64>().unwrap();
 
-                    let tick_array_lower_start_index =
-                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
-                            tick_lower_index,
-                            pool_config.tick_spacing.into(),
-                        );
-                    let tick_array_upper_start_index =
-                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
-                            tick_upper_index,
-                            pool_config.tick_spacing.into(),
-                        );
                     // load pool to get observation
                     let program = anchor_client.program(pool_config.raydium_v3_program);
                     let pool: raydium_amm_v3::states::PoolState =
                         program.account(pool_config.pool_id_account.unwrap())?;
+
+                    let tick_array_lower_start_index =
+                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                            tick_lower_index,
+                            pool.tick_spacing.into(),
+                        );
+                    let tick_array_upper_start_index =
+                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                            tick_upper_index,
+                            pool.tick_spacing.into(),
+                        );
                     // load position
                     let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(
                         &rpc_client,
@@ -600,7 +635,6 @@ fn main() -> Result<()> {
                         let nft_mint = Keypair::generate(&mut OsRng);
                         let open_position_instr = open_position_instr(
                             &pool_config.clone(),
-                            pool.amm_config,
                             pool_config.pool_id_account.unwrap(),
                             pool.token_vault_0,
                             pool.token_vault_1,
@@ -614,10 +648,9 @@ fn main() -> Result<()> {
                                 &payer.pubkey(),
                                 &pool_config.mint1.unwrap(),
                             ),
-                            amount_0_desired,
-                            amount_1_desired,
-                            amount_0_min,
-                            amount_1_min,
+                            liquidity,
+                            amount_0_max,
+                            amount_1_max,
                             tick_lower_index,
                             tick_upper_index,
                             tick_array_lower_start_index,
@@ -639,32 +672,32 @@ fn main() -> Result<()> {
                         println!("personal position exist:{:?}", find_position);
                     }
                 } else {
-                    println!("invalid command: [open_position tick_lower_index tick_upper_index amount_0_desired amount_1_desired amount_0_min amount_1_min]");
+                    println!("invalid command: [open_position tick_lower_index tick_upper_index liquidity amount_0_max amount_1_max]");
                 }
             }
             "increase_liquidity" => {
                 if v.len() == 7 {
                     let tick_lower_index = v[1].parse::<i32>().unwrap();
                     let tick_upper_index = v[2].parse::<i32>().unwrap();
-                    let amount_0_desired = v[3].parse::<u64>().unwrap();
-                    let amount_1_desired = v[4].parse::<u64>().unwrap();
-                    let amount_0_min = v[5].parse::<u64>().unwrap();
-                    let amount_1_min = v[6].parse::<u64>().unwrap();
+                    let liquidity = v[3].parse::<u128>().unwrap();
+                    let amount_0_max = v[4].parse::<u64>().unwrap();
+                    let amount_1_max = v[5].parse::<u64>().unwrap();
 
-                    let tick_array_lower_start_index =
-                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
-                            tick_lower_index,
-                            pool_config.tick_spacing.into(),
-                        );
-                    let tick_array_upper_start_index =
-                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
-                            tick_upper_index,
-                            pool_config.tick_spacing.into(),
-                        );
                     // load pool to get observation
                     let program = anchor_client.program(pool_config.raydium_v3_program);
                     let pool: raydium_amm_v3::states::PoolState =
                         program.account(pool_config.pool_id_account.unwrap())?;
+
+                    let tick_array_lower_start_index =
+                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                            tick_lower_index,
+                            pool.tick_spacing.into(),
+                        );
+                    let tick_array_upper_start_index =
+                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                            tick_upper_index,
+                            pool.tick_spacing.into(),
+                        );
                     // load position
                     let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(
                         &rpc_client,
@@ -706,7 +739,6 @@ fn main() -> Result<()> {
                         // personal position exist
                         let increase_instr = increase_liquidity_instr(
                             &pool_config.clone(),
-                            pool.amm_config,
                             pool_config.pool_id_account.unwrap(),
                             pool.token_vault_0,
                             pool.token_vault_1,
@@ -719,10 +751,9 @@ fn main() -> Result<()> {
                                 &payer.pubkey(),
                                 &pool_config.mint1.unwrap(),
                             ),
-                            amount_0_desired,
-                            amount_1_desired,
-                            amount_0_min,
-                            amount_1_min,
+                            liquidity,
+                            amount_0_max,
+                            amount_1_max,
                             tick_lower_index,
                             tick_upper_index,
                             tick_array_lower_start_index,
@@ -744,7 +775,7 @@ fn main() -> Result<()> {
                         println!("personal position exist:{:?}", find_position);
                     }
                 } else {
-                    println!("invalid command: [increase_liquidity tick_lower_index tick_upper_index amount_0_desired amount_1_desired amount_0_min amount_1_min]");
+                    println!("invalid command: [increase_liquidity tick_lower_index tick_upper_index liquidity amount_0_max amount_1_max]");
                 }
             }
             "decrease_liquidity" => {
@@ -755,20 +786,21 @@ fn main() -> Result<()> {
                     let amount_0_min = v[4].parse::<u64>().unwrap();
                     let amount_1_min = v[5].parse::<u64>().unwrap();
 
-                    let tick_array_lower_start_index =
-                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
-                            tick_lower_index,
-                            pool_config.tick_spacing.into(),
-                        );
-                    let tick_array_upper_start_index =
-                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
-                            tick_upper_index,
-                            pool_config.tick_spacing.into(),
-                        );
                     // load pool to get observation
                     let program = anchor_client.program(pool_config.raydium_v3_program);
                     let pool: raydium_amm_v3::states::PoolState =
                         program.account(pool_config.pool_id_account.unwrap())?;
+
+                    let tick_array_lower_start_index =
+                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                            tick_lower_index,
+                            pool.tick_spacing.into(),
+                        );
+                    let tick_array_upper_start_index =
+                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                            tick_upper_index,
+                            pool.tick_spacing.into(),
+                        );
                     // load position
                     let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(
                         &rpc_client,
@@ -810,7 +842,6 @@ fn main() -> Result<()> {
                         // personal position exist
                         let decrease_instr = decrease_liquidity_instr(
                             &pool_config.clone(),
-                            pool.amm_config,
                             pool_config.pool_id_account.unwrap(),
                             pool.token_vault_0,
                             pool.token_vault_1,
@@ -853,10 +884,15 @@ fn main() -> Result<()> {
             "ptick_state" => {
                 if v.len() == 2 {
                     let tick = v[1].parse::<i32>().unwrap();
+                    // load pool to get tick_spacing
+                    let program = anchor_client.program(pool_config.raydium_v3_program);
+                    let pool: raydium_amm_v3::states::PoolState =
+                        program.account(pool_config.pool_id_account.unwrap())?;
+
                     let tick_array_start_index =
                         raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
                             tick,
-                            pool_config.tick_spacing.into(),
+                            pool.tick_spacing.into(),
                         );
                     let program = anchor_client.program(pool_config.raydium_v3_program);
                     let (tick_array_key, __bump) = Pubkey::find_program_address(
@@ -870,7 +906,7 @@ fn main() -> Result<()> {
                     let mut tick_array_account: raydium_amm_v3::states::TickArrayState =
                         program.account(tick_array_key)?;
                     let tick_state = tick_array_account
-                        .get_tick_state_mut(tick, pool_config.tick_spacing.into())
+                        .get_tick_state_mut(tick, pool.tick_spacing.into())
                         .unwrap();
                     println!("{:?}", tick_state);
                 }

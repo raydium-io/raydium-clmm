@@ -4,6 +4,7 @@
 .vscode
 target
 KeyPairs
+*.json
 client/target
 **/*.rs.bk
 node_modules
