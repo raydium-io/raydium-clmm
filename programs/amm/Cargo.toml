@@ -18,6 +18,7 @@ default = []
 no-log-ix-name = []
 init_if_needed = []
 enable-log = []
+devnet = []
 
 [dependencies]
 anchor-lang = {version = "0.24.2", features = ["init-if-needed"] }
