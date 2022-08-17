@@ -114,7 +114,8 @@ export async function main() {
     new Decimal("0.99800209846088566961"),
     new Decimal("1.0020019011404840582"),
     new BN(1_000_000),
-    new BN(1_000_000)
+    new BN(1_000_000),
+    0.005
   );
   console.log("createPersonalPosition tx:", positionTx);
 
@@ -466,7 +467,8 @@ async function createPersonalPosition(
     ammPool,
     tickLower,
     tickUpper,
-    liquidity
+    liquidity,
+    amountSlippage
   );
 
   const tx = await sendTransaction(

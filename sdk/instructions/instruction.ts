@@ -287,14 +287,12 @@ export class AmmInstruction {
       SqrtPriceMath.getSqrtPriceX64FromTick(tickUpperIndex),
       liquidity
     );
-    console.log(" poolState.sqrtPriceX64:", poolState.sqrtPriceX64.toString())
-    console.log(" token0Amount:", token0Amount.toString())
-    console.log(" token1Amount:", token1Amount.toString())
-    let amount0Min: BN = new BN(0);
-    let amount1Min: BN = new BN(0);
+    console.log("token0Amount:", token0Amount.toString(), "token1Amount:", token1Amount.toString());
+    let amount0Max = token0Amount;
+    let amount1Max = token1Amount;
     if (amountSlippage !== undefined) {
-      amount0Min = token0Amount.muln(1 - amountSlippage);
-      amount1Min = token1Amount.muln(1 - amountSlippage);
+      amount0Max = token0Amount.muln(1 + amountSlippage);
+      amount1Max = token1Amount.muln(1 + amountSlippage);
     }
     // prepare tickArray
     const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
@@ -348,8 +346,8 @@ export class AmmInstruction {
           tickArrayLowerStartIndex: tickArrayLowerStartIndex,
           tickArrayUpperStartIndex: tickArrayUpperStartIndex,
           liquidity: liquidity,
-          amount0Min,
-          amount1Min,
+          amount0Max: amount0Max,
+          amount1Max: amount1Max,
         },
         {
           payer: accounts.payer,
@@ -413,11 +411,11 @@ export class AmmInstruction {
       SqrtPriceMath.getSqrtPriceX64FromTick(tickUpperIndex),
       liquidity
     );
-    let amount0Min: BN = new BN(0);
-    let amount1Min: BN = new BN(0);
+    let amount0Max = token0Amount;
+    let amount1Max = token1Amount;
     if (amountSlippage != undefined) {
-      amount0Min = token0Amount.muln(1 - amountSlippage);
-      amount1Min = token1Amount.muln(1 - amountSlippage);
+      amount0Max = token0Amount.muln(1 + amountSlippage);
+      amount1Max = token1Amount.muln(1 + amountSlippage);
     }
     // prepare tickArray
     const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
@@ -462,8 +460,8 @@ export class AmmInstruction {
       ctx.program,
       {
         liquidity,
-        amount0Min,
-        amount1Min,
+        amount0Max,
+        amount1Max,
       },
       {
         nftOwner: accounts.positionNftOwner,

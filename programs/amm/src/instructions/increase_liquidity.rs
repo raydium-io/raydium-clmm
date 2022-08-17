@@ -77,8 +77,8 @@ pub struct IncreaseLiquidity<'info> {
 pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, IncreaseLiquidity<'info>>,
     liquidity: u128,
-    amount_0_min: u64,
-    amount_1_min: u64,
+    amount_0_max: u64,
+    amount_1_max: u64,
 ) -> Result<()> {
     let tick_lower = ctx.accounts.personal_position.tick_lower_index;
     let tick_upper = ctx.accounts.personal_position.tick_upper_index;
@@ -97,8 +97,8 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     let (liquidity, amount_0, amount_1) = add_liquidity(
         &mut accounts,
         liquidity,
-        amount_0_min,
-        amount_1_min,
+        amount_0_max,
+        amount_1_max,
         tick_lower,
         tick_upper,
     )?;

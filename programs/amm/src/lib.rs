@@ -168,8 +168,8 @@ pub mod amm_v3 {
     /// * `tick_array_lower_start_index` - The start index of tick array which include tick low
     /// * `tick_array_upper_start_index` - The start index of tick array which include tick upper
     /// * `liquidity` - The liquidity to be added
-    /// * `amount_0_min` - The minimum amount of token_0 to spend, which serves as a slippage check
-    /// * `amount_1_min` - The minimum amount of token_1 to spend, which serves as a slippage check
+    /// * `amount_0_max` - The max amount of token_0 to spend, which serves as a slippage check
+    /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
     ///
     pub fn open_position<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, OpenPosition<'info>>,
@@ -178,14 +178,14 @@ pub mod amm_v3 {
         tick_array_lower_start_index: i32,
         tick_array_upper_start_index: i32,
         liquidity: u128,
-        amount_0_min: u64,
-        amount_1_min: u64,
+        amount_0_max: u64,
+        amount_1_max: u64,
     ) -> Result<()> {
         instructions::open_position(
             ctx,
             liquidity,
-            amount_0_min,
-            amount_1_min,
+            amount_0_max,
+            amount_1_max,
             tick_lower_index,
             tick_upper_index,
             tick_array_lower_start_index,
@@ -211,17 +211,17 @@ pub mod amm_v3 {
     ///
     /// * `ctx` - The context of accounts
     /// * `liquidity` - The desired liquidity to be added
-    /// * `amount_0_min` - The minimum amount of token_0 to spend, which serves as a slippage check
-    /// * `amount_1_min` - The minimum amount of token_1 to spend, which serves as a slippage check
+    /// * `amount_0_max` - The max amount of token_0 to spend, which serves as a slippage check
+    /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
     ///
     #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
     pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, IncreaseLiquidity<'info>>,
         liquidity: u128,
-        amount_0_min: u64,
-        amount_1_min: u64,
+        amount_0_max: u64,
+        amount_1_max: u64,
     ) -> Result<()> {
-        instructions::increase_liquidity(ctx, liquidity, amount_0_min, amount_1_min)
+        instructions::increase_liquidity(ctx, liquidity, amount_0_max, amount_1_max)
     }
 
     /// Decreases liquidity with a exist position

@@ -193,7 +193,7 @@ export abstract class LiquidityMath {
           sqrtPriceAX64,
           sqrtPriceBX64,
           liquidity,
-          false
+          true
         ),
         new BN(0),
       ];
@@ -202,13 +202,13 @@ export abstract class LiquidityMath {
         sqrtPriceCurrentX64,
         sqrtPriceBX64,
         liquidity,
-        false
+        true
       );
       const amount1 = LiquidityMath.getToken1AmountFromLiquidity(
         sqrtPriceAX64,
         sqrtPriceCurrentX64,
         liquidity,
-        false
+        true
       );
       return [amount0, amount1];
     } else {
@@ -218,7 +218,7 @@ export abstract class LiquidityMath {
           sqrtPriceAX64,
           sqrtPriceBX64,
           liquidity,
-          false
+          true
         ),
       ];
     }

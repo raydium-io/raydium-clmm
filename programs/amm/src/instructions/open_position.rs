@@ -180,8 +180,8 @@ pub struct OpenPosition<'info> {
 pub fn open_position<'a, 'b, 'c, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, OpenPosition<'info>>,
     liquidity: u128,
-    amount_0_min: u64,
-    amount_1_min: u64,
+    amount_0_max: u64,
+    amount_1_max: u64,
     tick_lower_index: i32,
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
@@ -248,8 +248,8 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     let (liquidity, amount_0, amount_1) = add_liquidity(
         &mut add_liquidity_accounts,
         liquidity,
-        amount_0_min,
-        amount_1_min,
+        amount_0_max,
+        amount_1_max,
         tick_lower_index,
         tick_upper_index,
     )?;
@@ -308,8 +308,8 @@ pub fn open_position<'a, 'b, 'c, 'info>(
 pub fn add_liquidity<'b, 'info>(
     accounts: &mut AddLiquidityParam<'b, 'info>,
     liquidity: u128,
-    amount_0_min: u64,
-    amount_1_min: u64,
+    amount_0_max: u64,
+    amount_1_max: u64,
     tick_lower_index: i32,
     tick_upper_index: i32,
 ) -> Result<(u128, u64, u64)> {
@@ -372,14 +372,14 @@ pub fn add_liquidity<'b, 'info>(
     require_eq!(amount_1, accounts.token_vault_1.amount - balance_1_before);
     #[cfg(feature = "enable-log")]
     msg!(
-        "amount_0:{},amount_1:{},amount_0_min:{},amount_1_min:{}",
+        "amount_0:{},amount_1:{},amount_0_max:{},amount_1_max:{}",
         amount_0,
         amount_1,
-        amount_0_min,
-        amount_1_min
+        amount_0_max,
+        amount_1_max
     );
     require!(
-        amount_0 >= amount_0_min && amount_1 >= amount_1_min,
+        amount_0 <= amount_0_max && amount_1 <= amount_1_max,
         ErrorCode::PriceSlippageCheck
     );
 

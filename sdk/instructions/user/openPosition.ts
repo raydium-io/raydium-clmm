@@ -10,8 +10,8 @@ export function openPositionInstruction(
     tickArrayLowerStartIndex: number;
     tickArrayUpperStartIndex: number;
     liquidity: BN;
-    amount0Min: BN;
-    amount1Min: BN;
+    amount0Max: BN;
+    amount1Max: BN;
   },
   accounts: {
     payer: PublicKey;
@@ -42,8 +42,8 @@ export function openPositionInstruction(
     tickArrayLowerStartIndex,
     tickArrayUpperStartIndex,
     liquidity,
-    amount0Min,
-    amount1Min,
+    amount0Max,
+    amount1Max,
   } = args;
 
   return program.methods
@@ -53,8 +53,8 @@ export function openPositionInstruction(
       tickArrayLowerStartIndex,
       tickArrayUpperStartIndex,
       liquidity,
-      amount0Min,
-      amount1Min
+      amount0Max,
+      amount1Max
     )
     .accounts(accounts)
     .remainingAccounts([])
