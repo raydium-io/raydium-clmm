@@ -149,11 +149,11 @@ export abstract class SqrtPriceMath {
         numerator1.div(sqrtPriceX64).add(amount)
       );
     } else {
-      let product = amount.mul(sqrtPriceX64);
-      if (!liquidityLeftShift.gt(product)) {
-        throw new Error("too small");
+      let amountMulSqrtPrice = amount.mul(sqrtPriceX64);
+      if (!liquidityLeftShift.gt(amountMulSqrtPrice)) {
+        throw new Error("getNextSqrtPriceFromToken0AmountRoundingUp,liquidityLeftShift must gt amountMulSqrtPrice");
       }
-      const denominator = liquidityLeftShift.sub(product);
+      const denominator = liquidityLeftShift.sub(amountMulSqrtPrice);
       return Math.mulDivCeil(liquidityLeftShift, sqrtPriceX64, denominator);
     }
   }
@@ -176,11 +176,11 @@ export abstract class SqrtPriceMath {
     if (add) {
       return sqrtPriceX64.add(deltaY.div(liquidity));
     } else {
-      const quotient = Math.mulDivRoundingUp(deltaY, ONE, liquidity);
-      if (!sqrtPriceX64.gt(quotient)) {
-        throw new Error("too small");
+      const amountDivLiquidity = Math.mulDivRoundingUp(deltaY, ONE, liquidity);
+      if (!sqrtPriceX64.gt(amountDivLiquidity)) {
+        throw new Error("getNextSqrtPriceFromToken1AmountRoundingDown sqrtPriceX64 must gt amountDivLiquidity");
       }
-      return sqrtPriceX64.sub(quotient);
+      return sqrtPriceX64.sub(amountDivLiquidity);
     }
   }
 

@@ -48,17 +48,16 @@ fn update_protocol_fee_rate(amm_config: &mut Account<AmmConfig>, protocol_fee_ra
 }
 
 fn update_trade_fee_rate(amm_config: &mut Account<AmmConfig>, trade_fee_rate: u32) {
-    assert!(trade_fee_rate < FEE_RATE_DENOMINATOR_VALUE); 
+    assert!(trade_fee_rate < FEE_RATE_DENOMINATOR_VALUE);
     amm_config.trade_fee_rate = trade_fee_rate;
 }
 
 fn set_new_owner(amm_config: &mut Account<AmmConfig>, new_owner: Pubkey) {
     #[cfg(feature = "enable-log")]
     msg!(
-        "amm_config.owner:{}, signer:{}, new_owner:{}",
+        "amm_config, old_owner:{}, new_owner:{}",
         amm_config.owner.to_string(),
-        ctx.accounts.owner.key().to_string(),
-        ctx.accounts.new_owner.key().to_string()
+        new_owner.key().to_string()
     );
     amm_config.owner = new_owner;
 }

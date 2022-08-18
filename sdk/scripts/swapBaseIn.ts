@@ -59,7 +59,7 @@ async function main() {
     
     let inputTokenAccount = token0Account
     let outputTokenAccount = token1Account
-    if (new PublicKey(param.inputTokenMint).equals(poolStateData.tokenMint0)){
+    if (new PublicKey(param.inputTokenMint).equals(poolStateData.tokenMint1)){
       inputTokenAccount = token1Account
       outputTokenAccount = token0Account
     }

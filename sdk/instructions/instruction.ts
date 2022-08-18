@@ -107,16 +107,14 @@ export type SwapAccounts = {
 export type RouterPoolParam = {
   ammPool: AmmPool;
   inputTokenMint: PublicKey;
-  inputTokenAccount: PublicKey;
-  outputTokenAccount: PublicKey;
 };
 
 type PrepareOnePoolResult = {
   amountOut: BN;
+  inputTokenAccount: PublicKey;
   outputTokenMint: PublicKey;
   outputTokenAccount: PublicKey;
   remains: AccountMeta[];
-  // additionLength: number;
 };
 
 export class AmmInstruction {
@@ -812,10 +810,7 @@ export class AmmInstruction {
   public static async swapRouterBaseIn(
     payer: PublicKey,
     firstPoolParam: RouterPoolParam,
-    remainRouterPools: {
-      ammPool: AmmPool;
-      outputTokenAccount: PublicKey;
-    }[],
+    remainRouterPools: AmmPool[],
     amountIn: BN,
     amountOutSlippage?: number
   ): Promise<TransactionInstruction> {
@@ -824,16 +819,23 @@ export class AmmInstruction {
     }
     let remainingAccounts: AccountMeta[] = [];
 
-    let result = await AmmInstruction.prepareOnePool(amountIn, firstPoolParam);
+    let result = await AmmInstruction.prepareOnePool(
+      payer,
+      amountIn,
+      firstPoolParam
+    );
     remainingAccounts.push(...result.remains);
+    const startInputTokenAccount = result.inputTokenAccount;
     for (let i = 0; i < remainRouterPools.length; i++) {
       const param: RouterPoolParam = {
-        ammPool: remainRouterPools[i].ammPool,
+        ammPool: remainRouterPools[i],
         inputTokenMint: result.outputTokenMint,
-        inputTokenAccount: result.outputTokenAccount,
-        outputTokenAccount: remainRouterPools[i].outputTokenAccount,
       };
-      result = await AmmInstruction.prepareOnePool(result.amountOut, param);
+      result = await AmmInstruction.prepareOnePool(
+        payer,
+        result.amountOut,
+        param
+      );
       remainingAccounts.push(...result.remains);
     }
     let amountOutMin = new BN(0);
@@ -848,7 +850,7 @@ export class AmmInstruction {
       },
       {
         payer,
-        inputTokenAccount: firstPoolParam.inputTokenAccount,
+        inputTokenAccount: startInputTokenAccount,
         tokenProgram: TOKEN_PROGRAM_ID,
         remainings: remainingAccounts,
       }
@@ -910,9 +912,15 @@ export class AmmInstruction {
   }
 
   static async prepareOnePool(
+    owner: PublicKey,
     inputAmount: BN,
     param: RouterPoolParam
   ): Promise<PrepareOnePoolResult> {
+    if (!param.ammPool.isContain(param.inputTokenMint)) {
+      throw new Error(
+        `pool ${param.ammPool.address.toString()} is not contain token mint ${param.inputTokenMint.toString()}`
+      );
+    }
     // get vault
     const zeroForOne = param.inputTokenMint.equals(
       param.ammPool.poolState.tokenMint0
@@ -933,10 +941,24 @@ export class AmmInstruction {
     if (remainingAccounts.length == 0) {
       throw new Error("must has one tickArray");
     }
+    const inputTokenAccount = await Token.getAssociatedTokenAddress(
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
+      param.inputTokenMint,
+      owner
+    );
+
+    const outputTokenAccount = await Token.getAssociatedTokenAddress(
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
+      outputTokenMint,
+      owner
+    );
     return {
       amountOut: expectedAmountOut,
+      inputTokenAccount,
       outputTokenMint,
-      outputTokenAccount: param.outputTokenAccount,
+      outputTokenAccount,
       remains: [
         {
           pubkey: param.ammPool.poolState.ammConfig,
@@ -949,7 +971,7 @@ export class AmmInstruction {
           isWritable: true,
         },
         {
-          pubkey: param.outputTokenAccount,
+          pubkey: outputTokenAccount,
           isSigner: false,
           isWritable: true,
         },
