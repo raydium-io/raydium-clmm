@@ -1,11 +1,8 @@
 pub mod create_amm_config;
 pub use create_amm_config::*;
 
-pub mod set_new_owner;
-pub use set_new_owner::*;
-
-pub mod set_protocol_fee_rate;
-pub use set_protocol_fee_rate::*;
+pub mod update_amm_config;
+pub use update_amm_config::*;
 
 pub mod collect_protocol_fee;
 pub use collect_protocol_fee::*;

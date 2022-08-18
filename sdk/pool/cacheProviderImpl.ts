@@ -72,7 +72,6 @@ export class CacheDataProviderImpl implements CacheDataProvider {
       );
       tickArraysToFetch.push(tickArrayAddress);
     }
-
     const fetchedTickArrays =
       (await this.program.account.tickArrayState.fetchMultiple(
         tickArraysToFetch

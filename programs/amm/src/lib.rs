@@ -9,7 +9,6 @@ use crate::access_control::*;
 use anchor_lang::prelude::*;
 use instructions::*;
 use states::*;
-
 #[cfg(feature = "devnet")]
 declare_id!("devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU");
 #[cfg(not(feature = "devnet"))]
@@ -45,8 +44,7 @@ pub mod amm_v3 {
         protocol_fee_rate: u32,
     ) -> Result<()> {
         assert!(protocol_fee_rate > 0 && protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
-        assert!(trade_fee_rate < 1_000_000); // 100%
-        assert!(tick_spacing > 0 && tick_spacing < 16384);
+        assert!(trade_fee_rate < FEE_RATE_DENOMINATOR_VALUE);
         instructions::create_amm_config(ctx, index, tick_spacing, protocol_fee_rate, trade_fee_rate)
     }
 
@@ -55,10 +53,20 @@ pub mod amm_v3 {
     ///
     /// # Arguments
     ///
-    /// * `ctx`- Checks whether protocol owner has signed
+    /// * `ctx`- The context of accounts
+    /// * `new_owner`- The config's new owner, be set when `flag` is 0
+    /// * `trade_fee_rate`- The new trade fee rate of amm config, be set when `flag` is 1
+    /// * `protocol_fee_rate`- The new protocol fee rate of amm config, be set when `flag` is 2
+    /// * `flag`- The vaule can be 0 | 1 | 2, otherwise will report a error
     ///
-    pub fn set_new_owner(ctx: Context<SetNewOwner>) -> Result<()> {
-        instructions::set_new_owner(ctx)
+    pub fn update_amm_config(
+        ctx: Context<UpdateAmmConfig>,
+        new_owner: Pubkey,
+        trade_fee_rate: u32,
+        protocol_fee_rate: u32,
+        flag: u8,
+    ) -> Result<()> {
+        instructions::update_amm_config(ctx, new_owner, trade_fee_rate, protocol_fee_rate, flag)
     }
 
     /// Creates a pool for the given token pair and the initial price
@@ -126,20 +134,6 @@ pub mod amm_v3 {
         emissions_per_second_x64: u128,
     ) -> Result<()> {
         instructions::set_reward_emissions(ctx, reward_index, emissions_per_second_x64)
-    }
-
-    /// Restset the protocol fee rate of the fees.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - The context of accounts
-    /// * `protocol_fee_rate` - new protocol fee rate
-    ///
-    pub fn set_protocol_fee_rate(
-        ctx: Context<SetProtocolFeeRate>,
-        protocol_fee_rate: u32,
-    ) -> Result<()> {
-        instructions::set_protocol_fee_rate(ctx, protocol_fee_rate)
     }
 
     /// Collect the protocol fee accrued to the pool

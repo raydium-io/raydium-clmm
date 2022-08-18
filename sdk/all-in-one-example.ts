@@ -245,15 +245,8 @@ export async function main() {
     {
       ammPool: ammPoolA,
       inputTokenMint: token0.publicKey,
-      inputTokenAccount: ownerToken0Account,
-      outputTokenAccount: ownerToken1Account,
     },
-    [
-      {
-        ammPool: ammPoolB,
-        outputTokenAccount: ownerToken2Account,
-      },
-    ],
+    [ammPoolB],
     new BN(100_000),
     0.02
   );
@@ -569,7 +562,12 @@ async function swapBaseIn(
     priceLimit
   );
 
-  return await sendTransaction(ctx.connection, [ix], [owner],defaultConfirmOptions);
+  return await sendTransaction(
+    ctx.connection,
+    [ix],
+    [owner],
+    defaultConfirmOptions
+  );
 }
 
 async function swapBaseOut(
@@ -603,10 +601,7 @@ async function swapRouterBaseIn(
   ctx: Context,
   owner: Signer,
   firstPoolParam: RouterPoolParam,
-  remainRouterPools: {
-    ammPool: AmmPool;
-    outputTokenAccount: PublicKey;
-  }[],
+  remainRouterPools: AmmPool[],
   amountIn: BN,
   amountOutSlippage?: number
 ): Promise<TransactionSignature> {

@@ -56,6 +56,12 @@ async function main() {
       stateFetcher
     );
     await ammPool.loadCache();
+    let inputTokenAccount = token0Account
+    let outputTokenAccount = token1Account
+    if (new PublicKey(param.outputTokenMint).equals(poolStateData.tokenMint0)){
+      inputTokenAccount = token1Account
+      outputTokenAccount = token0Account
+    }
     const ix = await AmmInstruction.swapBaseOut(
       {
         payer: owner.publicKey,

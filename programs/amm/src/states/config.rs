@@ -60,24 +60,11 @@ pub struct CreateConfigEvent {
     pub tick_spacing: u16,
 }
 
-/// Emitted when the owner of the config is changed
+
+/// Emitted when update a config
 #[event]
-pub struct OwnerChangedEvent {
-    /// The owner before the owner was changed
-    #[index]
-    pub old_owner: Pubkey,
-
-    /// The owner after the owner was changed
-    #[index]
-    pub new_owner: Pubkey,
-}
-
-/// Emitted when the protocol fee is changed
-#[event]
-pub struct SetProtocolFeeRateEvent {
-    /// The previous value of the protocol fee
-    pub protocol_fee_rate_old: u32,
-
-    /// The updated value of the protocol fee
-    pub protocol_fee_rate_new: u32,
+pub struct UpdaterConfigEvent {
+    pub owner: Pubkey,
+    pub protocol_fee_rate: u32,
+    pub trade_fee_rate: u32,
 }

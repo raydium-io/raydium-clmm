@@ -13,7 +13,6 @@ import { getTickWithPriceAndTickspacing, SqrtPriceMath } from "../math";
 import { AmmInstruction } from "../instructions";
 import { Config, defaultConfirmOptions } from "./config";
 import { AmmPool } from "../pool";
-import { Position } from "../position";
 import keypairFile from "./owner-keypair.json";
 import {
   Token,

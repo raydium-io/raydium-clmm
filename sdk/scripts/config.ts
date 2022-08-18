@@ -28,14 +28,27 @@ export const Config = {
   "create-pool": [
     {
       ammConfig: "47QDZdQvRQtAutMRWCLe7FRNGegjEmcqhG874aj3k9HT",
-      tokenMint0: "6BsnRfuAfhxPY91wF7Q14iy295Ga5V3mVzhdnBY9KfnS",
-      tokenMint1: "6ajT55d5NXQKqTjmcumTaa1AiF2t3y2XYSbjCoq66zU2",
+      tokenMint0: "5x7dAB4HfSn4FrFRPeNJF4bpvfTzaU2gEg2xRbUhqaYF",
+      tokenMint1: "82xhaNPDQt7WAwyH2ZHXeSaXtb9LhzEKPnad1tWDiVDX",
+      initialPrice: new Decimal("1"),
+    },
+    {
+      ammConfig: "47QDZdQvRQtAutMRWCLe7FRNGegjEmcqhG874aj3k9HT",
+      tokenMint0: "82xhaNPDQt7WAwyH2ZHXeSaXtb9LhzEKPnad1tWDiVDX",
+      tokenMint1: "Aa2dSbfjTb45LxuTN8c8TvJuVbas8zL4VyXYRgKFocVG",
       initialPrice: new Decimal("1"),
     },
   ],
   "open-position": [
     {
-      poolId: "CrhoHr8h7553wzQMWzFu2KFS9cpbgPJhKTH86JD4gTAX",
+      poolId: "5a8xUFnpCHP9kz2ZaA1pjcS31HEyGVzaygyv6FiVeUZC",
+      priceLower: new Decimal("0.5"),
+      priceUpper: new Decimal("1.5"),
+      liquidity: new BN("100000000"),
+      amountSlippage: 0.005,
+    },
+    {
+      poolId: "CVr8pKUM893U7vAirhYiFm4MTp2vdAg85q5x7LTYuWkK",
       priceLower: new Decimal("0.5"),
       priceUpper: new Decimal("1.5"),
       liquidity: new BN("100000000"),
@@ -44,36 +57,45 @@ export const Config = {
   ],
   "increase-liquidity": [
     {
-      poolId: "CrhoHr8h7553wzQMWzFu2KFS9cpbgPJhKTH86JD4gTAX",
-      positionId: "4aG7pFXYBRNLghPQykKphkgzVsQAhUkoTB9xQ8XX21qZ",
+      poolId: "5a8xUFnpCHP9kz2ZaA1pjcS31HEyGVzaygyv6FiVeUZC",
+      positionId: "48jdUMHRCHhiHDWVNo4snrYndZh7gwXgGhyK5bmsYw1W",
       liquidity: new BN("100000000"),
       amountSlippage: 0.005,
     },
   ],
   "decrease-liquidity": [
     {
-      poolId: "CrhoHr8h7553wzQMWzFu2KFS9cpbgPJhKTH86JD4gTAX",
-      positionId: "4aG7pFXYBRNLghPQykKphkgzVsQAhUkoTB9xQ8XX21qZ",
+      poolId: "5a8xUFnpCHP9kz2ZaA1pjcS31HEyGVzaygyv6FiVeUZC",
+      positionId: "48jdUMHRCHhiHDWVNo4snrYndZh7gwXgGhyK5bmsYw1W",
       liquidity: new BN("100000000"),
       amountSlippage: 0.005,
     },
   ],
   "swap-base-in": [
     {
-      poolId: "CrhoHr8h7553wzQMWzFu2KFS9cpbgPJhKTH86JD4gTAX",
-      inputTokenMint: "6BsnRfuAfhxPY91wF7Q14iy295Ga5V3mVzhdnBY9KfnS",
-      amountIn: new BN("100000"),
+      poolId: "5a8xUFnpCHP9kz2ZaA1pjcS31HEyGVzaygyv6FiVeUZC",
+      inputTokenMint: "5x7dAB4HfSn4FrFRPeNJF4bpvfTzaU2gEg2xRbUhqaYF",
+      amountIn: new BN("1000000"),
       priceLimit: new Decimal(0),
       amountOutSlippage: 0.005,
     },
   ],
   "swap-base-out": [
     {
-      poolId: "CrhoHr8h7553wzQMWzFu2KFS9cpbgPJhKTH86JD4gTAX",
-      outputTokenMint: "6ajT55d5NXQKqTjmcumTaa1AiF2t3y2XYSbjCoq66zU2",
+      poolId: "5a8xUFnpCHP9kz2ZaA1pjcS31HEyGVzaygyv6FiVeUZC",
+      outputTokenMint: "82xhaNPDQt7WAwyH2ZHXeSaXtb9LhzEKPnad1tWDiVDX",
       amountOut: new BN("100000"),
       priceLimit: new Decimal(0),
       amountInSlippage: 0.005,
     },
   ],
+  "swap-router-base-in": {
+    startPool: {
+      poolId: "5a8xUFnpCHP9kz2ZaA1pjcS31HEyGVzaygyv6FiVeUZC",
+      inputTokenMint: "5x7dAB4HfSn4FrFRPeNJF4bpvfTzaU2gEg2xRbUhqaYF",
+    },
+    remainRouterPoolIds: ["CVr8pKUM893U7vAirhYiFm4MTp2vdAg85q5x7LTYuWkK"],
+    amountIn: new BN("100000"),
+    amountOutSlippage: 0.005,
+  },
 };
