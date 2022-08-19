@@ -223,4 +223,35 @@ export abstract class LiquidityMath {
       ];
     }
   }
+
+  public static getAmountsFromLiquidityWithSlippage(
+    sqrtPriceCurrentX64: BN,
+    sqrtPriceAX64: BN,
+    sqrtPriceBX64: BN,
+    liquidity: BN,
+    amountMax: boolean,
+    amountSlippage?: number
+  ): [BN, BN] {
+    const [token0Amount, token1Amount] = LiquidityMath.getAmountsFromLiquidity(
+      sqrtPriceCurrentX64,
+      sqrtPriceAX64,
+      sqrtPriceBX64,
+      liquidity
+    );
+    let coefficient = 1 + amountSlippage;
+    if (!amountMax) {
+      coefficient = 1 - amountSlippage;
+    }
+    let amount0Slippage: BN = token0Amount;
+    let amount1Slippage: BN = token1Amount;
+    if (!amountMax) {
+      amount0Slippage = new BN(0);
+      amount1Slippage = new BN(0);
+    }
+    if (amountSlippage !== undefined) {
+      amount0Slippage = token0Amount.muln(coefficient);
+      amount1Slippage = token1Amount.muln(coefficient);
+    }
+    return [amount0Slippage, amount1Slippage];
+  }
 }

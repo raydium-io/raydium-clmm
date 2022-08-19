@@ -1,6 +1,13 @@
 #!/usr/bin/env ts-node
 
-import { Connection, Keypair, PublicKey,ComputeBudgetProgram } from "@solana/web3.js";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  ComputeBudgetProgram,
+  TransactionInstruction,
+  Signer,
+} from "@solana/web3.js";
 import { Context, NodeWallet } from "../base";
 import { StateFetcher } from "../states";
 import { sendTransaction } from "../utils";
@@ -24,11 +31,21 @@ async function main() {
   const stateFetcher = new StateFetcher(ctx.program);
   const params = Config["swap-router-base-in"];
 
+  const additionalComputeBudgetInstruction = ComputeBudgetProgram.requestUnits({
+    units: 400000,
+    additionalFee: 0,
+  });
+  let instructions: TransactionInstruction[] = [
+    additionalComputeBudgetInstruction,
+  ];
+  let signers: Signer[] = [owner];
+
   const startPool = await generateOnePool(
     ctx,
     new PublicKey(params.startPool.poolId),
     stateFetcher
   );
+
   let remainRouterPools: AmmPool[] = [];
   for (let i = 0; i < params.remainRouterPoolIds.length; i++) {
     const pool = await generateOnePool(
@@ -38,26 +55,24 @@ async function main() {
     );
     remainRouterPools.push(pool);
   }
-  const ix = await AmmInstruction.swapRouterBaseIn(
-    owner.publicKey,
-    {
-      ammPool: startPool,
-      inputTokenMint: new PublicKey(params.startPool.inputTokenMint),
-    },
-    remainRouterPools,
-    params.amountIn,
-    params.amountOutSlippage
-  );
-
-  const additionalComputeBudgetInstruction = ComputeBudgetProgram.requestUnits({
-    units: 400000,
-    additionalFee: 0,
-  });
+  const { instructions: ixs, signers: signer } =
+    await AmmInstruction.swapRouterBaseIn(
+      owner.publicKey,
+      {
+        ammPool: startPool,
+        inputTokenMint: new PublicKey(params.startPool.inputTokenMint),
+      },
+      remainRouterPools,
+      params.amountIn,
+      params.amountOutSlippage
+    );
+  instructions.push(...ixs);
+  signers.push(...signer);
 
   let tx = await sendTransaction(
     ctx.connection,
-    [additionalComputeBudgetInstruction,ix],
-    [owner],
+    instructions,
+    signers,
     defaultConfirmOptions
   );
   console.log("swapRouterBaseIn tx: ", tx);

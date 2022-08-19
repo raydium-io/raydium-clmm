@@ -160,15 +160,19 @@ impl TickArrayState {
 
     pub fn next_initialized_tick(
         &mut self,
-        currenct_tick_index: i32,
+        current_tick_index: i32,
         tick_spacing: u16,
         zero_for_one: bool,
     ) -> Result<Option<&mut TickState>> {
-        let start_tick_index =
-            TickArrayState::get_arrary_start_index(currenct_tick_index, tick_spacing as i32);
-        let is_start_index = start_tick_index == currenct_tick_index;
+        let current_tick_array_start_index =
+            TickArrayState::get_arrary_start_index(current_tick_index, tick_spacing as i32);
+        if current_tick_array_start_index != self.start_tick_index {
+            let tick_state = self.first_initialized_tick(zero_for_one)?;
+            return Ok(Some(tick_state));
+        }
+        let is_start_index = current_tick_array_start_index == current_tick_index;
         let mut offset_in_array =
-            (currenct_tick_index - self.start_tick_index) / (tick_spacing as i32);
+            (current_tick_index - self.start_tick_index) / (tick_spacing as i32);
         if zero_for_one {
             if is_start_index {
                 offset_in_array = offset_in_array - 1;

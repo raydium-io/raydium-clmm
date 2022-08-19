@@ -3,7 +3,7 @@
 import { Connection, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import { Context, NodeWallet } from "../base";
 import { OBSERVATION_STATE_LEN } from "../states";
-import { sendTransaction } from "../utils";
+import { sendTransaction, accountExist } from "../utils";
 import { AmmInstruction } from "../instructions";
 import { Config, defaultConfirmOptions } from "./config";
 import keypairFile from "./owner-keypair.json";
@@ -45,6 +45,11 @@ async function main() {
       },
       param.initialPrice
     );
+    const isExist = await accountExist(ctx.connection, address);
+    if (isExist) {
+      console.log("pool exist, account:", address.toBase58());
+      continue
+    }
 
     const tx = await sendTransaction(
       ctx.provider.connection,
