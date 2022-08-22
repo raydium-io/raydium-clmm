@@ -1250,12 +1250,6 @@ export class AmmInstruction {
       outputVault = param.ammPool.poolState.tokenVault0;
       outputTokenMint = param.ammPool.poolState.tokenMint0;
     }
-    console.log(
-      "inputTokenMint1:",
-      param.inputTokenMint.toBase58(),
-      "outputTokenMint1:",
-      outputTokenMint.toString()
-    );
     const [expectedAmountOut, remainingAccounts] =
       await param.ammPool.getOutputAmountAndRemainAccounts(
         param.inputTokenMint,
@@ -1278,13 +1272,6 @@ export class AmmInstruction {
         owner
       );
     }
-    console.log(
-      "inputTokenAccount2:",
-      inputTokenAccount.toBase58(),
-      "inputTokenMint2:",
-      param.inputTokenMint.toString()
-    );
-
     let outputTokenAccount = PublicKey.default;
     if (isWSOLTokenMint(outputTokenMint)) {
       if (wSolAccount == undefined || wSolAccount.equals(PublicKey.default)) {
@@ -1299,12 +1286,6 @@ export class AmmInstruction {
         owner
       );
     }
-    console.log(
-      "outputTokenAccount3:",
-      outputTokenAccount.toBase58(),
-      "outputTokenMint3:",
-      outputTokenMint.toString()
-    );
     return {
       amountOut: expectedAmountOut,
       inputTokenAccount,

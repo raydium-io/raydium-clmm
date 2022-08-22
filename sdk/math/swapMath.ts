@@ -113,7 +113,6 @@ export abstract class SwapMath {
       }
       let step: Partial<StepComputations> = {};
       step.sqrtPriceStartX64 = state.sqrtPriceX64;
-      console.log("state.tick:",state.tick)
       // save the bitmap, and the tick account if it is initialized
       const [nextInitTick, tickArrayAddress, tickAarrayStartIndex] =
         await cacheDataProvider.nextInitializedTick(

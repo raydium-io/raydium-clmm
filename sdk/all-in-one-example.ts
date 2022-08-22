@@ -56,8 +56,8 @@ export async function main() {
   const programId = new PublicKey(
     "devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU"
   );
-  const url = "https://api.devnet.solana.com";
-  // const url = "http://127.0.0.1:8899";
+  // const url = "https://api.devnet.solana.com";
+  const url = "http://127.0.0.1:8899";
   const ctx = await getContext(programId, owner, url);
   const stateFetcher = new StateFetcher(ctx.program);
 
@@ -228,8 +228,6 @@ export async function main() {
     ctx,
     owner,
     ammPoolB,
-    ownerToken1Account,
-    ownerToken2Account,
     new Decimal("0.99800209846088566961"),
     new Decimal("1.0020019011404840582"),
     new BN(1_000_000),
@@ -418,8 +416,6 @@ async function createPersonalPosition(
   ctx: Context,
   owner: Signer,
   ammPool: AmmPool,
-  ownerToken0Account: PublicKey,
-  ownerToken1Account: PublicKey,
   priceLower: Decimal,
   priceUpper: Decimal,
   token0Amount: BN,
@@ -449,13 +445,21 @@ async function createPersonalPosition(
     token1Amount
   );
   const nftMintAKeypair = new Keypair();
-  const [address, openIx] = await AmmInstruction.openPosition(
+
+  let instructions: TransactionInstruction[] = [
+    additionalComputeBudgetInstruction,
+  ];
+  let signers: Signer[] = [owner, nftMintAKeypair];
+
+  const {
+    personalPosition,
+    instructions: ixs,
+    signers: signer,
+  } = await AmmInstruction.openPosition(
     {
       payer: owner.publicKey,
       positionNftOwner: owner.publicKey,
       positionNftMint: nftMintAKeypair.publicKey,
-      token0Account: ownerToken0Account,
-      token1Account: ownerToken1Account,
     },
     ammPool,
     tickLower,
@@ -463,14 +467,16 @@ async function createPersonalPosition(
     liquidity,
     amountSlippage
   );
+  instructions.push(...ixs);
+  signers.push(...signer);
 
   const tx = await sendTransaction(
     ctx.provider.connection,
-    [additionalComputeBudgetInstruction, openIx],
-    [owner, nftMintAKeypair],
+    instructions,
+    signers,
     confirmOptions
   );
-  return [address, tx];
+  return [personalPosition, tx];
 }
 
 async function increaseLiquidity(
@@ -495,18 +501,29 @@ async function increaseLiquidity(
     token0AmountDesired,
     token1AmountDesired
   );
-  const ix = await AmmInstruction.increaseLiquidity(
-    {
-      positionNftOwner: owner.publicKey,
-      token0Account: ownerToken0Account,
-      token1Account: ownerToken1Account,
-    },
-    ammPool,
-    personalPositionData,
-    liquidity,
-    amountSlippage
+
+  let instructions: TransactionInstruction[] = [];
+  let signers: Signer[] = [owner];
+
+  const { instructions: ixs, signers: signer } =
+    await AmmInstruction.increaseLiquidity(
+      {
+        positionNftOwner: owner.publicKey,
+      },
+      ammPool,
+      personalPositionData,
+      liquidity,
+      amountSlippage
+    );
+  instructions.push(...ixs);
+  signers.push(...signer);
+
+  return await sendTransaction(
+    ctx.connection,
+    instructions,
+    signers,
+    confirmOptions
   );
-  return await sendTransaction(ctx.connection, [ix], [owner], confirmOptions);
 }
 
 async function decreaseLiquidity(
@@ -523,19 +540,28 @@ async function decreaseLiquidity(
 ): Promise<TransactionSignature> {
   const personalPositionData =
     await ammPool.stateFetcher.getPersonalPositionState(personalPosition);
-  const ix = await AmmInstruction.decreaseLiquidityWithInputAmount(
-    {
-      positionNftOwner: owner.publicKey,
-      token0Account: ownerToken0Account,
-      token1Account: ownerToken1Account,
-    },
-    ammPool,
-    personalPositionData,
-    token0AmountDesired,
-    token1AmountDesired,
-    amountSlippage
+  let instructions: TransactionInstruction[] = [];
+  let signers: Signer[] = [owner];
+
+  const { instructions: ixs, signers: signer } =
+    await AmmInstruction.decreaseLiquidityWithInputAmount(
+      {
+        positionNftOwner: owner.publicKey,
+      },
+      ammPool,
+      personalPositionData,
+      token0AmountDesired,
+      token1AmountDesired,
+      amountSlippage
+    );
+  instructions.push(...ixs);
+  signers.push(...signer);
+  return await sendTransaction(
+    ctx.connection,
+    instructions,
+    signers,
+    confirmOptions
   );
-  return await sendTransaction(ctx.connection, [ix], [owner], confirmOptions);
 }
 
 async function swapBaseIn(
@@ -549,23 +575,26 @@ async function swapBaseIn(
   amountOutSlippage?: number,
   priceLimit?: Decimal
 ): Promise<TransactionSignature> {
-  const ix = await AmmInstruction.swapBaseIn(
-    {
-      payer: owner.publicKey,
-      inputTokenAccount: ownerToken0Account,
-      outputTokenAccount: ownerToken1Account,
-    },
-    ammPool,
-    inputTokenMint,
-    amountIn,
-    amountOutSlippage,
-    priceLimit
-  );
+  let instructions: TransactionInstruction[] = [];
+  let signers: Signer[] = [owner];
 
+  const { instructions: ixs, signers: signer } =
+    await AmmInstruction.swapBaseIn(
+      {
+        payer: owner.publicKey,
+      },
+      ammPool,
+      inputTokenMint,
+      amountIn,
+      amountOutSlippage,
+      priceLimit
+    );
+  instructions.push(...ixs);
+  signers.push(...signer);
   return await sendTransaction(
     ctx.connection,
-    [ix],
-    [owner],
+    instructions,
+    signers,
     defaultConfirmOptions
   );
 }
@@ -581,20 +610,23 @@ async function swapBaseOut(
   amountInSlippage?: number,
   priceLimit?: Decimal
 ): Promise<TransactionSignature> {
-  const ix = await AmmInstruction.swapBaseOut(
-    {
-      payer: owner.publicKey,
-      inputTokenAccount: ownerToken0Account,
-      outputTokenAccount: ownerToken1Account,
-    },
-    ammPool,
-    outputTokenMint,
-    amountOut,
-    amountInSlippage,
-    priceLimit
-  );
+  let instructions: TransactionInstruction[] = [];
+  let signers: Signer[] = [owner];
 
-  return await sendTransaction(ctx.connection, [ix], [owner]);
+  const { instructions: ixs, signers: signer } =
+    await AmmInstruction.swapBaseOut(
+      {
+        payer: owner.publicKey,
+      },
+      ammPool,
+      outputTokenMint,
+      amountOut,
+      amountInSlippage,
+      priceLimit
+    );
+  instructions.push(...ixs);
+  signers.push(...signer);
+  return await sendTransaction(ctx.connection, instructions, signers);
 }
 
 async function swapRouterBaseIn(
@@ -610,18 +642,26 @@ async function swapRouterBaseIn(
     additionalFee: 0,
   });
 
-  const ix = await AmmInstruction.swapRouterBaseIn(
-    owner.publicKey,
-    firstPoolParam,
-    remainRouterPools,
-    amountIn,
-    amountOutSlippage
-  );
+  let instructions: TransactionInstruction[] = [
+    additionalComputeBudgetInstruction,
+  ];
+  let signers: Signer[] = [owner];
+
+  const { instructions: ixs, signers: signer } =
+    await AmmInstruction.swapRouterBaseIn(
+      owner.publicKey,
+      firstPoolParam,
+      remainRouterPools,
+      amountIn,
+      amountOutSlippage
+    );
+  instructions.push(...ixs);
+  signers.push(...signer);
 
   return await sendTransaction(
     ctx.connection,
-    [additionalComputeBudgetInstruction, ix],
-    [owner],
+    instructions,
+    signers,
     defaultConfirmOptions
   );
 }

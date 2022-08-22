@@ -237,7 +237,6 @@ export class AmmPool {
       this.poolState.tickCurrent,
       this.poolState.tickSpacing
     );
-    console.log("startIndex:",startIndex,"isInitialized:",isInitialized)
     if (isInitialized) {
       const [address, _] = await getTickArrayAddress(
         this.address,

@@ -94,7 +94,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         protocol_position: ctx.accounts.protocol_position.as_mut(),
         token_program: ctx.accounts.token_program.clone(),
     };
-    let (liquidity, amount_0, amount_1) = add_liquidity(
+    let (amount_0, amount_1) = add_liquidity(
         &mut accounts,
         liquidity,
         amount_0_max,

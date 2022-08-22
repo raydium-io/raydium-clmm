@@ -245,7 +245,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         token_program: ctx.accounts.token_program.clone(),
     };
 
-    let (liquidity, amount_0, amount_1) = add_liquidity(
+    let (amount_0, amount_1) = add_liquidity(
         &mut add_liquidity_accounts,
         liquidity,
         amount_0_max,
@@ -312,7 +312,7 @@ pub fn add_liquidity<'b, 'info>(
     amount_1_max: u64,
     tick_lower_index: i32,
     tick_upper_index: i32,
-) -> Result<(u128, u64, u64)> {
+) -> Result<(u64, u64)> {
     assert!(liquidity > 0);
     let balance_0_before = accounts.token_vault_0.amount;
     let balance_1_before = accounts.token_vault_1.amount;
@@ -383,7 +383,7 @@ pub fn add_liquidity<'b, 'info>(
         ErrorCode::PriceSlippageCheck
     );
 
-    Ok((liquidity, amount_0, amount_1))
+    Ok((amount_0, amount_1))
 }
 
 pub fn modify_position<'info>(
@@ -421,7 +421,6 @@ pub fn modify_position<'info>(
 
     Ok((amount_0, amount_1, flip_tick_lower, flip_tick_upper))
 }
-
 
 /// Updates a position with the given liquidity delta and tick
 pub fn update_position<'info>(

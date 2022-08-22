@@ -120,7 +120,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     let latest_fees_owed_0 = personal_position.token_fees_owed_0;
     let latest_fees_owed_1 = personal_position.token_fees_owed_1;
     personal_position.token_fees_owed_0 = 0;
-    personal_position.token_fees_owed_0 = 0;
+    personal_position.token_fees_owed_1 = 0;
 
     // update rewards, must update before decrease liquidity
     personal_position.update_rewards(procotol_position_state.reward_growth_inside)?;

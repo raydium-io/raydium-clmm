@@ -360,3 +360,18 @@ pub fn get_amounts_delta_signed(
     }
     Ok((amount_0, amount_1))
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    mod get_amounts_delta_signed {
+
+        use super::*;
+
+        #[test]
+        fn get_amounts_delta_signed_test() {
+            let (amount0, amount1) = get_amounts_delta_signed(-1860, -6960, 4080, 100000).unwrap();
+            println!("amount0:{}, amount1:{}", amount0, amount1)
+        }
+    }
+}
