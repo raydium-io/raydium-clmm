@@ -1,6 +1,12 @@
 #!/usr/bin/env ts-node
 
-import { Connection, PublicKey, Keypair } from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  Keypair,
+  Signer,
+  TransactionInstruction,
+} from "@solana/web3.js";
 import { Context, NodeWallet } from "../base";
 import { StateFetcher } from "../states";
 import { sendTransaction } from "../utils";
@@ -8,11 +14,6 @@ import { AmmInstruction } from "../instructions";
 import { Config, defaultConfirmOptions } from "./config";
 import { AmmPool } from "../pool";
 import keypairFile from "./owner-keypair.json";
-import {
-  Token,
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  TOKEN_PROGRAM_ID,
-} from "@solana/spl-token";
 import { SqrtPriceMath } from "../math";
 
 async function main() {
@@ -35,18 +36,7 @@ async function main() {
     const poolStateData = await stateFetcher.getPoolState(
       new PublicKey(param.poolId)
     );
-    const token0Account = await Token.getAssociatedTokenAddress(
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
-      poolStateData.tokenMint0,
-      owner.publicKey
-    );
-    const token1Account = await Token.getAssociatedTokenAddress(
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
-      poolStateData.tokenMint1,
-      owner.publicKey
-    );
+
     const ammConfigData = await stateFetcher.getAmmConfig(
       new PublicKey(poolStateData.ammConfig)
     );
@@ -80,24 +70,30 @@ async function main() {
         personalPositionData.tickUpperIndex
       ).toString()
     );
-    const ix = await AmmInstruction.increaseLiquidity(
-      {
-        positionNftOwner: owner.publicKey,
-        token0Account: token0Account,
-        token1Account: token1Account,
-      },
-      ammPool,
-      personalPositionData,
-      param.liquidity,
-      param.amountSlippage
-    );
+
+    let instructions: TransactionInstruction[] = [];
+    let signers: Signer[] = [owner];
+
+    const { instructions: ixs, signers: signer } =
+      await AmmInstruction.increaseLiquidity(
+        {
+          positionNftOwner: owner.publicKey,
+        },
+        ammPool,
+        personalPositionData,
+        param.liquidity,
+        param.amountSlippage
+      );
+    instructions.push(...ixs);
+    signers.push(...signer);
+
     let tx = await sendTransaction(
       ctx.connection,
-      [ix],
-      [owner],
+      instructions,
+      signers,
       defaultConfirmOptions
     );
-    console.log("increaseLiquidity tx: ", tx);
+    console.log("increaseLiquidity tx: ", tx, "\n");
   }
 }
 

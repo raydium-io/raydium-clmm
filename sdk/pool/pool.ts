@@ -185,7 +185,6 @@ export class AmmPool {
     if (!this.isContain(outputTokenMint)) {
       throw new Error("token is not in pool");
     }
-
     if (reload) {
       this.reloadPoolState();
     }
@@ -238,6 +237,7 @@ export class AmmPool {
       this.poolState.tickCurrent,
       this.poolState.tickSpacing
     );
+    console.log("startIndex:",startIndex,"isInitialized:",isInitialized)
     if (isInitialized) {
       const [address, _] = await getTickArrayAddress(
         this.address,

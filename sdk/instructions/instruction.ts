@@ -5,6 +5,8 @@ import {
   SYSVAR_RENT_PUBKEY,
   TransactionInstruction,
   AccountMeta,
+  Keypair,
+  Signer,
 } from "@solana/web3.js";
 
 import { programs } from "@metaplex/js";
@@ -34,6 +36,7 @@ import {
   getNftMetadataAddress,
   getPersonalPositionAddress,
   getTickArrayAddress,
+  isWSOLTokenMint,
 } from "../utils";
 
 import {
@@ -59,6 +62,7 @@ import {
 import { AmmPool } from "../pool";
 import { Context } from "../base";
 import Decimal from "decimal.js";
+import { Spl, WSOL } from "@raydium-io/raydium-sdk";
 
 type CreatePoolAccounts = {
   poolCreator: PublicKey;
@@ -72,8 +76,6 @@ export type OpenPositionAccounts = {
   payer: PublicKey;
   positionNftOwner: PublicKey;
   positionNftMint: PublicKey;
-  token0Account: PublicKey;
-  token1Account: PublicKey;
 };
 
 export type ClosePositionAccounts = {
@@ -85,23 +87,12 @@ export type ClosePositionAccounts = {
   systemProgram: PublicKey;
 };
 
-export type IncreaseLiquidityAccounts = {
+export type LiquidityChangeAccounts = {
   positionNftOwner: PublicKey;
-  token0Account: PublicKey;
-  token1Account: PublicKey;
-};
-
-export type DecreaseLiquidityAccounts = {
-  positionNftOwner: PublicKey;
-  token0Account: PublicKey;
-  token1Account: PublicKey;
-  // recipientRewardTokenAccountA: PublicKey[];
 };
 
 export type SwapAccounts = {
   payer: PublicKey;
-  inputTokenAccount: PublicKey;
-  outputTokenAccount: PublicKey;
 };
 
 export type RouterPoolParam = {
@@ -238,7 +229,8 @@ export class AmmInstruction {
     accounts: CreatePoolAccounts,
     initialPrice: Decimal
   ): Promise<[PublicKey, TransactionInstruction]> {
-    if (accounts.tokenMint0 >= accounts.tokenMint1) {
+    // @ts-ignore
+    if ((accounts.tokenMint0._bn as BN).gt(accounts.tokenMint1._bn as BN)) {
       let tmp = accounts.tokenMint0;
       accounts.tokenMint0 = accounts.tokenMint1;
       accounts.tokenMint1 = tmp;
@@ -299,7 +291,11 @@ export class AmmInstruction {
     priceUpper: Decimal,
     liquidity: BN,
     amountSlippage?: number
-  ): Promise<[PublicKey, TransactionInstruction]> {
+  ): Promise<{
+    personalPosition: PublicKey;
+    instructions: TransactionInstruction[];
+    signers: Signer[];
+  }> {
     const tickLower = SqrtPriceMath.getTickFromPrice(priceLower);
     const tickUpper = SqrtPriceMath.getTickFromPrice(priceUpper);
 
@@ -330,7 +326,11 @@ export class AmmInstruction {
     tickUpperIndex: number,
     liquidity: BN,
     amountSlippage?: number
-  ): Promise<[PublicKey, TransactionInstruction]> {
+  ): Promise<{
+    personalPosition: PublicKey;
+    instructions: TransactionInstruction[];
+    signers: Signer[];
+  }> {
     if (amountSlippage != undefined && amountSlippage < 0) {
       throw new Error("amountSlippage must be gtn 0");
     }
@@ -347,18 +347,15 @@ export class AmmInstruction {
 
     const poolState = ammPool.poolState;
     const ctx = ammPool.ctx;
-    const [token0Amount, token1Amount] = LiquidityMath.getAmountsFromLiquidity(
-      poolState.sqrtPriceX64,
-      SqrtPriceMath.getSqrtPriceX64FromTick(tickLowerIndex),
-      SqrtPriceMath.getSqrtPriceX64FromTick(tickUpperIndex),
-      liquidity
-    );
-    let amount0Max = token0Amount;
-    let amount1Max = token1Amount;
-    if (amountSlippage !== undefined) {
-      amount0Max = token0Amount.muln(1 + amountSlippage);
-      amount1Max = token1Amount.muln(1 + amountSlippage);
-    }
+    const [amount0Max, amount1Max] =
+      LiquidityMath.getAmountsFromLiquidityWithSlippage(
+        poolState.sqrtPriceX64,
+        SqrtPriceMath.getSqrtPriceX64FromTick(tickLowerIndex),
+        SqrtPriceMath.getSqrtPriceX64FromTick(tickUpperIndex),
+        liquidity,
+        true,
+        amountSlippage
+      );
     // prepare tickArray
     const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
       tickLowerIndex,
@@ -401,44 +398,89 @@ export class AmmInstruction {
       tickUpperIndex
     );
 
-    return [
+    let instructions: TransactionInstruction[] = [];
+    let signers: Signer[] = [];
+
+    const { tokenAccount: token0Account, isWSol: isToken0WsolAccount } =
+      await getTokenAccountForLiquidityChange(
+        ctx,
+        accounts.payer,
+        poolState.tokenMint0,
+        amount0Max,
+        instructions,
+        signers
+      );
+
+    const { tokenAccount: token1Account, isWSol: isToken1WsolAccount } =
+      await getTokenAccountForLiquidityChange(
+        ctx,
+        accounts.payer,
+        poolState.tokenMint1,
+        amount1Max,
+        instructions,
+        signers
+      );
+
+    const openIx = await openPositionInstruction(
+      ctx.program,
+      {
+        tickLowerIndex,
+        tickUpperIndex,
+        tickArrayLowerStartIndex: tickArrayLowerStartIndex,
+        tickArrayUpperStartIndex: tickArrayUpperStartIndex,
+        liquidity: liquidity,
+        amount0Max: amount0Max,
+        amount1Max: amount1Max,
+      },
+      {
+        payer: accounts.payer,
+        positionNftOwner: accounts.positionNftOwner,
+        ammConfig: poolState.ammConfig,
+        positionNftMint: accounts.positionNftMint,
+        positionNftAccount: positionANftAccount,
+        metadataAccount,
+        poolState: ammPool.address,
+        protocolPosition,
+        tickArrayLower,
+        tickArrayUpper,
+        tokenAccount0: token0Account,
+        tokenAccount1: token1Account,
+        tokenVault0: poolState.tokenVault0,
+        tokenVault1: poolState.tokenVault1,
+        personalPosition,
+        systemProgram: SystemProgram.programId,
+        rent: SYSVAR_RENT_PUBKEY,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        metadataProgram: programs.metadata.MetadataProgram.PUBKEY,
+      }
+    );
+    instructions.push(openIx);
+
+    if (isToken0WsolAccount) {
+      const closeIx = Spl.makeCloseAccountInstruction({
+        tokenAccount: token0Account,
+        owner: accounts.payer,
+        payer: accounts.payer,
+      });
+      instructions.push(closeIx);
+    }
+    if (isToken1WsolAccount) {
+      const closeIx = Spl.makeCloseAccountInstruction({
+        tokenAccount: token1Account,
+        owner: accounts.payer,
+        payer: accounts.payer,
+      });
+      instructions.push(closeIx);
+    }
+
+    return {
       personalPosition,
-      await openPositionInstruction(
-        ctx.program,
-        {
-          tickLowerIndex,
-          tickUpperIndex,
-          tickArrayLowerStartIndex: tickArrayLowerStartIndex,
-          tickArrayUpperStartIndex: tickArrayUpperStartIndex,
-          liquidity: liquidity,
-          amount0Max: amount0Max,
-          amount1Max: amount1Max,
-        },
-        {
-          payer: accounts.payer,
-          positionNftOwner: accounts.positionNftOwner,
-          ammConfig: poolState.ammConfig,
-          positionNftMint: accounts.positionNftMint,
-          positionNftAccount: positionANftAccount,
-          metadataAccount,
-          poolState: ammPool.address,
-          protocolPosition,
-          tickArrayLower,
-          tickArrayUpper,
-          tokenAccount0: accounts.token0Account,
-          tokenAccount1: accounts.token1Account,
-          tokenVault0: poolState.tokenVault0,
-          tokenVault1: poolState.tokenVault1,
-          personalPosition,
-          systemProgram: SystemProgram.programId,
-          rent: SYSVAR_RENT_PUBKEY,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-          metadataProgram: programs.metadata.MetadataProgram.PUBKEY,
-        }
-      ),
-    ];
+      instructions,
+      signers,
+    };
   }
+
   public static async closePosition(
     accounts: ClosePositionAccounts,
     ammPool: AmmPool
@@ -456,12 +498,15 @@ export class AmmInstruction {
    * @returns
    */
   public static async increaseLiquidity(
-    accounts: IncreaseLiquidityAccounts,
+    accounts: LiquidityChangeAccounts,
     ammPool: AmmPool,
     positionState: PositionState,
     liquidity: BN,
     amountSlippage?: number
-  ): Promise<TransactionInstruction> {
+  ): Promise<{
+    instructions: TransactionInstruction[];
+    signers: Signer[];
+  }> {
     if (amountSlippage != undefined && amountSlippage < 0) {
       throw new Error("amountSlippage must be gtn 0");
     }
@@ -470,18 +515,16 @@ export class AmmInstruction {
     const tickLowerIndex = positionState.tickLowerIndex;
     const tickUpperIndex = positionState.tickUpperIndex;
 
-    const [token0Amount, token1Amount] = LiquidityMath.getAmountsFromLiquidity(
-      poolState.sqrtPriceX64,
-      SqrtPriceMath.getSqrtPriceX64FromTick(tickLowerIndex),
-      SqrtPriceMath.getSqrtPriceX64FromTick(tickUpperIndex),
-      liquidity
-    );
-    let amount0Max = token0Amount;
-    let amount1Max = token1Amount;
-    if (amountSlippage != undefined) {
-      amount0Max = token0Amount.muln(1 + amountSlippage);
-      amount1Max = token1Amount.muln(1 + amountSlippage);
-    }
+    const [amount0Max, amount1Max] =
+      LiquidityMath.getAmountsFromLiquidityWithSlippage(
+        poolState.sqrtPriceX64,
+        SqrtPriceMath.getSqrtPriceX64FromTick(tickLowerIndex),
+        SqrtPriceMath.getSqrtPriceX64FromTick(tickUpperIndex),
+        liquidity,
+        true,
+        amountSlippage
+      );
+
     // prepare tickArray
     const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
       tickLowerIndex,
@@ -521,7 +564,30 @@ export class AmmInstruction {
       tickUpperIndex
     );
 
-    return await increaseLiquidityInstruction(
+    let instructions: TransactionInstruction[] = [];
+    let signers: Signer[] = [];
+
+    const { tokenAccount: token0Account, isWSol: isToken0WsolAccount } =
+      await getTokenAccountForLiquidityChange(
+        ctx,
+        accounts.positionNftOwner,
+        poolState.tokenMint0,
+        amount0Max,
+        instructions,
+        signers
+      );
+
+    const { tokenAccount: token1Account, isWSol: isToken1WsolAccount } =
+      await getTokenAccountForLiquidityChange(
+        ctx,
+        accounts.positionNftOwner,
+        poolState.tokenMint1,
+        amount1Max,
+        instructions,
+        signers
+      );
+
+    const ix = await increaseLiquidityInstruction(
       ctx.program,
       {
         liquidity,
@@ -535,14 +601,36 @@ export class AmmInstruction {
         protocolPosition,
         tickArrayLower,
         tickArrayUpper,
-        tokenAccount0: accounts.token0Account,
-        tokenAccount1: accounts.token1Account,
+        tokenAccount0: token0Account,
+        tokenAccount1: token1Account,
         tokenVault0: poolState.tokenVault0,
         tokenVault1: poolState.tokenVault1,
         personalPosition,
         tokenProgram: TOKEN_PROGRAM_ID,
       }
     );
+    instructions.push(ix);
+
+    if (isToken0WsolAccount) {
+      const closeIx = Spl.makeCloseAccountInstruction({
+        tokenAccount: token0Account,
+        owner: accounts.positionNftOwner,
+        payer: accounts.positionNftOwner,
+      });
+      instructions.push(closeIx);
+    }
+    if (isToken1WsolAccount) {
+      const closeIx = Spl.makeCloseAccountInstruction({
+        tokenAccount: token1Account,
+        owner: accounts.positionNftOwner,
+        payer: accounts.positionNftOwner,
+      });
+      instructions.push(closeIx);
+    }
+    return {
+      instructions,
+      signers,
+    };
   }
 
   /**
@@ -556,13 +644,16 @@ export class AmmInstruction {
    * @returns
    */
   public static async decreaseLiquidityWithInputAmount(
-    accounts: DecreaseLiquidityAccounts,
+    accounts: LiquidityChangeAccounts,
     ammPool: AmmPool,
     positionState: PositionState,
     token0AmountDesired: BN,
     token1AmountDesired: BN,
     amountSlippage?: number
-  ): Promise<TransactionInstruction> {
+  ): Promise<{
+    instructions: TransactionInstruction[];
+    signers: Signer[];
+  }> {
     if (amountSlippage != undefined && amountSlippage < 0) {
       throw new Error("amountSlippage must be gtn 0");
     }
@@ -598,12 +689,15 @@ export class AmmInstruction {
    * @returns
    */
   public static async decreaseLiquidity(
-    accounts: DecreaseLiquidityAccounts,
+    accounts: LiquidityChangeAccounts,
     ammPool: AmmPool,
     positionState: PositionState,
     liquidity: BN,
     amountSlippage?: number
-  ): Promise<TransactionInstruction> {
+  ): Promise<{
+    instructions: TransactionInstruction[];
+    signers: Signer[];
+  }> {
     if (amountSlippage != undefined && amountSlippage < 0) {
       throw new Error("amountSlippage must be gtn 0");
     }
@@ -615,18 +709,16 @@ export class AmmInstruction {
     const sqrtPriceUpperX64 =
       SqrtPriceMath.getSqrtPriceX64FromTick(tickUpperIndex);
 
-    const [token0Amount, token1Amount] = LiquidityMath.getAmountsFromLiquidity(
-      ammPool.poolState.sqrtPriceX64,
-      sqrtPriceLowerX64,
-      sqrtPriceUpperX64,
-      liquidity
-    );
-    let amount0Min: BN = new BN(0);
-    let amount1Min: BN = new BN(0);
-    if (amountSlippage !== undefined) {
-      amount0Min = token0Amount.muln(1 - amountSlippage);
-      amount1Min = token1Amount.muln(1 - amountSlippage);
-    }
+    const [amount0Min, amount1Min] =
+      LiquidityMath.getAmountsFromLiquidityWithSlippage(
+        ammPool.poolState.sqrtPriceX64,
+        sqrtPriceLowerX64,
+        sqrtPriceUpperX64,
+        liquidity,
+        false,
+        amountSlippage
+      );
+
     // prepare tickArray
     const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
       tickLowerIndex,
@@ -666,10 +758,33 @@ export class AmmInstruction {
       tickUpperIndex
     );
 
-    return await decreaseLiquidityInstruction(
+    let instructions: TransactionInstruction[] = [];
+    let signers: Signer[] = [];
+
+    const { tokenAccount: token0Account, isWSol: isToken0WsolAccount } =
+      await getTokenAccountForLiquidityChange(
+        ctx,
+        accounts.positionNftOwner,
+        ammPool.poolState.tokenMint0,
+        new BN(0),
+        instructions,
+        signers
+      );
+
+    const { tokenAccount: token1Account, isWSol: isToken1WsolAccount } =
+      await getTokenAccountForLiquidityChange(
+        ctx,
+        accounts.positionNftOwner,
+        ammPool.poolState.tokenMint1,
+        new BN(0),
+        instructions,
+        signers
+      );
+
+    const ix = await decreaseLiquidityInstruction(
       ctx.program,
       {
-        liquidity: liquidity,
+        liquidity,
         amount0Min,
         amount1Min,
       },
@@ -680,8 +795,8 @@ export class AmmInstruction {
         protocolPosition,
         tickArrayLower,
         tickArrayUpper,
-        recipientTokenAccount0: accounts.token0Account,
-        recipientTokenAccount1: accounts.token1Account,
+        recipientTokenAccount0: token0Account,
+        recipientTokenAccount1: token1Account,
         tokenVault0: ammPool.poolState.tokenVault0,
         tokenVault1: ammPool.poolState.tokenVault1,
         personalPosition,
@@ -689,6 +804,28 @@ export class AmmInstruction {
       },
       []
     );
+    instructions.push(ix);
+
+    if (isToken0WsolAccount) {
+      const closeIx = Spl.makeCloseAccountInstruction({
+        tokenAccount: token0Account,
+        owner: accounts.positionNftOwner,
+        payer: accounts.positionNftOwner,
+      });
+      instructions.push(closeIx);
+    }
+    if (isToken1WsolAccount) {
+      const closeIx = Spl.makeCloseAccountInstruction({
+        tokenAccount: token1Account,
+        owner: accounts.positionNftOwner,
+        payer: accounts.positionNftOwner,
+      });
+      instructions.push(closeIx);
+    }
+    return {
+      instructions,
+      signers,
+    };
   }
 
   /**
@@ -708,7 +845,10 @@ export class AmmInstruction {
     amountIn: BN,
     amountOutSlippage?: number,
     priceLimit?: Decimal
-  ): Promise<TransactionInstruction> {
+  ): Promise<{
+    instructions: TransactionInstruction[];
+    signers: Signer[];
+  }> {
     if (amountOutSlippage != undefined && amountOutSlippage < 0) {
       throw new Error("amountOutSlippage must be gtn 0");
     }
@@ -733,8 +873,41 @@ export class AmmInstruction {
     if (amountOutSlippage != undefined) {
       amountOutMin = expectedAmountOut.muln(1 - amountOutSlippage);
     }
-    return AmmInstruction.swap(
-      accounts,
+
+    let outputTokenMint = PublicKey.default;
+    if (zeroForOne) {
+      outputTokenMint = ammPool.poolState.tokenMint1;
+    } else {
+      outputTokenMint = ammPool.poolState.tokenMint0;
+    }
+
+    let instructions: TransactionInstruction[] = [];
+    let signers: Signer[] = [];
+
+    const { tokenAccount: inputTokenAccount, isWSol: isInputTokenWsol } =
+      await getTokenAccountForLiquidityChange(
+        ammPool.ctx,
+        accounts.payer,
+        inputTokenMint,
+        amountIn,
+        instructions,
+        signers
+      );
+
+    const { tokenAccount: outputTokenAccount, isWSol: isOutputTokenWsol } =
+      await getTokenAccountForLiquidityChange(
+        ammPool.ctx,
+        accounts.payer,
+        outputTokenMint,
+        new BN(0),
+        instructions,
+        signers
+      );
+
+    const ix = await AmmInstruction.swap(
+      accounts.payer,
+      inputTokenAccount,
+      outputTokenAccount,
       remainingAccounts,
       ammPool,
       inputTokenMint,
@@ -743,6 +916,28 @@ export class AmmInstruction {
       true,
       sqrtPriceLimitX64
     );
+    instructions.push(ix);
+
+    if (isInputTokenWsol) {
+      const closeIx = Spl.makeCloseAccountInstruction({
+        tokenAccount: inputTokenAccount,
+        owner: accounts.payer,
+        payer: accounts.payer,
+      });
+      instructions.push(closeIx);
+    }
+    if (isOutputTokenWsol) {
+      const closeIx = Spl.makeCloseAccountInstruction({
+        tokenAccount: outputTokenAccount,
+        owner: accounts.payer,
+        payer: accounts.payer,
+      });
+      instructions.push(closeIx);
+    }
+    return {
+      instructions,
+      signers,
+    };
   }
 
   /**
@@ -762,7 +957,10 @@ export class AmmInstruction {
     amountOut: BN,
     amountInSlippage?: number,
     priceLimit?: Decimal
-  ): Promise<TransactionInstruction> {
+  ): Promise<{
+    instructions: TransactionInstruction[];
+    signers: Signer[];
+  }> {
     if (amountInSlippage != undefined && amountInSlippage < 0) {
       throw new Error("amountInSlippage must be gtn 0");
     }
@@ -786,8 +984,41 @@ export class AmmInstruction {
     if (amountInSlippage != undefined) {
       amountInMax = expectedAmountIn.muln(1 + amountInSlippage);
     }
-    return AmmInstruction.swap(
-      accounts,
+
+    let inputTokenMint = PublicKey.default;
+    if (new PublicKey(outputTokenMint).equals(ammPool.poolState.tokenMint0)) {
+      inputTokenMint = ammPool.poolState.tokenMint1;
+    } else {
+      inputTokenMint = ammPool.poolState.tokenMint0;
+    }
+
+    let instructions: TransactionInstruction[] = [];
+    let signers: Signer[] = [];
+
+    const { tokenAccount: inputTokenAccount, isWSol: isInputTokenWsol } =
+      await getTokenAccountForLiquidityChange(
+        ammPool.ctx,
+        accounts.payer,
+        inputTokenMint,
+        amountInMax,
+        instructions,
+        signers
+      );
+
+    const { tokenAccount: outputTokenAccount, isWSol: isOutputTokenWsol } =
+      await getTokenAccountForLiquidityChange(
+        ammPool.ctx,
+        accounts.payer,
+        outputTokenMint,
+        new BN(0),
+        instructions,
+        signers
+      );
+
+    const ix = await AmmInstruction.swap(
+      accounts.payer,
+      inputTokenAccount,
+      outputTokenAccount,
       remainingAccounts,
       ammPool,
       outputTokenMint,
@@ -796,6 +1027,28 @@ export class AmmInstruction {
       false,
       sqrtPriceLimitX64
     );
+    instructions.push(ix);
+
+    if (isInputTokenWsol) {
+      const closeIx = Spl.makeCloseAccountInstruction({
+        tokenAccount: inputTokenAccount,
+        owner: accounts.payer,
+        payer: accounts.payer,
+      });
+      instructions.push(closeIx);
+    }
+    if (isOutputTokenWsol) {
+      const closeIx = Spl.makeCloseAccountInstruction({
+        tokenAccount: outputTokenAccount,
+        owner: accounts.payer,
+        payer: accounts.payer,
+      });
+      instructions.push(closeIx);
+    }
+    return {
+      instructions,
+      signers,
+    };
   }
 
   /**
@@ -813,16 +1066,62 @@ export class AmmInstruction {
     remainRouterPools: AmmPool[],
     amountIn: BN,
     amountOutSlippage?: number
-  ): Promise<TransactionInstruction> {
+  ): Promise<{
+    instructions: TransactionInstruction[];
+    signers: Signer[];
+  }> {
     if (amountOutSlippage != undefined && amountOutSlippage < 0) {
       throw new Error("amountOutSlippage must be gtn 0");
     }
     let remainingAccounts: AccountMeta[] = [];
+    let instructions: TransactionInstruction[] = [];
+    let signers: Signer[] = [];
+
+    const inputTokenMint = new PublicKey(firstPoolParam.inputTokenMint);
+    let wSolAccount = PublicKey.default;
+    let needWSolTokenAccount = false;
+    let allPool: AmmPool[] = [...remainRouterPools];
+    allPool.push(firstPoolParam.ammPool);
+    for (let i = 0; i < allPool.length; i++) {
+      if (isWSOLTokenMint(allPool[i].poolState.tokenMint0)) {
+        needWSolTokenAccount = true;
+      }
+      if (isWSOLTokenMint(allPool[i].poolState.tokenMint1)) {
+        needWSolTokenAccount = true;
+      }
+      break;
+    }
+    if (needWSolTokenAccount) {
+      if (isWSOLTokenMint(inputTokenMint)) {
+        const { tokenAccount: inputTokenAccount } =
+          await getTokenAccountForLiquidityChange(
+            firstPoolParam.ammPool.ctx,
+            payer,
+            inputTokenMint,
+            amountIn,
+            instructions,
+            signers
+          );
+        wSolAccount = inputTokenAccount;
+      } else {
+        const { tokenAccount: randomWSolAccount } =
+          await getTokenAccountForLiquidityChange(
+            firstPoolParam.ammPool.ctx,
+            payer,
+            new PublicKey(WSOL.mint),
+            new BN(0),
+            instructions,
+            signers
+          );
+        wSolAccount = randomWSolAccount;
+      }
+    }
 
     let result = await AmmInstruction.prepareOnePool(
       payer,
       amountIn,
-      firstPoolParam
+      firstPoolParam,
+      wSolAccount
     );
     remainingAccounts.push(...result.remains);
     const startInputTokenAccount = result.inputTokenAccount;
@@ -834,7 +1133,8 @@ export class AmmInstruction {
       result = await AmmInstruction.prepareOnePool(
         payer,
         result.amountOut,
-        param
+        param,
+        wSolAccount
       );
       remainingAccounts.push(...result.remains);
     }
@@ -842,7 +1142,7 @@ export class AmmInstruction {
     if (amountOutSlippage != undefined) {
       amountOutMin = amountOutMin.muln(1 - amountOutSlippage);
     }
-    return await swapRouterBaseInInstruction(
+    const ix = await swapRouterBaseInInstruction(
       firstPoolParam.ammPool.ctx.program,
       {
         amountIn,
@@ -855,10 +1155,26 @@ export class AmmInstruction {
         remainings: remainingAccounts,
       }
     );
+    instructions.push(ix);
+    if (!wSolAccount.equals(PublicKey.default)) {
+      const closeIx = Spl.makeCloseAccountInstruction({
+        tokenAccount: wSolAccount,
+        owner: payer,
+        payer: payer,
+      });
+      instructions.push(closeIx);
+    }
+
+    return {
+      instructions,
+      signers,
+    };
   }
 
   static async swap(
-    accounts: SwapAccounts,
+    payer: PublicKey,
+    inputTokenAccount: PublicKey,
+    outputTokenAccount: PublicKey,
     remainingAccounts: AccountMeta[],
     ammPool: AmmPool,
     inputTokenMint: PublicKey,
@@ -896,11 +1212,11 @@ export class AmmInstruction {
         isBaseInput,
       },
       {
-        payer: accounts.payer,
+        payer,
         ammConfig: poolState.ammConfig,
         poolState: ammPool.address,
-        inputTokenAccount: accounts.inputTokenAccount,
-        outputTokenAccount: accounts.outputTokenAccount,
+        inputTokenAccount,
+        outputTokenAccount,
         inputVault,
         outputVault,
         tickArray,
@@ -914,7 +1230,8 @@ export class AmmInstruction {
   static async prepareOnePool(
     owner: PublicKey,
     inputAmount: BN,
-    param: RouterPoolParam
+    param: RouterPoolParam,
+    wSolAccount?: PublicKey
   ): Promise<PrepareOnePoolResult> {
     if (!param.ammPool.isContain(param.inputTokenMint)) {
       throw new Error(
@@ -933,6 +1250,12 @@ export class AmmInstruction {
       outputVault = param.ammPool.poolState.tokenVault0;
       outputTokenMint = param.ammPool.poolState.tokenMint0;
     }
+    console.log(
+      "inputTokenMint1:",
+      param.inputTokenMint.toBase58(),
+      "outputTokenMint1:",
+      outputTokenMint.toString()
+    );
     const [expectedAmountOut, remainingAccounts] =
       await param.ammPool.getOutputAmountAndRemainAccounts(
         param.inputTokenMint,
@@ -941,18 +1264,46 @@ export class AmmInstruction {
     if (remainingAccounts.length == 0) {
       throw new Error("must has one tickArray");
     }
-    const inputTokenAccount = await Token.getAssociatedTokenAddress(
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
-      param.inputTokenMint,
-      owner
+    let inputTokenAccount = PublicKey.default;
+    if (isWSOLTokenMint(param.inputTokenMint)) {
+      if (wSolAccount == undefined || wSolAccount.equals(PublicKey.default)) {
+        throw new Error("wSol token account must be specialed");
+      }
+      inputTokenAccount = wSolAccount;
+    } else {
+      inputTokenAccount = await Token.getAssociatedTokenAddress(
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+        TOKEN_PROGRAM_ID,
+        param.inputTokenMint,
+        owner
+      );
+    }
+    console.log(
+      "inputTokenAccount2:",
+      inputTokenAccount.toBase58(),
+      "inputTokenMint2:",
+      param.inputTokenMint.toString()
     );
 
-    const outputTokenAccount = await Token.getAssociatedTokenAddress(
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
-      outputTokenMint,
-      owner
+    let outputTokenAccount = PublicKey.default;
+    if (isWSOLTokenMint(outputTokenMint)) {
+      if (wSolAccount == undefined || wSolAccount.equals(PublicKey.default)) {
+        throw new Error("wSol token account must be specialed");
+      }
+      outputTokenAccount = wSolAccount;
+    } else {
+      outputTokenAccount = await Token.getAssociatedTokenAddress(
+        ASSOCIATED_TOKEN_PROGRAM_ID,
+        TOKEN_PROGRAM_ID,
+        outputTokenMint,
+        owner
+      );
+    }
+    console.log(
+      "outputTokenAccount3:",
+      outputTokenAccount.toBase58(),
+      "outputTokenMint3:",
+      outputTokenMint.toString()
     );
     return {
       amountOut: expectedAmountOut,
@@ -994,4 +1345,44 @@ export class AmmInstruction {
       ],
     };
   }
+}
+
+async function getTokenAccountForLiquidityChange(
+  ctx: Context,
+  owner: PublicKey,
+  tokenMint: PublicKey,
+  amount: BN,
+  instructions: TransactionInstruction[],
+  signers: Signer[]
+): Promise<{
+  tokenAccount: PublicKey;
+  isWSol: boolean;
+}> {
+  let isWSol = false;
+  let tokenAccount = PublicKey.default;
+  if (isWSOLTokenMint(tokenMint)) {
+    const { newAccount, instructions: ixs } =
+      await Spl.makeCreateWrappedNativeAccountInstructions({
+        connection: ctx.connection,
+        owner: owner,
+        payer: owner,
+        amount: amount.toString(),
+      });
+    isWSol = true;
+    signers.push(newAccount);
+    tokenAccount = newAccount.publicKey;
+    instructions.push(...ixs);
+    console.log("new wsol account:", newAccount.publicKey.toBase58());
+  } else {
+    tokenAccount = await Token.getAssociatedTokenAddress(
+      ASSOCIATED_TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_ID,
+      tokenMint,
+      owner
+    );
+  }
+  return {
+    tokenAccount,
+    isWSol,
+  };
 }

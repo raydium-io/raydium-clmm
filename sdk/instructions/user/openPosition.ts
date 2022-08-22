@@ -45,7 +45,6 @@ export function openPositionInstruction(
     amount0Max,
     amount1Max,
   } = args;
-
   return program.methods
     .openPosition(
       tickLowerIndex,

@@ -5,6 +5,8 @@ import {
   Keypair,
   ComputeBudgetProgram,
   PublicKey,
+  TransactionInstruction,
+  Signer,
 } from "@solana/web3.js";
 import { Context, NodeWallet } from "../base";
 import { StateFetcher } from "../states";
@@ -14,11 +16,6 @@ import { AmmInstruction } from "../instructions";
 import { Config, defaultConfirmOptions } from "./config";
 import { AmmPool } from "../pool";
 import keypairFile from "./owner-keypair.json";
-import {
-  Token,
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  TOKEN_PROGRAM_ID,
-} from "@solana/spl-token";
 
 async function main() {
   const owner = Keypair.fromSeed(Uint8Array.from(keypairFile.slice(0, 32)));
@@ -43,18 +40,6 @@ async function main() {
     const poolStateData = await stateFetcher.getPoolState(
       new PublicKey(param.poolId)
     );
-    const token0Account = await Token.getAssociatedTokenAddress(
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
-      poolStateData.tokenMint0,
-      owner.publicKey
-    );
-    const token1Account = await Token.getAssociatedTokenAddress(
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
-      poolStateData.tokenMint1,
-      owner.publicKey
-    );
 
     const ammConfigData = await stateFetcher.getAmmConfig(
       new PublicKey(poolStateData.ammConfig)
@@ -76,6 +61,11 @@ async function main() {
       ammPool.poolState.tickSpacing
     );
 
+    let instructions: TransactionInstruction[] = [
+      additionalComputeBudgetInstruction,
+    ];
+    let signers: Signer[] = [owner];
+
     const priceLower = SqrtPriceMath.getSqrtPriceX64FromTick(tickLower);
     console.log(
       "tickLower:",
@@ -95,15 +85,17 @@ async function main() {
       "priceLower:",
       param.priceUpper
     );
-
     const nftMintAKeypair = new Keypair();
-    const [address, openIx] = await AmmInstruction.openPosition(
+    signers.push(nftMintAKeypair);
+    const {
+      personalPosition,
+      instructions: ixs,
+      signers: signer,
+    } = await AmmInstruction.openPosition(
       {
         payer: owner.publicKey,
         positionNftOwner: owner.publicKey,
         positionNftMint: nftMintAKeypair.publicKey,
-        token0Account: token0Account,
-        token1Account: token1Account,
       },
       ammPool,
       tickLower,
@@ -111,14 +103,22 @@ async function main() {
       param.liquidity,
       param.amountSlippage
     );
+    instructions.push(...ixs);
+    signers.push(...signer);
 
     const tx = await sendTransaction(
       ctx.provider.connection,
-      [additionalComputeBudgetInstruction, openIx],
-      [owner, nftMintAKeypair],
+      instructions,
+      signers,
       defaultConfirmOptions
     );
-    console.log("openPosition tx: ", tx, "account:", address.toBase58());
+    console.log(
+      "openPosition tx: ",
+      tx,
+      "account:",
+      personalPosition.toBase58(),
+      "\n"
+    );
   }
 }
 

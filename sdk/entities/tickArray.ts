@@ -59,6 +59,7 @@ export function checkTickArrayIsInitialized(
   let multiplier = tickSpacing * TICK_ARRAY_SIZE;
   let compressed = Math.floor(tick / multiplier) + 512;
   let bit_pos = Math.abs(compressed);
+  console.log("multiplier:",multiplier,"compressed:",compressed,"bit_pos:",bit_pos,"tick:", tick)
   return [bitmap.testn(bit_pos), (bit_pos - 512) * multiplier];
 }
 

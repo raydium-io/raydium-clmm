@@ -8,6 +8,7 @@ import keypairFile from "./admin-keypair.json";
 
 async function main() {
   const admin = Keypair.fromSeed(Uint8Array.from(keypairFile.slice(0, 32)));
+  console.log("admin:",admin.publicKey.toString())
   const connection = new Connection(
     Config.url,
     defaultConfirmOptions.commitment
