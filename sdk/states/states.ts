@@ -46,6 +46,8 @@ export type PoolState = {
   observationKey: PublicKey;
   observationUpdateDuration: number;
   tickArrayBitmap: BN[];
+  mint0Decimals: number;
+  mint1Decimals: number;
 };
 
 export type RewardInfo = {

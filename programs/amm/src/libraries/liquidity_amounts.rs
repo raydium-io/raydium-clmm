@@ -211,8 +211,28 @@ pub fn get_amounts_for_liquidity(
 
 #[cfg(test)]
 mod test {
+
     use super::*;
     use crate::libraries::sqrt_price_math;
+    use crate::libraries::tick_math;
+    #[test]
+    fn test_get_amounts_for_liquidity() {
+        // let current_sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(-1860).unwrap();
+        let current_sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(37577).unwrap();
+        let sqrt_price_x64_a = tick_math::get_sqrt_price_at_tick(34020).unwrap();
+        let sqrt_price_x64_b = tick_math::get_sqrt_price_at_tick(39180).unwrap();
+        let (amount0, amount1) = get_amounts_for_liquidity(
+            current_sqrt_price_x64,
+            sqrt_price_x64_a,
+            sqrt_price_x64_b,
+            100000000,
+        );
+        println!(
+            "get_amounts_for_liquidity ,amount0:{}, amount1:{}",
+            amount0, amount1
+        );
+    }
+
     #[test]
     fn test_liquidity_and_amounts_convert() {
         let current_sqrt_price_x64: u128 = 226137466252783162;

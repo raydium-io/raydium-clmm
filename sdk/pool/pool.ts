@@ -2,7 +2,13 @@ import { BN } from "@project-serum/anchor";
 import { AccountMeta, PublicKey } from "@solana/web3.js";
 import { AmmConfig, PoolState, StateFetcher } from "../states";
 import { Context } from "../base";
-import { NEGATIVE_ONE, SwapMath, Math as LibMath } from "../math";
+import {
+  NEGATIVE_ONE,
+  SwapMath,
+  Math as LibMath,
+  SqrtPriceMath,
+  getTickWithPriceAndTickspacing,
+} from "../math";
 import { CacheDataProviderImpl } from "./cacheProviderImpl";
 import Decimal from "decimal.js";
 import {
@@ -102,20 +108,24 @@ export class AmmPool {
 
   /**
    *
-   * @returns token0 price
+   * @returns token price
    */
-  public token0Price(): Decimal {
-    return LibMath.x64ToDecimal(this.poolState.sqrtPriceX64);
+  public tokenPrice(): Decimal {
+    return SqrtPriceMath.sqrtPriceX64ToPrice(
+      this.poolState.sqrtPriceX64,
+      this.poolState.mint0Decimals,
+      this.poolState.mint1Decimals
+    );
   }
 
-  /**
-   *
-   * @returns token1 price
-   */
-  public token1Price(): Decimal {
-    return new Decimal(1).div(this.token0Price());
+  public getRoundingTickWithPrice(price: Decimal): number {
+    return getTickWithPriceAndTickspacing(
+      price,
+      this.poolState.tickSpacing,
+      this.poolState.mint0Decimals,
+      this.poolState.mint1Decimals
+    );
   }
-
   /**
    *
    * @param inputTokenMint

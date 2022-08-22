@@ -7,6 +7,8 @@ import { sendTransaction, accountExist } from "../utils";
 import { AmmInstruction } from "../instructions";
 import { Config, defaultConfirmOptions } from "./config";
 import keypairFile from "./owner-keypair.json";
+import { SqrtPriceMath } from "../math";
+import { publicKey, Spl, struct, u32, u64, u8 } from "@raydium-io/raydium-sdk";
 
 async function main() {
   const owner = Keypair.fromSeed(Uint8Array.from(keypairFile.slice(0, 32)));
@@ -34,6 +36,33 @@ async function main() {
       programId: ctx.program.programId,
     });
 
+    const SPL_MINT_LAYOUT = struct([
+      u32("mintAuthorityOption"),
+      publicKey("mintAuthority"),
+      u64("supply"),
+      u8("decimals"),
+      u8("isInitialized"),
+      u32("freezeAuthorityOption"),
+      publicKey("freezeAuthority"),
+    ]);
+
+    const token0Data = await connection.getAccountInfo(
+      new PublicKey(param.tokenMint0)
+    );
+    if (!token0Data) {
+      throw new Error("token0Data is null");
+    }
+
+    const decimals0 = SPL_MINT_LAYOUT.decode(token0Data.data).decimals;
+
+    const token1Data = await connection.getAccountInfo(
+      new PublicKey(param.tokenMint1)
+    );
+    if (!token1Data) {
+      throw new Error("token1Data is null");
+    }
+    const decimals1 = SPL_MINT_LAYOUT.decode(token1Data.data).decimals;
+  console.log("decimals0:",decimals0,"decimals1:",decimals1)
     const [address, ixs] = await AmmInstruction.createPool(
       ctx,
       {
@@ -43,12 +72,14 @@ async function main() {
         tokenMint1: new PublicKey(param.tokenMint1),
         observation: observation.publicKey,
       },
-      param.initialPrice
+      param.initialPrice,
+      decimals0,
+      decimals1
     );
     const isExist = await accountExist(ctx.connection, address);
     if (isExist) {
       console.log("pool exist, account:", address.toBase58());
-      continue
+      continue;
     }
 
     const tx = await sendTransaction(

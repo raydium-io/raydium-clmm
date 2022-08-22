@@ -156,9 +156,7 @@ export class AmmInstruction {
     ctx: Context,
     ammConfig: PublicKey,
     owner: PublicKey,
-    newOwner: PublicKey,
-    tradeFeeRate: number,
-    protocolFeeRate: number
+    newOwner: PublicKey
   ): Promise<TransactionInstruction> {
     return await updateAmmConfigInstruction(
       ctx.program,
@@ -227,7 +225,9 @@ export class AmmInstruction {
   public static async createPool(
     ctx: Context,
     accounts: CreatePoolAccounts,
-    initialPrice: Decimal
+    initialPrice: Decimal,
+    tokenMint0Decimals: number,
+    tokenMint1Decimals: number
   ): Promise<[PublicKey, TransactionInstruction]> {
     // @ts-ignore
     if ((accounts.tokenMint0._bn as BN).gt(accounts.tokenMint1._bn as BN)) {
@@ -252,7 +252,11 @@ export class AmmInstruction {
       ctx.program.programId
     );
 
-    const initialPriceX64 = SqrtPriceMath.priceToSqrtPriceX64(initialPrice);
+    const initialPriceX64 = SqrtPriceMath.priceToSqrtPriceX64(
+      initialPrice,
+      tokenMint0Decimals,
+      tokenMint1Decimals
+    );
     const creatPoolIx = await createPoolInstruction(
       ctx.program,
       initialPriceX64,
@@ -289,6 +293,8 @@ export class AmmInstruction {
     ammPool: AmmPool,
     priceLower: Decimal,
     priceUpper: Decimal,
+    tokenMint0Decimals: number,
+    tokenMint1Decimals: number,
     liquidity: BN,
     amountSlippage?: number
   ): Promise<{
@@ -296,8 +302,16 @@ export class AmmInstruction {
     instructions: TransactionInstruction[];
     signers: Signer[];
   }> {
-    const tickLower = SqrtPriceMath.getTickFromPrice(priceLower);
-    const tickUpper = SqrtPriceMath.getTickFromPrice(priceUpper);
+    const tickLower = SqrtPriceMath.getTickFromPrice(
+      priceLower,
+      tokenMint0Decimals,
+      tokenMint1Decimals
+    );
+    const tickUpper = SqrtPriceMath.getTickFromPrice(
+      priceUpper,
+      tokenMint0Decimals,
+      tokenMint1Decimals
+    );
 
     return AmmInstruction.openPosition(
       accounts,
@@ -859,7 +873,11 @@ export class AmmInstruction {
         ? MIN_SQRT_PRICE_X64.add(ONE)
         : MAX_SQRT_PRICE_X64.sub(ONE);
     } else {
-      sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(priceLimit);
+      sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
+        priceLimit,
+        ammPool.poolState.mint0Decimals,
+        ammPool.poolState.mint1Decimals
+      );
     }
     const [expectedAmountOut, remainingAccounts] =
       await ammPool.getOutputAmountAndRemainAccounts(
@@ -868,7 +886,6 @@ export class AmmInstruction {
         sqrtPriceLimitX64,
         true
       );
-
     let amountOutMin = new BN(0);
     if (amountOutSlippage != undefined) {
       amountOutMin = expectedAmountOut.muln(1 - amountOutSlippage);
@@ -971,7 +988,11 @@ export class AmmInstruction {
         ? MIN_SQRT_PRICE_X64.add(ONE)
         : MAX_SQRT_PRICE_X64.sub(ONE);
     } else {
-      sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(priceLimit);
+      sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
+        priceLimit,
+        ammPool.poolState.mint0Decimals,
+        ammPool.poolState.mint1Decimals
+      );
     }
     const [expectedAmountIn, remainingAccounts] =
       await ammPool.getInputAmountAndAccounts(
@@ -1080,16 +1101,15 @@ export class AmmInstruction {
     const inputTokenMint = new PublicKey(firstPoolParam.inputTokenMint);
     let wSolAccount = PublicKey.default;
     let needWSolTokenAccount = false;
-    let allPool: AmmPool[] = [...remainRouterPools];
-    allPool.push(firstPoolParam.ammPool);
-    for (let i = 0; i < allPool.length; i++) {
-      if (isWSOLTokenMint(allPool[i].poolState.tokenMint0)) {
+    let allPool: AmmPool[] = [firstPoolParam.ammPool, ...remainRouterPools];
+    for (const pool of allPool) {
+      if (
+        isWSOLTokenMint(pool.poolState.tokenMint0) ||
+        isWSOLTokenMint(pool.poolState.tokenMint1)
+      ) {
         needWSolTokenAccount = true;
+        break;
       }
-      if (isWSOLTokenMint(allPool[i].poolState.tokenMint1)) {
-        needWSolTokenAccount = true;
-      }
-      break;
     }
     if (needWSolTokenAccount) {
       if (isWSOLTokenMint(inputTokenMint)) {
@@ -1199,10 +1219,12 @@ export class AmmInstruction {
     if (sqrtPriceLimitX64 == undefined) {
       sqrtPriceLimitX64 = new BN(0);
     }
+    console.log("swap remainingAccounts1:", remainingAccounts.length);
     const tickArray = remainingAccounts[0].pubkey;
-    if (remainingAccounts.length > 1) {
+    if (remainingAccounts.length >= 1) {
       remainingAccounts = remainingAccounts.slice(1, remainingAccounts.length);
     }
+    console.log("swap remainingAccounts:", remainingAccounts.length);
     return await swapInstruction(
       ctx.program,
       {

@@ -40,14 +40,26 @@ export abstract class SqrtPriceMath {
    */
   private constructor() {}
 
-  public static sqrtPriceX64ToPrice(sqrtPriceX64: BN): Decimal {
-    return Math.x64ToDecimal(sqrtPriceX64).pow(2);
+  public static sqrtPriceX64ToPrice(
+    sqrtPriceX64: BN,
+    decimals0: number,
+    decimals1: number
+  ): Decimal {
+    return Math.x64ToDecimal(sqrtPriceX64)
+      .pow(2)
+      .mul(Decimal.pow(10, decimals0 - decimals1));
   }
-  
-  public static priceToSqrtPriceX64(price: Decimal): BN {
-    return Math.decimalToX64(price.sqrt());
+
+  public static priceToSqrtPriceX64(
+    price: Decimal,
+    decimals0: number,
+    decimals1: number
+  ): BN {
+    return Math.decimalToX64(
+      price.mul(Decimal.pow(10, decimals1 - decimals0)).sqrt()
+    );
   }
-  
+
   /**
    *
    * @param sqrtPriceX64
@@ -151,7 +163,9 @@ export abstract class SqrtPriceMath {
     } else {
       let amountMulSqrtPrice = amount.mul(sqrtPriceX64);
       if (!liquidityLeftShift.gt(amountMulSqrtPrice)) {
-        throw new Error("getNextSqrtPriceFromToken0AmountRoundingUp,liquidityLeftShift must gt amountMulSqrtPrice");
+        throw new Error(
+          "getNextSqrtPriceFromToken0AmountRoundingUp,liquidityLeftShift must gt amountMulSqrtPrice"
+        );
       }
       const denominator = liquidityLeftShift.sub(amountMulSqrtPrice);
       return Math.mulDivCeil(liquidityLeftShift, sqrtPriceX64, denominator);
@@ -178,16 +192,18 @@ export abstract class SqrtPriceMath {
     } else {
       const amountDivLiquidity = Math.mulDivRoundingUp(deltaY, ONE, liquidity);
       if (!sqrtPriceX64.gt(amountDivLiquidity)) {
-        throw new Error("getNextSqrtPriceFromToken1AmountRoundingDown sqrtPriceX64 must gt amountDivLiquidity");
+        throw new Error(
+          "getNextSqrtPriceFromToken1AmountRoundingDown sqrtPriceX64 must gt amountDivLiquidity"
+        );
       }
       return sqrtPriceX64.sub(amountDivLiquidity);
     }
   }
 
   /**
-   * 
-   * @param tick 
-   * @returns 
+   *
+   * @param tick
+   * @returns
    */
   public static getSqrtPriceX64FromTick(tick: number): BN {
     if (!Number.isInteger(tick)) {
@@ -244,14 +260,19 @@ export abstract class SqrtPriceMath {
   }
 
   /**
-   * 
-   * @param price 
-   * @returns 
+   *
+   * @param price
+   * @returns
    */
-  public static getTickFromPrice(price: Decimal): number {
-    return SqrtPriceMath.getTickFromSqrtPriceX64( SqrtPriceMath.priceToSqrtPriceX64(price))
+  public static getTickFromPrice(
+    price: Decimal,
+    decimals0: number,
+    decimals1: number
+  ): number {
+    return SqrtPriceMath.getTickFromSqrtPriceX64(
+      SqrtPriceMath.priceToSqrtPriceX64(price, decimals0, decimals1)
+    );
   }
-
 
   /**
    *
