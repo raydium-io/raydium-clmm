@@ -36,7 +36,7 @@ async function main() {
     const poolStateData = await stateFetcher.getPoolState(
       new PublicKey(param.poolId)
     );
-
+    
     const ammConfigData = await stateFetcher.getAmmConfig(
       new PublicKey(poolStateData.ammConfig)
     );
@@ -47,28 +47,42 @@ async function main() {
       ammConfigData,
       stateFetcher
     );
-
+    console.log("pool price:",ammPool.tokenPrice())
     const personalPositionData =
       await ammPool.stateFetcher.getPersonalPositionState(
         new PublicKey(param.positionId)
       );
 
+    const priceLowerX64 = SqrtPriceMath.getSqrtPriceX64FromTick(
+      personalPositionData.tickLowerIndex
+    );
     console.log(
       "personalPositionData.tickLowerIndex:",
       personalPositionData.tickLowerIndex,
+      "priceLowerX64:",
+      priceLowerX64.toString(),
       "priceLower:",
-      SqrtPriceMath.getSqrtPriceX64FromTick(
-        personalPositionData.tickLowerIndex
-      ).toString()
+      SqrtPriceMath.sqrtPriceX64ToPrice(
+        priceLowerX64,
+        ammPool.poolState.mint0Decimals,
+        ammPool.poolState.mint1Decimals
+      )
     );
 
+    const priceUpperX64 = SqrtPriceMath.getSqrtPriceX64FromTick(
+      personalPositionData.tickUpperIndex
+    );
     console.log(
       "personalPositionData.tickUpperIndex:",
       personalPositionData.tickUpperIndex,
+      "priceUpperX64:",
+      priceUpperX64.toString(),
       "priceUpper:",
-      SqrtPriceMath.getSqrtPriceX64FromTick(
-        personalPositionData.tickUpperIndex
-      ).toString()
+      SqrtPriceMath.sqrtPriceX64ToPrice(
+        priceUpperX64,
+        ammPool.poolState.mint0Decimals,
+        ammPool.poolState.mint1Decimals
+      )
     );
 
     let instructions: TransactionInstruction[] = [];

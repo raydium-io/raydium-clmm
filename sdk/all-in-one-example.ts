@@ -56,8 +56,8 @@ export async function main() {
   const programId = new PublicKey(
     "devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU"
   );
-  // const url = "https://api.devnet.solana.com";
-  const url = "http://127.0.0.1:8899";
+  const url = "https://api.devnet.solana.com";
+  // const url = "http://127.0.0.1:8899";
   const ctx = await getContext(programId, owner, url);
   const stateFetcher = new StateFetcher(ctx.program);
 
@@ -88,7 +88,9 @@ export async function main() {
     ammConfigAddress,
     token0.publicKey,
     token1.publicKey,
-    new Decimal(1)
+    new Decimal(1),
+    6,
+    6
   );
   console.log("createPool tx:", poolTx);
 
@@ -143,7 +145,7 @@ export async function main() {
   console.log("decreaseLiquidity tx:", tx);
 
   // swapBaseIn with limit price
-  let limitPrice = ammPoolA.token0Price().sub(new Decimal("0.0000002"));
+  let limitPrice = ammPoolA.tokenPrice().sub(new Decimal("0.0000002"));
   // because open position and add liquidity to the pool, we should load tickArray cache data
   await ammPoolA.loadCache(true);
 
@@ -203,7 +205,9 @@ export async function main() {
     ammConfigAddress,
     token1.publicKey,
     token2.publicKey,
-    new Decimal(1)
+    new Decimal(1),
+    6,
+    6
   );
 
   const poolStateBData = await stateFetcher.getPoolState(poolBAddress);
@@ -371,6 +375,8 @@ async function createPool(
   token0Mint: PublicKey,
   token1Mint: PublicKey,
   initialPrice: Decimal,
+  tokenMint0Decimals: number,
+  tokenMint1Decimals: number,
   confirmOptions?: ConfirmOptions
 ): Promise<[PublicKey, TransactionSignature]> {
   const observation = new Keypair();
@@ -392,7 +398,9 @@ async function createPool(
       tokenMint1: token1Mint,
       observation: observation.publicKey,
     },
-    initialPrice
+    initialPrice,
+    tokenMint0Decimals,
+    tokenMint1Decimals
   );
 
   const tx = await sendTransaction(
@@ -420,14 +428,8 @@ async function createPersonalPosition(
     additionalFee: 0,
   });
 
-  const tickLower = getTickWithPriceAndTickspacing(
-    priceLower,
-    ammPool.poolState.tickSpacing
-  );
-  const tickUpper = getTickWithPriceAndTickspacing(
-    priceUpper,
-    ammPool.poolState.tickSpacing
-  );
+  const tickLower = ammPool.getRoundingTickWithPrice(priceLower);
+  const tickUpper = ammPool.getRoundingTickWithPrice(priceUpper);
 
   const liquidity = LiquidityMath.getLiquidityFromTokenAmounts(
     ammPool.poolState.sqrtPriceX64,

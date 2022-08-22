@@ -34,53 +34,7 @@ export class StateFetcher {
   }
 
   public async getPoolState(address: PublicKey): Promise<PoolState> {
-    const {
-      bump,
-      ammConfig,
-      owner,
-      tokenMint0,
-      tokenMint1,
-      tokenVault0,
-      tokenVault1,
-      tickCurrent,
-      tickSpacing,
-      liquidity,
-      sqrtPriceX64,
-      feeGrowthGlobal0X64,
-      feeGrowthGlobal1X64,
-      protocolFeesToken0,
-      protocolFeesToken1,
-      rewardLastUpdatedTimestamp,
-      rewardInfos,
-      observationIndex,
-      observationKey,
-      observationUpdateDuration,
-      tickArrayBitmap,
-    } = await this.program.account.poolState.fetch(address);
-    const rewards = rewardInfos as RewardInfo[];
-    return {
-      bump,
-      ammConfig,
-      owner,
-      tokenMint0,
-      tokenMint1,
-      tokenVault0,
-      tokenVault1,
-      tickCurrent,
-      tickSpacing,
-      liquidity,
-      sqrtPriceX64,
-      feeGrowthGlobal0X64,
-      feeGrowthGlobal1X64,
-      protocolFeesToken0,
-      protocolFeesToken1,
-      rewardLastUpdatedTimestamp,
-      rewardInfos: rewards,
-      observationIndex,
-      observationKey,
-      observationUpdateDuration,
-      tickArrayBitmap,
-    };
+    return await this.program.account.poolState.fetch(address) as PoolState;
   }
 
   public async getTickArrayState(address: PublicKey): Promise<TickArrayState> {
@@ -106,8 +60,8 @@ export class StateFetcher {
       tickLowerIndex,
       tickUpperIndex,
       liquidity,
-      feeGrowthInside0Last,
-      feeGrowthInside1Last,
+      feeGrowthInside0LastX64,
+      feeGrowthInside1LastX64,
       tokenFeesOwed0,
       tokenFeesOwed1,
       rewardInfos,
@@ -122,8 +76,8 @@ export class StateFetcher {
       tickLowerIndex,
       tickUpperIndex,
       liquidity,
-      feeGrowthInside0LastX64: feeGrowthInside0Last,
-      feeGrowthInside1LastX64: feeGrowthInside1Last,
+      feeGrowthInside0LastX64,
+      feeGrowthInside1LastX64,
       tokenFeesOwed0,
       tokenFeesOwed1,
       rewardInfos: rewards,

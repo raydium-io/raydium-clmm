@@ -99,7 +99,6 @@ export abstract class SwapMath {
       accounts: [] as AccountMeta[],
       liquidity: liquidity,
     };
-
     let loopCount = 0;
     // loop across ticks until input liquidity is consumed, or the limit price is reached
     while (
@@ -195,7 +194,7 @@ export abstract class SwapMath {
 
       ++loopCount;
     }
-
+    console.log("state.accounts2:",state.accounts.length,lastSavedTickArrayStartIndex,"state.tick:",state.tick)
     return {
       amountCalculated: state.amountCalculated,
       sqrtPriceX64: state.sqrtPriceX64,
