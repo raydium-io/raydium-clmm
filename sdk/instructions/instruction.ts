@@ -231,9 +231,7 @@ export class AmmInstruction {
   ): Promise<[PublicKey, TransactionInstruction]> {
     // @ts-ignore
     if ((accounts.tokenMint0._bn as BN).gt(accounts.tokenMint1._bn as BN)) {
-      let tmp = accounts.tokenMint0;
-      accounts.tokenMint0 = accounts.tokenMint1;
-      accounts.tokenMint1 = tmp;
+      throw new Error("tokenMint0 must less than tokenMint1");
     }
     const [poolAddres, _bump1] = await getPoolAddress(
       accounts.ammConfig,
@@ -257,6 +255,7 @@ export class AmmInstruction {
       tokenMint0Decimals,
       tokenMint1Decimals
     );
+    console.log("sjsssjskji")
     const creatPoolIx = await createPoolInstruction(
       ctx.program,
       initialPriceX64,
@@ -890,7 +889,12 @@ export class AmmInstruction {
     if (amountOutSlippage != undefined) {
       amountOutMin = expectedAmountOut.muln(1 - amountOutSlippage);
     }
-
+    console.log(
+      "swapBaseIn amountIn:",
+      amountIn.toString(),
+      "expectedAmountOut:",
+      expectedAmountOut.toString()
+    );
     let outputTokenMint = PublicKey.default;
     if (zeroForOne) {
       outputTokenMint = ammPool.poolState.tokenMint1;

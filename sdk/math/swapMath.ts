@@ -194,7 +194,7 @@ export abstract class SwapMath {
 
       ++loopCount;
     }
-    console.log("state.accounts2:",state.accounts.length,lastSavedTickArrayStartIndex,"state.tick:",state.tick)
+    console.log("swapCompute finish, state.tick:",state.tick)
     return {
       amountCalculated: state.amountCalculated,
       sqrtPriceX64: state.sqrtPriceX64,

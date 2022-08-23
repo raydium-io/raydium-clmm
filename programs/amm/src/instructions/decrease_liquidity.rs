@@ -84,7 +84,8 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     amount_0_min: u64,
     amount_1_min: u64,
 ) -> Result<()> {
-    let mut pool_state = ctx.accounts.pool_state.as_mut().clone();
+    assert!(liquidity <= ctx.accounts.personal_position.liquidity);
+    let mut pool_state = ctx.accounts.pool_state.as_mut();
 
     let protocol_position_state = ctx.accounts.protocol_position.as_mut();
     let (decrease_amount_0, decrease_amount_1) = burn_liquidity(
@@ -94,7 +95,6 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         protocol_position_state,
         liquidity,
     )?;
-
     if liquidity > 0 {
         require!(
             decrease_amount_0 >= amount_0_min && decrease_amount_1 >= amount_1_min,
@@ -121,6 +121,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         protocol_position_state.fee_growth_inside_0_last_x64;
     personal_position.fee_growth_inside_1_last_x64 =
         protocol_position_state.fee_growth_inside_1_last_x64;
+
     let latest_fees_owed_0 = personal_position.token_fees_owed_0;
     let latest_fees_owed_1 = personal_position.token_fees_owed_1;
     personal_position.token_fees_owed_0 = 0;
@@ -143,7 +144,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
             latest_fees_owed_0,
         );
         transfer_from_pool_vault_to_user(
-            ctx.accounts.pool_state.clone().as_mut(),
+            pool_state,
             &ctx.accounts.token_vault_0,
             &ctx.accounts.recipient_token_account_0,
             &ctx.accounts.token_program,
@@ -160,7 +161,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
             latest_fees_owed_1,
         );
         transfer_from_pool_vault_to_user(
-            ctx.accounts.pool_state.clone().as_mut(),
+            pool_state,
             &ctx.accounts.token_vault_1,
             &ctx.accounts.recipient_token_account_1,
             &ctx.accounts.token_program,
@@ -219,7 +220,7 @@ pub fn burn_liquidity<'b, 'info>(
             pool_state.tick_spacing as i32,
             false,
         )?;
-        if tick_array_lower.initialized_tick_count <= 0 {
+        if tick_array_lower.initialized_tick_count == 0 {
             pool_state.flip_tick_array_bit(tick_array_lower.start_tick_index)?;
         }
     }
@@ -229,14 +230,13 @@ pub fn burn_liquidity<'b, 'info>(
             pool_state.tick_spacing as i32,
             false,
         )?;
-        if tick_array_upper.initialized_tick_count <= 0 {
+        if tick_array_upper.initialized_tick_count == 0 {
             pool_state.flip_tick_array_bit(tick_array_upper.start_tick_index)?;
         }
     }
 
     let amount_0 = (-amount_0_int) as u64;
     let amount_1 = (-amount_1_int) as u64;
-
     Ok((amount_0, amount_1))
 }
 

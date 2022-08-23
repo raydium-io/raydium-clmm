@@ -320,33 +320,63 @@ pub fn add_liquidity<'b, 'info>(
     let balance_1_before = accounts.token_vault_1.amount;
 
     let mut tick_array_lower = accounts.tick_array_lower.load_mut()?;
-    tick_array_lower.update_initialized_tick_count(
-        tick_lower_index,
-        accounts.pool_state.tick_spacing as i32,
-        true,
-    )?;
+    // tick_array_lower.update_initialized_tick_count(
+    //     tick_lower_index,
+    //     accounts.pool_state.tick_spacing as i32,
+    //     true,
+    // )?;
     let tick_lower_state = tick_array_lower
         .get_tick_state_mut(tick_lower_index, accounts.pool_state.tick_spacing as i32)?;
 
     let mut tick_array_upper = accounts.tick_array_upper.load_mut()?;
-    tick_array_upper.update_initialized_tick_count(
-        tick_upper_index,
-        accounts.pool_state.tick_spacing as i32,
-        true,
-    )?;
+    // tick_array_upper.update_initialized_tick_count(
+    //     tick_upper_index,
+    //     accounts.pool_state.tick_spacing as i32,
+    //     true,
+    // )?;
     let tick_upper_state = tick_array_upper
         .get_tick_state_mut(tick_upper_index, accounts.pool_state.tick_spacing as i32)?;
 
     tick_lower_state.tick = tick_lower_index;
     tick_upper_state.tick = tick_upper_index;
 
-    let (amount_0_int, amount_1_int, _, _) = modify_position(
+    let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = modify_position(
         i128::try_from(liquidity).unwrap(),
         accounts.pool_state,
         accounts.protocol_position,
         tick_lower_state,
         tick_upper_state,
     )?;
+
+    if flip_tick_lower {
+        let before_init_tick_count = tick_array_lower.initialized_tick_count;
+        tick_array_lower.update_initialized_tick_count(
+            tick_lower_index,
+            accounts.pool_state.tick_spacing as i32,
+            true,
+        )?;
+
+        if before_init_tick_count == 0 {
+            accounts
+                .pool_state
+                .flip_tick_array_bit(tick_array_lower.start_tick_index)?;
+        }
+    }
+    if flip_tick_upper {
+        let before_init_tick_count = tick_array_upper.initialized_tick_count;
+        tick_array_upper.update_initialized_tick_count(
+            tick_upper_index,
+            accounts.pool_state.tick_spacing as i32,
+            true,
+        )?;
+
+        if before_init_tick_count == 0 {
+            accounts
+                .pool_state
+                .flip_tick_array_bit(tick_array_upper.start_tick_index)?;
+        }
+    }
+
     let amount_0 = amount_0_int as u64;
     let amount_1 = amount_1_int as u64;
     if amount_0 > 0 {
@@ -412,7 +442,6 @@ pub fn modify_position<'info>(
             tick_upper_state.tick,
             liquidity_delta,
         )?;
-
         if pool_state.tick_current >= tick_lower_state.tick
             && pool_state.tick_current < tick_upper_state.tick
         {

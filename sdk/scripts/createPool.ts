@@ -7,9 +7,7 @@ import { sendTransaction, accountExist } from "../utils";
 import { AmmInstruction } from "../instructions";
 import { Config, defaultConfirmOptions } from "./config";
 import keypairFile from "./owner-keypair.json";
-import { SqrtPriceMath } from "../math";
-import { publicKey, Spl, struct, u32, u64, u8 } from "@raydium-io/raydium-sdk";
-
+import { SPL_ACCOUNT_LAYOUT, SPL_MINT_LAYOUT } from "@raydium-io/raydium-sdk";
 async function main() {
   const owner = Keypair.fromSeed(Uint8Array.from(keypairFile.slice(0, 32)));
   const connection = new Connection(
@@ -36,40 +34,33 @@ async function main() {
       programId: ctx.program.programId,
     });
 
-    const SPL_MINT_LAYOUT = struct([
-      u32("mintAuthorityOption"),
-      publicKey("mintAuthority"),
-      u64("supply"),
-      u8("decimals"),
-      u8("isInitialized"),
-      u32("freezeAuthorityOption"),
-      publicKey("freezeAuthority"),
-    ]);
+    const tokenMint0 = new PublicKey(param.tokenMint0);
+    const tokenMint1 = new PublicKey(param.tokenMint1);
+    // @ts-ignore
+    if ((tokenMint0._bn as BN).gt(tokenMint1._bn as BN)) {
+      throw new Error("tokenMint0 must less than tokenMint1");
+    }
 
-    const token0Data = await connection.getAccountInfo(
-      new PublicKey(param.tokenMint0)
-    );
+    const token0Data = await connection.getAccountInfo(tokenMint0);
     if (!token0Data) {
       throw new Error("token0Data is null");
     }
 
     const decimals0 = SPL_MINT_LAYOUT.decode(token0Data.data).decimals;
 
-    const token1Data = await connection.getAccountInfo(
-      new PublicKey(param.tokenMint1)
-    );
+    const token1Data = await connection.getAccountInfo(tokenMint1);
     if (!token1Data) {
       throw new Error("token1Data is null");
     }
     const decimals1 = SPL_MINT_LAYOUT.decode(token1Data.data).decimals;
-  console.log("decimals0:",decimals0,"decimals1:",decimals1)
+    console.log("decimals0:", decimals0, "decimals1:", decimals1);
     const [address, ixs] = await AmmInstruction.createPool(
       ctx,
       {
         poolCreator: owner.publicKey,
         ammConfig: new PublicKey(param.ammConfig),
-        tokenMint0: new PublicKey(param.tokenMint0),
-        tokenMint1: new PublicKey(param.tokenMint1),
+        tokenMint0: tokenMint0,
+        tokenMint1: tokenMint1,
         observation: observation.publicKey,
       },
       param.initialPrice,
