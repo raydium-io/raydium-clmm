@@ -59,6 +59,7 @@ pub struct IncreaseLiquidity<'info> {
     /// The address that holds pool tokens for token_0
     #[account(
         mut,
+        token::mint = pool_state.token_mint_0,
         constraint = token_vault_0.key() == pool_state.token_vault_0
     )]
     pub token_vault_0: Box<Account<'info, TokenAccount>>,
@@ -66,6 +67,7 @@ pub struct IncreaseLiquidity<'info> {
     /// The address that holds pool tokens for token_1
     #[account(
         mut,
+        token::mint = pool_state.token_mint_1,
         constraint = token_vault_1.key() == pool_state.token_vault_1
     )]
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
@@ -102,29 +104,29 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         tick_lower,
         tick_upper,
     )?;
-    let updated_procotol_position = accounts.protocol_position;
+    let updated_protocol_position = accounts.protocol_position;
 
     let personal_position = ctx.accounts.personal_position.as_mut();
     personal_position.token_fees_owed_0 = calculate_latest_token_fees(
         personal_position.token_fees_owed_0,
         personal_position.fee_growth_inside_0_last_x64,
-        updated_procotol_position.fee_growth_inside_0_last,
+        updated_protocol_position.fee_growth_inside_0_last_x64,
         personal_position.liquidity,
     );
     personal_position.token_fees_owed_1 = calculate_latest_token_fees(
         personal_position.token_fees_owed_1,
         personal_position.fee_growth_inside_1_last_x64,
-        updated_procotol_position.fee_growth_inside_1_last,
+        updated_protocol_position.fee_growth_inside_1_last_x64,
         personal_position.liquidity,
     );
 
     personal_position.fee_growth_inside_0_last_x64 =
-        updated_procotol_position.fee_growth_inside_0_last;
+        updated_protocol_position.fee_growth_inside_0_last_x64;
     personal_position.fee_growth_inside_1_last_x64 =
-        updated_procotol_position.fee_growth_inside_1_last;
+        updated_protocol_position.fee_growth_inside_1_last_x64;
 
     // update rewards, must update before increase liquidity
-    personal_position.update_rewards(updated_procotol_position.reward_growth_inside)?;
+    personal_position.update_rewards(updated_protocol_position.reward_growth_inside)?;
     personal_position.liquidity = personal_position.liquidity.checked_add(liquidity).unwrap();
 
     emit!(IncreaseLiquidityEvent {

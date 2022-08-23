@@ -1,5 +1,5 @@
 use crate::error::ErrorCode;
-use crate::libraries::{liquidity_math, sqrt_price_math, tick_math};
+use crate::libraries::{liquidity_math, sqrt_price_math};
 use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
@@ -148,6 +148,7 @@ pub struct OpenPosition<'info> {
     /// The address that holds pool tokens for token_0
     #[account(
         mut,
+        token::mint = pool_state.token_mint_0,
         constraint = token_vault_0.key() == pool_state.token_vault_0
     )]
     pub token_vault_0: Box<Account<'info, TokenAccount>>,
@@ -155,6 +156,7 @@ pub struct OpenPosition<'info> {
     /// The address that holds pool tokens for token_1
     #[account(
         mut,
+        token::mint = pool_state.token_mint_1,
         constraint = token_vault_1.key() == pool_state.token_vault_1
     )]
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
@@ -199,12 +201,6 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         ctx.accounts.pool_state.tick_spacing,
     )?;
 
-    // check if protocol position is initilized
-    if ctx.accounts.protocol_position.bump == 0 {
-        let position_account = &mut ctx.accounts.protocol_position;
-        position_account.bump = *ctx.bumps.get("protocol_position").unwrap();
-    }
-
     let tick_array_lower_state = TickArrayState::get_or_create_tick_array(
         ctx.accounts.payer.to_account_info(),
         ctx.accounts.tick_array_lower.to_account_info(),
@@ -226,6 +222,12 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     };
 
     let pool_state_info = ctx.accounts.pool_state.to_account_info();
+    // check if protocol position is initilized
+    if ctx.accounts.protocol_position.bump == 0 {
+        let protocol_position = &mut ctx.accounts.protocol_position;
+        protocol_position.bump = *ctx.bumps.get("protocol_position").unwrap();
+        // protocol_position.pool_id = pool_state_info.key();
+    }
 
     let amm_config_key = ctx.accounts.pool_state.amm_config;
     let token_mint_0 = ctx.accounts.pool_state.token_mint_0.key();
@@ -285,9 +287,9 @@ pub fn open_position<'a, 'b, 'c, 'info>(
 
     let updated_protocol_position = add_liquidity_accounts.protocol_position;
     personal_position.fee_growth_inside_0_last_x64 =
-        updated_protocol_position.fee_growth_inside_0_last;
+        updated_protocol_position.fee_growth_inside_0_last_x64;
     personal_position.fee_growth_inside_1_last_x64 =
-        updated_protocol_position.fee_growth_inside_1_last;
+        updated_protocol_position.fee_growth_inside_1_last_x64;
     personal_position.update_rewards(updated_protocol_position.reward_growth_inside)?;
 
     emit!(CreatePersonalPositionEvent {
@@ -502,22 +504,6 @@ pub fn update_position<'info>(
         }
     }
     Ok((flipped_lower, flipped_upper))
-}
-
-fn check_tick_array_start_index(
-    tick_array_start_index: i32,
-    tick_index: i32,
-    tick_spacing: u16,
-) -> Result<()> {
-    check_tick_boundary(tick_index, tick_spacing)?;
-    let expect_start_index =
-        TickArrayState::get_arrary_start_index(tick_index, tick_spacing as i32);
-    require_eq!(tick_array_start_index, expect_start_index);
-    assert!(
-        tick_array_start_index >= tick_math::MIN_TICK
-            && tick_array_start_index <= tick_math::MAX_TICK
-    );
-    Ok(())
 }
 
 fn create_nft_with_metadata<'info>(

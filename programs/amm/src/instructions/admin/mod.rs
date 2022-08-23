@@ -15,3 +15,9 @@ pub use set_reward_emissions::*;
 
 pub mod reset_sqrt_price;
 pub use reset_sqrt_price::*;
+
+pub mod close_personal_position;
+pub use close_personal_position::*;
+
+pub mod close_protocol_position;
+pub use close_protocol_position::*;

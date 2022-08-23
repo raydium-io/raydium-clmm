@@ -485,6 +485,22 @@ pub fn check_tick_boundary(tick: i32, tick_spacing: u16) -> Result<()> {
     Ok(())
 }
 
+pub fn check_tick_array_start_index(
+    tick_array_start_index: i32,
+    tick_index: i32,
+    tick_spacing: u16,
+) -> Result<()> {
+    check_tick_boundary(tick_index, tick_spacing)?;
+    let expect_start_index =
+        TickArrayState::get_arrary_start_index(tick_index, tick_spacing as i32);
+    require_eq!(tick_array_start_index, expect_start_index);
+    assert!(
+        tick_array_start_index >= tick_math::MIN_TICK
+            && tick_array_start_index <= tick_math::MAX_TICK
+    );
+    Ok(())
+}
+
 /// Common checks for valid tick inputs.
 ///
 /// # Arguments

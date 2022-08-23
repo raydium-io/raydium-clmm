@@ -125,7 +125,28 @@ impl PoolState {
         )
         .unwrap()
     }
-    
+
+    pub fn pool_check_reset(&mut self, sqrt_price_x64: u128, tick: i32) -> Result<()> {
+        if !U1024(self.tick_array_bitmap).is_zero() {
+            return err!(ErrorCode::NotApproved);
+        }
+        self.sqrt_price_x64 = sqrt_price_x64;
+        self.tick_current = tick;
+        self.liquidity = 0;
+        self.observation_index = 0;
+        self.fee_growth_global_0_x64 = 0;
+        self.fee_growth_global_1_x64 = 0;
+        self.protocol_fees_token_0 = 0;
+        self.protocol_fees_token_1 = 0;
+        self.swap_in_amount_token_0 = 0;
+        self.swap_out_amount_token_1 = 0;
+        self.swap_in_amount_token_1 = 0;
+        self.swap_out_amount_token_0 = 0;
+        self.reward_last_updated_timestamp = 0;
+        self.reward_infos = [RewardInfo::new(self.owner); REWARD_NUM];
+        Ok(())
+    }
+
     pub fn initialize_reward(
         &mut self,
         curr_timestamp: u64,

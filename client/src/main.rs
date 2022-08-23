@@ -7,6 +7,7 @@ use solana_account_decoder::{
 };
 use solana_client::{rpc_client::RpcClient, rpc_request::TokenAccountsFilter};
 use solana_sdk::{
+    program_pack::Pack,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
     transaction::Transaction,
@@ -23,19 +24,8 @@ mod instructions;
 use instructions::amm_instructions::*;
 use instructions::rpc::*;
 use instructions::token_instructions::*;
+use instructions::utils::*;
 use raydium_amm_v3::libraries::{fixed_point_64, tick_math};
-
-const Q_RATIO: f64 = 1.0001;
-fn tick_to_price(tick: i32) -> f64 {
-    Q_RATIO.powi(tick)
-}
-fn price_to_tick(price: f64) -> i32 {
-    price.log(Q_RATIO) as i32
-}
-fn tick_to_sqrt_price(tick: i32) -> f64 {
-    Q_RATIO.powi(tick).sqrt()
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClientConfig {
     http_url: String,
@@ -98,6 +88,11 @@ fn load_cfg(client_config: &String) -> Result<ClientConfig> {
     );
 
     let pool_id_account = if mint0 != None && mint1 != None {
+        if mint0.unwrap() > mint1.unwrap() {
+            let temp_mint = mint0;
+            mint0 = mint1;
+            mint1 = temp_mint;
+        }
         Some(
             Pubkey::find_program_address(
                 &[
@@ -227,18 +222,6 @@ fn main() -> Result<()> {
         std::io::stdin().read_line(&mut line).unwrap();
         let v: Vec<&str> = line.trim().split(' ').collect();
         match &v[0][..] {
-            "gene_discriminator_zero_copy_account" => {
-                // let account_name = v[1];
-                // let mut discriminator = [0u8; 8];
-                // let discriminator_preimage = {
-                //     // For now, zero copy accounts can't be namespaced.
-                //     format!("account:{}", account_name)
-                // };
-                // discriminator.copy_from_slice(
-                //     &anchor_syn::hash::hash(discriminator_preimage.as_bytes()).to_bytes()[..8],
-                // );
-                // println!("{:?}", discriminator);
-            }
             "mint0" => {
                 let keypair_path = "KeyPairs/mint0_keypair.json";
                 if !path_is_exist(keypair_path) {
@@ -418,10 +401,20 @@ fn main() -> Result<()> {
                     println!("invalid command: [pcfg config_index]");
                 }
             }
-            "set_new_cfg_owner" => {
+            "update_amm_cfg" => {
                 if v.len() == 3 {
                     let config_index = v[1].parse::<u16>().unwrap();
-                    let new_owner = Pubkey::from_str(&v[2]).unwrap();
+                    let flag = v[2].parse::<u8>().unwrap();
+                    let mut new_owner = Pubkey::default();
+                    let mut trade_fee_rate = 0;
+                    let mut protocol_fee_rate = 0;
+                    if flag == 0 {
+                        new_owner = Pubkey::from_str(&v[3]).unwrap();
+                    } else if flag == 1 {
+                        trade_fee_rate = v[3].parse::<u32>().unwrap();
+                    } else {
+                        protocol_fee_rate = v[3].parse::<u32>().unwrap();
+                    }
                     let (amm_config_key, __bump) = Pubkey::find_program_address(
                         &[
                             raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(),
@@ -429,16 +422,19 @@ fn main() -> Result<()> {
                         ],
                         &pool_config.raydium_v3_program,
                     );
-                    let set_new_owner_instr = set_new_config_owner_instr(
+                    let update_amm_config_instr = update_amm_config_instr(
                         &pool_config.clone(),
                         amm_config_key,
-                        &new_owner,
+                        new_owner,
+                        trade_fee_rate,
+                        protocol_fee_rate,
+                        flag,
                     )?;
                     // send
                     let signers = vec![&payer, &admin];
                     let recent_hash = rpc_client.get_latest_blockhash()?;
                     let txn = Transaction::new_signed_with_payer(
-                        &set_new_owner_instr,
+                        &update_amm_config_instr,
                         Some(&payer.pubkey()),
                         &signers,
                         recent_hash,
@@ -447,39 +443,6 @@ fn main() -> Result<()> {
                     println!("{}", signature);
                 } else {
                     println!("invalid command: [set_new_cfg_owner config_index new_owner]");
-                }
-            }
-            "set_protocol_fee_rate" => {
-                if v.len() == 3 {
-                    let config_index = v[1].parse::<u16>().unwrap();
-                    let protocol_fee_rate = v[2].parse::<u32>().unwrap();
-                    let (amm_config_key, __bump) = Pubkey::find_program_address(
-                        &[
-                            raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(),
-                            &config_index.to_be_bytes(),
-                        ],
-                        &pool_config.raydium_v3_program,
-                    );
-                    let set_protocol_fee_instr = set_protocol_fee_rate_instr(
-                        &pool_config.clone(),
-                        amm_config_key,
-                        protocol_fee_rate,
-                    )?;
-                    // send
-                    let signers = vec![&payer, &admin];
-                    let recent_hash = rpc_client.get_latest_blockhash()?;
-                    let txn = Transaction::new_signed_with_payer(
-                        &set_protocol_fee_instr,
-                        Some(&payer.pubkey()),
-                        &signers,
-                        recent_hash,
-                    );
-                    let signature = send_txn(&rpc_client, &txn, true)?;
-                    println!("{}", signature);
-                } else {
-                    println!(
-                        "invalid command: [set_protocol_fee_rate config_index protocol_fee_rate]"
-                    );
                 }
             }
             "cmp_key" => {
@@ -515,12 +478,66 @@ fn main() -> Result<()> {
                     println!("tick_to_price tick");
                 }
             }
+            "tick_with_spacing" => {
+                if v.len() == 2 {
+                    let tick = v[1].parse::<i32>().unwrap();
+                    let tick_spacing = v[2].parse::<i32>().unwrap();
+                    let tick_with_spacing = tick_with_spacing(tick, tick_spacing);
+                    println!("tick:{}, tick_with_spacing:{}", tick, tick_with_spacing);
+                } else {
+                    println!("tick_with_spacing tick tick_spacing");
+                }
+            }
+            "tick_array_start_index" => {
+                if v.len() == 2 {
+                    let tick = v[1].parse::<i32>().unwrap();
+                    let tick_spacing = v[2].parse::<i32>().unwrap();
+                    let tick_array_start_index =
+                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                            tick,
+                            tick_spacing,
+                        );
+                    println!(
+                        "tick:{}, tick_array_start_index:{}",
+                        tick, tick_array_start_index
+                    );
+                } else {
+                    println!("tick_array_start_index tick tick_spacing");
+                }
+            }
+            "liquidity_to_amounts" => {
+                let program = anchor_client.program(pool_config.raydium_v3_program);
+                println!("{}", pool_config.pool_id_account.unwrap());
+                let pool_account: raydium_amm_v3::states::PoolState =
+                    program.account(pool_config.pool_id_account.unwrap())?;
+                if v.len() == 4 {
+                    let tick_upper = v[1].parse::<i32>().unwrap();
+                    let tick_lower = v[2].parse::<i32>().unwrap();
+                    let liquidity = v[3].parse::<i128>().unwrap();
+                    let amounts = raydium_amm_v3::libraries::get_amounts_delta_signed(
+                        pool_account.tick_current,
+                        tick_lower,
+                        tick_upper,
+                        liquidity,
+                    )?;
+                    println!("amount_0:{}, amount_1:{}", amounts.0, amounts.1);
+                }
+            }
             "create_pool" | "cpool" => {
                 if v.len() == 3 {
                     let config_index = v[1].parse::<u16>().unwrap();
-                    let tick = v[2].parse::<i32>().unwrap();
-                    let price = tick_to_price(tick);
-                    let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick)?;
+                    let price = v[2].parse::<f64>().unwrap();
+                    let load_pubkeys = vec![pool_config.mint0.unwrap(), pool_config.mint1.unwrap()];
+                    let rsps = rpc_client.get_multiple_accounts(&load_pubkeys)?;
+                    let mint0_account =
+                        spl_token::state::Mint::unpack(&rsps[0].as_ref().unwrap().data).unwrap();
+                    let mint1_account =
+                        spl_token::state::Mint::unpack(&rsps[1].as_ref().unwrap().data).unwrap();
+                    let sqrt_price_x64 = price_to_sqrt_price_x64(
+                        price,
+                        mint0_account.decimals,
+                        mint1_account.decimals,
+                    );
                     let (amm_config_key, __bump) = Pubkey::find_program_address(
                         &[
                             raydium_amm_v3::states::AMM_CONFIG_SEED.as_bytes(),
@@ -528,6 +545,7 @@ fn main() -> Result<()> {
                         ],
                         &pool_config.raydium_v3_program,
                     );
+                    let tick = tick_math::get_tick_at_sqrt_price(sqrt_price_x64).unwrap();
                     println!(
                         "tick:{}, price:{}, sqrt_price_x64:{}, amm_config_key:{}",
                         tick, price, sqrt_price_x64, amm_config_key
@@ -562,6 +580,40 @@ fn main() -> Result<()> {
                     println!("{}", signature);
                 } else {
                     println!("invalid command: [create_pool config_index tick_spacing]");
+                }
+            }
+            "admin_reset_sqrt_price" => {
+                if v.len() == 2 {
+                    let program = anchor_client.program(pool_config.raydium_v3_program);
+                    println!("{}", pool_config.pool_id_account.unwrap());
+                    let pool_account: raydium_amm_v3::states::PoolState =
+                        program.account(pool_config.pool_id_account.unwrap())?;
+                    let price = v[2].parse::<f64>().unwrap();
+                    let sqrt_price_x64 = price_to_sqrt_price_x64(
+                        price,
+                        pool_account.mint_0_decimals,
+                        pool_account.mint_1_decimals,
+                    );
+                    let admin_reset_sqrt_price_instr = admin_reset_sqrt_price_instr(
+                        &pool_config.clone(),
+                        pool_config.pool_id_account.unwrap(),
+                        pool_account.token_vault_0,
+                        pool_account.token_vault_1,
+                        sqrt_price_x64,
+                    )
+                    .unwrap();
+                    // send
+                    let signers = vec![&payer, &admin];
+                    let recent_hash = rpc_client.get_latest_blockhash()?;
+                    let txn = Transaction::new_signed_with_payer(
+                        &admin_reset_sqrt_price_instr,
+                        Some(&payer.pubkey()),
+                        &signers,
+                        recent_hash,
+                    );
+                    let signature = send_txn(&rpc_client, &txn, true)?;
+                    println!("{}", signature);
+                } else {
                 }
             }
             "ppool" => {
@@ -966,8 +1018,8 @@ fn main() -> Result<()> {
                     println!("tick:{}, price:{}", tick, price);
 
                     let price = (2.0 as f64).powi(min / 2);
-                    let price_x32 = price * fixed_point_64::Q64 as f64;
-                    println!("price_x64:{}", price_x32);
+                    let price_x64 = price * fixed_point_64::Q64 as f64;
+                    println!("price_x64:{}", price_x64);
                 }
             }
             _ => {

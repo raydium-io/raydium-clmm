@@ -17,7 +17,7 @@ pub struct CollectProtocolFee<'info> {
     #[account(
         mut,
         token::mint = pool_state.token_mint_0,
-        constraint = token_vault_0.key() == pool_state.token_vault_0,
+        constraint = token_vault_0.key() == pool_state.token_vault_0
     )]
     pub token_vault_0: Account<'info, TokenAccount>,
 
@@ -25,7 +25,7 @@ pub struct CollectProtocolFee<'info> {
     #[account(
         mut,
         token::mint = pool_state.token_mint_1,
-        constraint = token_vault_1.key() == pool_state.token_vault_1,
+        constraint = token_vault_1.key() == pool_state.token_vault_1
     )]
     pub token_vault_1: Account<'info, TokenAccount>,
 

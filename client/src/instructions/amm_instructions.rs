@@ -48,32 +48,13 @@ pub fn create_amm_config_instr(
     Ok(instructions)
 }
 
-pub fn set_new_config_owner_instr(
+pub fn update_amm_config_instr(
     config: &ClientConfig,
     amm_config: Pubkey,
-    new_owner: &Pubkey,
-) -> Result<Vec<Instruction>> {
-    let payer = read_keypair_file(&config.payer_path)?;
-    let admin = read_keypair_file(&config.admin_path)?;
-    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
-    // Client.
-    let client = Client::new(url, Rc::new(payer));
-    let program = client.program(config.raydium_v3_program);
-    let instructions = program
-        .request()
-        .accounts(raydium_accounts::SetNewOwner {
-            owner: admin.pubkey(),
-            new_owner: *new_owner,
-            amm_config,
-        })
-        .instructions()?;
-    Ok(instructions)
-}
-
-pub fn set_protocol_fee_rate_instr(
-    config: &ClientConfig,
-    amm_config: Pubkey,
+    new_owner: Pubkey,
+    trade_fee_rate: u32,
     protocol_fee_rate: u32,
+    flag: u8,
 ) -> Result<Vec<Instruction>> {
     let payer = read_keypair_file(&config.payer_path)?;
     let admin = read_keypair_file(&config.admin_path)?;
@@ -83,11 +64,16 @@ pub fn set_protocol_fee_rate_instr(
     let program = client.program(config.raydium_v3_program);
     let instructions = program
         .request()
-        .accounts(raydium_accounts::SetProtocolFeeRate {
+        .accounts(raydium_accounts::UpdateAmmConfig {
             owner: admin.pubkey(),
             amm_config,
         })
-        .args(raydium_instruction::SetProtocolFeeRate { protocol_fee_rate })
+        .args(raydium_instruction::UpdateAmmConfig {
+            new_owner,
+            trade_fee_rate,
+            protocol_fee_rate,
+            flag,
+        })
         .instructions()?;
     Ok(instructions)
 }
@@ -146,6 +132,31 @@ pub fn create_pool_instr(
             rent: sysvar::rent::id(),
         })
         .args(raydium_instruction::CreatePool { sqrt_price_x64 })
+        .instructions()?;
+    Ok(instructions)
+}
+
+pub fn admin_reset_sqrt_price_instr(
+    config: &ClientConfig,
+    pool_account_key: Pubkey,
+    token_vault_0: Pubkey,
+    token_vault_1: Pubkey,
+    sqrt_price_x64: u128,
+) -> Result<Vec<Instruction>> {
+    let admin = read_keypair_file(&config.admin_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(admin));
+    let program = client.program(config.raydium_v3_program);
+    let instructions = program
+        .request()
+        .accounts(raydium_accounts::ResetSqrtPrice {
+            owner: program.payer(),
+            pool_state: pool_account_key,
+            token_vault_0,
+            token_vault_1,
+        })
+        .args(raydium_instruction::ResetSqrtPrice { sqrt_price_x64 })
         .instructions()?;
     Ok(instructions)
 }

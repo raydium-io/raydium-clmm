@@ -19,6 +19,9 @@ pub struct ProtocolPositionState {
     /// Bump to identify PDA
     pub bump: u8,
 
+    /// The ID of the pool with which this token is connected
+    // pub pool_id: Pubkey,
+
     /// The lower bound tick of the position
     pub tick_lower_index: i32,
 
@@ -29,10 +32,10 @@ pub struct ProtocolPositionState {
     pub liquidity: u128,
 
     /// The token_0 fee growth per unit of liquidity as of the last update to liquidity or fees owed
-    pub fee_growth_inside_0_last: u128,
+    pub fee_growth_inside_0_last_x64: u128,
 
     /// The token_1 fee growth per unit of liquidity as of the last update to liquidity or fees owed
-    pub fee_growth_inside_1_last: u128,
+    pub fee_growth_inside_1_last_x64: u128,
 
     /// The fees owed to the position owner in token_0
     pub token_fees_owed_0: u64,
@@ -77,12 +80,12 @@ impl ProtocolPositionState {
 
         // calculate accumulated Fees
         let tokens_owed_0 =
-            U128::from(fee_growth_inside_0_x64.saturating_sub(self.fee_growth_inside_0_last))
+            U128::from(fee_growth_inside_0_x64.saturating_sub(self.fee_growth_inside_0_last_x64))
                 .mul_div_floor(U128::from(self.liquidity), U128::from(fixed_point_64::Q64))
                 .unwrap()
                 .as_u64();
         let tokens_owed_1 =
-            U128::from(fee_growth_inside_1_x64.saturating_sub(self.fee_growth_inside_1_last))
+            U128::from(fee_growth_inside_1_x64.saturating_sub(self.fee_growth_inside_1_last_x64))
                 .mul_div_floor(U128::from(self.liquidity), U128::from(fixed_point_64::Q64))
                 .unwrap()
                 .as_u64();
@@ -91,8 +94,8 @@ impl ProtocolPositionState {
         if liquidity_delta != 0 {
             self.liquidity = liquidity_next;
         }
-        self.fee_growth_inside_0_last = fee_growth_inside_0_x64;
-        self.fee_growth_inside_1_last = fee_growth_inside_1_x64;
+        self.fee_growth_inside_0_last_x64 = fee_growth_inside_0_x64;
+        self.fee_growth_inside_1_last_x64 = fee_growth_inside_1_x64;
         self.tick_lower_index = tick_lower_index;
         self.tick_upper_index = tick_upper_index;
         if tokens_owed_0 > 0 || tokens_owed_1 > 0 {

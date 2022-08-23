@@ -91,6 +91,28 @@ pub mod amm_v3 {
         instructions::reset_sqrt_price(ctx, sqrt_price_x64)
     }
 
+    /// close_personal_position
+    pub fn close_personal_position(ctx: Context<ClosePersonalPosition>) -> Result<()> {
+        instructions::close_personal_position(ctx)
+    }
+
+    /// close_personal_position
+    pub fn close_protocol_position(
+        ctx: Context<CloseProtocolPosition>,
+        tick_lower_index: i32,
+        tick_upper_index: i32,
+        tick_array_lower_start_index: i32,
+        tick_array_upper_start_index: i32,
+    ) -> Result<()> {
+        instructions::close_protocol_position(
+            ctx,
+            tick_lower_index,
+            tick_upper_index,
+            tick_array_lower_start_index,
+            tick_array_upper_start_index,
+        )
+    }
+
     /// Initialize a reward info for a given pool and reward index
     ///
     /// # Arguments
