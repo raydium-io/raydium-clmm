@@ -52,14 +52,8 @@ async function main() {
       stateFetcher
     );
 
-    const tickLower = getTickWithPriceAndTickspacing(
-      param.priceLower,
-      ammPool.poolState.tickSpacing
-    );
-    const tickUpper = getTickWithPriceAndTickspacing(
-      param.priceUpper,
-      ammPool.poolState.tickSpacing
-    );
+    const tickLower = ammPool.getRoundingTickWithPrice(param.priceLower);
+    const tickUpper = ammPool.getRoundingTickWithPrice(param.priceUpper);
 
     let instructions: TransactionInstruction[] = [
       additionalComputeBudgetInstruction,

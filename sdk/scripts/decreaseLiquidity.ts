@@ -15,7 +15,6 @@ import { Config, defaultConfirmOptions } from "./config";
 import { AmmPool } from "../pool";
 import keypairFile from "./owner-keypair.json";
 import { SqrtPriceMath } from "../math";
-import { Spl } from "@raydium-io/raydium-sdk";
 async function main() {
   const owner = Keypair.fromSeed(Uint8Array.from(keypairFile.slice(0, 32)));
   const connection = new Connection(
@@ -46,27 +45,42 @@ async function main() {
       ammConfigData,
       stateFetcher
     );
-
+    console.log("pool price:",ammPool.tokenPrice())
     const personalPositionData =
       await ammPool.stateFetcher.getPersonalPositionState(
         new PublicKey(param.positionId)
       );
+
+    const priceLowerX64 = SqrtPriceMath.getSqrtPriceX64FromTick(
+      personalPositionData.tickLowerIndex
+    );
     console.log(
       "personalPositionData.tickLowerIndex:",
       personalPositionData.tickLowerIndex,
+      "priceLowerX64:",
+      priceLowerX64.toString(),
       "priceLower:",
-      SqrtPriceMath.getSqrtPriceX64FromTick(
-        personalPositionData.tickLowerIndex
-      ).toString()
+      SqrtPriceMath.sqrtPriceX64ToPrice(
+        priceLowerX64,
+        ammPool.poolState.mint0Decimals,
+        ammPool.poolState.mint1Decimals
+      )
     );
 
+    const priceUpperX64 = SqrtPriceMath.getSqrtPriceX64FromTick(
+      personalPositionData.tickUpperIndex
+    );
     console.log(
       "personalPositionData.tickUpperIndex:",
       personalPositionData.tickUpperIndex,
+      "priceUpperX64:",
+      priceUpperX64.toString(),
       "priceUpper:",
-      SqrtPriceMath.getSqrtPriceX64FromTick(
-        personalPositionData.tickUpperIndex
-      ).toString()
+      SqrtPriceMath.sqrtPriceX64ToPrice(
+        priceUpperX64,
+        ammPool.poolState.mint0Decimals,
+        ammPool.poolState.mint1Decimals
+      )
     );
 
     let instructions: TransactionInstruction[] = [];
