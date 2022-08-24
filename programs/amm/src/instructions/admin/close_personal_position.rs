@@ -5,7 +5,7 @@ use anchor_lang::prelude::*;
 #[derive(Accounts)]
 pub struct ClosePersonalPosition<'info> {
     /// Only admin has the authority to reset initial price
-    #[account(address = crate::admin::id())]
+    #[account(mut, address = crate::admin::id())]
     pub owner: Signer<'info>,
 
     pub pool_state: Box<Account<'info, PoolState>>,

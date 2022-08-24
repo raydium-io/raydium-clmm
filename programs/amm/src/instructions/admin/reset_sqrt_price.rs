@@ -58,9 +58,6 @@ pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price_x64: u128) -> R
     let pool_state = ctx.accounts.pool_state.deref_mut();
     let mut observation_state = ctx.accounts.observation_state.load_mut()?;
 
-    // if ctx.accounts.token_vault_0.amount > 0 || ctx.accounts.token_vault_1.amount > 0 {
-    //     return err!(ErrorCode::NotApproved);
-    // }
     // reset observation
     observation_state.initialized = false;
     observation_state.observations = [Observation::default(); OBSERVATION_NUM];

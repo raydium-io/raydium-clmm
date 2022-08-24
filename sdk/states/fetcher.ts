@@ -101,6 +101,14 @@ export class StateFetcher {
     return result as PositionState[];
   }
 
+  public async getMultiplePoolStates(
+    addresses: PublicKey[]
+  ): Promise<PoolState[]> {
+    const result =
+      await this.program.account.poolState.fetchMultiple(addresses);
+    return result as PoolState[];
+  }
+
   public async getObservationState(
     address: PublicKey
   ): Promise<ObservationState> {

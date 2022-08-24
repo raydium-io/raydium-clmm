@@ -19,7 +19,7 @@ import keypairFile from "./owner-keypair.json";
 import { assert } from "chai";
 import { getTickOffsetInArray, getTickArrayAddressByTick } from "../entities";
 
-async function main() {
+(async () => {
   const owner = Keypair.fromSeed(Uint8Array.from(keypairFile.slice(0, 32)));
   const connection = new Connection(
     Config.url,
@@ -39,20 +39,16 @@ async function main() {
   const params = Config["open-position"];
   for (let i = 0; i < params.length; i++) {
     const param = params[i];
-    const poolStateData = await stateFetcher.getPoolState(
-      new PublicKey(param.poolId)
-    );
-
-    const ammConfigData = await stateFetcher.getAmmConfig(
-      new PublicKey(poolStateData.ammConfig)
-    );
+    
     const ammPool = new AmmPool(
       ctx,
       new PublicKey(param.poolId),
-      poolStateData,
-      ammConfigData,
       stateFetcher
     );
+
+    await ammPool.loadPoolState()
+    const poolStateData = ammPool.poolState
+
     console.log(
       "pool current tick:",
       poolStateData.tickCurrent,
@@ -214,6 +210,4 @@ async function main() {
       }
     }
   }
-}
-
-main();
+})();

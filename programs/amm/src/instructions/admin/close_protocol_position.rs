@@ -7,7 +7,7 @@ use anchor_lang::prelude::*;
 #[instruction(tick_lower_index: i32, tick_upper_index: i32,tick_array_lower_start_index:i32,tick_array_upper_start_index:i32)]
 pub struct CloseProtocolPosition<'info> {
     /// Only admin has the authority to reset initial price
-    #[account(address = crate::admin::id())]
+    #[account(mut, address = crate::admin::id())]
     pub owner: Signer<'info>,
 
     #[account(mut)]

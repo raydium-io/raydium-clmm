@@ -1,5 +1,5 @@
 import { PublicKey, TokenAccountsFilter } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID,AccountLayout, MintLayout } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID,MintLayout, AccountLayout } from "@solana/spl-token";
 import { PositionState, StateFetcher } from "../states";
 import { getPersonalPositionAddress } from "../utils";
 import { Context } from "../base";
@@ -29,10 +29,12 @@ export async function fetchAllPositionsByOwner(
 
   let allMints: PublicKey[] = [];
   for (let i = 0; i < result.value.length; i++) {
-    const { mint } = AccountLayout.decode(result.value[i].account.data);
-    allMints.push(mint);
+    const {mint} = AccountLayout.decode(result.value[i].account.data);
+    // console.log(mint)
+    allMints.push(new PublicKey(mint));
   }
-  let fetchCount = Math.ceil(allMints.length / 100);
+  const fetchCount = Math.ceil(allMints.length / 100);
+
   for (let i = 0; i < fetchCount; i++) {
     const start = i * 100;
     let end = start + 100;
@@ -41,14 +43,15 @@ export async function fetchAllPositionsByOwner(
     }
     const mints = allMints.slice(start, end);
     let positionAddresses: PublicKey[] = [];
-    const mintAccountInfos = await ctx.connection.getMultipleAccountsInfo(
-      mints
-    );
-    for (let i = 0; i < mintAccountInfos.length; i++) {
-      const info = mintAccountInfos[i];
-      if (info != null) {
+
+    const mintAccountInfos = await ctx.connection.getMultipleAccountsInfo(mints);
+    for (const [i,info] of mintAccountInfos.entries()) {
+      if (info) {
         const { supply, decimals } = MintLayout.decode(info.data);
-        if (supply.eqn(1) && decimals == 0) {
+        const sup = supply.readBigInt64LE()
+        // console.log(sup, supply, decimals)
+        if (sup == 1 && decimals === 0) {
+
           const [positionAddress] = await getPersonalPositionAddress(
             mints[i],
             ctx.program.programId
@@ -58,12 +61,9 @@ export async function fetchAllPositionsByOwner(
       }
     }
 
-    const states = await stateFetcher.getMultiplePersonalPositionStates(
-      positionAddresses
-    );
-    for (let i = 0; i < states.length; i++) {
-      const state = states[i];
-      if (state != null) {
+    const states = await stateFetcher.getMultiplePersonalPositionStates(positionAddresses);
+    for (const [i,state] of states.entries()) {
+      if (state) {
         allPositions.push({ pubkey: positionAddresses[i], state });
       }
     }

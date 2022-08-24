@@ -226,7 +226,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     if ctx.accounts.protocol_position.bump == 0 {
         let protocol_position = &mut ctx.accounts.protocol_position;
         protocol_position.bump = *ctx.bumps.get("protocol_position").unwrap();
-        // protocol_position.pool_id = pool_state_info.key();
+        protocol_position.pool_id = pool_state_info.key();
     }
 
     let amm_config_key = ctx.accounts.pool_state.amm_config;

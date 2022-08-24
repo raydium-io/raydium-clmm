@@ -9,9 +9,9 @@ export const defaultConfirmOptions: ConfirmOptions = {
 };
 
 export const Config = {
-  // url: "https://api.devnet.solana.com",
-  url: "http://127.0.0.1:8899",
-  programId: new PublicKey("devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU"),
+  url: "https://api.devnet.solana.com",
+  // url: "http://127.0.0.1:8899",
+  programId: new PublicKey("DevadyVYwyiMQikvjkFYmiaobLNaGsJJbgsEL1Rfp3zK"),
   "create-amm-config": [
     {
       index: 0,
@@ -28,102 +28,56 @@ export const Config = {
   ],
   "create-pool": [
     {
-      ammConfig: "47QDZdQvRQtAutMRWCLe7FRNGegjEmcqhG874aj3k9HT",
-      tokenMint0: "So11111111111111111111111111111111111111112",
-      tokenMint1: "BLYTbdZGESHS7ZJRiKqt6nVcLnyo3LNCvw721GDSqK2p",
-      initialPrice: new Decimal("44"),
+      ammConfig: "CP7fpJt1y43ExsUUp269wdQH6tfLHPupaDToeVJgbgjh",
+      tokenMint0: "5iKLWCDrscNcpH4QppYUXCi8aju25MRFmQKGJzDx1hkE",
+      tokenMint1: "HiFJGEg878HXXBKPVcjmwwwxfVrPwgBLMgyPDgYs9Pq3",
+      initialPrice: new Decimal("140"),
     },
+    // {
+    //   ammConfig: "47QDZdQvRQtAutMRWCLe7FRNGegjEmcqhG874aj3k9HT",
+    //   tokenMint0: "So11111111111111111111111111111111111111112",
+    //   tokenMint1: "DunbyXRAAo8amM2aYV2bewuEzGZ2XSpwsiA52B1cwivz",
+    //   initialPrice: new Decimal("44"),
+    // },
   ],
   "open-position": [
     {
-      poolId: "Av8WbGwUGSfRHPUoaPAKocGAvvb9sZTuQEwKVBKwUQXL",
-      priceLower: new Decimal("11"),
-      priceUpper: new Decimal("88"),
+      poolId: "FcVZ6kzdHHuTeK3oRiSZiefNEaeayJxoqishm4vKZE6R",
+      priceLower: new Decimal("110"),
+      priceUpper: new Decimal("220"),
       liquidity: new BN("100000000"),
       amountSlippage: 0.005,
-    },
-    {
-      poolId: "Av8WbGwUGSfRHPUoaPAKocGAvvb9sZTuQEwKVBKwUQXL",
-      priceLower: new Decimal("30"),
-      priceUpper: new Decimal("40"),
-      liquidity: new BN("100000000"),
-      amountSlippage: 0.005,
-    },
-    {
-      poolId: "Av8WbGwUGSfRHPUoaPAKocGAvvb9sZTuQEwKVBKwUQXL",
-      priceLower: new Decimal("50"),
-      priceUpper: new Decimal("60"),
-      liquidity: new BN("100000000"),
-      amountSlippage: 0,
     },
   ],
   "increase-liquidity": [
     {
-      poolId: "Av8WbGwUGSfRHPUoaPAKocGAvvb9sZTuQEwKVBKwUQXL",
-      positionId: "6vySZXs5PpS2PberzDEK1LN5UMugMGUuiXQUVVQk8EZs",
-      liquidity: new BN("100000000"),
-      amountSlippage: 0,
-    },
-    {
-      poolId: "Av8WbGwUGSfRHPUoaPAKocGAvvb9sZTuQEwKVBKwUQXL",
-      positionId: "GUtFrZ3M3X16ej1oasrxRuVDcopTSsPjY8jo5uJNYXEs",
-      liquidity: new BN("100000000"),
-      amountSlippage: 0,
-    },
-    {
-      poolId: "Av8WbGwUGSfRHPUoaPAKocGAvvb9sZTuQEwKVBKwUQXL",
-      positionId: "E5GstZnExh4LTd3RKTT3dnsHwbCHs3CbPn9WjnbcpRDB",
+      poolId: "FcVZ6kzdHHuTeK3oRiSZiefNEaeayJxoqishm4vKZE6R",
+      positionId: "FzKNkZ1FJQXKAKUKzHBckEhZFRwUkGQ36wHF2rahahsS",
       liquidity: new BN("100000000"),
       amountSlippage: 0,
     },
   ],
   "decrease-liquidity": [
     {
-      poolId: "Av8WbGwUGSfRHPUoaPAKocGAvvb9sZTuQEwKVBKwUQXL",
-      positionId: "6vySZXs5PpS2PberzDEK1LN5UMugMGUuiXQUVVQk8EZs",
-      liquidity: new BN("100000000"),
-      amountSlippage: 0,
-    },
-    {
-      poolId: "Av8WbGwUGSfRHPUoaPAKocGAvvb9sZTuQEwKVBKwUQXL",
-      positionId: "GUtFrZ3M3X16ej1oasrxRuVDcopTSsPjY8jo5uJNYXEs",
-      liquidity: new BN("100000000"),
-      amountSlippage: 0,
-    },
-    {
-      poolId: "Av8WbGwUGSfRHPUoaPAKocGAvvb9sZTuQEwKVBKwUQXL",
-      positionId: "E5GstZnExh4LTd3RKTT3dnsHwbCHs3CbPn9WjnbcpRDB",
+      poolId: "FcVZ6kzdHHuTeK3oRiSZiefNEaeayJxoqishm4vKZE6R",
+      positionId: "FzKNkZ1FJQXKAKUKzHBckEhZFRwUkGQ36wHF2rahahsS",
       liquidity: new BN("100000000"),
       amountSlippage: 0,
     },
   ],
   "swap-base-in": [
     {
-      poolId: "Av8WbGwUGSfRHPUoaPAKocGAvvb9sZTuQEwKVBKwUQXL",
-      inputTokenMint: "So11111111111111111111111111111111111111112",
-      amountIn: new BN("1000000"),
+      poolId: "FcVZ6kzdHHuTeK3oRiSZiefNEaeayJxoqishm4vKZE6R",
+      inputTokenMint: "5iKLWCDrscNcpH4QppYUXCi8aju25MRFmQKGJzDx1hkE",
+      amountIn: new BN("100000"),
       priceLimit: new Decimal(0),
-      amountOutSlippage: 0,
-    },
-    {
-      poolId: "Av8WbGwUGSfRHPUoaPAKocGAvvb9sZTuQEwKVBKwUQXL",
-      inputTokenMint: "BLYTbdZGESHS7ZJRiKqt6nVcLnyo3LNCvw721GDSqK2p",
-      amountIn: new BN("1000000"),
-      priceLimit: new Decimal(0),
-      amountOutSlippage: 0,
+      amountOutSlippage: 0
     },
   ],
   "swap-base-out": [
     {
-      poolId: "Av8WbGwUGSfRHPUoaPAKocGAvvb9sZTuQEwKVBKwUQXL",
-      outputTokenMint: "So11111111111111111111111111111111111111112",
-      amountOut: new BN("100000"),
-      priceLimit: new Decimal(0),
-      amountInSlippage: 0,
-    },
-    {
-      poolId: "Av8WbGwUGSfRHPUoaPAKocGAvvb9sZTuQEwKVBKwUQXL",
-      outputTokenMint: "BLYTbdZGESHS7ZJRiKqt6nVcLnyo3LNCvw721GDSqK2p",
+      poolId: "FcVZ6kzdHHuTeK3oRiSZiefNEaeayJxoqishm4vKZE6R",
+      outputTokenMint: "5iKLWCDrscNcpH4QppYUXCi8aju25MRFmQKGJzDx1hkE",
       amountOut: new BN("100000"),
       priceLimit: new Decimal(0),
       amountInSlippage: 0,

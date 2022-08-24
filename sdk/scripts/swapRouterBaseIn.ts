@@ -16,7 +16,8 @@ import { Config, defaultConfirmOptions } from "./config";
 import { AmmPool } from "../pool";
 import keypairFile from "./owner-keypair.json";
 
-async function main() {
+
+(async () => {
   const owner = Keypair.fromSeed(Uint8Array.from(keypairFile.slice(0, 32)));
   const connection = new Connection(
     Config.url,
@@ -76,26 +77,19 @@ async function main() {
     defaultConfirmOptions
   );
   console.log("swapRouterBaseIn tx: ", tx);
-}
+})()
 
 async function generateOnePool(
   ctx: Context,
   poolId: PublicKey,
   stateFetcher: StateFetcher
 ): Promise<AmmPool> {
-  const poolStateData = await stateFetcher.getPoolState(new PublicKey(poolId));
-  const ammConfigData = await stateFetcher.getAmmConfig(
-    new PublicKey(poolStateData.ammConfig)
-  );
+
   const ammPool = new AmmPool(
     ctx,
     new PublicKey(poolId),
-    poolStateData,
-    ammConfigData,
     stateFetcher
   );
-  await ammPool.loadCache();
+  await ammPool.loadPoolState()
   return ammPool;
 }
-
-main();

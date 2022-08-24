@@ -141,6 +141,9 @@ pub fn admin_reset_sqrt_price_instr(
     pool_account_key: Pubkey,
     token_vault_0: Pubkey,
     token_vault_1: Pubkey,
+    observation_key: Pubkey,
+    user_token_account_0: Pubkey,
+    user_token_account_1: Pubkey,
     sqrt_price_x64: u128,
 ) -> Result<Vec<Instruction>> {
     let admin = read_keypair_file(&config.admin_path)?;
@@ -155,8 +158,69 @@ pub fn admin_reset_sqrt_price_instr(
             pool_state: pool_account_key,
             token_vault_0,
             token_vault_1,
+            observation_state: observation_key,
+            recipient_token_account_0: user_token_account_0,
+            recipient_token_account_1: user_token_account_1,
+            token_program: spl_token::id(),
         })
         .args(raydium_instruction::ResetSqrtPrice { sqrt_price_x64 })
+        .instructions()?;
+    Ok(instructions)
+}
+
+pub fn admin_close_personal_position_instr(
+    config: &ClientConfig,
+    pool_account_key: Pubkey,
+    personal_position: Pubkey,
+) -> Result<Vec<Instruction>> {
+    let admin = read_keypair_file(&config.admin_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(admin));
+    let program = client.program(config.raydium_v3_program);
+    let instructions = program
+        .request()
+        .accounts(raydium_accounts::ClosePersonalPosition {
+            owner: program.payer(),
+            pool_state: pool_account_key,
+            personal_position,
+        })
+        .args(raydium_instruction::ClosePersonalPosition)
+        .instructions()?;
+    Ok(instructions)
+}
+
+pub fn admin_close_protocol_position_instr(
+    config: &ClientConfig,
+    pool_account_key: Pubkey,
+    tick_array_lower_state: Pubkey,
+    tick_array_upper_state: Pubkey,
+    protocol_position_state: Pubkey,
+    tick_lower_index: i32,
+    tick_upper_index: i32,
+    tick_array_lower_start_index: i32,
+    tick_array_upper_start_index: i32,
+) -> Result<Vec<Instruction>> {
+    let admin = read_keypair_file(&config.admin_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(admin));
+    let program = client.program(config.raydium_v3_program);
+    let instructions = program
+        .request()
+        .accounts(raydium_accounts::CloseProtocolPosition {
+            owner: program.payer(),
+            pool_state: pool_account_key,
+            tick_array_lower_state,
+            tick_array_upper_state,
+            protocol_position_state,
+        })
+        .args(raydium_instruction::CloseProtocolPosition {
+            tick_lower_index,
+            tick_upper_index,
+            tick_array_lower_start_index,
+            tick_array_upper_start_index,
+        })
         .instructions()?;
     Ok(instructions)
 }

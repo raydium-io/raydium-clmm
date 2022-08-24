@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 use anchor_client::{Client, Cluster};
 use anyhow::{format_err, Result};
+use configparser::ini::Ini;
+use rand::rngs::OsRng;
 use solana_account_decoder::{
     parse_token::{TokenAccountType, UiAccountState},
     UiAccountData,
@@ -12,10 +14,6 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     transaction::Transaction,
 };
-
-use arrayref::array_refs;
-use configparser::ini::Ini;
-use rand::rngs::OsRng;
 use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -583,23 +581,185 @@ fn main() -> Result<()> {
                     println!("invalid command: [create_pool config_index tick_spacing]");
                 }
             }
+            "admin_close_personal_position" => {
+                if v.len() == 4 {
+                    let tick_lower_index = v[1].parse::<i32>().unwrap();
+                    let tick_upper_index = v[2].parse::<i32>().unwrap();
+                    let user_wallet = Pubkey::from_str(&v[3]).unwrap();
+                    // load position
+                    let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(
+                        &rpc_client,
+                        &user_wallet,
+                        &pool_config.raydium_v3_program,
+                    );
+
+                    let rsps = rpc_client.get_multiple_accounts(&positions)?;
+                    let mut user_positions = Vec::new();
+                    for rsp in rsps {
+                        match rsp {
+                            None => continue,
+                            Some(rsp) => {
+                                let position = deserialize_anchor_account::<
+                                    raydium_amm_v3::states::PersonalPositionState,
+                                >(rsp)?;
+                                user_positions.push(position);
+                            }
+                        }
+                    }
+                    let mut find_position =
+                        raydium_amm_v3::states::PersonalPositionState::default();
+                    for position in user_positions {
+                        if position.pool_id == pool_config.pool_id_account.unwrap()
+                            && position.tick_lower_index == tick_lower_index
+                            && position.tick_upper_index == tick_upper_index
+                        {
+                            find_position = position.clone();
+                        }
+                    }
+                    if find_position.nft_mint != Pubkey::default()
+                        && find_position.pool_id == pool_config.pool_id_account.unwrap()
+                    {
+                        let (personal_position_key, __bump) = Pubkey::find_program_address(
+                            &[
+                                raydium_amm_v3::states::POSITION_SEED.as_bytes(),
+                                find_position.nft_mint.to_bytes().as_ref(),
+                            ],
+                            &pool_config.raydium_v3_program,
+                        );
+                        println!(
+                            "persional_position:{}, tick_lower:{}, tick_upper:{}",
+                            personal_position_key,
+                            find_position.tick_lower_index,
+                            find_position.tick_upper_index
+                        );
+
+                        let admin_close_personal_position_instr =
+                            admin_close_personal_position_instr(
+                                &pool_config.clone(),
+                                pool_config.pool_id_account.unwrap(),
+                                personal_position_key,
+                            )
+                            .unwrap();
+                        // send
+                        let signers = vec![&payer, &admin];
+                        let recent_hash = rpc_client.get_latest_blockhash()?;
+                        let txn = Transaction::new_signed_with_payer(
+                            &admin_close_personal_position_instr,
+                            Some(&payer.pubkey()),
+                            &signers,
+                            recent_hash,
+                        );
+                        let signature = send_txn(&rpc_client, &txn, true)?;
+                        println!("{}", signature);
+                    } else {
+                        println!("not find persional position");
+                    }
+                } else {
+                    println!(
+                        "invalid command: [admin_close_personal_position tick_lower tick_upper]"
+                    );
+                }
+            }
+            "admin_close_protocol_position" => {
+                if v.len() == 3 {
+                    let tick_lower_index = v[1].parse::<i32>().unwrap();
+                    let tick_upper_index = v[2].parse::<i32>().unwrap();
+                    // load pool
+                    let program = anchor_client.program(pool_config.raydium_v3_program);
+                    let pool: raydium_amm_v3::states::PoolState =
+                        program.account(pool_config.pool_id_account.unwrap())?;
+
+                    let tick_array_lower_start_index =
+                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                            tick_lower_index,
+                            pool.tick_spacing.into(),
+                        );
+                    let tick_array_upper_start_index =
+                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                            tick_upper_index,
+                            pool.tick_spacing.into(),
+                        );
+                    let (protocol_position_key, __bump) = Pubkey::find_program_address(
+                        &[
+                            raydium_amm_v3::states::POSITION_SEED.as_bytes(),
+                            pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
+                            &tick_lower_index.to_be_bytes(),
+                            &tick_upper_index.to_be_bytes(),
+                        ],
+                        &pool_config.raydium_v3_program,
+                    );
+                    let (tick_array_lower_key, __bump) = Pubkey::find_program_address(
+                        &[
+                            raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                            pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
+                            &tick_array_lower_start_index.to_be_bytes(),
+                        ],
+                        &pool_config.raydium_v3_program,
+                    );
+                    let (tick_array_upper_key, __bump) = Pubkey::find_program_address(
+                        &[
+                            raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                            pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
+                            &tick_array_upper_start_index.to_be_bytes(),
+                        ],
+                        &pool_config.raydium_v3_program,
+                    );
+                    let admin_close_protocol_position_instr = admin_close_protocol_position_instr(
+                        &pool_config.clone(),
+                        pool_config.pool_id_account.unwrap(),
+                        tick_array_lower_key,
+                        tick_array_upper_key,
+                        protocol_position_key,
+                        tick_lower_index,
+                        tick_upper_index,
+                        tick_array_lower_start_index,
+                        tick_array_upper_start_index,
+                    )
+                    .unwrap();
+                    // send
+                    let signers = vec![&payer, &admin];
+                    let recent_hash = rpc_client.get_latest_blockhash()?;
+                    let txn = Transaction::new_signed_with_payer(
+                        &admin_close_protocol_position_instr,
+                        Some(&payer.pubkey()),
+                        &signers,
+                        recent_hash,
+                    );
+                    let signature = send_txn(&rpc_client, &txn, true)?;
+                    println!("{}", signature);
+                } else {
+                    println!(
+                        "invalid command: [admin_close_protocol_position tick_lower tick_upper]"
+                    );
+                }
+            }
             "admin_reset_sqrt_price" => {
-                if v.len() == 2 {
+                if v.len() == 4 {
                     let program = anchor_client.program(pool_config.raydium_v3_program);
                     println!("{}", pool_config.pool_id_account.unwrap());
                     let pool_account: raydium_amm_v3::states::PoolState =
                         program.account(pool_config.pool_id_account.unwrap())?;
-                    let price = v[2].parse::<f64>().unwrap();
+                    let price = v[1].parse::<f64>().unwrap();
+                    let receive_token_0 = Pubkey::from_str(&v[2]).unwrap();
+                    let receive_token_1 = Pubkey::from_str(&v[3]).unwrap();
                     let sqrt_price_x64 = price_to_sqrt_price_x64(
                         price,
                         pool_account.mint_0_decimals,
                         pool_account.mint_1_decimals,
+                    );
+                    let tick = tick_math::get_tick_at_sqrt_price(sqrt_price_x64).unwrap();
+                    println!(
+                        "tick:{}, price:{}, sqrt_price_x64:{}",
+                        tick, price, sqrt_price_x64
                     );
                     let admin_reset_sqrt_price_instr = admin_reset_sqrt_price_instr(
                         &pool_config.clone(),
                         pool_config.pool_id_account.unwrap(),
                         pool_account.token_vault_0,
                         pool_account.token_vault_1,
+                        pool_account.observation_key,
+                        receive_token_0,
+                        receive_token_1,
                         sqrt_price_x64,
                     )
                     .unwrap();
@@ -615,6 +775,7 @@ fn main() -> Result<()> {
                     let signature = send_txn(&rpc_client, &txn, true)?;
                     println!("{}", signature);
                 } else {
+                    println!("invalid command: [admin_reset_sqrt_price price receive_token_0 receive_token_1]");
                 }
             }
             "ppool" => {
@@ -659,15 +820,9 @@ fn main() -> Result<()> {
                         match rsp {
                             None => continue,
                             Some(rsp) => {
-                                let (_, data, _) = array_refs![&*rsp.data, 8, std::mem::size_of::<raydium_amm_v3::states::PersonalPositionState>();..;];
-                                let position = unsafe {
-                                    std::mem::transmute::<
-                                        &[u8; std::mem::size_of::<
-                                            raydium_amm_v3::states::PersonalPositionState,
-                                        >()],
-                                        &raydium_amm_v3::states::PersonalPositionState,
-                                    >(data)
-                                };
+                                let position = deserialize_anchor_account::<
+                                    raydium_amm_v3::states::PersonalPositionState,
+                                >(rsp)?;
                                 user_positions.push(position);
                             }
                         }
@@ -763,15 +918,9 @@ fn main() -> Result<()> {
                         match rsp {
                             None => continue,
                             Some(rsp) => {
-                                let (_, data, _) = array_refs![&*rsp.data, 8, std::mem::size_of::<raydium_amm_v3::states::PersonalPositionState>();..;];
-                                let position = unsafe {
-                                    std::mem::transmute::<
-                                        &[u8; std::mem::size_of::<
-                                            raydium_amm_v3::states::PersonalPositionState,
-                                        >()],
-                                        &raydium_amm_v3::states::PersonalPositionState,
-                                    >(data)
-                                };
+                                let position = deserialize_anchor_account::<
+                                    raydium_amm_v3::states::PersonalPositionState,
+                                >(rsp)?;
                                 user_positions.push(position);
                             }
                         }
@@ -866,15 +1015,9 @@ fn main() -> Result<()> {
                         match rsp {
                             None => continue,
                             Some(rsp) => {
-                                let (_, data, _) = array_refs![&*rsp.data, 8, std::mem::size_of::<raydium_amm_v3::states::PersonalPositionState>();..;];
-                                let position = unsafe {
-                                    std::mem::transmute::<
-                                        &[u8; std::mem::size_of::<
-                                            raydium_amm_v3::states::PersonalPositionState,
-                                        >()],
-                                        &raydium_amm_v3::states::PersonalPositionState,
-                                    >(data)
-                                };
+                                let position = deserialize_anchor_account::<
+                                    raydium_amm_v3::states::PersonalPositionState,
+                                >(rsp)?;
                                 user_positions.push(position);
                             }
                         }

@@ -12,7 +12,7 @@ import { Config, defaultConfirmOptions } from "./config";
 import keypairFile from "./owner-keypair.json";
 import { Token, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
-async function main() {
+(async () => {
   const owner = Keypair.fromSeed(Uint8Array.from(keypairFile.slice(0, 32)));
   console.log("owner: ", owner.publicKey.toString());
   const connection = new Connection(
@@ -76,6 +76,4 @@ async function main() {
 
   console.log("ownerToken0Account key: ", ownerToken0Account.toString());
   console.log("ownerToken1Account key: ", ownerToken1Account.toString());
-}
-
-main();
+})();

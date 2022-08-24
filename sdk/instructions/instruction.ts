@@ -31,13 +31,13 @@ import {
   isWSOLTokenMint,
   makeCreateWrappedNativeAccountInstructions,
   makeCloseAccountInstruction,
-  WSOLMint,
 } from "../utils";
 
 import {
   Token,
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
+  NATIVE_MINT,
 } from "@solana/spl-token";
 
 import {
@@ -1151,7 +1151,7 @@ export class AmmInstruction {
           await getTokenAccountForLiquidityChange(
             firstPoolParam.ammPool.ctx,
             payer,
-            WSOLMint,
+            NATIVE_MINT,
             new BN(0),
             instructions,
             signers

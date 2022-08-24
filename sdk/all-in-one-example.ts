@@ -54,7 +54,7 @@ export async function main() {
   const owner = localWallet();
   console.log("owner: ", owner.publicKey.toString());
   const programId = new PublicKey(
-    "devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU"
+    "DevadyVYwyiMQikvjkFYmiaobLNaGsJJbgsEL1Rfp3zK"
   );
   const url = "https://api.devnet.solana.com";
   // const url = "http://127.0.0.1:8899";
@@ -94,15 +94,14 @@ export async function main() {
   );
   console.log("createPool tx:", poolTx);
 
-  const poolStateAData = await stateFetcher.getPoolState(poolAAddress);
-  const ammConfigData = await stateFetcher.getAmmConfig(ammConfigAddress);
+
   const ammPoolA = new AmmPool(
     ctx,
     poolAAddress,
-    poolStateAData,
-    ammConfigData,
     stateFetcher
   );
+
+  await ammPoolA.loadPoolState();
 
   // console.log(SqrtPriceMath.sqrtPriceX64ToPrice(SqrtPriceMath.getSqrtPriceX64FromTick(-20)).toString())
   // console.log(SqrtPriceMath.sqrtPriceX64ToPrice(SqrtPriceMath.getSqrtPriceX64FromTick(20)).toString())
@@ -147,7 +146,7 @@ export async function main() {
   // swapBaseIn with limit price
   let limitPrice = ammPoolA.tokenPrice().sub(new Decimal("0.0000002"));
   // because open position and add liquidity to the pool, we should load tickArray cache data
-  await ammPoolA.loadCache(true);
+  await ammPoolA.loadPoolState();
 
   tx = await swapBaseIn(
     ctx,
@@ -162,6 +161,7 @@ export async function main() {
   );
   console.log("swapBaseIn with limit price tx:", tx);
 
+  await ammPoolA.loadPoolState();
   // swapBaseIn without limit price
   tx = await swapBaseIn(
     ctx,
@@ -175,6 +175,8 @@ export async function main() {
   );
   console.log("swapBaseIn without limit price tx:", tx);
 
+  await ammPoolA.loadPoolState();
+
   tx = await swapBaseOut(
     ctx,
     owner,
@@ -187,6 +189,7 @@ export async function main() {
   );
   console.log("swapBaseOut tx:", tx);
 
+  await ammPoolA.loadPoolState();
   // only collect fee
   tx = await decreaseLiquidity(
     ctx,
@@ -198,6 +201,7 @@ export async function main() {
   );
   console.log("collect fee tx:", tx);
 
+  await ammPoolA.loadPoolState();
   // create a second pool for swap router
   const [poolBAddress, poolBTx] = await createPool(
     ctx,
@@ -210,14 +214,13 @@ export async function main() {
     6
   );
 
-  const poolStateBData = await stateFetcher.getPoolState(poolBAddress);
   const ammPoolB = new AmmPool(
     ctx,
     poolBAddress,
-    poolStateBData,
-    ammConfigData,
     stateFetcher
   );
+
+  await ammPoolB.loadPoolState();
 
   // Open position with pool B
   const [positionBccountAddress, positionBTx] = await createPersonalPosition(
@@ -231,8 +234,8 @@ export async function main() {
   );
   console.log("open second position with pool B, tx:", positionBTx);
 
+  await ammPoolB.loadPoolState();
   // because open position and add liquidity to the pool, we should reload tickArray cache data
-  await ammPoolB.loadCache(true);
   tx = await swapRouterBaseIn(
     ctx,
     owner,

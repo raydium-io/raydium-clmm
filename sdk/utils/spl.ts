@@ -7,15 +7,12 @@ import {
   SystemProgram,
   TransactionInstruction,
 } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, Token, AccountLayout } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID, Token,NATIVE_MINT, AccountLayout } from "@solana/spl-token";
 import { BN } from "@project-serum/anchor";
 
-export const WSOLMint = new PublicKey(
-  "So11111111111111111111111111111111111111112"
-);
 
 export function isWSOLTokenMint(tokenMint: PublicKey): boolean {
-  return tokenMint.equals(WSOLMint);
+  return tokenMint.equals(NATIVE_MINT);
 }
 
 export function makeCloseAccountInstruction({
@@ -73,7 +70,7 @@ export async function makeCreateWrappedNativeAccountInstructions({
   instructions.push(
     Token.createInitAccountInstruction(
       TOKEN_PROGRAM_ID,
-      WSOLMint,
+      NATIVE_MINT,
       newAccount.publicKey,
       owner
     )

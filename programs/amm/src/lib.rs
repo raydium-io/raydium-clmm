@@ -10,7 +10,7 @@ use anchor_lang::prelude::*;
 use instructions::*;
 use states::*;
 #[cfg(feature = "devnet")]
-declare_id!("devKfPVu9CaDvG47KG7bDKexFvAY37Tgp6rPHTruuqU");
+declare_id!("DevadyVYwyiMQikvjkFYmiaobLNaGsJJbgsEL1Rfp3zK");
 #[cfg(not(feature = "devnet"))]
 declare_id!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 

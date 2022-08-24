@@ -15,7 +15,8 @@ import { Config, defaultConfirmOptions } from "./config";
 import { AmmPool } from "../pool";
 import keypairFile from "./owner-keypair.json";
 
-async function main() {
+
+(async () => {
   const owner = Keypair.fromSeed(Uint8Array.from(keypairFile.slice(0, 32)));
   const connection = new Connection(
     Config.url,
@@ -31,20 +32,13 @@ async function main() {
   const params = Config["swap-base-in"];
   for (let i = 0; i < params.length; i++) {
     const param = params[i];
-    const poolStateData = await stateFetcher.getPoolState(
-      new PublicKey(param.poolId)
-    );
-    const ammConfigData = await stateFetcher.getAmmConfig(
-      new PublicKey(poolStateData.ammConfig)
-    );
     const ammPool = new AmmPool(
       ctx,
       new PublicKey(param.poolId),
-      poolStateData,
-      ammConfigData,
       stateFetcher
     );
-    await ammPool.loadCache();
+    await ammPool.loadPoolState()
+    const poolStateData = ammPool.poolState
 
     let instructions: TransactionInstruction[] = [];
     let signers: Signer[] = [owner];
@@ -71,6 +65,4 @@ async function main() {
     );
     console.log("swapBaseIn tx: ", tx);
   }
-}
-
-main();
+})();

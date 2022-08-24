@@ -20,6 +20,7 @@ import {
   checkTickArrayIsInitialized,
 } from "../entities";
 import { getTickArrayAddress } from "../utils";
+import { AmmConfigCache } from "./configCache";
 
 export class AmmPool {
   // public readonly fee: Fee;
@@ -29,7 +30,6 @@ export class AmmPool {
   public readonly stateFetcher: StateFetcher;
   public poolState: PoolState;
   public ammConfig: AmmConfig;
-
   /**
    *
    * @param ctx
@@ -41,15 +41,13 @@ export class AmmPool {
   public constructor(
     ctx: Context,
     address: PublicKey,
-    poolState: PoolState,
-    ammConfig: AmmConfig,
     stateFetcher: StateFetcher
   ) {
     this.ctx = ctx;
     this.stateFetcher = stateFetcher;
     this.address = address;
-    this.poolState = poolState;
-    this.ammConfig = ammConfig;
+    this.poolState = null;
+    this.ammConfig = null;
     this.cacheDataProvider = new CacheDataProviderImpl(ctx.program, address);
   }
 
@@ -73,25 +71,16 @@ export class AmmPool {
    *
    * @returns
    */
-  public async reloadPoolState(): Promise<PoolState> {
-    const newState = await this.stateFetcher.getPoolState(this.address);
-    this.poolState = newState;
-    return this.poolState;
-  }
-
-  /**
-   *
-   * @param reloadPool
-   */
-  public async loadCache(reloadPool?: boolean) {
-    if (reloadPool) {
-      await this.reloadPoolState();
-    }
+  public async loadPoolState(): Promise<PoolState> {
+    this.poolState = await this.stateFetcher.getPoolState(this.address);
+    this.ammConfig = await AmmConfigCache.getConfig(this.stateFetcher, this.poolState.ammConfig)
     await this.cacheDataProvider.loadTickArrayCache(
       this.poolState.tickCurrent,
       this.poolState.tickSpacing,
       this.poolState.tickArrayBitmap
     );
+
+    return this.poolState;
   }
 
   /**
@@ -144,8 +133,10 @@ export class AmmPool {
       throw new Error("token is not in pool");
     }
     if (reload) {
-      await this.reloadPoolState();
+      await this.loadPoolState();
     }
+
+    if (!this.poolState) await this.loadPoolState()
     const zeroForOne = inputTokenMint.equals(this.poolState.tokenMint0);
     let allNeededAccounts: AccountMeta[] = [];
     let [isExist, nextStartIndex, nextAccountMeta] =
@@ -196,8 +187,10 @@ export class AmmPool {
       throw new Error("token is not in pool");
     }
     if (reload) {
-      this.reloadPoolState();
+      this.loadPoolState();
     }
+
+    if (!this.poolState) await this.loadPoolState()
 
     const zeroForOne = outputTokenMint.equals(this.poolState.tokenMint1);
     let allNeededAccounts: AccountMeta[] = [];

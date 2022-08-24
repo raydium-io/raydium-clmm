@@ -20,7 +20,7 @@ pub struct ProtocolPositionState {
     pub bump: u8,
 
     /// The ID of the pool with which this token is connected
-    // pub pool_id: Pubkey,
+    pub pool_id: Pubkey,
 
     /// The lower bound tick of the position
     pub tick_lower_index: i32,
@@ -50,7 +50,7 @@ pub struct ProtocolPositionState {
 }
 
 impl ProtocolPositionState {
-    pub const LEN: usize = 8 + 1 + 4 + 4 + 16 + 16 + 16 + 8 + 8 + 16 * REWARD_NUM + 64;
+    pub const LEN: usize = 8 + 1 + 32 + 4 + 4 + 16 + 16 + 16 + 8 + 8 + 16 * REWARD_NUM + 64;
     /// Credits accumulated fees to a user's position
     ///
     /// # Arguments
