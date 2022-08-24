@@ -1,5 +1,6 @@
 import { BN } from "@project-serum/anchor";
 import { PublicKey } from "@solana/web3.js";
+import { getTickArrayAddress } from "../utils";
 export const TICK_ARRAY_SIZE = 80;
 
 export declare type Tick = {
@@ -15,6 +16,46 @@ export declare type TickArray = {
   startTickIndex: number;
   ticks: Tick[];
 };
+
+/**
+ *
+ * @param programId
+ * @param poolId
+ * @param tickIndex
+ * @param tickSpacing
+ * @returns
+ */
+export async function getTickArrayAddressByTick(
+  programId: PublicKey,
+  poolId: PublicKey,
+  tickIndex: number,
+  tickSpacing: number
+): Promise<PublicKey> {
+  const startIndex = getTickArrayStartIndexByTick(tickIndex, tickSpacing);
+  let [tickArrayAddress] = await getTickArrayAddress(
+    poolId,
+    programId,
+    startIndex
+  );
+  return tickArrayAddress;
+}
+
+export function getTickOffsetInArray(
+  tick_index: number,
+  tick_spacing: number
+): number {
+  if (tick_index % tick_spacing != 0) {
+    throw new Error("tick_index % tick_spacing not equal 0");
+  }
+  let start_tick_index = getTickArrayStartIndexByTick(tick_index, tick_spacing);
+  let offset_in_array = Math.floor(
+    (tick_index - start_tick_index) / tick_spacing
+  );
+  if (offset_in_array < 0 || offset_in_array >= TICK_ARRAY_SIZE) {
+    throw new Error("tick offset in array overflow");
+  }
+  return offset_in_array;
+}
 
 /**
  *
@@ -45,10 +86,10 @@ export function getTickArrayOffsetInBitmapByTick(
 }
 
 /**
- * 
- * @param bitmap 
- * @param tick 
- * @param tickSpacing 
+ *
+ * @param bitmap
+ * @param tick
+ * @param tickSpacing
  * @returns if the special bit is initialized and tick array start index
  */
 export function checkTickArrayIsInitialized(

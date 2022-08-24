@@ -9,12 +9,11 @@ import {
 } from "@solana/web3.js";
 import { Context, NodeWallet } from "../base";
 import { StateFetcher } from "../states";
-import {sendTransaction } from "../utils";
+import { sendTransaction } from "../utils";
 import { AmmInstruction } from "../instructions";
 import { Config, defaultConfirmOptions } from "./config";
 import { AmmPool } from "../pool";
 import keypairFile from "./owner-keypair.json";
-
 
 async function main() {
   const owner = Keypair.fromSeed(Uint8Array.from(keypairFile.slice(0, 32)));
@@ -50,16 +49,17 @@ async function main() {
     let instructions: TransactionInstruction[] = [];
     let signers: Signer[] = [owner];
 
-    const { instructions: ixs, signers: signer }  = await AmmInstruction.swapBaseIn(
-      {
-        payer: owner.publicKey,
-      },
-      ammPool,
-      new PublicKey(param.inputTokenMint),
-      param.amountIn,
-      param.amountOutSlippage,
-      param.priceLimit
-    );
+    const { instructions: ixs, signers: signer } =
+      await AmmInstruction.swapBaseIn(
+        {
+          payer: owner.publicKey,
+        },
+        ammPool,
+        new PublicKey(param.inputTokenMint),
+        param.amountIn,
+        param.amountOutSlippage,
+        param.priceLimit
+      );
     instructions.push(...ixs);
     signers.push(...signer);
 

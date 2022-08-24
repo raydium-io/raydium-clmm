@@ -8,7 +8,7 @@ import {
   MIN_SQRT_PRICE_X64,
   MAX_SQRT_PRICE_X64,
 } from "./constants";
-import { Math } from "./math";
+import { MathUtil } from "./math";
 import { BN } from "@project-serum/anchor";
 
 import Decimal from "decimal.js";
@@ -45,7 +45,7 @@ export abstract class SqrtPriceMath {
     decimals0: number,
     decimals1: number
   ): Decimal {
-    return Math.x64ToDecimal(sqrtPriceX64)
+    return MathUtil.x64ToDecimal(sqrtPriceX64)
       .pow(2)
       .mul(Decimal.pow(10, decimals0 - decimals1));
   }
@@ -55,7 +55,7 @@ export abstract class SqrtPriceMath {
     decimals0: number,
     decimals1: number
   ): BN {
-    return Math.decimalToX64(
+    return MathUtil.decimalToX64(
       price.mul(Decimal.pow(10, decimals1 - decimals0)).sqrt()
     );
   }
@@ -153,9 +153,9 @@ export abstract class SqrtPriceMath {
       const numerator1 = liquidityLeftShift;
       const denominator = liquidityLeftShift.add(amount.mul(sqrtPriceX64));
       if (denominator.gte(numerator1)) {
-        return Math.mulDivCeil(numerator1, sqrtPriceX64, denominator);
+        return MathUtil.mulDivCeil(numerator1, sqrtPriceX64, denominator);
       }
-      return Math.mulDivRoundingUp(
+      return MathUtil.mulDivRoundingUp(
         numerator1,
         ONE,
         numerator1.div(sqrtPriceX64).add(amount)
@@ -168,7 +168,7 @@ export abstract class SqrtPriceMath {
         );
       }
       const denominator = liquidityLeftShift.sub(amountMulSqrtPrice);
-      return Math.mulDivCeil(liquidityLeftShift, sqrtPriceX64, denominator);
+      return MathUtil.mulDivCeil(liquidityLeftShift, sqrtPriceX64, denominator);
     }
   }
 
@@ -190,7 +190,7 @@ export abstract class SqrtPriceMath {
     if (add) {
       return sqrtPriceX64.add(deltaY.div(liquidity));
     } else {
-      const amountDivLiquidity = Math.mulDivRoundingUp(deltaY, ONE, liquidity);
+      const amountDivLiquidity = MathUtil.mulDivRoundingUp(deltaY, ONE, liquidity);
       if (!sqrtPriceX64.gt(amountDivLiquidity)) {
         throw new Error(
           "getNextSqrtPriceFromToken1AmountRoundingDown sqrtPriceX64 must gt amountDivLiquidity"

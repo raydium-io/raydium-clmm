@@ -15,6 +15,9 @@ import { Config, defaultConfirmOptions } from "./config";
 import { AmmPool } from "../pool";
 import keypairFile from "./owner-keypair.json";
 import { SqrtPriceMath } from "../math";
+import { assert } from "chai";
+import { getTickOffsetInArray, getTickArrayAddressByTick } from "../entities";
+
 async function main() {
   const owner = Keypair.fromSeed(Uint8Array.from(keypairFile.slice(0, 32)));
   const connection = new Connection(
@@ -45,7 +48,16 @@ async function main() {
       ammConfigData,
       stateFetcher
     );
-    console.log("pool price:",ammPool.tokenPrice())
+    console.log(
+      "pool current tick:",
+      poolStateData.tickCurrent,
+      "sqrtPriceX64:",
+      poolStateData.sqrtPriceX64.toString(),
+      "price:",
+      ammPool.tokenPrice(),
+      "liquidity:",
+      poolStateData.liquidity.toString()
+    );
     const personalPositionData =
       await ammPool.stateFetcher.getPersonalPositionState(
         new PublicKey(param.positionId)
@@ -64,7 +76,9 @@ async function main() {
         priceLowerX64,
         ammPool.poolState.mint0Decimals,
         ammPool.poolState.mint1Decimals
-      )
+      ),
+      "liquidity:",
+      personalPositionData.liquidity.toString()
     );
 
     const priceUpperX64 = SqrtPriceMath.getSqrtPriceX64FromTick(
@@ -81,6 +95,30 @@ async function main() {
         ammPool.poolState.mint0Decimals,
         ammPool.poolState.mint1Decimals
       )
+    );
+
+    let tickArrayAddresses: PublicKey[] = [];
+    let tickArrayLowerAddress = await getTickArrayAddressByTick(
+      ctx.program.programId,
+      new PublicKey(param.poolId),
+      personalPositionData.tickLowerIndex,
+      poolStateData.tickSpacing
+    );
+    tickArrayAddresses.push(tickArrayLowerAddress);
+
+    let tickArrayUpperAddress = await getTickArrayAddressByTick(
+      ctx.program.programId,
+      new PublicKey(param.poolId),
+      personalPositionData.tickUpperIndex,
+      poolStateData.tickSpacing
+    );
+
+    if (!tickArrayLowerAddress.equals(tickArrayUpperAddress)) {
+      tickArrayAddresses.push(tickArrayUpperAddress);
+    }
+
+    const tickArraiesBefore = await stateFetcher.getMultipleTickArrayState(
+      tickArrayAddresses
     );
 
     let instructions: TransactionInstruction[] = [];
@@ -105,6 +143,73 @@ async function main() {
       defaultConfirmOptions
     );
     console.log("decreaseLiquidity tx: ", tx);
+
+    const personalPositionDataUpdated =
+      await ammPool.stateFetcher.getPersonalPositionState(
+        new PublicKey(param.positionId)
+      );
+    console.log(
+      "personalPositionDataUpdated.liquidity:",
+      personalPositionDataUpdated.liquidity.toString(),
+      "param.liquidity:",
+      param.liquidity.toString()
+    );
+    assert.equal(
+      personalPositionDataUpdated.liquidity.toString(),
+      personalPositionData.liquidity.sub(param.liquidity).toString()
+    );
+    assert.isTrue(personalPositionDataUpdated.tokenFeesOwed0.eqn(0));
+    assert.isTrue(personalPositionDataUpdated.tokenFeesOwed1.eqn(0));
+
+    const poolUpdatedData = await stateFetcher.getPoolState(
+      new PublicKey(param.poolId)
+    );
+    console.log(
+      "after decrease, pool liquidity:",
+      poolUpdatedData.liquidity.toString()
+    );
+
+    if (
+      poolStateData.tickCurrent >= personalPositionData.tickLowerIndex &&
+      poolStateData.tickCurrent < personalPositionData.tickUpperIndex
+    ) {
+      assert.equal(
+        poolUpdatedData.liquidity.toString(),
+        poolStateData.liquidity.sub(param.liquidity).toString()
+      );
+    } else {
+      assert.equal(
+        poolUpdatedData.liquidity.toString(),
+        poolStateData.liquidity.toString()
+      );
+    }
+
+    const tickArraiesAfter = await stateFetcher.getMultipleTickArrayState(
+      tickArrayAddresses
+    );
+    assert.equal(tickArraiesBefore.length, tickArraiesAfter.length);
+
+    let tickOffsets: number[] = [];
+    let tickLowerOffset = getTickOffsetInArray(
+      personalPositionData.tickLowerIndex,
+      poolStateData.tickSpacing
+    );
+    tickOffsets.push(tickLowerOffset);
+
+    let tickUpperOffset = getTickOffsetInArray(
+      personalPositionData.tickUpperIndex,
+      poolStateData.tickSpacing
+    );
+    tickOffsets.push(tickUpperOffset);
+
+    for (let i = 0; i < tickArraiesAfter.length; i++) {
+      assert.equal(
+        tickArraiesAfter[i].ticks[tickOffsets[i]].liquidityGross.toString(),
+        tickArraiesBefore[i].ticks[tickOffsets[i]].liquidityGross
+          .sub(param.liquidity)
+          .toString()
+      );
+    }
   }
 }
 

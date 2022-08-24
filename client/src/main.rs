@@ -516,6 +516,7 @@ fn main() -> Result<()> {
                     let liquidity = v[3].parse::<i128>().unwrap();
                     let amounts = raydium_amm_v3::libraries::get_amounts_delta_signed(
                         pool_account.tick_current,
+                        pool_account.sqrt_price_x64,
                         tick_lower,
                         tick_upper,
                         liquidity,
@@ -963,21 +964,21 @@ fn main() -> Result<()> {
                     println!("{:?}", tick_state);
                 }
             }
-            "single_swap" => {
-                let tick1 = tick_math::get_tick_at_sqrt_price(18446744073709551616)?;
-                let tick2 = tick_math::get_tick_at_sqrt_price(18446744073709541616)?;
-                println!("tick1:{}, tick2:{}", tick1, tick2);
-                let ret = raydium_amm_v3::libraries::get_amount_0_for_liquidity(
-                    18446744073709551616,
-                    18446744073709541616,
-                    52022602764,
-                );
-                println!("{}", ret);
-                // load pool to get observation
-                let program = anchor_client.program(pool_config.raydium_v3_program);
-                let _pool: raydium_amm_v3::states::PoolState =
-                    program.account(pool_config.pool_id_account.unwrap())?;
-            }
+            // "single_swap" => {
+            //     let tick1 = tick_math::get_tick_at_sqrt_price(18446744073709551616)?;
+            //     let tick2 = tick_math::get_tick_at_sqrt_price(18446744073709541616)?;
+            //     println!("tick1:{}, tick2:{}", tick1, tick2);
+            //     let ret = raydium_amm_v3::libraries::get(
+            //         18446744073709551616,
+            //         18446744073709541616,
+            //         52022602764,
+            //     );
+            //     println!("{}", ret);
+            //     // load pool to get observation
+            //     let program = anchor_client.program(pool_config.raydium_v3_program);
+            //     let _pool: raydium_amm_v3::states::PoolState =
+            //         program.account(pool_config.pool_id_account.unwrap())?;
+            // }
             "tick_to_x64" => {
                 if v.len() == 2 {
                     let tick = v[1].parse::<i32>().unwrap();

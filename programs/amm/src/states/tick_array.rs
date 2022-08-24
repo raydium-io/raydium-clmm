@@ -74,8 +74,8 @@ impl TickArrayState {
             // save the 8 byte discriminator
             tick_array_state_loader.exit(&crate::id())?;
 
-            // mark the position in bitmap
-            pool_state.flip_tick_array_bit(tick_array_start_index)?;
+            // // mark the position in bitmap
+            // pool_state.flip_tick_array_bit(tick_array_start_index)?;
 
             tick_array_state_loader
         } else {
@@ -99,17 +99,9 @@ impl TickArrayState {
         Ok(())
     }
 
-    pub fn update_initialized_tick_count(
-        &mut self,
-        tick_index: i32,
-        tick_spacing: i32,
-        add: bool,
-    ) -> Result<()> {
-        let offset_in_array = self.get_tick_offset_in_array(tick_index, tick_spacing)?;
+    pub fn update_initialized_tick_count(&mut self, add: bool) -> Result<()> {
         if add {
-            if !self.ticks[offset_in_array].is_initialized() {
-                self.initialized_tick_count += 1;
-            }
+            self.initialized_tick_count += 1;
         } else {
             self.initialized_tick_count -= 1;
         }
@@ -279,7 +271,6 @@ impl TickState {
         // Either liquidity_gross_after becomes 0 (uninitialized) XOR liquidity_gross_before
         // was zero (initialized)
         let flipped = (liquidity_gross_after == 0) != (liquidity_gross_before == 0);
-
         if liquidity_gross_before == 0 {
             // by convention, we assume that all growth before a tick was initialized happened _below_ the tick
             if self.tick <= tick_current {

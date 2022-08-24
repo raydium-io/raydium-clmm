@@ -29,7 +29,7 @@ pub fn transfer_from_user_to_pool_vault<'info>(
 }
 
 pub fn transfer_from_pool_vault_to_user<'info>(
-    pool: &mut Account<'info, PoolState>,
+    pool: &Account<'info, PoolState>,
     from_vault: &Account<'info, TokenAccount>,
     to: &Account<'info, TokenAccount>,
     token_program: &Program<'info, Token>,

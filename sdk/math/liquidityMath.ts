@@ -1,5 +1,5 @@
 import { ONE, ZERO, MaxU64, U64Resolution, Q64 } from "./constants";
-import { Math } from "./math";
+import { MathUtil } from "./math";
 // import { } from "../math/constants";
 import { BN } from "@project-serum/anchor";
 
@@ -45,12 +45,12 @@ export abstract class LiquidityMath {
     const numerator2 = sqrtPriceBX64.sub(sqrtPriceAX64);
 
     return roundUp
-      ? Math.mulDivRoundingUp(
-          Math.mulDivCeil(numerator1, numerator2, sqrtPriceBX64),
+      ? MathUtil.mulDivRoundingUp(
+          MathUtil.mulDivCeil(numerator1, numerator2, sqrtPriceBX64),
           ONE,
           sqrtPriceAX64
         )
-      : Math.mulDivFloor(numerator1, numerator2, sqrtPriceBX64).div(
+      : MathUtil.mulDivFloor(numerator1, numerator2, sqrtPriceBX64).div(
           sqrtPriceAX64
         );
   }
@@ -77,8 +77,8 @@ export abstract class LiquidityMath {
     }
 
     return roundUp
-      ? Math.mulDivCeil(liquidity, sqrtPriceBX64.sub(sqrtPriceAX64), Q64)
-      : Math.mulDivFloor(liquidity, sqrtPriceBX64.sub(sqrtPriceAX64), Q64);
+      ? MathUtil.mulDivCeil(liquidity, sqrtPriceBX64.sub(sqrtPriceAX64), Q64)
+      : MathUtil.mulDivFloor(liquidity, sqrtPriceBX64.sub(sqrtPriceAX64), Q64);
   }
 
   /**
@@ -103,7 +103,7 @@ export abstract class LiquidityMath {
     let result = numerator.div(denominator);
 
     if (roundUp) {
-      return Math.mulDivRoundingUp(result, ONE, MaxU64);
+      return MathUtil.mulDivRoundingUp(result, ONE, MaxU64);
     } else {
       return result.shrn(U64Resolution);
     }
@@ -124,7 +124,7 @@ export abstract class LiquidityMath {
     if (sqrtPriceAX64.gt(sqrtPriceBX64)) {
       [sqrtPriceAX64, sqrtPriceBX64] = [sqrtPriceBX64, sqrtPriceAX64];
     }
-    return Math.mulDivFloor(amount1, MaxU64, sqrtPriceBX64.sub(sqrtPriceAX64));
+    return MathUtil.mulDivFloor(amount1, MaxU64, sqrtPriceBX64.sub(sqrtPriceAX64));
   }
 
   /**
@@ -181,7 +181,8 @@ export abstract class LiquidityMath {
     sqrtPriceCurrentX64: BN,
     sqrtPriceAX64: BN,
     sqrtPriceBX64: BN,
-    liquidity: BN
+    liquidity: BN,
+    roundUp: boolean
   ): [BN, BN] {
     if (sqrtPriceAX64.gt(sqrtPriceBX64)) {
       [sqrtPriceAX64, sqrtPriceBX64] = [sqrtPriceBX64, sqrtPriceAX64];
@@ -193,7 +194,7 @@ export abstract class LiquidityMath {
           sqrtPriceAX64,
           sqrtPriceBX64,
           liquidity,
-          true
+          roundUp
         ),
         new BN(0),
       ];
@@ -202,13 +203,13 @@ export abstract class LiquidityMath {
         sqrtPriceCurrentX64,
         sqrtPriceBX64,
         liquidity,
-        true
+        roundUp
       );
       const amount1 = LiquidityMath.getToken1AmountFromLiquidity(
         sqrtPriceAX64,
         sqrtPriceCurrentX64,
         liquidity,
-        true
+        roundUp
       );
       return [amount0, amount1];
     } else {
@@ -218,7 +219,7 @@ export abstract class LiquidityMath {
           sqrtPriceAX64,
           sqrtPriceBX64,
           liquidity,
-          true
+          roundUp
         ),
       ];
     }
@@ -230,14 +231,18 @@ export abstract class LiquidityMath {
     sqrtPriceBX64: BN,
     liquidity: BN,
     amountMax: boolean,
+    roundUp: boolean,
     amountSlippage?: number
   ): [BN, BN] {
     const [token0Amount, token1Amount] = LiquidityMath.getAmountsFromLiquidity(
       sqrtPriceCurrentX64,
       sqrtPriceAX64,
       sqrtPriceBX64,
-      liquidity
+      liquidity,
+      roundUp
     );
+    console.log("token0Amount:",token0Amount.toString())
+    console.log("token1Amount:",token1Amount.toString())
     let coefficient = 1 + amountSlippage;
     if (!amountMax) {
       coefficient = 1 - amountSlippage;
