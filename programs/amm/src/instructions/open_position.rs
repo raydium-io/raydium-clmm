@@ -1,5 +1,5 @@
 use crate::error::ErrorCode;
-use crate::libraries::{liquidity_math, sqrt_price_math};
+use crate::libraries::{liquidity_amounts, liquidity_math};
 use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
@@ -320,20 +320,10 @@ pub fn add_liquidity<'b, 'info>(
     let balance_1_before = accounts.token_vault_1.amount;
 
     let mut tick_array_lower = accounts.tick_array_lower.load_mut()?;
-    // tick_array_lower.update_initialized_tick_count(
-    //     tick_lower_index,
-    //     accounts.pool_state.tick_spacing as i32,
-    //     true,
-    // )?;
     let tick_lower_state = tick_array_lower
         .get_tick_state_mut(tick_lower_index, accounts.pool_state.tick_spacing as i32)?;
 
     let mut tick_array_upper = accounts.tick_array_upper.load_mut()?;
-    // tick_array_upper.update_initialized_tick_count(
-    //     tick_upper_index,
-    //     accounts.pool_state.tick_spacing as i32,
-    //     true,
-    // )?;
     let tick_upper_state = tick_array_upper
         .get_tick_state_mut(tick_upper_index, accounts.pool_state.tick_spacing as i32)?;
 
@@ -350,11 +340,7 @@ pub fn add_liquidity<'b, 'info>(
 
     if flip_tick_lower {
         let before_init_tick_count = tick_array_lower.initialized_tick_count;
-        tick_array_lower.update_initialized_tick_count(
-            tick_lower_index,
-            accounts.pool_state.tick_spacing as i32,
-            true,
-        )?;
+        tick_array_lower.update_initialized_tick_count(true)?;
 
         if before_init_tick_count == 0 {
             accounts
@@ -364,11 +350,7 @@ pub fn add_liquidity<'b, 'info>(
     }
     if flip_tick_upper {
         let before_init_tick_count = tick_array_upper.initialized_tick_count;
-        tick_array_upper.update_initialized_tick_count(
-            tick_upper_index,
-            accounts.pool_state.tick_spacing as i32,
-            true,
-        )?;
+        tick_array_upper.update_initialized_tick_count(true)?;
 
         if before_init_tick_count == 0 {
             accounts
@@ -436,8 +418,9 @@ pub fn modify_position<'info>(
     let mut amount_1 = 0;
 
     if liquidity_delta != 0 {
-        (amount_0, amount_1) = sqrt_price_math::get_amounts_delta_signed(
+        (amount_0, amount_1) = liquidity_amounts::get_amounts_delta_signed(
             pool_state.tick_current,
+            pool_state.sqrt_price_x64,
             tick_lower_state.tick,
             tick_upper_state.tick,
             liquidity_delta,

@@ -82,13 +82,6 @@ async function main() {
       tickUpper,
       poolStateData.tickSpacing
     );
-
-    console.log(
-      "tickArrayLowerAddress:",
-      tickArrayLowerAddress.toString(),
-      "tickArrayUpperAddress:",
-      tickArrayUpperAddress.toString()
-    );
     if (!tickArrayLowerAddress.equals(tickArrayUpperAddress)) {
       tickArrayAddresses.push(tickArrayUpperAddress);
     }
@@ -102,24 +95,32 @@ async function main() {
     ];
     let signers: Signer[] = [owner];
 
-    const priceLower = SqrtPriceMath.getSqrtPriceX64FromTick(tickLower);
+    const priceLowerX64 = SqrtPriceMath.getSqrtPriceX64FromTick(tickLower);
     console.log(
       "tickLower:",
       tickLower,
       "priceLowerX64:",
-      priceLower.toString(),
+      priceLowerX64.toString(),
       "priceLower:",
-      param.priceLower
+      SqrtPriceMath.sqrtPriceX64ToPrice(
+        priceLowerX64,
+        poolStateData.mint0Decimals,
+        poolStateData.mint1Decimals
+      )
     );
 
-    const priceUpper = SqrtPriceMath.getSqrtPriceX64FromTick(tickUpper);
+    const priceUpperX64 = SqrtPriceMath.getSqrtPriceX64FromTick(tickUpper);
     console.log(
       "tickUpper:",
       tickUpper,
       "priceUpperX64:",
-      priceUpper.toString(),
+      priceUpperX64.toString(),
       "priceLower:",
-      param.priceUpper
+      SqrtPriceMath.sqrtPriceX64ToPrice(
+        priceUpperX64,
+        poolStateData.mint0Decimals,
+        poolStateData.mint1Decimals
+      )
     );
     const nftMintAKeypair = new Keypair();
     signers.push(nftMintAKeypair);
@@ -198,12 +199,19 @@ async function main() {
     tickOffsets.push(tickUpperOffset);
 
     for (let i = 0; i < tickArraiesAfter.length; i++) {
-      assert.equal(
-        tickArraiesAfter[i].ticks[tickOffsets[i]].liquidityGross.toString(),
-        tickArraiesBefore[i].ticks[tickOffsets[i]].liquidityGross
-          .add(param.liquidity)
-          .toString()
-      );
+      if (tickArraiesBefore[i] != undefined) {
+        assert.equal(
+          tickArraiesAfter[i].ticks[tickOffsets[i]].liquidityGross.toString(),
+          tickArraiesBefore[i].ticks[tickOffsets[i]].liquidityGross
+            .add(param.liquidity)
+            .toString()
+        );
+      } else {
+        assert.equal(
+          tickArraiesAfter[i].ticks[tickOffsets[i]].liquidityGross.toString(),
+          param.liquidity.toString()
+        );
+      }
     }
   }
 }

@@ -1,8 +1,8 @@
 import { BN } from "@project-serum/anchor";
-import { ONE, ZERO, Q64, U64Resolution } from "./constants";
+import { ONE, ZERO } from "./constants";
 import Decimal from "decimal.js";
 
-export abstract class Math {
+export abstract class MathUtil {
   /**
    * Cannot be constructed.
    */

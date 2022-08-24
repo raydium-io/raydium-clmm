@@ -1,6 +1,5 @@
 import { PublicKey, TokenAccountsFilter } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { SPL_ACCOUNT_LAYOUT, SPL_MINT_LAYOUT } from "@raydium-io/raydium-sdk";
+import { TOKEN_PROGRAM_ID,AccountLayout, MintLayout } from "@solana/spl-token";
 import { PositionState, StateFetcher } from "../states";
 import { getPersonalPositionAddress } from "../utils";
 import { Context } from "../base";
@@ -30,14 +29,10 @@ export async function fetchAllPositionsByOwner(
 
   let allMints: PublicKey[] = [];
   for (let i = 0; i < result.value.length; i++) {
-    const { mint } = SPL_ACCOUNT_LAYOUT.decode(result.value[i].account.data);
+    const { mint } = AccountLayout.decode(result.value[i].account.data);
     allMints.push(mint);
   }
-  let fetchCount = Math.floor(allMints.length / 100);
-  if (allMints.length % 100 != 0) {
-    fetchCount += 1;
-  }
-
+  let fetchCount = Math.ceil(allMints.length / 100);
   for (let i = 0; i < fetchCount; i++) {
     const start = i * 100;
     let end = start + 100;
@@ -52,7 +47,7 @@ export async function fetchAllPositionsByOwner(
     for (let i = 0; i < mintAccountInfos.length; i++) {
       const info = mintAccountInfos[i];
       if (info != null) {
-        const { supply, decimals } = SPL_MINT_LAYOUT.decode(info.data);
+        const { supply, decimals } = MintLayout.decode(info.data);
         if (supply.eqn(1) && decimals == 0) {
           const [positionAddress] = await getPersonalPositionAddress(
             mints[i],

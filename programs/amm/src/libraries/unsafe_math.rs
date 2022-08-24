@@ -1,4 +1,4 @@
-use super::big_num::U128;
+use super::{big_num::U128, U256};
 
 ///! Math functions that do not check inputs or outputs
 ///! Contains methods that perform common math functions but do not do any
@@ -27,6 +27,12 @@ impl UnsafeMathTrait for u64 {
 impl UnsafeMathTrait for U128 {
     fn div_rounding_up(x: Self, y: Self) -> Self {
         x / y + U128::from((x % y > U128::default()) as u8)
+    }
+}
+
+impl UnsafeMathTrait for U256 {
+    fn div_rounding_up(x: Self, y: Self) -> Self {
+        x / y + U256::from((x % y > U256::default()) as u8)
     }
 }
 

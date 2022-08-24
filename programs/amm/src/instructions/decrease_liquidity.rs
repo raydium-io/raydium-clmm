@@ -135,11 +135,8 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     let transfer_amount_1 = decrease_amount_1 + latest_fees_owed_1;
 
     if transfer_amount_0 > 0 {
-        #[cfg(feature = "enable-log")]
         msg!(
-            "decrease_amount_0, vault_0 balance: {}, recipient_token_account balance before transfer:{}, decrease amount:{}, fee amount:{}",
-            ctx.accounts.token_vault_0.amount,
-            ctx.accounts.recipient_token_account_0.amount,
+            "decrease amount:{}, fee amount:{}",
             decrease_amount_0,
             latest_fees_owed_0,
         );
@@ -152,11 +149,8 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         )?;
     }
     if transfer_amount_1 > 0 {
-        #[cfg(feature = "enable-log")]
         msg!(
-            "decrease_amount_1, vault_1 balance: {}, recipient_token_account balance before transfer:{}, decrease amount:{}, fee amount:{}",
-            ctx.accounts.token_vault_1.amount,
-            ctx.accounts.recipient_token_account_1.amount,
+            "decrease amount:{}, fee amount:{}",
             decrease_amount_1,
             latest_fees_owed_1,
         );
@@ -215,21 +209,13 @@ pub fn burn_liquidity<'b, 'info>(
         tick_upper_state,
     )?;
     if flip_tick_lower {
-        tick_array_lower.update_initialized_tick_count(
-            protocol_position_state.tick_lower_index,
-            pool_state.tick_spacing as i32,
-            false,
-        )?;
+        tick_array_lower.update_initialized_tick_count(false)?;
         if tick_array_lower.initialized_tick_count == 0 {
             pool_state.flip_tick_array_bit(tick_array_lower.start_tick_index)?;
         }
     }
     if flip_tick_upper {
-        tick_array_upper.update_initialized_tick_count(
-            protocol_position_state.tick_upper_index,
-            pool_state.tick_spacing as i32,
-            false,
-        )?;
+        tick_array_upper.update_initialized_tick_count(false)?;
         if tick_array_upper.initialized_tick_count == 0 {
             pool_state.flip_tick_array_bit(tick_array_upper.start_tick_index)?;
         }

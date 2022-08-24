@@ -3,8 +3,12 @@
 ///! Implements formulae 6.29 and 6.30
 ///
 use super::big_num::U128;
+use super::big_num::U256;
 use super::fixed_point_64;
 use super::full_math::MulDiv;
+use super::tick_math;
+use super::unsafe_math::UnsafeMathTrait;
+use anchor_lang::prelude::*;
 /// Computes the amount of liquidity received for a given amount of token_0 and price range
 /// Calculates ΔL = Δx (√P_upper x √P_lower)/(√P_upper - √P_lower)
 ///
@@ -106,218 +110,189 @@ pub fn get_liquidity_for_amounts(
     }
 }
 
-/// Computes the amount of token_0 for a given amount of liquidity and a price range
-/// Calculates Δx = ΔL (√P_upper - √P_lower) / (√P_upper x √P_lower)
-///     = ΔL (1 / √P_lower -1 / √P_upper)
+/// Gets the amount_0 delta between two prices, for given amount of liquidity (formula 6.30)
+///
+/// # Formula
+///
+/// * `Δx = L * (1 / √P_lower - 1 / √P_upper)`
+/// * i.e. `L * (√P_upper - √P_lower) / (√P_upper * √P_lower)`
 ///
 /// # Arguments
 ///
-/// * `sqrt_ratio_a_x64` - A sqrt price representing the first tick boundary
-/// * `sqrt_ratio_b_x64` - A sqrt price representing the second tick boundary
-/// * `liquidity` - The liquidity being valued
+/// * `sqrt_ratio_a_x64` - A sqrt price
+/// * `sqrt_ratio_b_x64` - Another sqrt price
+/// * `liquidity` - The amount of usable liquidity
+/// * `round_up`- Whether to round the amount up or down
 ///
-pub fn get_amount_0_for_liquidity(
+pub fn get_amount_0_delta_unsigned(
     mut sqrt_ratio_a_x64: u128,
     mut sqrt_ratio_b_x64: u128,
     liquidity: u128,
+    round_up: bool,
 ) -> u64 {
     // sqrt_ratio_a_x64 should hold the smaller value
     if sqrt_ratio_a_x64 > sqrt_ratio_b_x64 {
         std::mem::swap(&mut sqrt_ratio_a_x64, &mut sqrt_ratio_b_x64);
     };
 
-    // Token amount can't exceed u64
-    ((U128::from(liquidity) << fixed_point_64::RESOLUTION)
-        .mul_div_floor(
-            U128::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),
-            U128::from(sqrt_ratio_b_x64),
+    let numerator_1 = U256::from(liquidity) << fixed_point_64::RESOLUTION;
+    let numerator_2 = U256::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64);
+
+    assert!(sqrt_ratio_a_x64 > 0);
+
+    if round_up {
+        U256::div_rounding_up(
+            numerator_1
+                .mul_div_ceil(numerator_2, U256::from(sqrt_ratio_b_x64))
+                .unwrap(),
+            U256::from(sqrt_ratio_a_x64),
         )
-        .unwrap()
-        / U128::from(sqrt_ratio_a_x64))
+        .as_u64()
+    } else {
+        (numerator_1
+            .mul_div_floor(numerator_2, U256::from(sqrt_ratio_b_x64))
+            .unwrap()
+            / U256::from(sqrt_ratio_a_x64))
+        .as_u64()
+    }
+}
+
+/// Gets the amount_1 delta between two prices, for given amount of liquidity (formula 6.30)
+///
+/// # Formula
+///
+/// * `Δy = L (√P_upper - √P_lower)`
+///
+/// # Arguments
+///
+/// * `sqrt_ratio_a_x64` - A sqrt price
+/// * `sqrt_ratio_b_x64` - Another sqrt price
+/// * `liquidity` - The amount of usable liquidity
+/// * `round_up`- Whether to round the amount up or down
+///
+pub fn get_amount_1_delta_unsigned(
+    mut sqrt_ratio_a_x64: u128,
+    mut sqrt_ratio_b_x64: u128,
+    liquidity: u128,
+    round_up: bool,
+) -> u64 {
+    // sqrt_ratio_a_x64 should hold the smaller value
+    if sqrt_ratio_a_x64 > sqrt_ratio_b_x64 {
+        std::mem::swap(&mut sqrt_ratio_a_x64, &mut sqrt_ratio_b_x64);
+    };
+
+    if round_up {
+        U256::from(liquidity).mul_div_ceil(
+            U256::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),
+            U256::from(fixed_point_64::Q64),
+        )
+    } else {
+        U256::from(liquidity).mul_div_floor(
+            U256::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),
+            U256::from(fixed_point_64::Q64),
+        )
+    }
+    .unwrap()
     .as_u64()
 }
 
-/// Computes the amount of token_1 for a given amount of liquidity and a price range
-/// Calculates Δy = ΔL * (√P_upper - √P_lower)
+/// Helper function to get signed token_0 delta between two prices,
+/// for the given change in liquidity
 ///
 /// # Arguments
 ///
-/// * `sqrt_ratio_a_x64` - A sqrt price representing the first tick boundary
-/// * `sqrt_ratio_b_x64` - A sqrt price representing the second tick boundary
-/// * `liquidity` - The liquidity being valued
+/// * `sqrt_ratio_a_x64` - A sqrt price
+/// * `sqrt_ratio_b_x64` - Another sqrt price
+/// * `liquidity` - The change in liquidity for which to compute amount_0 delta
 ///
-pub fn get_amount_1_for_liquidity(
-    mut sqrt_ratio_a_x64: u128,
-    mut sqrt_ratio_b_x64: u128,
-    liquidity: u128,
-) -> u64 {
-    // sqrt_ratio_a_x32 should hold the smaller value
-    if sqrt_ratio_a_x64 > sqrt_ratio_b_x64 {
-        std::mem::swap(&mut sqrt_ratio_a_x64, &mut sqrt_ratio_b_x64);
-    };
-
-    U128::from(liquidity)
-        .mul_div_floor(
-            U128::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),
-            U128::from(fixed_point_64::Q64),
-        )
-        .unwrap()
-        .as_u64()
+pub fn get_amount_0_delta_signed(
+    sqrt_ratio_a_x64: u128,
+    sqrt_ratio_b_x64: u128,
+    liquidity: i128,
+) -> i64 {
+    if liquidity < 0 {
+        -(get_amount_0_delta_unsigned(
+            sqrt_ratio_a_x64,
+            sqrt_ratio_b_x64,
+            -liquidity as u128,
+            false,
+        ) as i64)
+    } else {
+        // TODO check overflow, since i64::MAX < u64::MAX
+        get_amount_0_delta_unsigned(sqrt_ratio_a_x64, sqrt_ratio_b_x64, liquidity as u128, true)
+            as i64
+    }
 }
 
-/// Computes the token_0 and token_1 value for a given amount of liquidity, the current
-/// pool prices and the prices at the tick boundaries
-///
-/// # Arguments
-///
-/// * `sqrt_ratio_x64` - A sqrt price representing the current pool prices
-/// * `sqrt_ratio_a_x64` - A sqrt price representing the first tick boundary
-/// * `sqrt_ratio_b_x64` - A sqrt price representing the second tick boundary
-/// * `liquidity` - The liquidity being valued
-/// * `amount_0` - The amount of token_0
-/// * `amount_1` - The amount of token_1
-///
-pub fn get_amounts_for_liquidity(
-    sqrt_ratio_x64: u128,
-    mut sqrt_ratio_a_x64: u128,
-    mut sqrt_ratio_b_x64: u128,
-    liquidity: u128,
-) -> (u64, u64) {
-    // sqrt_ratio_a_x64 should hold the smaller value
-    if sqrt_ratio_a_x64 > sqrt_ratio_b_x64 {
-        std::mem::swap(&mut sqrt_ratio_a_x64, &mut sqrt_ratio_b_x64);
-    };
-
-    if sqrt_ratio_x64 <= sqrt_ratio_a_x64 {
-        // If P ≤ P_lower, active liquidity is entirely in token_0
-        (
-            get_amount_0_for_liquidity(sqrt_ratio_a_x64, sqrt_ratio_b_x64, liquidity),
-            0,
-        )
-    } else if sqrt_ratio_x64 < sqrt_ratio_b_x64 {
-        // If P_lower < P < P_upper, active liquidity is in token_0 and token_1
-        (
-            get_amount_0_for_liquidity(sqrt_ratio_x64, sqrt_ratio_b_x64, liquidity),
-            get_amount_1_for_liquidity(sqrt_ratio_a_x64, sqrt_ratio_x64, liquidity),
-        )
+/// Helper function to get signed token_1 delta between two prices,
+/// for the given change in liquidity
+pub fn get_amount_1_delta_signed(
+    sqrt_ratio_a_x64: u128,
+    sqrt_ratio_b_x64: u128,
+    liquidity: i128,
+) -> i64 {
+    if liquidity < 0 {
+        -(get_amount_1_delta_unsigned(
+            sqrt_ratio_a_x64,
+            sqrt_ratio_b_x64,
+            -liquidity as u128,
+            false,
+        ) as i64)
     } else {
-        // If P ≥ P_upper, active liquidity is entirely in token_1
-        (
-            0,
-            get_amount_1_for_liquidity(sqrt_ratio_a_x64, sqrt_ratio_b_x64, liquidity),
-        )
+        get_amount_1_delta_unsigned(sqrt_ratio_a_x64, sqrt_ratio_b_x64, liquidity as u128, true)
+            as i64
     }
+}
+
+pub fn get_amounts_delta_signed(
+    tick_current: i32,
+    sqrt_price_x64_current: u128,
+    tick_lower: i32,
+    tick_upper: i32,
+    liquidity_delta: i128,
+) -> Result<(i64, i64)> {
+    let mut amount_0 = 0;
+    let mut amount_1 = 0;
+    if tick_current < tick_lower {
+        amount_0 = get_amount_0_delta_signed(
+            tick_math::get_sqrt_price_at_tick(tick_lower)?,
+            tick_math::get_sqrt_price_at_tick(tick_upper)?,
+            liquidity_delta,
+        );
+    } else if tick_current < tick_upper {
+        amount_0 = get_amount_0_delta_signed(
+            sqrt_price_x64_current,
+            tick_math::get_sqrt_price_at_tick(tick_upper)?,
+            liquidity_delta,
+        );
+        amount_1 = get_amount_1_delta_signed(
+            tick_math::get_sqrt_price_at_tick(tick_lower)?,
+            sqrt_price_x64_current,
+            liquidity_delta,
+        );
+    } else {
+        amount_1 = get_amount_1_delta_signed(
+            tick_math::get_sqrt_price_at_tick(tick_lower)?,
+            tick_math::get_sqrt_price_at_tick(tick_upper)?,
+            liquidity_delta,
+        );
+    }
+    Ok((amount_0, amount_1))
 }
 
 #[cfg(test)]
 mod test {
-
     use super::*;
-    use crate::libraries::sqrt_price_math;
-    use crate::libraries::tick_math;
-    #[test]
-    fn test_get_amounts_for_liquidity() {
-        // let current_sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(-1860).unwrap();
-        let current_sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(37577).unwrap();
-        let sqrt_price_x64_a = tick_math::get_sqrt_price_at_tick(34020).unwrap();
-        let sqrt_price_x64_b = tick_math::get_sqrt_price_at_tick(39180).unwrap();
-        let (amount0, amount1) = get_amounts_for_liquidity(
-            current_sqrt_price_x64,
-            sqrt_price_x64_a,
-            sqrt_price_x64_b,
-            100000000,
-        );
-        println!(
-            "get_amounts_for_liquidity ,amount0:{}, amount1:{}",
-            amount0, amount1
-        );
-    }
+    mod get_amounts_delta_signed {
+        use super::*;
 
-    #[test]
-    fn test_liquidity_and_amounts_convert() {
-        let current_sqrt_price_x64: u128 = 226137466252783162;
-        let sqrt_price_x64_a: u128 = 189217263716712836;
-        let sqrt_price_x64_b: u128 = 278218361723627362;
-        {
-            let mut amount0: u64 = 102912736398;
-            let mut amount1: u64 = 1735327364384;
-            let liquidity = get_liquidity_for_amounts(
-                current_sqrt_price_x64,
-                sqrt_price_x64_a,
-                sqrt_price_x64_b,
-                amount0,
-                amount1,
-            );
-            println!(
-                "get_liquidity_for_amounts liquidity:{},amount0:{}, amount1:{}",
-                liquidity, amount0, amount1
-            );
-
-            (amount0, amount1) = get_amounts_for_liquidity(
-                current_sqrt_price_x64,
-                sqrt_price_x64_a,
-                sqrt_price_x64_b,
-                liquidity,
-            );
-            println!(
-                "get_amounts_for_liquidity liquidity:{},amount0:{}, amount1:{}",
-                liquidity, amount0, amount1
-            );
-            let amount0 = sqrt_price_math::get_amount_0_delta_signed(
-                current_sqrt_price_x64,
-                sqrt_price_x64_b,
-                -i128::try_from(liquidity).unwrap(),
-            );
-            let amount1 = sqrt_price_math::get_amount_1_delta_signed(
-                sqrt_price_x64_a,
-                current_sqrt_price_x64,
-                -i128::try_from(liquidity).unwrap(),
-            );
-            println!(
-                "get_amount_delta_signed   liquidity:{},amount0:{}, amount1:{}",
-                liquidity, amount0, amount1
-            );
-            let amount0 = sqrt_price_math::get_amount_0_delta_signed(
-                current_sqrt_price_x64,
-                sqrt_price_x64_b,
-                i128::try_from(liquidity).unwrap(),
-            );
-            let amount1 = sqrt_price_math::get_amount_1_delta_signed(
-                sqrt_price_x64_a,
-                current_sqrt_price_x64,
-                i128::try_from(liquidity).unwrap(),
-            );
-            println!(
-                "get_amount_delta_signed   liquidity:{},amount0:{}, amount1:{}",
-                liquidity, amount0, amount1
-            );
-        }
-
-        {
-            let mut amount0 = 47367378458;
-            let mut amount1 = 2395478753487;
-            let liquidity = get_liquidity_for_amounts(
-                current_sqrt_price_x64,
-                sqrt_price_x64_a,
-                sqrt_price_x64_b,
-                amount0,
-                amount1,
-            );
-            println!(
-                "get_liquidity_for_amounts liquidity:{},amount0:{}, amount1:{}",
-                liquidity, amount0, amount1
-            );
-
-            (amount0, amount1) = get_amounts_for_liquidity(
-                current_sqrt_price_x64,
-                sqrt_price_x64_a,
-                sqrt_price_x64_b,
-                liquidity,
-            );
-            println!(
-                "get_amounts_for_liquidity liquidity:{},amount0:{}, amount1:{}",
-                liquidity, amount0, amount1
-            );
+        #[test]
+        fn get_amounts_delta_signed_test() {
+            let current_tick = -1860;
+            let current_price = tick_math::get_sqrt_price_at_tick(current_tick).unwrap();
+            let (amount0, amount1) =
+                get_amounts_delta_signed(current_tick, current_price, -6960, 4080, 100000).unwrap();
+            println!("amount0:{}, amount1:{}", amount0, amount1)
         }
     }
 }

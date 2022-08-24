@@ -5,7 +5,7 @@ import { Context } from "../base";
 import {
   NEGATIVE_ONE,
   SwapMath,
-  Math as LibMath,
+  MathUtil as LibMath,
   SqrtPriceMath,
   getTickWithPriceAndTickspacing,
 } from "../math";

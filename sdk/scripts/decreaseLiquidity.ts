@@ -113,12 +113,6 @@ async function main() {
       poolStateData.tickSpacing
     );
 
-    console.log(
-      "tickArrayLowerAddress:",
-      tickArrayLowerAddress.toString(),
-      "tickArrayUpperAddress:",
-      tickArrayUpperAddress.toString()
-    );
     if (!tickArrayLowerAddress.equals(tickArrayUpperAddress)) {
       tickArrayAddresses.push(tickArrayUpperAddress);
     }
@@ -164,6 +158,8 @@ async function main() {
       personalPositionDataUpdated.liquidity.toString(),
       personalPositionData.liquidity.sub(param.liquidity).toString()
     );
+    assert.isTrue(personalPositionDataUpdated.tokenFeesOwed0.eqn(0));
+    assert.isTrue(personalPositionDataUpdated.tokenFeesOwed1.eqn(0));
 
     const poolUpdatedData = await stateFetcher.getPoolState(
       new PublicKey(param.poolId)

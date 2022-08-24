@@ -5,7 +5,6 @@ import {
   SYSVAR_RENT_PUBKEY,
   TransactionInstruction,
   AccountMeta,
-  Keypair,
   Signer,
 } from "@solana/web3.js";
 
@@ -19,14 +18,7 @@ import {
   MAX_SQRT_PRICE_X64,
 } from "../math";
 
-import {
-  PoolState,
-  PositionState,
-  ObservationState,
-  AmmConfig,
-  PositionRewardInfo,
-  RewardInfo,
-} from "../states";
+import { PositionState } from "../states";
 
 import {
   getAmmConfigAddress,
@@ -37,6 +29,9 @@ import {
   getPersonalPositionAddress,
   getTickArrayAddress,
   isWSOLTokenMint,
+  makeCreateWrappedNativeAccountInstructions,
+  makeCloseAccountInstruction,
+  WSOLMint,
 } from "../utils";
 
 import {
@@ -62,7 +57,7 @@ import {
 import { AmmPool } from "../pool";
 import { Context } from "../base";
 import Decimal from "decimal.js";
-import { Spl, WSOL } from "@raydium-io/raydium-sdk";
+import { WSOL } from "@raydium-io/raydium-sdk";
 
 type CreatePoolAccounts = {
   poolCreator: PublicKey;
@@ -231,7 +226,10 @@ export class AmmInstruction {
   ): Promise<[PublicKey, TransactionInstruction]> {
     // @ts-ignore
     if ((accounts.tokenMint0._bn as BN).gt(accounts.tokenMint1._bn as BN)) {
-      throw new Error("tokenMint0 must less than tokenMint1");
+      const tmp = accounts.tokenMint0;
+      accounts.tokenMint0 = accounts.tokenMint1;
+      accounts.tokenMint1 = tmp;
+      initialPrice = initialPrice.dividedBy(1);
     }
     const [poolAddres, _bump1] = await getPoolAddress(
       accounts.ammConfig,
@@ -255,7 +253,6 @@ export class AmmInstruction {
       tokenMint0Decimals,
       tokenMint1Decimals
     );
-    console.log("sjsssjskji")
     const creatPoolIx = await createPoolInstruction(
       ctx.program,
       initialPriceX64,
@@ -367,6 +364,7 @@ export class AmmInstruction {
         SqrtPriceMath.getSqrtPriceX64FromTick(tickUpperIndex),
         liquidity,
         true,
+        true,
         amountSlippage
       );
     // prepare tickArray
@@ -471,7 +469,7 @@ export class AmmInstruction {
     instructions.push(openIx);
 
     if (isToken0WsolAccount) {
-      const closeIx = Spl.makeCloseAccountInstruction({
+      const closeIx = makeCloseAccountInstruction({
         tokenAccount: token0Account,
         owner: accounts.payer,
         payer: accounts.payer,
@@ -479,7 +477,7 @@ export class AmmInstruction {
       instructions.push(closeIx);
     }
     if (isToken1WsolAccount) {
-      const closeIx = Spl.makeCloseAccountInstruction({
+      const closeIx = makeCloseAccountInstruction({
         tokenAccount: token1Account,
         owner: accounts.payer,
         payer: accounts.payer,
@@ -535,9 +533,15 @@ export class AmmInstruction {
         SqrtPriceMath.getSqrtPriceX64FromTick(tickUpperIndex),
         liquidity,
         true,
+        true,
         amountSlippage
       );
-
+    console.log(
+      "increaseLiquidity amount0Max:",
+      amount0Max.toString(),
+      "amount1Max:",
+      amount1Max.toString()
+    );
     // prepare tickArray
     const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
       tickLowerIndex,
@@ -625,7 +629,7 @@ export class AmmInstruction {
     instructions.push(ix);
 
     if (isToken0WsolAccount) {
-      const closeIx = Spl.makeCloseAccountInstruction({
+      const closeIx = makeCloseAccountInstruction({
         tokenAccount: token0Account,
         owner: accounts.positionNftOwner,
         payer: accounts.positionNftOwner,
@@ -633,7 +637,7 @@ export class AmmInstruction {
       instructions.push(closeIx);
     }
     if (isToken1WsolAccount) {
-      const closeIx = Spl.makeCloseAccountInstruction({
+      const closeIx = makeCloseAccountInstruction({
         tokenAccount: token1Account,
         owner: accounts.positionNftOwner,
         payer: accounts.positionNftOwner,
@@ -729,9 +733,15 @@ export class AmmInstruction {
         sqrtPriceUpperX64,
         liquidity,
         false,
+        false,
         amountSlippage
       );
-
+    console.log(
+      "decreaseLiquidity amount0Min:",
+      amount0Min.toString(),
+      "amount1Min:",
+      amount1Min.toString()
+    );
     // prepare tickArray
     const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
       tickLowerIndex,
@@ -820,7 +830,7 @@ export class AmmInstruction {
     instructions.push(ix);
 
     if (isToken0WsolAccount) {
-      const closeIx = Spl.makeCloseAccountInstruction({
+      const closeIx = makeCloseAccountInstruction({
         tokenAccount: token0Account,
         owner: accounts.positionNftOwner,
         payer: accounts.positionNftOwner,
@@ -828,7 +838,7 @@ export class AmmInstruction {
       instructions.push(closeIx);
     }
     if (isToken1WsolAccount) {
-      const closeIx = Spl.makeCloseAccountInstruction({
+      const closeIx = makeCloseAccountInstruction({
         tokenAccount: token1Account,
         owner: accounts.positionNftOwner,
         payer: accounts.positionNftOwner,
@@ -893,7 +903,9 @@ export class AmmInstruction {
       "swapBaseIn amountIn:",
       amountIn.toString(),
       "expectedAmountOut:",
-      expectedAmountOut.toString()
+      expectedAmountOut.toString(),
+      "amountOutMin:",
+      amountOutMin.toString()
     );
     let outputTokenMint = PublicKey.default;
     if (zeroForOne) {
@@ -940,7 +952,7 @@ export class AmmInstruction {
     instructions.push(ix);
 
     if (isInputTokenWsol) {
-      const closeIx = Spl.makeCloseAccountInstruction({
+      const closeIx = makeCloseAccountInstruction({
         tokenAccount: inputTokenAccount,
         owner: accounts.payer,
         payer: accounts.payer,
@@ -948,7 +960,7 @@ export class AmmInstruction {
       instructions.push(closeIx);
     }
     if (isOutputTokenWsol) {
-      const closeIx = Spl.makeCloseAccountInstruction({
+      const closeIx = makeCloseAccountInstruction({
         tokenAccount: outputTokenAccount,
         owner: accounts.payer,
         payer: accounts.payer,
@@ -1009,7 +1021,14 @@ export class AmmInstruction {
     if (amountInSlippage != undefined) {
       amountInMax = expectedAmountIn.muln(1 + amountInSlippage);
     }
-
+    console.log(
+      "swapBaseOut amountOut:",
+      amountOut.toString(),
+      "expectedAmountIn:",
+      expectedAmountIn.toString(),
+      "amountInMax:",
+      amountInMax.toString()
+    );
     let inputTokenMint = PublicKey.default;
     if (new PublicKey(outputTokenMint).equals(ammPool.poolState.tokenMint0)) {
       inputTokenMint = ammPool.poolState.tokenMint1;
@@ -1055,7 +1074,7 @@ export class AmmInstruction {
     instructions.push(ix);
 
     if (isInputTokenWsol) {
-      const closeIx = Spl.makeCloseAccountInstruction({
+      const closeIx = makeCloseAccountInstruction({
         tokenAccount: inputTokenAccount,
         owner: accounts.payer,
         payer: accounts.payer,
@@ -1063,7 +1082,7 @@ export class AmmInstruction {
       instructions.push(closeIx);
     }
     if (isOutputTokenWsol) {
-      const closeIx = Spl.makeCloseAccountInstruction({
+      const closeIx = makeCloseAccountInstruction({
         tokenAccount: outputTokenAccount,
         owner: accounts.payer,
         payer: accounts.payer,
@@ -1132,7 +1151,7 @@ export class AmmInstruction {
           await getTokenAccountForLiquidityChange(
             firstPoolParam.ammPool.ctx,
             payer,
-            new PublicKey(WSOL.mint),
+            WSOLMint,
             new BN(0),
             instructions,
             signers
@@ -1181,7 +1200,7 @@ export class AmmInstruction {
     );
     instructions.push(ix);
     if (!wSolAccount.equals(PublicKey.default)) {
-      const closeIx = Spl.makeCloseAccountInstruction({
+      const closeIx = makeCloseAccountInstruction({
         tokenAccount: wSolAccount,
         owner: payer,
         payer: payer,
@@ -1223,12 +1242,10 @@ export class AmmInstruction {
     if (sqrtPriceLimitX64 == undefined) {
       sqrtPriceLimitX64 = new BN(0);
     }
-    console.log("swap remainingAccounts1:", remainingAccounts.length);
     const tickArray = remainingAccounts[0].pubkey;
     if (remainingAccounts.length >= 1) {
       remainingAccounts = remainingAccounts.slice(1, remainingAccounts.length);
     }
-    console.log("swap remainingAccounts:", remainingAccounts.length);
     return await swapInstruction(
       ctx.program,
       {
@@ -1369,11 +1386,11 @@ async function getTokenAccountForLiquidityChange(
   let tokenAccount = PublicKey.default;
   if (isWSOLTokenMint(tokenMint)) {
     const { newAccount, instructions: ixs } =
-      await Spl.makeCreateWrappedNativeAccountInstructions({
+      await makeCreateWrappedNativeAccountInstructions({
         connection: ctx.connection,
         owner: owner,
         payer: owner,
-        amount: amount.toString(),
+        amount: amount,
       });
     isWSol = true;
     signers.push(newAccount);

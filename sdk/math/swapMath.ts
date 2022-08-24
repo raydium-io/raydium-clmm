@@ -2,7 +2,7 @@ import { BN } from "@project-serum/anchor";
 import { Fee, FEE_RATE_DENOMINATOR } from "../entities";
 import { NEGATIVE_ONE, ZERO } from "./constants";
 import { LiquidityMath } from "./liquidityMath";
-import { Math } from "./math";
+import { MathUtil } from "./math";
 import { SqrtPriceMath } from "./sqrtPriceMath";
 import { CacheDataProvider,getTickArrayStartIndexByTick } from "../entities";
 import { AccountMeta } from "@solana/web3.js";
@@ -194,7 +194,6 @@ export abstract class SwapMath {
 
       ++loopCount;
     }
-    console.log("swapCompute finish, state.tick:",state.tick)
     return {
       amountCalculated: state.amountCalculated,
       sqrtPriceX64: state.sqrtPriceX64,
@@ -217,7 +216,7 @@ export abstract class SwapMath {
     const baseInput = amountRemaining.gte(ZERO);
 
     if (baseInput) {
-      const amountRemainingSubtractFee = Math.mulDivFloor(
+      const amountRemainingSubtractFee = MathUtil.mulDivFloor(
         amountRemaining,
         FEE_RATE_DENOMINATOR.sub(new BN(feeRate.toString())),
         FEE_RATE_DENOMINATOR
@@ -321,7 +320,7 @@ export abstract class SwapMath {
     if (baseInput && !swapStep.sqrtPriceX64Next.eq(sqrtPriceX64Target)) {
       swapStep.feeAmount = amountRemaining.sub(swapStep.amountIn);
     } else {
-      swapStep.feeAmount = Math.mulDivCeil(
+      swapStep.feeAmount = MathUtil.mulDivCeil(
         swapStep.amountIn,
         new BN(feeRate),
         FEE_RATE_DENOMINATOR.sub(new BN(feeRate))

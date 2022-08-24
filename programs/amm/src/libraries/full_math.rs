@@ -148,6 +148,30 @@ impl MulDiv for U128 {
     }
 }
 
+impl MulDiv for U256 {
+    type Output = U256;
+
+    fn mul_div_floor(self, num: Self, denom: Self) -> Option<Self::Output> {
+        assert_ne!(denom, U256::default());
+        let r = (self * num) / denom;
+        if r > U128::MAX.as_u256() {
+            None
+        } else {
+            Some(r)
+        }
+    }
+
+    fn mul_div_ceil(self, num: Self, denom: Self) -> Option<Self::Output> {
+        assert_ne!(denom, U256::default());
+        let r = (self * num + (denom - 1)) / denom;
+        if r > U128::MAX.as_u256() {
+            None
+        } else {
+            Some(r)
+        }
+    }
+}
+
 #[cfg(test)]
 mod muldiv_u64_tests {
     use super::*;

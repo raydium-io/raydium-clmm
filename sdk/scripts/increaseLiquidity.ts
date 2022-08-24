@@ -114,12 +114,6 @@ async function main() {
       poolStateData.tickSpacing
     );
 
-    console.log(
-      "tickArrayLowerAddress:",
-      tickArrayLowerAddress.toString(),
-      "tickArrayUpperAddress:",
-      tickArrayUpperAddress.toString()
-    );
     if (!tickArrayLowerAddress.equals(tickArrayUpperAddress)) {
       tickArrayAddresses.push(tickArrayUpperAddress);
     }

@@ -45,7 +45,7 @@ async function main() {
       stateFetcher
     );
     await ammPool.loadCache();
-    console.log("poolStateData.tickArrayBitmap", poolStateData.tickArrayBitmap);
+
     let instructions: TransactionInstruction[] = [];
     let signers: Signer[] = [owner];
 

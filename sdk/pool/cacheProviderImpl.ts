@@ -81,7 +81,7 @@ export class CacheDataProviderImpl implements CacheDataProvider {
         this.tickArrayCache.set(item.startTickIndex, item);
       }
     }
-    console.log(this.tickArrayCache);
+    // console.log(this.tickArrayCache);
   }
 
   public setTickArrayCache(cachedTickArraies: TickArray[]) {
@@ -94,7 +94,7 @@ export class CacheDataProviderImpl implements CacheDataProvider {
    * Fetches the cached bitmap for the word
    * @param startIndex
    */
-  getTickArray(startIndex: number): TickArray {
+  getTickArray(startIndex: number): TickArray | undefined {
     return this.tickArrayCache.get(startIndex);
   }
 
@@ -111,27 +111,30 @@ export class CacheDataProviderImpl implements CacheDataProvider {
     tickSpacing: number,
     zeroForOne: boolean
   ): Promise<[Tick, PublicKey, number]> {
-    let [nextTick, address, startIndex] =
-      await this.nextInitializedTickInOneArray(
-        tickIndex,
-        tickSpacing,
-        zeroForOne
-      );
+    let {
+      initializedTick: nextTick,
+      tickArrayAddress,
+      tickArrayStartTickIndex,
+    } = await this.nextInitializedTickInOneArray(
+      tickIndex,
+      tickSpacing,
+      zeroForOne
+    );
     while (nextTick == undefined || nextTick.liquidityGross.lten(0)) {
-      startIndex = getNextTickArrayStartIndex(
-        startIndex,
+      tickArrayStartTickIndex = getNextTickArrayStartIndex(
+        tickArrayStartTickIndex,
         tickSpacing,
         zeroForOne
       );
       if (
-        startIndex < MIN_TICK_ARRAY_START_INDEX ||
-        startIndex > MAX_TICK_ARRAY_START_INDEX
+        tickArrayStartTickIndex < MIN_TICK_ARRAY_START_INDEX ||
+        tickArrayStartTickIndex > MAX_TICK_ARRAY_START_INDEX
       ) {
         throw new Error("No enough initialized tickArray");
       }
-      const cachedTickArray = this.getTickArray(startIndex);
+      const cachedTickArray = this.getTickArray(tickArrayStartTickIndex);
       if (cachedTickArray != undefined) {
-        [nextTick, address, startIndex] =
+        [nextTick, tickArrayAddress, tickArrayStartTickIndex] =
           await this.firstInitializedTickInOneArray(
             cachedTickArray,
             zeroForOne
@@ -141,7 +144,7 @@ export class CacheDataProviderImpl implements CacheDataProvider {
     if (nextTick == undefined) {
       throw new Error("No invaild tickArray cache");
     }
-    return [nextTick, address, startIndex];
+    return [nextTick, tickArrayAddress, tickArrayStartTickIndex];
   }
 
   async firstInitializedTickInOneArray(
@@ -189,7 +192,11 @@ export class CacheDataProviderImpl implements CacheDataProvider {
     tickIndex: number,
     tickSpacing: number,
     zeroForOne: boolean
-  ): Promise<[Tick, PublicKey, number]> {
+  ): Promise<{
+    initializedTick: Tick | undefined;
+    tickArrayAddress: PublicKey | undefined;
+    tickArrayStartTickIndex: number;
+  }> {
     const startIndex = getTickArrayStartIndexByTick(tickIndex, tickSpacing);
     let isStartIndex = startIndex == tickIndex;
     let tickPositionInArray = Math.floor(
@@ -197,7 +204,11 @@ export class CacheDataProviderImpl implements CacheDataProvider {
     );
     const cachedTickArray = this.getTickArray(startIndex);
     if (cachedTickArray == undefined) {
-      return [undefined, undefined, startIndex];
+      return {
+        initializedTick: undefined,
+        tickArrayAddress: undefined,
+        tickArrayStartTickIndex: startIndex,
+      };
     }
     let nextInitializedTick: Tick;
     if (zeroForOne) {
@@ -230,10 +241,10 @@ export class CacheDataProviderImpl implements CacheDataProvider {
       this.program.programId,
       startIndex
     );
-    return [
-      nextInitializedTick,
+    return {
+      initializedTick: nextInitializedTick,
       tickArrayAddress,
-      cachedTickArray.startTickIndex,
-    ];
+      tickArrayStartTickIndex: cachedTickArray.startTickIndex,
+    };
   }
 }

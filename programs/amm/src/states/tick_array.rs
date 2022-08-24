@@ -99,17 +99,8 @@ impl TickArrayState {
         Ok(())
     }
 
-    pub fn update_initialized_tick_count(
-        &mut self,
-        tick_index: i32,
-        tick_spacing: i32,
-        add: bool,
-    ) -> Result<()> {
-        // let offset_in_array = self.get_tick_offset_in_array(tick_index, tick_spacing)?;
+    pub fn update_initialized_tick_count(&mut self, add: bool) -> Result<()> {
         if add {
-            // if !self.ticks[offset_in_array].is_initialized() {
-            //     self.initialized_tick_count += 1;
-            // }
             self.initialized_tick_count += 1;
         } else {
             self.initialized_tick_count -= 1;
