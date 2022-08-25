@@ -1,14 +1,14 @@
-pub mod access_control;
 pub mod error;
 pub mod instructions;
 pub mod libraries;
 pub mod states;
 pub mod util;
 
-use crate::access_control::*;
 use anchor_lang::prelude::*;
 use instructions::*;
 use states::*;
+use util::access_control::*;
+
 #[cfg(feature = "devnet")]
 declare_id!("DevadyVYwyiMQikvjkFYmiaobLNaGsJJbgsEL1Rfp3zK");
 #[cfg(not(feature = "devnet"))]

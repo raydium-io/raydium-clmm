@@ -10,11 +10,6 @@ pub trait UnsafeMathTrait {
     ///
     /// In Solidity dividing by 0 results in 0, not an exception.
     ///
-    /// # Arguments
-    ///
-    /// * `x` - The dividend
-    /// * `y` - The divisor
-    ///
     fn div_rounding_up(x: Self, y: Self) -> Self;
 }
 

@@ -63,6 +63,6 @@ import keypairFile from "./owner-keypair.json";
       signers,
       defaultConfirmOptions
     );
-    console.log("swapBaseIn tx: ", tx);
+    console.log("swapBaseIn tx: ", tx,"\n");
   }
 })();

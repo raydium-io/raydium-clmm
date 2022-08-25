@@ -2,9 +2,9 @@ import { BN } from "@project-serum/anchor";
 import { Fee, FEE_RATE_DENOMINATOR } from "../entities";
 import { NEGATIVE_ONE, ZERO } from "./constants";
 import { LiquidityMath } from "./liquidityMath";
-import { MathUtil } from "./math";
+import { MathUtil } from "./mathUtil";
 import { SqrtPriceMath } from "./sqrtPriceMath";
-import { CacheDataProvider,getTickArrayStartIndexByTick } from "../entities";
+import { CacheDataProvider } from "../entities";
 import { AccountMeta } from "@solana/web3.js";
 
 import {
@@ -66,7 +66,6 @@ export abstract class SwapMath {
     if (amountSpecified.eq(ZERO)) {
       throw new Error("amountSpecified must not be 0");
     }
-
     if (!sqrtPriceLimitX64)
       sqrtPriceLimitX64 = zeroForOne
         ? MIN_SQRT_PRICE_X64.add(ONE)
@@ -108,7 +107,7 @@ export abstract class SwapMath {
       state.tick > MIN_TICK
     ) {
       if (loopCount > 10) {
-        throw Error("account limit");
+        throw Error("liquidity limit");
       }
       let step: Partial<StepComputations> = {};
       step.sqrtPriceStartX64 = state.sqrtPriceX64;
@@ -129,7 +128,6 @@ export abstract class SwapMath {
         });
         lastSavedTickArrayStartIndex = tickAarrayStartIndex;
       }
-
       if (step.tickNext < MIN_TICK) {
         step.tickNext = MIN_TICK;
       } else if (step.tickNext > MAX_TICK) {
@@ -139,19 +137,15 @@ export abstract class SwapMath {
       step.sqrtPriceNextX64 = SqrtPriceMath.getSqrtPriceX64FromTick(
         step.tickNext
       );
-
       let targetPrice: BN;
-      let ss: boolean;
       if (
-        (zeroForOne && step.sqrtPriceNextX64 < sqrtPriceLimitX64) ||
-        (!zeroForOne && step.sqrtPriceNextX64 > sqrtPriceLimitX64)
+        (zeroForOne && step.sqrtPriceNextX64.lt(sqrtPriceLimitX64)) ||
+        (!zeroForOne && step.sqrtPriceNextX64.gt(sqrtPriceLimitX64))
       ) {
         targetPrice = sqrtPriceLimitX64;
-        ss = true;
       } else {
         targetPrice = step.sqrtPriceNextX64;
       }
-
       [state.sqrtPriceX64, step.amountIn, step.amountOut, step.feeAmount] =
         SwapMath.swapStepCompute(
           state.sqrtPriceX64,
@@ -175,13 +169,11 @@ export abstract class SwapMath {
           step.amountIn.add(step.feeAmount)
         );
       }
-
       if (state.sqrtPriceX64.eq(step.sqrtPriceNextX64)) {
         // if the tick is initialized, run the tick transition
         if (step.initialized) {
           let liquidityNet = nextInitTick.liquidityNet;
           if (zeroForOne) liquidityNet = liquidityNet.mul(NEGATIVE_ONE);
-
           state.liquidity = LiquidityMath.addDelta(
             state.liquidity,
             liquidityNet
@@ -191,7 +183,6 @@ export abstract class SwapMath {
       } else if (state.sqrtPriceX64 != step.sqrtPriceStartX64) {
         state.tick = SqrtPriceMath.getTickFromSqrtPriceX64(state.sqrtPriceX64);
       }
-
       ++loopCount;
     }
     return {

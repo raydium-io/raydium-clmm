@@ -1,4 +1,4 @@
-export * from './math'
+export * from './mathUtil'
 export * from './liquidityMath'
 export * from './swapMath'
 export * from './sqrtPriceMath'

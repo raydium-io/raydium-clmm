@@ -98,8 +98,8 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
     pool_state.owner = ctx.accounts.pool_creator.key();
     pool_state.token_mint_0 = ctx.accounts.token_mint_0.key();
     pool_state.token_mint_1 = ctx.accounts.token_mint_1.key();
-    pool_state.mint_0_decimals = ctx.accounts.token_mint_0.decimals;
-    pool_state.mint_1_decimals = ctx.accounts.token_mint_1.decimals;
+    pool_state.mint_decimals_0 = ctx.accounts.token_mint_0.decimals;
+    pool_state.mint_decimals_1 = ctx.accounts.token_mint_1.decimals;
     pool_state.token_vault_0 = ctx.accounts.token_vault_0.key();
     pool_state.token_vault_1 = ctx.accounts.token_vault_1.key();
     pool_state.tick_spacing = ctx.accounts.amm_config.tick_spacing;

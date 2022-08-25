@@ -1,5 +1,5 @@
 import { ONE, ZERO, MaxU64, U64Resolution, Q64 } from "./constants";
-import { MathUtil } from "./math";
+import { MathUtil } from "./mathUtil";
 // import { } from "../math/constants";
 import { BN } from "@project-serum/anchor";
 
@@ -241,8 +241,6 @@ export abstract class LiquidityMath {
       liquidity,
       roundUp
     );
-    console.log("token0Amount:",token0Amount.toString())
-    console.log("token1Amount:",token1Amount.toString())
     let coefficient = 1 + amountSlippage;
     if (!amountMax) {
       coefficient = 1 - amountSlippage;

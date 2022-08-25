@@ -1,12 +1,7 @@
 use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::pool::REWARD_NUM;
 use anchor_lang::prelude::*;
-
 use super::pool::RewardInfo;
-/// Position wrapped as an SPL non-fungible token
-///
-/// PDA of `[POSITION_SEED, mint_address]`
-///
 #[account]
 #[derive(Default, Debug)]
 pub struct PersonalPositionState {

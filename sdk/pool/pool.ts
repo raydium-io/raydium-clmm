@@ -1,14 +1,14 @@
 import { BN } from "@project-serum/anchor";
 import { AccountMeta, PublicKey } from "@solana/web3.js";
-import { AmmConfig, PoolState, StateFetcher } from "../states";
+import { AmmConfig, PoolState, StateFetcher, TickArrayState } from "../states";
 import { Context } from "../base";
 import {
   NEGATIVE_ONE,
   SwapMath,
-  MathUtil as LibMath,
   SqrtPriceMath,
   getTickWithPriceAndTickspacing,
 } from "../math";
+
 import { CacheDataProviderImpl } from "./cacheProviderImpl";
 import Decimal from "decimal.js";
 import {
@@ -18,6 +18,7 @@ import {
   searchLowBitFromStart,
   searchHightBitFromStart,
   checkTickArrayIsInitialized,
+  getAllInitializedTickArrayInfo,
 } from "../entities";
 import { getTickArrayAddress } from "../utils";
 import { AmmConfigCache } from "./configCache";
@@ -30,13 +31,12 @@ export class AmmPool {
   public readonly stateFetcher: StateFetcher;
   public poolState: PoolState;
   public ammConfig: AmmConfig;
+
   /**
-   *
-   * @param ctx
-   * @param address
-   * @param poolState
-   * @param ammConfig
-   * @param stateFetcher
+   * 
+   * @param ctx 
+   * @param address 
+   * @param stateFetcher 
    */
   public constructor(
     ctx: Context,
@@ -73,7 +73,10 @@ export class AmmPool {
    */
   public async loadPoolState(): Promise<PoolState> {
     this.poolState = await this.stateFetcher.getPoolState(this.address);
-    this.ammConfig = await AmmConfigCache.getConfig(this.stateFetcher, this.poolState.ammConfig)
+    this.ammConfig = await AmmConfigCache.getConfig(
+      this.stateFetcher,
+      this.poolState.ammConfig
+    );
     await this.cacheDataProvider.loadTickArrayCache(
       this.poolState.tickCurrent,
       this.poolState.tickSpacing,
@@ -102,8 +105,8 @@ export class AmmPool {
   public tokenPrice(): Decimal {
     return SqrtPriceMath.sqrtPriceX64ToPrice(
       this.poolState.sqrtPriceX64,
-      this.poolState.mint0Decimals,
-      this.poolState.mint1Decimals
+      this.poolState.mintDecimals0,
+      this.poolState.mintDecimals1
     );
   }
 
@@ -111,10 +114,31 @@ export class AmmPool {
     return getTickWithPriceAndTickspacing(
       price,
       this.poolState.tickSpacing,
-      this.poolState.mint0Decimals,
-      this.poolState.mint1Decimals
+      this.poolState.mintDecimals0,
+      this.poolState.mintDecimals1
     );
   }
+
+  public async getAllInitializedTickArrayStartIndex(): Promise<
+    TickArrayState[]
+  > {
+    const allInitializedTickArrayInfo = await getAllInitializedTickArrayInfo(
+      this.ctx.program.programId,
+      this.address,
+      mergeTickArrayBitmap(this.poolState.tickArrayBitmap),
+      this.poolState.tickSpacing
+    );
+    let allInitializedTickArrayAddress: PublicKey[] = [];
+    let allInitializedTickArrayIndex: number[] = [];
+    for (const info of allInitializedTickArrayInfo) {
+      allInitializedTickArrayAddress.push(info.tickArrayAddress);
+      allInitializedTickArrayIndex.push(info.tickArrayStartIndex);
+    }
+    return await this.stateFetcher.getMultipleTickArrayState(
+      allInitializedTickArrayAddress
+    );
+  }
+
   /**
    *
    * @param inputTokenMint
@@ -136,7 +160,7 @@ export class AmmPool {
       await this.loadPoolState();
     }
 
-    if (!this.poolState) await this.loadPoolState()
+    if (!this.poolState) await this.loadPoolState();
     const zeroForOne = inputTokenMint.equals(this.poolState.tokenMint0);
     let allNeededAccounts: AccountMeta[] = [];
     let [isExist, nextStartIndex, nextAccountMeta] =
@@ -190,7 +214,7 @@ export class AmmPool {
       this.loadPoolState();
     }
 
-    if (!this.poolState) await this.loadPoolState()
+    if (!this.poolState) await this.loadPoolState();
 
     const zeroForOne = outputTokenMint.equals(this.poolState.tokenMint1);
     let allNeededAccounts: AccountMeta[] = [];

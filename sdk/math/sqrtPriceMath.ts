@@ -8,7 +8,7 @@ import {
   MIN_SQRT_PRICE_X64,
   MAX_SQRT_PRICE_X64,
 } from "./constants";
-import { MathUtil } from "./math";
+import { MathUtil } from "./mathUtil";
 import { BN } from "@project-serum/anchor";
 
 import Decimal from "decimal.js";

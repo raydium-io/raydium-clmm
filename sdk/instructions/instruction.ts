@@ -413,7 +413,7 @@ export class AmmInstruction {
     let signers: Signer[] = [];
 
     const { tokenAccount: token0Account, isWSol: isToken0WsolAccount } =
-      await getTokenAccountForLiquidityChange(
+      await getATAOrRandomWsolTokenAccount(
         ctx,
         accounts.payer,
         poolState.tokenMint0,
@@ -423,7 +423,7 @@ export class AmmInstruction {
       );
 
     const { tokenAccount: token1Account, isWSol: isToken1WsolAccount } =
-      await getTokenAccountForLiquidityChange(
+      await getATAOrRandomWsolTokenAccount(
         ctx,
         accounts.payer,
         poolState.tokenMint1,
@@ -585,7 +585,7 @@ export class AmmInstruction {
     let signers: Signer[] = [];
 
     const { tokenAccount: token0Account, isWSol: isToken0WsolAccount } =
-      await getTokenAccountForLiquidityChange(
+      await getATAOrRandomWsolTokenAccount(
         ctx,
         accounts.positionNftOwner,
         poolState.tokenMint0,
@@ -595,7 +595,7 @@ export class AmmInstruction {
       );
 
     const { tokenAccount: token1Account, isWSol: isToken1WsolAccount } =
-      await getTokenAccountForLiquidityChange(
+      await getATAOrRandomWsolTokenAccount(
         ctx,
         accounts.positionNftOwner,
         poolState.tokenMint1,
@@ -736,12 +736,6 @@ export class AmmInstruction {
         false,
         amountSlippage
       );
-    console.log(
-      "decreaseLiquidity amount0Min:",
-      amount0Min.toString(),
-      "amount1Min:",
-      amount1Min.toString()
-    );
     // prepare tickArray
     const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
       tickLowerIndex,
@@ -785,7 +779,7 @@ export class AmmInstruction {
     let signers: Signer[] = [];
 
     const { tokenAccount: token0Account, isWSol: isToken0WsolAccount } =
-      await getTokenAccountForLiquidityChange(
+      await getATAOrRandomWsolTokenAccount(
         ctx,
         accounts.positionNftOwner,
         ammPool.poolState.tokenMint0,
@@ -795,7 +789,7 @@ export class AmmInstruction {
       );
 
     const { tokenAccount: token1Account, isWSol: isToken1WsolAccount } =
-      await getTokenAccountForLiquidityChange(
+      await getATAOrRandomWsolTokenAccount(
         ctx,
         accounts.positionNftOwner,
         ammPool.poolState.tokenMint1,
@@ -884,8 +878,8 @@ export class AmmInstruction {
     } else {
       sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
         priceLimit,
-        ammPool.poolState.mint0Decimals,
-        ammPool.poolState.mint1Decimals
+        ammPool.poolState.mintDecimals0,
+        ammPool.poolState.mintDecimals1
       );
     }
     const [expectedAmountOut, remainingAccounts] =
@@ -918,7 +912,7 @@ export class AmmInstruction {
     let signers: Signer[] = [];
 
     const { tokenAccount: inputTokenAccount, isWSol: isInputTokenWsol } =
-      await getTokenAccountForLiquidityChange(
+      await getATAOrRandomWsolTokenAccount(
         ammPool.ctx,
         accounts.payer,
         inputTokenMint,
@@ -928,7 +922,7 @@ export class AmmInstruction {
       );
 
     const { tokenAccount: outputTokenAccount, isWSol: isOutputTokenWsol } =
-      await getTokenAccountForLiquidityChange(
+      await getATAOrRandomWsolTokenAccount(
         ammPool.ctx,
         accounts.payer,
         outputTokenMint,
@@ -1006,8 +1000,8 @@ export class AmmInstruction {
     } else {
       sqrtPriceLimitX64 = SqrtPriceMath.priceToSqrtPriceX64(
         priceLimit,
-        ammPool.poolState.mint0Decimals,
-        ammPool.poolState.mint1Decimals
+        ammPool.poolState.mintDecimals0,
+        ammPool.poolState.mintDecimals1
       );
     }
     const [expectedAmountIn, remainingAccounts] =
@@ -1040,7 +1034,7 @@ export class AmmInstruction {
     let signers: Signer[] = [];
 
     const { tokenAccount: inputTokenAccount, isWSol: isInputTokenWsol } =
-      await getTokenAccountForLiquidityChange(
+      await getATAOrRandomWsolTokenAccount(
         ammPool.ctx,
         accounts.payer,
         inputTokenMint,
@@ -1050,7 +1044,7 @@ export class AmmInstruction {
       );
 
     const { tokenAccount: outputTokenAccount, isWSol: isOutputTokenWsol } =
-      await getTokenAccountForLiquidityChange(
+      await getATAOrRandomWsolTokenAccount(
         ammPool.ctx,
         accounts.payer,
         outputTokenMint,
@@ -1137,7 +1131,7 @@ export class AmmInstruction {
     if (needWSolTokenAccount) {
       if (isWSOLTokenMint(inputTokenMint)) {
         const { tokenAccount: inputTokenAccount } =
-          await getTokenAccountForLiquidityChange(
+          await getATAOrRandomWsolTokenAccount(
             firstPoolParam.ammPool.ctx,
             payer,
             inputTokenMint,
@@ -1148,7 +1142,7 @@ export class AmmInstruction {
         wSolAccount = inputTokenAccount;
       } else {
         const { tokenAccount: randomWSolAccount } =
-          await getTokenAccountForLiquidityChange(
+          await getATAOrRandomWsolTokenAccount(
             firstPoolParam.ammPool.ctx,
             payer,
             NATIVE_MINT,
@@ -1371,7 +1365,7 @@ export class AmmInstruction {
   }
 }
 
-async function getTokenAccountForLiquidityChange(
+async function getATAOrRandomWsolTokenAccount(
   ctx: Context,
   owner: PublicKey,
   tokenMint: PublicKey,

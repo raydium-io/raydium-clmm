@@ -9,6 +9,8 @@ use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
+#[cfg(feature = "enable-log")]
+use std::convert::identity;
 use std::iter::Iterator;
 use std::ops::Neg;
 use std::ops::{Deref, DerefMut};
@@ -196,11 +198,9 @@ pub fn swap_internal<'b, 'info>(
     // check tick_array account is owned by the pool
     require_keys_eq!(tick_array_current_loader.amm_pool, ctx.pool_state.key());
 
-    let mut current_vaild_tick_array_start_index;
-    let search_from_tick_index;
-    (current_vaild_tick_array_start_index, search_from_tick_index) = ctx
+    let mut current_vaild_tick_array_start_index = ctx
         .pool_state
-        .get_next_initialized_tick_array(zero_for_one)
+        .get_first_initialized_tick_array(zero_for_one)
         .unwrap();
 
     // check tick_array account is correct
@@ -216,18 +216,17 @@ pub fn swap_internal<'b, 'info>(
         )
         .0
     );
-    state.tick = search_from_tick_index;
-
     // continue swapping as long as we haven't used the entire input/output and haven't
     // reached the price limit
     while state.amount_specified_remaining != 0 && state.sqrt_price_x64 != sqrt_price_limit_x64 {
         #[cfg(feature = "enable-log")]
         msg!(
-            "while begin, exact_input:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{},state.protocol_fee:{},cache.protocol_fee_rate:{}",
+            "while begin, exact_input:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{},state_liquidity:{},state.protocol_fee:{},cache.protocol_fee_rate:{}",
             exact_input,
             state.fee_growth_global_x64,
             state.sqrt_price_x64,
             state.tick,
+            state.liquidity,
             state.protocol_fee,
             cache.protocol_fee_rate
         );
@@ -241,8 +240,14 @@ pub fn swap_internal<'b, 'info>(
         } else {
             Box::new(TickState::default())
         };
+        #[cfg(feature = "enable-log")]
+        msg!(
+            "next_initialized_tick, status:{}, tick_index:{}",
+            next_initialized_tick.is_initialized(),
+            identity(next_initialized_tick.tick)
+        );
         if !next_initialized_tick.is_initialized() {
-            (current_vaild_tick_array_start_index, _) =
+            current_vaild_tick_array_start_index =
                 tick_array_bit_map::next_initialized_tick_array_start_index(
                     U1024(ctx.pool_state.tick_array_bitmap),
                     current_vaild_tick_array_start_index,
@@ -280,6 +285,7 @@ pub fn swap_internal<'b, 'info>(
         }
 
         step.sqrt_price_next_x64 = tick_math::get_sqrt_price_at_tick(step.tick_next)?;
+
         let target_price = if (zero_for_one && step.sqrt_price_next_x64 < sqrt_price_limit_x64)
             || (!zero_for_one && step.sqrt_price_next_x64 > sqrt_price_limit_x64)
         {
@@ -294,7 +300,7 @@ pub fn swap_internal<'b, 'info>(
             state.amount_specified_remaining,
             ctx.amm_config.trade_fee_rate,
         );
-        state.sqrt_price_x64 = swap_step.sqrt_ratio_next_x64;
+        state.sqrt_price_x64 = swap_step.sqrt_price_next_x64;
         step.amount_in = swap_step.amount_in;
         step.amount_out = swap_step.amount_out;
         step.fee_amount = swap_step.fee_amount;
@@ -333,7 +339,6 @@ pub fn swap_internal<'b, 'info>(
                 .unwrap()
                 .as_u128();
         }
-
         // shift tick if we reached the next price
         if state.sqrt_price_x64 == step.sqrt_price_next_x64 {
             // if the tick is initialized, run the tick transition
@@ -355,12 +360,9 @@ pub fn swap_internal<'b, 'info>(
                     &updated_reward_infos,
                 );
 
-                // if we're moving leftward, we interpret liquidity_net as the opposite sign
-                // safe because liquidity_net cannot be i64::MIN
                 if zero_for_one {
                     liquidity_net = liquidity_net.neg();
                 }
-
                 state.liquidity = liquidity_math::add_delta(state.liquidity, liquidity_net)?;
             }
 
@@ -376,7 +378,7 @@ pub fn swap_internal<'b, 'info>(
 
         #[cfg(feature = "enable-log")]
         msg!(
-            "end, exact_input:{},step_amount_in:{}, step_amount_out:{}, step_fee_amount:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{},state.protocol_fee:{},cache.protocol_fee_rate:{}",
+            "end, exact_input:{},step_amount_in:{}, step_amount_out:{}, step_fee_amount:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{}, state_liquidity:{},state.protocol_fee:{},cache.protocol_fee_rate:{}",
             exact_input,
             step.amount_in,
             step.amount_out,
@@ -384,6 +386,7 @@ pub fn swap_internal<'b, 'info>(
             state.fee_growth_global_x64,
             state.sqrt_price_x64,
             state.tick,
+            state.liquidity,
             state.protocol_fee,
             cache.protocol_fee_rate
         );
@@ -408,13 +411,10 @@ pub fn swap_internal<'b, 'info>(
     }
     ctx.pool_state.sqrt_price_x64 = state.sqrt_price_x64;
 
-    // update liquidity if it changed
     if cache.liquidity_start != state.liquidity {
         ctx.pool_state.liquidity = state.liquidity;
     }
 
-    // update fee growth global and, if necessary, protocol fees
-    // overflow is acceptable, protocol has to withdraw before it hit u64::MAX fees
     if zero_for_one {
         ctx.pool_state.fee_growth_global_0_x64 = state.fee_growth_global_x64;
         if state.protocol_fee > 0 {
