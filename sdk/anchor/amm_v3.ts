@@ -154,11 +154,31 @@ export type AmmV3 = {
         },
         {
           "name": "tokenVault0",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
           "name": "tokenVault1",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "observationState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "recipientTokenAccount0",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "recipientTokenAccount1",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
           "isMut": false,
           "isSigner": false
         }
@@ -167,6 +187,75 @@ export type AmmV3 = {
         {
           "name": "sqrtPriceX64",
           "type": "u128"
+        }
+      ]
+    },
+    {
+      "name": "closePersonalPosition",
+      "accounts": [
+        {
+          "name": "owner",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "poolState",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "personalPosition",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "closeProtocolPosition",
+      "accounts": [
+        {
+          "name": "owner",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tickArrayLowerState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tickArrayUpperState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "protocolPositionState",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "tickLowerIndex",
+          "type": "i32"
+        },
+        {
+          "name": "tickUpperIndex",
+          "type": "i32"
+        },
+        {
+          "name": "tickArrayLowerStartIndex",
+          "type": "i32"
+        },
+        {
+          "name": "tickArrayUpperStartIndex",
+          "type": "i32"
         }
       ]
     },
@@ -918,11 +1007,11 @@ export type AmmV3 = {
             "type": "publicKey"
           },
           {
-            "name": "mint0Decimals",
+            "name": "mintDecimals0",
             "type": "u8"
           },
           {
-            "name": "mint1Decimals",
+            "name": "mintDecimals1",
             "type": "u8"
           },
           {
@@ -1030,11 +1119,11 @@ export type AmmV3 = {
             "type": "u128"
           },
           {
-            "name": "feeGrowthInside0Last",
+            "name": "feeGrowthInside0LastX64",
             "type": "u128"
           },
           {
-            "name": "feeGrowthInside1Last",
+            "name": "feeGrowthInside1LastX64",
             "type": "u128"
           },
           {
@@ -1908,11 +1997,31 @@ export const IDL: AmmV3 = {
         },
         {
           "name": "tokenVault0",
-          "isMut": false,
+          "isMut": true,
           "isSigner": false
         },
         {
           "name": "tokenVault1",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "observationState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "recipientTokenAccount0",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "recipientTokenAccount1",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
           "isMut": false,
           "isSigner": false
         }
@@ -1921,6 +2030,75 @@ export const IDL: AmmV3 = {
         {
           "name": "sqrtPriceX64",
           "type": "u128"
+        }
+      ]
+    },
+    {
+      "name": "closePersonalPosition",
+      "accounts": [
+        {
+          "name": "owner",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "poolState",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "personalPosition",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "closeProtocolPosition",
+      "accounts": [
+        {
+          "name": "owner",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tickArrayLowerState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tickArrayUpperState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "protocolPositionState",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "tickLowerIndex",
+          "type": "i32"
+        },
+        {
+          "name": "tickUpperIndex",
+          "type": "i32"
+        },
+        {
+          "name": "tickArrayLowerStartIndex",
+          "type": "i32"
+        },
+        {
+          "name": "tickArrayUpperStartIndex",
+          "type": "i32"
         }
       ]
     },
@@ -2672,11 +2850,11 @@ export const IDL: AmmV3 = {
             "type": "publicKey"
           },
           {
-            "name": "mint0Decimals",
+            "name": "mintDecimals0",
             "type": "u8"
           },
           {
-            "name": "mint1Decimals",
+            "name": "mintDecimals1",
             "type": "u8"
           },
           {
@@ -2784,11 +2962,11 @@ export const IDL: AmmV3 = {
             "type": "u128"
           },
           {
-            "name": "feeGrowthInside0Last",
+            "name": "feeGrowthInside0LastX64",
             "type": "u128"
           },
           {
-            "name": "feeGrowthInside1Last",
+            "name": "feeGrowthInside1LastX64",
             "type": "u128"
           },
           {

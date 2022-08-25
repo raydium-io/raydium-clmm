@@ -120,15 +120,10 @@ pub fn get_sqrt_price_at_tick(tick: i32) -> Result<u128, anchor_lang::error::Err
     Ok(ratio.as_u128())
 }
 
-/// Calculates the greatest tick value such that get_sqrt_ratio_at_tick(tick) <= ratio
+/// Calculates the greatest tick value such that get_sqrt_price_at_tick(tick) <= ratio
 /// Throws if sqrt_price_x64 < MIN_SQRT_RATIO or sqrt_price_x64 > MAX_SQRT_RATIO
 ///
 /// Formula: `i = log base(√1.0001) (√P)`
-///
-/// # Arguments
-///
-/// * `sqrt_price_x64`- The sqrt ratio for which to compute the tick as a U32.32
-///
 pub fn get_tick_at_sqrt_price(sqrt_price_x64: u128) -> Result<i32, anchor_lang::error::Error> {
     // second inequality must be < because the price can never reach the price at the max tick
     require!(

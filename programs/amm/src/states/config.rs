@@ -6,15 +6,6 @@ pub const AMM_CONFIG_SEED: &str = "amm_config";
 pub const FEE_RATE_DENOMINATOR_VALUE: u32 = 1_000_000;
 
 /// Holds the current owner of the factory
-///
-/// # The owner can
-///
-/// 1. Set and collect a pool's protocol fees
-/// 2. Enable a new fee amount for pool creation
-/// 3. Set another address as an owner
-///
-/// PDA of `[]`
-///
 #[account]
 #[derive(Default, Debug)]
 pub struct AmmConfig {

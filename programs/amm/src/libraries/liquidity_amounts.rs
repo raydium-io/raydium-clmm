@@ -1,7 +1,3 @@
-///! Liquidity amount functions
-///! Provides functions for computing liquidity amounts from token amounts and prices
-///! Implements formulae 6.29 and 6.30
-///
 use super::big_num::U128;
 use super::big_num::U256;
 use super::fixed_point_64;
@@ -9,15 +5,9 @@ use super::full_math::MulDiv;
 use super::tick_math;
 use super::unsafe_math::UnsafeMathTrait;
 use anchor_lang::prelude::*;
+
 /// Computes the amount of liquidity received for a given amount of token_0 and price range
 /// Calculates ΔL = Δx (√P_upper x √P_lower)/(√P_upper - √P_lower)
-///
-/// # Arguments
-///
-/// * `sqrt_ratio_a_x64` - A sqrt price representing the first tick boundary
-/// * `sqrt_ratio_b_x64` - A sqrt price representing the second tick boundary
-/// * `amount_0` - The amount_0 being sent in
-///
 pub fn get_liquidity_for_amount_0(
     mut sqrt_ratio_a_x64: u128,
     mut sqrt_ratio_b_x64: u128,
@@ -45,13 +35,6 @@ pub fn get_liquidity_for_amount_0(
 
 /// Computes the amount of liquidity received for a given amount of token_1 and price range
 /// Calculates ΔL = Δy / (√P_upper - √P_lower)
-///
-/// # Arguments
-///
-/// * `sqrt_ratio_a_x64` - A sqrt price representing the first tick boundary
-/// * `sqrt_ratio_b_x64` - A sqrt price representing the second tick boundary
-/// * `amount_1` - The amount_1 being sent in
-///
 pub fn get_liquidity_for_amount_1(
     mut sqrt_ratio_a_x64: u128,
     mut sqrt_ratio_b_x64: u128,
@@ -73,15 +56,6 @@ pub fn get_liquidity_for_amount_1(
 
 /// Computes the maximum amount of liquidity received for a given amount of token_0, token_1, the current
 /// pool prices and the prices at the tick boundaries
-///
-/// # Arguments
-///
-/// * `sqrt_ratio_x64` - A sqrt price representing the current pool prices
-/// * `sqrt_ratio_a_x64` - A sqrt price representing the first tick boundary
-/// * `sqrt_ratio_b_x64` - A sqrt price representing the second tick boundary
-/// * `amount_0` - The amount of token_0 being sent in
-/// * `amount_1` - The amount of token_1 being sent in
-///
 pub fn get_liquidity_for_amounts(
     sqrt_ratio_x64: u128,
     mut sqrt_ratio_a_x64: u128,
@@ -116,14 +90,6 @@ pub fn get_liquidity_for_amounts(
 ///
 /// * `Δx = L * (1 / √P_lower - 1 / √P_upper)`
 /// * i.e. `L * (√P_upper - √P_lower) / (√P_upper * √P_lower)`
-///
-/// # Arguments
-///
-/// * `sqrt_ratio_a_x64` - A sqrt price
-/// * `sqrt_ratio_b_x64` - Another sqrt price
-/// * `liquidity` - The amount of usable liquidity
-/// * `round_up`- Whether to round the amount up or down
-///
 pub fn get_amount_0_delta_unsigned(
     mut sqrt_ratio_a_x64: u128,
     mut sqrt_ratio_b_x64: u128,
@@ -157,19 +123,8 @@ pub fn get_amount_0_delta_unsigned(
     }
 }
 
-/// Gets the amount_1 delta between two prices, for given amount of liquidity (formula 6.30)
-///
-/// # Formula
-///
+/// Gets the amount_1 delta between two prices, for given amount of liquidity
 /// * `Δy = L (√P_upper - √P_lower)`
-///
-/// # Arguments
-///
-/// * `sqrt_ratio_a_x64` - A sqrt price
-/// * `sqrt_ratio_b_x64` - Another sqrt price
-/// * `liquidity` - The amount of usable liquidity
-/// * `round_up`- Whether to round the amount up or down
-///
 pub fn get_amount_1_delta_unsigned(
     mut sqrt_ratio_a_x64: u128,
     mut sqrt_ratio_b_x64: u128,
@@ -198,13 +153,6 @@ pub fn get_amount_1_delta_unsigned(
 
 /// Helper function to get signed token_0 delta between two prices,
 /// for the given change in liquidity
-///
-/// # Arguments
-///
-/// * `sqrt_ratio_a_x64` - A sqrt price
-/// * `sqrt_ratio_b_x64` - Another sqrt price
-/// * `liquidity` - The change in liquidity for which to compute amount_0 delta
-///
 pub fn get_amount_0_delta_signed(
     sqrt_ratio_a_x64: u128,
     sqrt_ratio_b_x64: u128,

@@ -1,7 +1,9 @@
 import { BN } from "@project-serum/anchor";
 import { PublicKey } from "@solana/web3.js";
 import { getTickArrayAddress } from "../utils";
+import { TickArrayState } from "../states";
 export const TICK_ARRAY_SIZE = 80;
+const TICK_ARRAY_BITMAP_SIZE = 1024;
 
 export declare type Tick = {
   tick: number;
@@ -179,13 +181,67 @@ export function getInitializedTickArrayInRange(
     ...searchHightBitFromStart(
       tickArrayBitmap,
       tickArrayOffset,
-      1024,
+      TICK_ARRAY_BITMAP_SIZE,
       expectedCount,
       tickSpacing
     )
   );
 
   return result;
+}
+
+export function getAllInitializedTickArrayStartIndex(
+  tickArrayBitmap: BN,
+  tickSpacing: number
+): number[] {
+  // find from offset 0 to 1024
+  return searchHightBitFromStart(
+    tickArrayBitmap,
+    0,
+    TICK_ARRAY_BITMAP_SIZE,
+    TICK_ARRAY_BITMAP_SIZE,
+    tickSpacing
+  );
+}
+
+export async function getAllInitializedTickArrayInfo(
+  programId: PublicKey,
+  poolId: PublicKey,
+  tickArrayBitmap: BN,
+  tickSpacing: number
+): Promise<
+  {
+    tickArrayStartIndex: number;
+    tickArrayAddress: PublicKey;
+  }[]
+> {
+  let result: {
+    tickArrayStartIndex: number;
+    tickArrayAddress: PublicKey;
+  }[] = [];
+  let allInitializedTickArrayIndex: number[] =
+    getAllInitializedTickArrayStartIndex(tickArrayBitmap, tickSpacing);
+  for (const startIndex of allInitializedTickArrayIndex) {
+    const [address] = await getTickArrayAddress(poolId, programId, startIndex);
+    result.push({
+      tickArrayStartIndex: startIndex,
+      tickArrayAddress: address,
+    });
+  }
+  return result;
+}
+
+export function getAllInitializedTickInTickArray(
+  tickArray: TickArrayState,
+  tickSpacing: number
+): number[] {
+  let allInitializedTick: number[] = [];
+  for (let i = 0; i < tickArray.ticks.length; i++) {
+    if (tickArray.ticks[i].liquidityGross.gtn(0)) {
+      allInitializedTick.push(tickArray.startTickIndex + i * tickSpacing);
+    }
+  }
+  return allInitializedTick;
 }
 
 /**

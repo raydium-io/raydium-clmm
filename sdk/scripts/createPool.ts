@@ -1,13 +1,15 @@
 #!/usr/bin/env ts-node
 
 import { Connection, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID,MintLayout, AccountLayout } from "@solana/spl-token";
+import { MintLayout } from "@solana/spl-token";
 import { Context, NodeWallet } from "../base";
 import { OBSERVATION_STATE_LEN } from "../states";
 import { sendTransaction, accountExist } from "../utils";
 import { AmmInstruction } from "../instructions";
 import { Config, defaultConfirmOptions } from "./config";
+import { StateFetcher } from "../states";
 import keypairFile from "./owner-keypair.json";
+import { assert } from "chai";
 
 (async () => {
   const owner = Keypair.fromSeed(Uint8Array.from(keypairFile.slice(0, 32)));
@@ -35,25 +37,13 @@ import keypairFile from "./owner-keypair.json";
       programId: ctx.program.programId,
     });
 
-    const tokenMint0 = new PublicKey(param.tokenMint0)
-    const tokenMint1 = new PublicKey(param.tokenMint1)
-    const [decimals0, decimals1] = (await connection.getMultipleAccountsInfo(
-      [tokenMint0, tokenMint1]
-      )).map((t)=>t?MintLayout.decode(t.data).decimals:0)
-    // if (!token0Data) {
-    //   throw new Error("token0Data is null");
-    // }
+    const tokenMint0 = new PublicKey(param.tokenMint0);
+    const tokenMint1 = new PublicKey(param.tokenMint1);
+    const [decimals0, decimals1] = (
+      await connection.getMultipleAccountsInfo([tokenMint0, tokenMint1])
+    ).map((t) => (t ? MintLayout.decode(t.data).decimals : 0));
 
-    // const decimals0 = MintLayout.decode(token0Data.data).decimals;
-
-    // const token1Data = await connection.getAccountInfo(
-    //   new PublicKey(param.tokenMint1)
-    // );
-    // if (!token1Data) {
-    //   throw new Error("token1Data is null");
-    // }
-    // const decimals1 = MintLayout.decode(token1Data.data).decimals;
-    console.log("decimals0:",decimals0,"decimals1:",decimals1)
+    console.log("decimals0:", decimals0, "decimals1:", decimals1);
 
     const [address, ixs] = await AmmInstruction.createPool(
       ctx,
@@ -81,5 +71,14 @@ import keypairFile from "./owner-keypair.json";
       defaultConfirmOptions
     );
     console.log("createPool tx: ", tx, " account:", address.toBase58());
+
+    const stateFetcher = new StateFetcher(ctx.program);
+    const poolData = await stateFetcher.getPoolState(address);
+    assert.equal(poolData.mintDecimals0, decimals0);
+    assert.equal(poolData.mintDecimals1, decimals1);
+    assert.isTrue(poolData.tokenMint0.equals(tokenMint0));
+    assert.isTrue(poolData.tokenMint1.equals(tokenMint1));
+    assert.equal(poolData.ammConfig.toString(), param.ammConfig);
+    assert.isTrue(poolData.liquidity.eqn(0));
   }
 })();

@@ -11,6 +11,7 @@ import { Context, NodeWallet } from "../base";
 import { StateFetcher } from "../states";
 import { sendTransaction } from "../utils";
 import { AmmInstruction } from "../instructions";
+import { fetchAllPositionsByOwner } from "../position";
 import { Config, defaultConfirmOptions } from "./config";
 import { AmmPool } from "../pool";
 import keypairFile from "./owner-keypair.json";
@@ -68,8 +69,8 @@ import { getTickOffsetInArray, getTickArrayAddressByTick } from "../entities";
       "priceLower:",
       SqrtPriceMath.sqrtPriceX64ToPrice(
         priceLowerX64,
-        ammPool.poolState.mint0Decimals,
-        ammPool.poolState.mint1Decimals
+        ammPool.poolState.mintDecimals0,
+        ammPool.poolState.mintDecimals1
       ),
       "liquidity:",
       personalPositionData.liquidity.toString()
@@ -86,8 +87,8 @@ import { getTickOffsetInArray, getTickArrayAddressByTick } from "../entities";
       "priceUpper:",
       SqrtPriceMath.sqrtPriceX64ToPrice(
         priceUpperX64,
-        ammPool.poolState.mint0Decimals,
-        ammPool.poolState.mint1Decimals
+        ammPool.poolState.mintDecimals0,
+        ammPool.poolState.mintDecimals1
       )
     );
 
@@ -137,7 +138,7 @@ import { getTickOffsetInArray, getTickArrayAddressByTick } from "../entities";
       signers,
       defaultConfirmOptions
     );
-    console.log("increaseLiquidity tx: ", tx, "\n");
+    console.log("increaseLiquidity tx: ", tx);
 
     const personalPositionDataUpdated =
       await ammPool.stateFetcher.getPersonalPositionState(
@@ -148,25 +149,41 @@ import { getTickOffsetInArray, getTickArrayAddressByTick } from "../entities";
       personalPositionData.liquidity.add(param.liquidity).toString()
     );
 
-    const poolUpdatedData = await stateFetcher.getPoolState(
+    const poolStateDataUpdated = await stateFetcher.getPoolState(
       new PublicKey(param.poolId)
     );
     console.log(
       "after increase, pool liquidity:",
-      poolUpdatedData.liquidity.toString()
+      poolStateDataUpdated.liquidity.toString(),
+      "\n"
     );
-
+    assert.deepEqual(
+      poolStateData.tickCurrent,
+      poolStateDataUpdated.tickCurrent
+    );
+    assert.deepEqual(
+      poolStateData.sqrtPriceX64,
+      poolStateDataUpdated.sqrtPriceX64
+    );
+    assert.deepEqual(
+      poolStateData.protocolFeesToken0,
+      poolStateDataUpdated.protocolFeesToken0
+    );
+    assert.deepEqual(
+      poolStateData.protocolFeesToken1,
+      poolStateDataUpdated.protocolFeesToken1
+    );
     if (
       poolStateData.tickCurrent >= personalPositionData.tickLowerIndex &&
       poolStateData.tickCurrent < personalPositionData.tickUpperIndex
     ) {
       assert.equal(
-        poolUpdatedData.liquidity.toString(),
+        poolStateDataUpdated.liquidity.toString(),
         poolStateData.liquidity.add(param.liquidity).toString()
       );
     } else {
       assert.equal(
-        poolUpdatedData.liquidity.toString(),
+        poolStateDataUpdated.liquidity.toString(),
         poolStateData.liquidity.toString()
       );
     }

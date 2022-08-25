@@ -1,13 +1,10 @@
 use super::pool::PoolState;
 use crate::error::ErrorCode;
-///! Contains functions for managing tick processes and relevant calculations
-///!
 use crate::libraries::{liquidity_math, tick_math};
 use crate::pool::{RewardInfo, REWARD_NUM};
 use crate::util::*;
 use anchor_lang::{prelude::*, system_program};
 
-/// Seed to derive account address and signature
 pub const TICK_ARRAY_SEED: &str = "tick_array";
 pub const TICK_ARRAY_SIZE_USIZE: usize = 80;
 pub const TICK_ARRAY_SIZE: i32 = 80;
@@ -73,10 +70,6 @@ impl TickArrayState {
 
             // save the 8 byte discriminator
             tick_array_state_loader.exit(&crate::id())?;
-
-            // // mark the position in bitmap
-            // pool_state.flip_tick_array_bit(tick_array_start_index)?;
-
             tick_array_state_loader
         } else {
             AccountLoader::<TickArrayState>::try_from(&tick_array_account_info)?
@@ -218,17 +211,11 @@ impl Default for TickArrayState {
     }
 }
 
-/// Account storing info for a price tick
-///
-/// PDA of `[TICK_SEED, token_0, token_1, fee, tick]`
-///
 #[zero_copy]
 #[repr(packed)]
 #[derive(Default, Debug)]
 pub struct TickState {
-    /// The price tick whose info is stored in the account
     pub tick: i32,
-
     /// Amount of net liquidity added (subtracted) when tick is crossed from left to right (right to left)
     pub liquidity_net: i128,
     /// The total position liquidity that references this tick
@@ -239,10 +226,8 @@ pub struct TickState {
     pub fee_growth_outside_0_x64: u128,
     pub fee_growth_outside_1_x64: u128,
 
-    // Array of Q64.64
+    // Reward growth per unit of liquidity like fee, array of Q64.64
     pub reward_growths_outside_x64: [u128; REWARD_NUM],
-    // padding space for upgrade
-    // pub padding: [u64; 8],
 }
 
 impl TickState {
@@ -322,12 +307,6 @@ impl TickState {
         self.liquidity_net
     }
 
-    /// Clears tick data. Variables other than bump and tick are cleared
-    ///
-    /// # Arguments
-    ///
-    /// * `self` - The tick account to be cleared
-    ///
     pub fn clear(&mut self) {
         self.liquidity_net = 0;
         self.liquidity_gross = 0;
@@ -344,15 +323,7 @@ impl TickState {
 /// Retrieves the all time fee growth data in token_0 and token_1, per unit of liquidity,
 /// inside a position's tick boundaries.
 ///
-/// Calculates `fr = fg - f_below(lower) - f_above(upper)`, formula 6.19
-///
-/// # Arguments
-///
-/// * `tick_lower` - The lower tick boundary of the position
-/// * `tick_upper` - The upper tick boundary of the position
-/// * `tick_current` - The current tick
-/// * `fee_growth_global_0_x64` - The all-time global fee growth, per unit of liquidity, in token_0
-/// * `fee_growth_global_1_x64` - The all-time global fee growth, per unit of liquidity, in token_1
+/// Calculates `fr = fg - f_below(lower) - f_above(upper)`
 ///
 pub fn get_fee_growth_inside(
     tick_lower: &TickState,
@@ -462,10 +433,6 @@ pub fn get_reward_growths_inside(
 /// A tick is valid iff it lies within tick boundaries and it is a multiple
 /// of tick spacing.
 ///
-/// # Arguments
-///
-/// * `tick` - The price tick
-///
 pub fn check_tick_boundary(tick: i32, tick_spacing: u16) -> Result<()> {
     require!(tick >= tick_math::MIN_TICK, ErrorCode::TickLowerOverflow);
     require!(tick <= tick_math::MAX_TICK, ErrorCode::TickUpperOverflow);
@@ -493,11 +460,6 @@ pub fn check_tick_array_start_index(
 }
 
 /// Common checks for valid tick inputs.
-///
-/// # Arguments
-///
-/// * `tick_lower` - The lower tick
-/// * `tick_upper` - The upper tick
 ///
 pub fn check_ticks_order(tick_lower_index: i32, tick_upper_index: i32) -> Result<()> {
     require!(

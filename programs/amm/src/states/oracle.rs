@@ -1,12 +1,6 @@
 use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 /// Oracle provides price data useful for a wide variety of system designs
 ///
-/// Instances of stored oracle data, "observations", are collected in the oracle array.
-///
-/// Every pool is initialized with an oracle array length of 1000.
-///
-/// Observations are overwritten when the full length of the oracle array is populated.
-///
 use anchor_lang::prelude::*;
 /// Seed to derive account address and signature
 pub const OBSERVATION_SEED: &str = "observation";
@@ -31,10 +25,6 @@ impl Observation {
     pub const LEN: usize = 4 + 16 + 16 + 16;
 }
 
-/// Returns data about a specific observation index
-///
-/// PDA of `[OBSERVATION_SEED, pool_id]`
-///
 #[account(zero_copy)]
 #[repr(packed)]
 pub struct ObservationState {

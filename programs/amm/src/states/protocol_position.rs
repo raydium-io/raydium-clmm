@@ -4,9 +4,6 @@ use crate::{
     error::ErrorCode,
     libraries::{fixed_point_64, liquidity_math},
 };
-///! Positions represent an owner address' liquidity between a lower and upper tick boundary
-///! Positions store additional state for tracking fees owed to the position
-///!
 use anchor_lang::prelude::*;
 
 /// Seed to derive account address and signature
@@ -51,17 +48,7 @@ pub struct ProtocolPositionState {
 
 impl ProtocolPositionState {
     pub const LEN: usize = 8 + 1 + 32 + 4 + 4 + 16 + 16 + 16 + 8 + 8 + 16 * REWARD_NUM + 64;
-    /// Credits accumulated fees to a user's position
-    ///
-    /// # Arguments
-    ///
-    /// * `self` - The individual position to update
-    /// * `liquidity_delta` - The change in pool liquidity as a result of the position update
-    /// * `fee_growth_inside_0_x64` - The all-time fee growth in token_0, per unit of liquidity,
-    /// inside the position's tick boundaries
-    /// * `fee_growth_inside_1_x64` - The all-time fee growth in token_1, per unit of liquidity,
-    /// inside the position's tick boundaries
-    ///
+
     pub fn update(
         &mut self,
         tick_lower_index: i32,

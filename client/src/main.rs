@@ -744,8 +744,8 @@ fn main() -> Result<()> {
                     let receive_token_1 = Pubkey::from_str(&v[3]).unwrap();
                     let sqrt_price_x64 = price_to_sqrt_price_x64(
                         price,
-                        pool_account.mint_0_decimals,
-                        pool_account.mint_1_decimals,
+                        pool_account.mint_decimals_0,
+                        pool_account.mint_decimals_1,
                     );
                     let tick = tick_math::get_tick_at_sqrt_price(sqrt_price_x64).unwrap();
                     println!(

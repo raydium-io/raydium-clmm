@@ -2,7 +2,6 @@ import { web3, BN } from "@project-serum/anchor";
 import { Token, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { AmmPool } from "./pool";
 import {
-  getTickWithPriceAndTickspacing,
   LiquidityMath,
   SqrtPriceMath,
 } from "./math";

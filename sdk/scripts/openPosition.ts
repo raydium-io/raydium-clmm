@@ -10,8 +10,8 @@ import {
 } from "@solana/web3.js";
 import { Context, NodeWallet } from "../base";
 import { StateFetcher } from "../states";
-import { getTickArrayAddress, sendTransaction } from "../utils";
-import { getTickWithPriceAndTickspacing, SqrtPriceMath } from "../math";
+import { sendTransaction } from "../utils";
+import { SqrtPriceMath } from "../math";
 import { AmmInstruction } from "../instructions";
 import { Config, defaultConfirmOptions } from "./config";
 import { AmmPool } from "../pool";
@@ -55,7 +55,9 @@ import { getTickOffsetInArray, getTickArrayAddressByTick } from "../entities";
       "sqrtPriceX64:",
       poolStateData.sqrtPriceX64.toString(),
       "price:",
-      ammPool.tokenPrice()
+      ammPool.tokenPrice(),
+      "liquidity:",
+      poolStateData.liquidity.toString()
     );
     const tickLower = ammPool.getRoundingTickWithPrice(param.priceLower);
     const tickUpper = ammPool.getRoundingTickWithPrice(param.priceUpper);
@@ -100,8 +102,8 @@ import { getTickOffsetInArray, getTickArrayAddressByTick } from "../entities";
       "priceLower:",
       SqrtPriceMath.sqrtPriceX64ToPrice(
         priceLowerX64,
-        poolStateData.mint0Decimals,
-        poolStateData.mint1Decimals
+        poolStateData.mintDecimals0,
+        poolStateData.mintDecimals1
       )
     );
 
@@ -114,8 +116,8 @@ import { getTickOffsetInArray, getTickArrayAddressByTick } from "../entities";
       "priceLower:",
       SqrtPriceMath.sqrtPriceX64ToPrice(
         priceUpperX64,
-        poolStateData.mint0Decimals,
-        poolStateData.mint1Decimals
+        poolStateData.mintDecimals0,
+        poolStateData.mintDecimals1
       )
     );
     const nftMintAKeypair = new Keypair();
@@ -150,28 +152,43 @@ import { getTickOffsetInArray, getTickArrayAddressByTick } from "../entities";
       tx,
       "account:",
       personalPosition.toBase58(),
-      "\n"
     );
 
-    const poolUpdatedData = await stateFetcher.getPoolState(
+    const poolStateDataUpdated = await stateFetcher.getPoolState(
       new PublicKey(param.poolId)
     );
     console.log(
       "after open position, pool updated liquidity:",
-      poolUpdatedData.liquidity.toString()
+      poolStateDataUpdated.liquidity.toString(),
+      "\n"
     );
-
+    assert.deepEqual(
+      poolStateData.tickCurrent,
+      poolStateDataUpdated.tickCurrent
+    );
+    assert.deepEqual(
+      poolStateData.sqrtPriceX64,
+      poolStateDataUpdated.sqrtPriceX64
+    );
+    assert.deepEqual(
+      poolStateData.protocolFeesToken0,
+      poolStateDataUpdated.protocolFeesToken0
+    );
+    assert.deepEqual(
+      poolStateData.protocolFeesToken1,
+      poolStateDataUpdated.protocolFeesToken1
+    );
     if (
       poolStateData.tickCurrent >= tickLower &&
       poolStateData.tickCurrent < tickUpper
     ) {
       assert.equal(
-        poolUpdatedData.liquidity.toString(),
+        poolStateDataUpdated.liquidity.toString(),
         poolStateData.liquidity.add(param.liquidity).toString()
       );
     } else {
       assert.equal(
-        poolUpdatedData.liquidity.toString(),
+        poolStateDataUpdated.liquidity.toString(),
         poolStateData.liquidity.toString()
       );
     }

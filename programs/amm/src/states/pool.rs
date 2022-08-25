@@ -43,8 +43,8 @@ pub struct PoolState {
     pub observation_key: Pubkey,
 
     /// mint0 and mint1 decimals
-    pub mint_0_decimals: u8,
-    pub mint_1_decimals: u8,
+    pub mint_decimals_0: u8,
+    pub mint_decimals_1: u8,
 
     /// The minimum number of ticks between initialized ticks
     pub tick_spacing: u16,
@@ -295,14 +295,16 @@ impl PoolState {
         Ok(())
     }
 
-    pub fn get_next_initialized_tick_array(&self, zero_for_one: bool) -> Option<(i32, i32)> {
+    /// Search the first initialized tick array from pool current tick, if current tick array is initialized then direct return,
+    /// else find next according to the direction
+    pub fn get_first_initialized_tick_array(&self, zero_for_one: bool) -> Option<i32> {
         let (is_initialized, start_index) = check_current_tick_array_is_initialized(
             U1024(self.tick_array_bitmap),
             self.tick_current,
             self.tick_spacing.into(),
         );
         if is_initialized {
-            return Some((start_index, self.tick_current));
+            return Some(start_index);
         }
         next_initialized_tick_array_start_index(
             U1024(self.tick_array_bitmap),
