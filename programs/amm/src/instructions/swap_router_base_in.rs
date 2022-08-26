@@ -23,7 +23,7 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
     amount_out_minimum: u64,
 ) -> Result<()> {
     let mut amount_in_internal = amount_in;
-    let mut input_token_account = ctx.accounts.input_token_account.clone();
+    let mut input_token_account = Box::new(ctx.accounts.input_token_account.clone());
     let mut accounts: &[AccountInfo] = ctx.remaining_accounts;
     while !accounts.is_empty() {
         let mut remaining_accounts = accounts.iter();
@@ -34,14 +34,19 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
             accounts = remaining_accounts.as_slice();
             continue;
         }
-        let mut amm_config = Box::new(Account::<AmmConfig>::try_from(account_info)?);
+        let amm_config = Box::new(Account::<AmmConfig>::try_from(account_info)?);
         let mut pool_state = Box::new(Account::<PoolState>::try_from(
             remaining_accounts.next().unwrap(),
         )?);
-        let output_token_account =
-            Account::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
-        let input_vault = Account::<TokenAccount>::try_from(remaining_accounts.next().unwrap())?;
-        let output_vault = Account::<TokenAccount>::try_from(remaining_accounts.next().unwrap())?;
+        let output_token_account = Box::new(Account::<TokenAccount>::try_from(
+            &remaining_accounts.next().unwrap(),
+        )?);
+        let input_vault = Box::new(Account::<TokenAccount>::try_from(
+            remaining_accounts.next().unwrap(),
+        )?);
+        let output_vault = Box::new(Account::<TokenAccount>::try_from(
+            remaining_accounts.next().unwrap(),
+        )?);
         let mut observation_state =
             AccountLoader::<ObservationState>::try_from(remaining_accounts.next().unwrap())?;
         // check observation account is owned by the pool
@@ -54,9 +59,9 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
         amount_in_internal = exact_internal(
             &mut SwapAccounts {
                 signer: ctx.accounts.payer.clone(),
-                amm_config: amm_config.as_mut(),
+                amm_config: &amm_config,
                 input_token_account: input_token_account.clone(),
-                pool_state: pool_state.as_mut(),
+                pool_state: &mut pool_state,
                 output_token_account: output_token_account.clone(),
                 input_vault: input_vault.clone(),
                 output_vault: output_vault.clone(),

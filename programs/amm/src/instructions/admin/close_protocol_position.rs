@@ -57,8 +57,8 @@ pub fn close_protocol_position(
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
 ) -> Result<()> {
-    let pool_state = ctx.accounts.pool_state.as_mut();
-    let protocol_position = ctx.accounts.protocol_position_state.as_mut();
+    let pool_state = &mut ctx.accounts.pool_state;
+    let protocol_position = &mut ctx.accounts.protocol_position_state;
 
     check_ticks_order(tick_lower_index, tick_upper_index)?;
     check_tick_array_start_index(

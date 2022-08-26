@@ -30,19 +30,19 @@ pub struct SwapSingle<'info> {
 
     /// The user token account for input token
     #[account(mut)]
-    pub input_token_account: Account<'info, TokenAccount>,
+    pub input_token_account: Box<Account<'info, TokenAccount>>,
 
     /// The user token account for output token
     #[account(mut)]
-    pub output_token_account: Account<'info, TokenAccount>,
+    pub output_token_account: Box<Account<'info, TokenAccount>>,
 
     /// The vault token account for input token
     #[account(mut)]
-    pub input_vault: Account<'info, TokenAccount>,
+    pub input_vault: Box<Account<'info, TokenAccount>>,
 
     /// The vault token account for output token
     #[account(mut)]
-    pub output_vault: Account<'info, TokenAccount>,
+    pub output_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(mut, constraint = tick_array.load()?.amm_pool == pool_state.key())]
     pub tick_array: AccountLoader<'info, TickArrayState>,
@@ -60,25 +60,25 @@ pub struct SwapAccounts<'b, 'info> {
     pub signer: Signer<'info>,
 
     /// The user token account for input token
-    pub input_token_account: Account<'info, TokenAccount>,
+    pub input_token_account: Box<Account<'info, TokenAccount>>,
 
     /// The user token account for output token
-    pub output_token_account: Account<'info, TokenAccount>,
+    pub output_token_account: Box<Account<'info, TokenAccount>>,
 
     /// The vault token account for input token
-    pub input_vault: Account<'info, TokenAccount>,
+    pub input_vault: Box<Account<'info, TokenAccount>>,
 
     /// The vault token account for output token
-    pub output_vault: Account<'info, TokenAccount>,
+    pub output_vault: Box<Account<'info, TokenAccount>>,
 
     /// SPL program for token transfers
     pub token_program: Program<'info, Token>,
 
     /// The factory state to read protocol fees
-    pub amm_config: &'b Account<'info, AmmConfig>,
+    pub amm_config: &'b Box<Account<'info, AmmConfig>>,
 
     /// The program account of the pool in which the swap will be performed
-    pub pool_state: &'b mut Account<'info, PoolState>,
+    pub pool_state: &'b mut Box<Account<'info, PoolState>>,
 
     pub tick_array_state: &'b mut AccountLoader<'info, TickArrayState>,
 
@@ -451,7 +451,6 @@ pub fn exact_internal<'b, 'info>(
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
 ) -> Result<u64> {
-    let pool_state_info = ctx.pool_state.to_account_info();
     let zero_for_one = ctx.input_vault.mint == ctx.pool_state.token_mint_0;
     let input_balance_before = ctx.input_vault.amount;
     let output_balance_before = ctx.output_vault.amount;
@@ -555,7 +554,7 @@ pub fn exact_internal<'b, 'info>(
     }
 
     emit!(SwapEvent {
-        pool_state: pool_state_info.key(),
+        pool_state: ctx.pool_state.key(),
         sender: ctx.signer.key(),
         token_account_0: token_account_0.key(),
         token_account_1: token_account_1.key(),
@@ -612,13 +611,13 @@ pub fn swap<'a, 'b, 'c, 'info>(
     let amount = exact_internal(
         &mut SwapAccounts {
             signer: ctx.accounts.payer.clone(),
-            amm_config: ctx.accounts.amm_config.as_mut(),
+            amm_config: &ctx.accounts.amm_config,
             input_token_account: ctx.accounts.input_token_account.clone(),
             output_token_account: ctx.accounts.output_token_account.clone(),
             input_vault: ctx.accounts.input_vault.clone(),
             output_vault: ctx.accounts.output_vault.clone(),
             token_program: ctx.accounts.token_program.clone(),
-            pool_state: ctx.accounts.pool_state.as_mut(),
+            pool_state: &mut ctx.accounts.pool_state,
             tick_array_state: &mut ctx.accounts.tick_array,
             observation_state: &mut ctx.accounts.observation_state,
         },

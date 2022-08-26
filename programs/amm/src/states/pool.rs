@@ -82,8 +82,8 @@ pub struct PoolState {
     /// Packed initialized tick array state
     pub tick_array_bitmap: [u64; 16],
     // Unused bytes for future upgrades.
-    // pub padding1: [u64; 32],
-    // pub padding2: [u64; 32],
+    pub padding1: [u64; 32],
+    pub padding2: [u64; 32],
 }
 
 impl PoolState {

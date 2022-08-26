@@ -19,7 +19,7 @@ pub struct DecreaseLiquidity<'info> {
 
     /// Decrease liquidity for this position
     #[account(mut, constraint = personal_position.pool_id == pool_state.key())]
-    pub personal_position: Account<'info, PersonalPositionState>,
+    pub personal_position: Box<Account<'info, PersonalPositionState>>,
 
     #[account(mut)]
     pub pool_state: Box<Account<'info, PoolState>>,
@@ -65,14 +65,14 @@ pub struct DecreaseLiquidity<'info> {
         mut,
         token::mint = token_vault_0.mint
     )]
-    pub recipient_token_account_0: Account<'info, TokenAccount>,
+    pub recipient_token_account_0: Box<Account<'info, TokenAccount>>,
 
     /// The destination token account for receive amount_1
     #[account(
         mut,
         token::mint = token_vault_1.mint
     )]
-    pub recipient_token_account_1: Account<'info, TokenAccount>,
+    pub recipient_token_account_1: Box<Account<'info, TokenAccount>>,
 
     /// SPL program to transfer out tokens
     pub token_program: Program<'info, Token>,
@@ -85,11 +85,11 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     amount_1_min: u64,
 ) -> Result<()> {
     assert!(liquidity <= ctx.accounts.personal_position.liquidity);
-    let mut pool_state = ctx.accounts.pool_state.as_mut();
+    let pool_state = &mut ctx.accounts.pool_state;
+    let protocol_position_state = &mut ctx.accounts.protocol_position;
 
-    let protocol_position_state = ctx.accounts.protocol_position.as_mut();
     let (decrease_amount_0, decrease_amount_1) = burn_liquidity(
-        &mut pool_state,
+        pool_state,
         &ctx.accounts.tick_array_lower,
         &ctx.accounts.tick_array_upper,
         protocol_position_state,
@@ -164,7 +164,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     }
 
     let reward_amounts = collect_rewards(
-        &mut pool_state,
+        pool_state,
         ctx.remaining_accounts,
         ctx.accounts.token_program.clone(),
         personal_position,
@@ -184,10 +184,10 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
 }
 
 pub fn burn_liquidity<'b, 'info>(
-    pool_state: &mut Account<'info, PoolState>,
+    pool_state: &mut Box<Account<'info, PoolState>>,
     tick_array_lower_state: &AccountLoader<'info, TickArrayState>,
     tick_array_upper_state: &AccountLoader<'info, TickArrayState>,
-    protocol_position_state: &mut Account<'info, ProtocolPositionState>,
+    protocol_position_state: &mut Box<Account<'info, ProtocolPositionState>>,
     liquidity: u128,
 ) -> Result<(u64, u64)> {
     let mut tick_array_lower = tick_array_lower_state.load_mut()?;
@@ -227,7 +227,7 @@ pub fn burn_liquidity<'b, 'info>(
 }
 
 pub fn collect_rewards<'a, 'b, 'c, 'info>(
-    pool_state: &mut Account<'info, PoolState>,
+    pool_state: &mut Box<Account<'info, PoolState>>,
     remaining_accounts: &[AccountInfo<'info>],
     token_program: Program<'info, Token>,
     personal_position_state: &mut PersonalPositionState,

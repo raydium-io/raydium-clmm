@@ -11,26 +11,26 @@ use mpl_token_metadata::{instruction::create_metadata_accounts_v2, state::Creato
 use spl_token::instruction::AuthorityType;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 
 pub struct AddLiquidityParam<'b, 'info> {
     /// Pays to mint liquidity
     pub payer: &'b Signer<'info>,
 
     /// The token account spending token_0 to mint the position
-    pub token_account_0: &'b mut Account<'info, TokenAccount>,
+    pub token_account_0: &'b mut Box<Account<'info, TokenAccount>>,
 
     /// The token account spending token_1 to mint the position
-    pub token_account_1: &'b mut Account<'info, TokenAccount>,
+    pub token_account_1: &'b mut Box<Account<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_0
-    pub token_vault_0: &'b mut Account<'info, TokenAccount>,
+    pub token_vault_0: &'b mut Box<Account<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_1
-    pub token_vault_1: &'b mut Account<'info, TokenAccount>,
+    pub token_vault_1: &'b mut Box<Account<'info, TokenAccount>>,
 
     /// Mint liquidity for this pool
-    pub pool_state: &'b mut Account<'info, PoolState>,
+    pub pool_state: &'b mut Box<Account<'info, PoolState>>,
 
     /// The bitmap storing initialization state of the lower tick
     pub tick_array_lower: &'b AccountLoader<'info, TickArrayState>,
@@ -39,7 +39,7 @@ pub struct AddLiquidityParam<'b, 'info> {
     pub tick_array_upper: &'b AccountLoader<'info, TickArrayState>,
 
     /// The position into which liquidity is minted
-    pub protocol_position: &'b mut Account<'info, ProtocolPositionState>,
+    pub protocol_position: &'b mut Box<Account<'info, ProtocolPositionState>>,
 
     /// The SPL program to perform token transfers
     pub token_program: Program<'info, Token>,
@@ -205,7 +205,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         ctx.accounts.payer.to_account_info(),
         ctx.accounts.tick_array_lower.to_account_info(),
         ctx.accounts.system_program.to_account_info(),
-        ctx.accounts.pool_state.deref_mut(),
+        &ctx.accounts.pool_state,
         tick_array_lower_start_index,
     )?;
 
@@ -216,34 +216,28 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             ctx.accounts.payer.to_account_info(),
             ctx.accounts.tick_array_upper.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
-            ctx.accounts.pool_state.deref_mut(),
+            &ctx.accounts.pool_state,
             tick_array_upper_start_index,
         )?
     };
 
-    let pool_state_info = ctx.accounts.pool_state.to_account_info();
     // check if protocol position is initilized
     if ctx.accounts.protocol_position.bump == 0 {
         let protocol_position = &mut ctx.accounts.protocol_position;
         protocol_position.bump = *ctx.bumps.get("protocol_position").unwrap();
-        protocol_position.pool_id = pool_state_info.key();
+        protocol_position.pool_id = ctx.accounts.pool_state.key();
     }
-
-    let amm_config_key = ctx.accounts.pool_state.amm_config;
-    let token_mint_0 = ctx.accounts.pool_state.token_mint_0.key();
-    let token_mint_1 = ctx.accounts.pool_state.token_mint_1.key();
-    let bump = ctx.accounts.pool_state.bump;
 
     let mut add_liquidity_accounts = AddLiquidityParam {
         payer: &ctx.accounts.payer,
-        token_account_0: ctx.accounts.token_account_0.as_mut(),
-        token_account_1: ctx.accounts.token_account_1.as_mut(),
-        token_vault_0: ctx.accounts.token_vault_0.as_mut(),
-        token_vault_1: ctx.accounts.token_vault_1.as_mut(),
-        pool_state: ctx.accounts.pool_state.as_mut(),
+        token_account_0: &mut ctx.accounts.token_account_0,
+        token_account_1: &mut ctx.accounts.token_account_1,
+        token_vault_0: &mut ctx.accounts.token_vault_0,
+        token_vault_1: &mut ctx.accounts.token_vault_1,
+        pool_state: &mut ctx.accounts.pool_state.clone(),
         tick_array_lower: &tick_array_lower_state,
         tick_array_upper: &tick_array_upper_state,
-        protocol_position: ctx.accounts.protocol_position.as_mut(),
+        protocol_position: &mut ctx.accounts.protocol_position,
         token_program: ctx.accounts.token_program.clone(),
     };
 
@@ -258,15 +252,15 @@ pub fn open_position<'a, 'b, 'c, 'info>(
 
     let seeds = [
         &POOL_SEED.as_bytes(),
-        amm_config_key.as_ref(),
-        token_mint_0.as_ref(),
-        token_mint_1.as_ref(),
-        &[bump] as &[u8],
+        ctx.accounts.pool_state.amm_config.as_ref(),
+        ctx.accounts.pool_state.token_mint_0.as_ref(),
+        ctx.accounts.pool_state.token_mint_1.as_ref(),
+        &[ctx.accounts.pool_state.bump] as &[u8],
     ];
 
     create_nft_with_metadata(
         &ctx.accounts.payer.to_account_info(),
-        &pool_state_info,
+        &ctx.accounts.pool_state.to_account_info(),
         &ctx.accounts.position_nft_mint.to_account_info(),
         &ctx.accounts.position_nft_account.to_account_info(),
         &ctx.accounts.metadata_account.to_account_info(),
@@ -280,7 +274,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     let personal_position = &mut ctx.accounts.personal_position;
     personal_position.bump = *ctx.bumps.get("personal_position").unwrap();
     personal_position.nft_mint = ctx.accounts.position_nft_mint.key();
-    personal_position.pool_id = pool_state_info.key();
+    personal_position.pool_id = ctx.accounts.pool_state.key();
     personal_position.tick_lower_index = tick_lower_index;
     personal_position.tick_upper_index = tick_upper_index;
 
@@ -295,7 +289,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     personal_position.liquidity = liquidity;
 
     emit!(CreatePersonalPositionEvent {
-        pool_state: pool_state_info.key(),
+        pool_state: ctx.accounts.pool_state.key(),
         minter: ctx.accounts.payer.key(),
         nft_owner: ctx.accounts.position_nft_owner.key(),
         tick_lower_index: tick_lower_index,
@@ -404,8 +398,8 @@ pub fn add_liquidity<'b, 'info>(
 
 pub fn modify_position<'info>(
     liquidity_delta: i128,
-    pool_state: &mut Account<'info, PoolState>,
-    protocol_position_state: &mut Account<'info, ProtocolPositionState>,
+    pool_state: &mut Box<Account<'info, PoolState>>,
+    protocol_position_state: &mut Box<Account<'info, ProtocolPositionState>>,
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,
 ) -> Result<(i64, i64, bool, bool)> {
@@ -441,8 +435,8 @@ pub fn modify_position<'info>(
 /// Updates a position with the given liquidity delta and tick
 pub fn update_position<'info>(
     liquidity_delta: i128,
-    pool_state: &mut Account<'info, PoolState>,
-    protocol_position_state: &mut Account<'info, ProtocolPositionState>,
+    pool_state: &mut Box<Account<'info, PoolState>>,
+    protocol_position_state: &mut Box<Account<'info, ProtocolPositionState>>,
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,
 ) -> Result<(bool, bool)> {

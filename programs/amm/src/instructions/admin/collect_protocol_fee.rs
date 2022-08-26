@@ -46,8 +46,7 @@ pub fn collect_protocol_fee(
     amount_0_requested: u64,
     amount_1_requested: u64,
 ) -> Result<()> {
-    let pool_state_info = ctx.accounts.pool_state.to_account_info();
-    let pool_state = ctx.accounts.pool_state.as_mut();
+    let pool_state = &mut ctx.accounts.pool_state;
 
     let amount_0 = amount_0_requested.min(pool_state.protocol_fees_token_0);
     let amount_1 = amount_1_requested.min(pool_state.protocol_fees_token_1);
@@ -75,7 +74,7 @@ pub fn collect_protocol_fee(
     }
 
     emit!(CollectProtocolFeeEvent {
-        pool_state: pool_state_info.key(),
+        pool_state: ctx.accounts.pool_state.key(),
         recipient_token_account_0: ctx.accounts.recipient_token_account_0.key(),
         recipient_token_account_1: ctx.accounts.recipient_token_account_1.key(),
         amount_0,

@@ -29,7 +29,7 @@ impl TickArrayState {
         payer: AccountInfo<'info>,
         tick_array_account_info: AccountInfo<'info>,
         system_program: AccountInfo<'info>,
-        pool_state: &mut Account<'info, PoolState>,
+        pool_state: &Box<Account<'info, PoolState>>,
         tick_array_start_index: i32,
     ) -> Result<AccountLoader<'info, TickArrayState>> {
         let tick_array_state = if tick_array_account_info.owner == &system_program::ID {

@@ -4,7 +4,6 @@ use crate::states::*;
 use crate::util::transfer_from_pool_vault_to_user;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
-use std::ops::DerefMut;
 
 #[derive(Accounts)]
 pub struct ResetSqrtPrice<'info> {
@@ -41,21 +40,21 @@ pub struct ResetSqrtPrice<'info> {
         mut,
         token::mint = token_vault_0.mint
     )]
-    pub recipient_token_account_0: Account<'info, TokenAccount>,
+    pub recipient_token_account_0: Box<Account<'info, TokenAccount>>,
 
     /// The destination token account for receive amount_1
     #[account(
         mut,
         token::mint = token_vault_1.mint
     )]
-    pub recipient_token_account_1: Account<'info, TokenAccount>,
+    pub recipient_token_account_1: Box<Account<'info, TokenAccount>>,
 
     /// SPL program to transfer out tokens
     pub token_program: Program<'info, Token>,
 }
 
 pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price_x64: u128) -> Result<()> {
-    let pool_state = ctx.accounts.pool_state.deref_mut();
+    let pool_state = &mut ctx.accounts.pool_state;
     let mut observation_state = ctx.accounts.observation_state.load_mut()?;
 
     // reset observation
@@ -66,14 +65,14 @@ pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price_x64: u128) -> R
     pool_state.pool_check_reset(sqrt_price_x64, tick)?;
 
     transfer_from_pool_vault_to_user(
-        ctx.accounts.pool_state.clone().as_mut(),
+        pool_state,
         &ctx.accounts.token_vault_0,
         &ctx.accounts.recipient_token_account_0,
         &ctx.accounts.token_program,
         ctx.accounts.token_vault_0.amount,
     )?;
     transfer_from_pool_vault_to_user(
-        ctx.accounts.pool_state.clone().as_mut(),
+        pool_state,
         &ctx.accounts.token_vault_1,
         &ctx.accounts.recipient_token_account_1,
         &ctx.accounts.token_program,
