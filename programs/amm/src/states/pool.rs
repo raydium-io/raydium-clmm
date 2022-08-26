@@ -80,11 +80,9 @@ pub struct PoolState {
 
     /// Packed initialized tick array state
     pub tick_array_bitmap: [u64; 16],
-    // padding space for upgrade
-    // pub padding_1: [u64; 16],
-    // pub padding_2: [u64; 16],
-    // pub padding_3: [u64; 16],
-    // pub padding_4: [u64; 16],
+    // Unused bytes for future upgrades.
+    // pub padding1: [u64; 32],
+    // pub padding2: [u64; 32],
 }
 
 impl PoolState {
@@ -479,7 +477,7 @@ mod test {
         fn get_arrary_start_index_negative() {
             let mut pool_state = PoolState::default();
             pool_state.tick_spacing = 10;
-            pool_state.flip_tick_array_bit(-800).unwrap();
+            pool_state.flip_tick_array_bit(-600).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
                 [
@@ -501,7 +499,7 @@ mod test {
                     0
                 ]
             );
-            pool_state.flip_tick_array_bit(-1600).unwrap();
+            pool_state.flip_tick_array_bit(-1200).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
                 [
@@ -523,7 +521,7 @@ mod test {
                     0
                 ]
             );
-            pool_state.flip_tick_array_bit(-2400).unwrap();
+            pool_state.flip_tick_array_bit(-1800).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
                 [
@@ -545,7 +543,7 @@ mod test {
                     0
                 ]
             );
-            pool_state.flip_tick_array_bit(-51200).unwrap();
+            pool_state.flip_tick_array_bit(-38400).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
                 [
@@ -567,7 +565,7 @@ mod test {
                     0
                 ]
             );
-            pool_state.flip_tick_array_bit(-52000).unwrap();
+            pool_state.flip_tick_array_bit(-39000).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
                 [
@@ -589,7 +587,7 @@ mod test {
                     0
                 ]
             );
-            pool_state.flip_tick_array_bit(-409600).unwrap();
+            pool_state.flip_tick_array_bit(-307200).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
                 [
@@ -611,7 +609,7 @@ mod test {
                     0
                 ]
             );
-            pool_state.flip_tick_array_bit(-409600).unwrap();
+            pool_state.flip_tick_array_bit(-307200).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
                 [
@@ -644,22 +642,22 @@ mod test {
                 pool_state.tick_array_bitmap,
                 [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
             );
-            pool_state.flip_tick_array_bit(800).unwrap();
+            pool_state.flip_tick_array_bit(600).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
                 [0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0]
             );
-            pool_state.flip_tick_array_bit(1600).unwrap();
+            pool_state.flip_tick_array_bit(1200).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
                 [0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0]
             );
-            pool_state.flip_tick_array_bit(51200).unwrap();
+            pool_state.flip_tick_array_bit(38400).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
                 [0, 0, 0, 0, 0, 0, 0, 0, 7, 1, 0, 0, 0, 0, 0, 0]
             );
-            pool_state.flip_tick_array_bit(408800).unwrap();
+            pool_state.flip_tick_array_bit(306600).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
                 [
@@ -681,7 +679,7 @@ mod test {
                     9223372036854775808
                 ]
             );
-            pool_state.flip_tick_array_bit(408800).unwrap();
+            pool_state.flip_tick_array_bit(306600).unwrap();
             assert_eq!(
                 pool_state.tick_array_bitmap,
                 [0, 0, 0, 0, 0, 0, 0, 0, 7, 1, 0, 0, 0, 0, 0, 0]

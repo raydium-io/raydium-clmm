@@ -112,7 +112,7 @@ mod test {
             0,
             u64::max_value() & 1 << 63,
         ]);
-        let mut tick_current = -409600;
+        let mut tick_current = -307200;
         let mut start_index = -1;
         for _i in 0..1024 {
             let ret = check_current_tick_array_is_initialized(bit_map, tick_current, tick_spacing);
@@ -120,14 +120,14 @@ mod test {
                 start_index = ret.1;
                 println!("{}-{}", tick_current, start_index);
             }
-            tick_current += 800;
+            tick_current += 600;
         }
     }
     #[test]
     fn find_next_init_pos_in_bit_map_positive_price_down() {
         let tick_spacing = 10;
         let bit_map = U1024::max_value();
-        let mut tick_array_start_index = 408800;
+        let mut tick_array_start_index = 306600;
         for _i in 0..5 {
             let array_start_index = next_initialized_tick_array_start_index(
                 bit_map,
@@ -147,7 +147,7 @@ mod test {
     fn find_next_init_pos_in_bit_map_negative_price_down() {
         let tick_spacing = 10;
         let bit_map = U1024::max_value();
-        let mut tick_array_start_index = -409600 + 800 + 800;
+        let mut tick_array_start_index = -307200 + 600 + 600;
         for _i in 0..5 {
             let array_start_index = next_initialized_tick_array_start_index(
                 bit_map,
@@ -188,7 +188,7 @@ mod test {
     fn find_previous_init_pos_in_bit_map_positive_price_up() {
         let tick_spacing = 10;
         let bit_map = U1024::max_value();
-        let mut tick_array_start_index = 408800 - 800 - 800;
+        let mut tick_array_start_index = 306600 - 600 - 600;
         for _i in 0..5 {
             let array_start_index = next_initialized_tick_array_start_index(
                 bit_map,
@@ -208,7 +208,7 @@ mod test {
     fn find_previous_init_pos_in_bit_map_negative_price_up() {
         let tick_spacing = 10;
         let bit_map = U1024::max_value();
-        let mut tick_array_start_index = -409600;
+        let mut tick_array_start_index = -307200;
         for _i in 0..5 {
             let array_start_index = next_initialized_tick_array_start_index(
                 bit_map,
@@ -268,34 +268,34 @@ mod test {
         ];
         let mut array_start_index =
             next_initialized_tick_array_start_index(U1024(bit_map), 0, tick_spacing, true);
-        assert_eq!(array_start_index.unwrap(), -800);
+        assert_eq!(array_start_index.unwrap(), -600);
         array_start_index =
-            next_initialized_tick_array_start_index(U1024(bit_map), -800, tick_spacing, true);
-        assert_eq!(array_start_index.unwrap(), -1600);
+            next_initialized_tick_array_start_index(U1024(bit_map), -600, tick_spacing, true);
+        assert_eq!(array_start_index.unwrap(), -1200);
         array_start_index =
-            next_initialized_tick_array_start_index(U1024(bit_map), -1600, tick_spacing, true);
-        assert_eq!(array_start_index.unwrap(), -2400);
+            next_initialized_tick_array_start_index(U1024(bit_map), -1200, tick_spacing, true);
+        assert_eq!(array_start_index.unwrap(), -1800);
         array_start_index =
-            next_initialized_tick_array_start_index(U1024(bit_map), -2400, tick_spacing, true);
-        assert_eq!(array_start_index.unwrap(), -51200);
+            next_initialized_tick_array_start_index(U1024(bit_map), -1800, tick_spacing, true);
+        assert_eq!(array_start_index.unwrap(), -38400);
         array_start_index =
-            next_initialized_tick_array_start_index(U1024(bit_map), -51200, tick_spacing, true);
-        assert_eq!(array_start_index.unwrap(), -52000);
+            next_initialized_tick_array_start_index(U1024(bit_map), -38400, tick_spacing, true);
+        assert_eq!(array_start_index.unwrap(), -39000);
         array_start_index =
-            next_initialized_tick_array_start_index(U1024(bit_map), -52000, tick_spacing, true);
-        assert_eq!(array_start_index.unwrap(), -409600);
+            next_initialized_tick_array_start_index(U1024(bit_map), -39000, tick_spacing, true);
+        assert_eq!(array_start_index.unwrap(), -307200);
 
         array_start_index =
             next_initialized_tick_array_start_index(U1024(bit_map), 0, tick_spacing, false);
-        assert_eq!(array_start_index.unwrap(), 800);
+        assert_eq!(array_start_index.unwrap(), 600);
         array_start_index =
-            next_initialized_tick_array_start_index(U1024(bit_map), 800, tick_spacing, false);
-        assert_eq!(array_start_index.unwrap(), 1600);
+            next_initialized_tick_array_start_index(U1024(bit_map), 600, tick_spacing, false);
+        assert_eq!(array_start_index.unwrap(), 1200);
         array_start_index =
-            next_initialized_tick_array_start_index(U1024(bit_map), 1600, tick_spacing, false);
-        assert_eq!(array_start_index.unwrap(), 51200);
+            next_initialized_tick_array_start_index(U1024(bit_map), 1200, tick_spacing, false);
+        assert_eq!(array_start_index.unwrap(), 38400);
         array_start_index =
-            next_initialized_tick_array_start_index(U1024(bit_map), 51200, tick_spacing, false);
-        assert_eq!(array_start_index.unwrap(), 408800);
+            next_initialized_tick_array_start_index(U1024(bit_map), 38400, tick_spacing, false);
+        assert_eq!(array_start_index.unwrap(), 306600);
     }
 }

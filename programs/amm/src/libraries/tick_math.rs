@@ -3,14 +3,14 @@ use crate::{error::ErrorCode, libraries::big_num::U128};
 use anchor_lang::require;
 
 /// The minimum tick
-pub const MIN_TICK: i32 = -409600;
+pub const MIN_TICK: i32 = -307200;
 /// The minimum tick
 pub const MAX_TICK: i32 = -MIN_TICK;
 
 /// The minimum value that can be returned from #get_sqrt_price_at_tick. Equivalent to get_sqrt_price_at_tick(MIN_TICK)
-pub const MIN_SQRT_PRICE_X64: u128 = 23551220632;
+pub const MIN_SQRT_PRICE_X64: u128 = 3939943522091;
 /// The maximum value that can be returned from #get_sqrt_price_at_tick. Equivalent to get_sqrt_price_at_tick(MAX_TICK)
-pub const MAX_SQRT_PRICE_X64: u128 = 14448608513249754496350072978; 
+pub const MAX_SQRT_PRICE_X64: u128 = 86367321006760116002434269;
 
 // Number 64, encoded as a U128
 const NUM_64: U128 = U128([64, 0]);
@@ -187,11 +187,22 @@ mod test {
     use super::*;
     mod get_sqrt_price_at_tick_test {
         use super::*;
+        use crate::libraries::fixed_point_64;
 
         #[test]
         fn check_get_sqrt_price_at_tick_at_min_or_max_tick() {
-            assert_eq!(get_sqrt_price_at_tick(MIN_TICK).unwrap(),MIN_SQRT_PRICE_X64);
-            assert_eq!(get_sqrt_price_at_tick(MAX_TICK).unwrap(),MAX_SQRT_PRICE_X64)
+            assert_eq!(
+                get_sqrt_price_at_tick(MIN_TICK).unwrap(),
+                MIN_SQRT_PRICE_X64
+            );
+            let min_sqrt_price = MIN_SQRT_PRICE_X64 as f64 / fixed_point_64::Q64 as f64;
+            println!("min_sqrt_price: {}", min_sqrt_price);
+            assert_eq!(
+                get_sqrt_price_at_tick(MAX_TICK).unwrap(),
+                MAX_SQRT_PRICE_X64
+            );
+            let max_sqrt_price = MAX_SQRT_PRICE_X64 as f64 / fixed_point_64::Q64 as f64;
+            println!("max_sqrt_price: {}", max_sqrt_price);
         }
     }
 }

@@ -6,10 +6,10 @@ use crate::util::*;
 use anchor_lang::{prelude::*, system_program};
 
 pub const TICK_ARRAY_SEED: &str = "tick_array";
-pub const TICK_ARRAY_SIZE_USIZE: usize = 80;
-pub const TICK_ARRAY_SIZE: i32 = 80;
-pub const MIN_TICK_ARRAY_START_INDEX: i32 = -409600;
-pub const MAX_TICK_ARRAY_START_INDEX: i32 = 408800;
+pub const TICK_ARRAY_SIZE_USIZE: usize = 60;
+pub const TICK_ARRAY_SIZE: i32 = 60;
+pub const MIN_TICK_ARRAY_START_INDEX: i32 = -307200;
+pub const MAX_TICK_ARRAY_START_INDEX: i32 = 306600;
 
 #[account(zero_copy)]
 #[repr(packed)]
@@ -18,10 +18,12 @@ pub struct TickArrayState {
     pub start_tick_index: i32,
     pub ticks: [TickState; TICK_ARRAY_SIZE_USIZE],
     pub initialized_tick_count: u8,
+    // Unused bytes for future upgrades.
+    pub padding: [u8; 115],
 }
 
 impl TickArrayState {
-    pub const LEN: usize = 8 + 32 + 4 + TickState::LEN * TICK_ARRAY_SIZE_USIZE + 1;
+    pub const LEN: usize = 8 + 32 + 4 + TickState::LEN * TICK_ARRAY_SIZE_USIZE + 1 + 115;
 
     pub fn get_or_create_tick_array<'info>(
         payer: AccountInfo<'info>,
@@ -207,6 +209,7 @@ impl Default for TickArrayState {
             ticks: [TickState::default(); TICK_ARRAY_SIZE_USIZE],
             start_tick_index: 0,
             initialized_tick_count: 0,
+            padding: [0; 115],
         }
     }
 }
@@ -228,10 +231,17 @@ pub struct TickState {
 
     // Reward growth per unit of liquidity like fee, array of Q64.64
     pub reward_growths_outside_x64: [u128; REWARD_NUM],
+    // Unused bytes for future upgrades.
+    pub padding: [u32; 13],
+    // pub cross_up_liquidity_delta: u128,
+    // pub cross_down_liquidity_delta: u128,
+    // pub range_order_cross_up_time: u64,
+    // pub range_order_cross_down_time: u64,
+    // pub padding: u32,
 }
 
 impl TickState {
-    pub const LEN: usize = 4 + 16 + 16 + 16 + 16 + 16 * REWARD_NUM;
+    pub const LEN: usize = 4 + 16 + 16 + 16 + 16 + 16 * REWARD_NUM + 16 + 16 + 8 + 8 + 4;
 
     pub fn initialize(&mut self, tick: i32, tick_spacing: u16) -> Result<()> {
         check_tick_boundary(tick, tick_spacing)?;
@@ -480,27 +490,27 @@ mod test {
         fn get_arrary_start_index_test() {
             assert_eq!(TickArrayState::get_arrary_start_index(120, 3), 0);
             assert_eq!(TickArrayState::get_arrary_start_index(1002, 30), 0);
-            assert_eq!(TickArrayState::get_arrary_start_index(-120, 3), -240);
-            assert_eq!(TickArrayState::get_arrary_start_index(-1002, 30), -2400);
-            assert_eq!(TickArrayState::get_arrary_start_index(-20, 10), -800);
+            assert_eq!(TickArrayState::get_arrary_start_index(-120, 3), -180);
+            assert_eq!(TickArrayState::get_arrary_start_index(-1002, 30), -1800);
+            assert_eq!(TickArrayState::get_arrary_start_index(-20, 10), -600);
             assert_eq!(TickArrayState::get_arrary_start_index(20, 10), 0);
-            assert_eq!(TickArrayState::get_arrary_start_index(-1002, 10), -1600);
-            assert_eq!(TickArrayState::get_arrary_start_index(-800, 10), -800);
+            assert_eq!(TickArrayState::get_arrary_start_index(-1002, 10), -1200);
+            assert_eq!(TickArrayState::get_arrary_start_index(-600, 10), -600);
         }
 
         #[test]
         fn next_tick_arrary_start_index_test() {
             let tick_array = &mut TickArrayState::default();
-            tick_array.initialize(-2400, 15, Pubkey::default()).unwrap();
+            tick_array.initialize(-1800, 15, Pubkey::default()).unwrap();
             // println!("{:?}", tick_array);
-            assert_eq!(-3600, tick_array.next_tick_arrary_start_index(15, true));
-            assert_eq!(-1200, tick_array.next_tick_arrary_start_index(15, false));
+            assert_eq!(-2700, tick_array.next_tick_arrary_start_index(15, true));
+            assert_eq!(-900, tick_array.next_tick_arrary_start_index(15, false));
         }
 
         #[test]
         fn first_initialized_tick_test() {
             let tick_array = &mut TickArrayState::default();
-            tick_array.initialize(-1200, 15, Pubkey::default()).unwrap();
+            tick_array.initialize(-900, 15, Pubkey::default()).unwrap();
             let mut tick_state = tick_array.get_tick_state_mut(-300, 15).unwrap();
             tick_state.liquidity_gross = 1;
             tick_state.tick = -300;

@@ -21,7 +21,7 @@ pub struct AmmConfig {
     /// The tick spacing
     pub tick_spacing: u16,
     // padding space for upgrade
-    // pub padding: [u64; 8],
+    pub padding: [u64; 8],
 }
 
 impl AmmConfig {
@@ -50,7 +50,6 @@ pub struct CreateConfigEvent {
     pub trade_fee_rate: u32,
     pub tick_spacing: u16,
 }
-
 
 /// Emitted when update a config
 #[event]

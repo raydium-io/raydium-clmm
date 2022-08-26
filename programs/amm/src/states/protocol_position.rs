@@ -42,8 +42,8 @@ pub struct ProtocolPositionState {
 
     /// The reward growth per unit of liquidity as of the last update to liquidity
     pub reward_growth_inside: [u128; REWARD_NUM], // 24
-                                                  // padding space for upgrade
-                                                  // pub padding: [u64; 8],
+    // Unused bytes for future upgrades.
+    pub padding: [u64; 8],
 }
 
 impl ProtocolPositionState {

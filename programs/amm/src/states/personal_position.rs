@@ -1,7 +1,7 @@
+use super::pool::RewardInfo;
 use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::pool::REWARD_NUM;
 use anchor_lang::prelude::*;
-use super::pool::RewardInfo;
 #[account]
 #[derive(Default, Debug)]
 pub struct PersonalPositionState {
@@ -37,8 +37,10 @@ pub struct PersonalPositionState {
 
     // Position reward info
     pub reward_infos: [PositionRewardInfo; REWARD_NUM],
-    // padding space for upgrade
-    // pub padding: [u64; 8],
+    // Unused bytes for future upgrades.
+    pub padding: [u64; 8],
+    // pub range_order_type: u8,
+    // pub range_order_open_time: u64,
 }
 
 impl PersonalPositionState {
