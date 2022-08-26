@@ -20,17 +20,14 @@ export const MaxUint128 = Q128.subn(1);
 /**
  * The minimum tick that can be used on any pool.
  */
-export const MIN_TICK: number = -409600;
+export const MIN_TICK: number = -307200;
 /**
  * The maximum tick that can be used on any pool.
  */
 export const MAX_TICK: number = -MIN_TICK;
 
-export const MIN_SQRT_PRICE_X64: BN = new BN("23551220632");
-/**
- * The sqrt ratio corresponding to the maximum tick that could be used on any pool.
- */
-export const MAX_SQRT_PRICE_X64: BN = new BN("14448608513249754496350072978");
+export const MIN_SQRT_PRICE_X64: BN = new BN("3939943522091");
+export const MAX_SQRT_PRICE_X64: BN = new BN("86367321006760116002434269");
 
-export const MIN_TICK_ARRAY_START_INDEX = -409600;
-export const MAX_TICK_ARRAY_START_INDEX = 408800;
+export const MIN_TICK_ARRAY_START_INDEX = -307200;
+export const MAX_TICK_ARRAY_START_INDEX = 306600;

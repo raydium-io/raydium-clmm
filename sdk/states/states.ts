@@ -10,11 +10,13 @@ export type AmmConfig = {
   protocolFeeRate: number;
   tradeFeeRate: number;
   tickSpacing: number;
+  padding: BN[];
 };
 
 export type ObservationState = {
   initialized: boolean;
   observations: Observation[];
+  padding: BN[];
 };
 
 export type Observation = {
@@ -22,6 +24,7 @@ export type Observation = {
   sqrtPriceX64: BN;
   tickCumulative: BN;
   cumulativeTimePriceX64: BN;
+  padding: BN;
 };
 
 export type PoolState = {
@@ -64,7 +67,7 @@ export type RewardInfo = {
   rewardGrowthGlobalX64: BN;
 };
 
-export type PositionState = {
+export type PersonalPositionState = {
   bump: number;
   nftMint: PublicKey;
   poolId: PublicKey;
@@ -78,6 +81,7 @@ export type PositionState = {
   tokenFeesOwed0: BN;
   tokenFeesOwed1: BN;
   rewardInfos: PositionRewardInfo[];
+  padding: BN[];
 };
 
 export type PositionRewardInfo = {
@@ -91,6 +95,7 @@ export type TickArrayState = {
   startTickIndex: number;
   ticks: TickState[];
   initializedTickCount: number;
+  padding: number[];
 };
 
 export type TickState = {
@@ -103,4 +108,21 @@ export type TickState = {
   secondsPerLiquidityOutsideX64: BN;
   secondsOutside: number;
   rewardGrowthsOutside: BN[];
+  padding: number[];
+};
+
+export type ProtocolPositionState = {
+  bump: number;
+  poolId: PublicKey;
+  tickLowerIndex: number;
+  tickUpperIndex: number;
+  liquidity: BN;
+  // Q64.64
+  feeGrowthInside0LastX64: BN;
+  // Q64.64
+  feeGrowthInside1LastX64: BN;
+  tokenFeesOwed0: BN;
+  tokenFeesOwed1: BN;
+  rewardInfos: BN[];
+  padding: BN[];
 };

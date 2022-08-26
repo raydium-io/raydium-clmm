@@ -1,12 +1,12 @@
 import { PublicKey, TokenAccountsFilter } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID,MintLayout, AccountLayout } from "@solana/spl-token";
-import { PositionState, StateFetcher } from "../states";
+import { ProtocolPositionState, StateFetcher } from "../states";
 import { getPersonalPositionAddress } from "../utils";
 import { Context } from "../base";
 
 export type MultiplePosition = {
   pubkey: PublicKey;
-  state: PositionState;
+  state: ProtocolPositionState;
 };
 
 export async function fetchAllPositionsByOwner(
@@ -16,7 +16,7 @@ export async function fetchAllPositionsByOwner(
 ): Promise<
   {
     pubkey: PublicKey;
-    state: PositionState;
+    state: ProtocolPositionState;
   }[]
 > {
   const filter: TokenAccountsFilter = { programId: TOKEN_PROGRAM_ID };
@@ -24,7 +24,7 @@ export async function fetchAllPositionsByOwner(
 
   let allPositions: {
     pubkey: PublicKey;
-    state: PositionState;
+    state: ProtocolPositionState;
   }[] = [];
 
   let allMints: PublicKey[] = [];

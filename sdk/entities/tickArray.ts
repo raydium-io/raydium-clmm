@@ -1,8 +1,8 @@
 import { BN } from "@project-serum/anchor";
 import { PublicKey } from "@solana/web3.js";
 import { getTickArrayAddress } from "../utils";
-import { TickArrayState } from "../states";
-export const TICK_ARRAY_SIZE = 80;
+import { TickArrayState, TickState } from "../states";
+export const TICK_ARRAY_SIZE = 60;
 const TICK_ARRAY_BITMAP_SIZE = 1024;
 
 export declare type Tick = {
@@ -232,13 +232,12 @@ export async function getAllInitializedTickArrayInfo(
 }
 
 export function getAllInitializedTickInTickArray(
-  tickArray: TickArrayState,
-  tickSpacing: number
-): number[] {
-  let allInitializedTick: number[] = [];
+  tickArray: TickArrayState
+): TickState[] {
+  let allInitializedTick: TickState[] = [];
   for (let i = 0; i < tickArray.ticks.length; i++) {
     if (tickArray.ticks[i].liquidityGross.gtn(0)) {
-      allInitializedTick.push(tickArray.startTickIndex + i * tickSpacing);
+      allInitializedTick.push(tickArray.ticks[i]);
     }
   }
   return allInitializedTick;

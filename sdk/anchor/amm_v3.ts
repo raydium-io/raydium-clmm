@@ -195,7 +195,7 @@ export type AmmV3 = {
       "accounts": [
         {
           "name": "owner",
-          "isMut": false,
+          "isMut": true,
           "isSigner": true
         },
         {
@@ -216,7 +216,7 @@ export type AmmV3 = {
       "accounts": [
         {
           "name": "owner",
-          "isMut": false,
+          "isMut": true,
           "isSigner": true
         },
         {
@@ -320,11 +320,6 @@ export type AmmV3 = {
     {
       "name": "updateRewardInfos",
       "accounts": [
-        {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
         {
           "name": "poolState",
           "isMut": true,
@@ -870,6 +865,15 @@ export type AmmV3 = {
           {
             "name": "tickSpacing",
             "type": "u16"
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u64",
+                8
+              ]
+            }
           }
         ]
       }
@@ -963,6 +967,15 @@ export type AmmV3 = {
                   "defined": "PositionRewardInfo"
                 },
                 3
+              ]
+            }
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u64",
+                8
               ]
             }
           }
@@ -1107,6 +1120,10 @@ export type AmmV3 = {
             "type": "u8"
           },
           {
+            "name": "poolId",
+            "type": "publicKey"
+          },
+          {
             "name": "tickLowerIndex",
             "type": "i32"
           },
@@ -1142,6 +1159,15 @@ export type AmmV3 = {
                 3
               ]
             }
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u64",
+                8
+              ]
+            }
           }
         ]
       }
@@ -1166,13 +1192,22 @@ export type AmmV3 = {
                 {
                   "defined": "TickState"
                 },
-                80
+                60
               ]
             }
           },
           {
             "name": "initializedTickCount",
             "type": "u8"
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u8",
+                115
+              ]
+            }
           }
         ]
       }
@@ -1326,6 +1361,15 @@ export type AmmV3 = {
               "array": [
                 "u128",
                 3
+              ]
+            }
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u32",
+                13
               ]
             }
           }
@@ -2038,7 +2082,7 @@ export const IDL: AmmV3 = {
       "accounts": [
         {
           "name": "owner",
-          "isMut": false,
+          "isMut": true,
           "isSigner": true
         },
         {
@@ -2059,7 +2103,7 @@ export const IDL: AmmV3 = {
       "accounts": [
         {
           "name": "owner",
-          "isMut": false,
+          "isMut": true,
           "isSigner": true
         },
         {
@@ -2163,11 +2207,6 @@ export const IDL: AmmV3 = {
     {
       "name": "updateRewardInfos",
       "accounts": [
-        {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
         {
           "name": "poolState",
           "isMut": true,
@@ -2713,6 +2752,15 @@ export const IDL: AmmV3 = {
           {
             "name": "tickSpacing",
             "type": "u16"
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u64",
+                8
+              ]
+            }
           }
         ]
       }
@@ -2806,6 +2854,15 @@ export const IDL: AmmV3 = {
                   "defined": "PositionRewardInfo"
                 },
                 3
+              ]
+            }
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u64",
+                8
               ]
             }
           }
@@ -2950,6 +3007,10 @@ export const IDL: AmmV3 = {
             "type": "u8"
           },
           {
+            "name": "poolId",
+            "type": "publicKey"
+          },
+          {
             "name": "tickLowerIndex",
             "type": "i32"
           },
@@ -2985,6 +3046,15 @@ export const IDL: AmmV3 = {
                 3
               ]
             }
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u64",
+                8
+              ]
+            }
           }
         ]
       }
@@ -3009,13 +3079,22 @@ export const IDL: AmmV3 = {
                 {
                   "defined": "TickState"
                 },
-                80
+                60
               ]
             }
           },
           {
             "name": "initializedTickCount",
             "type": "u8"
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u8",
+                115
+              ]
+            }
           }
         ]
       }
@@ -3169,6 +3248,15 @@ export const IDL: AmmV3 = {
               "array": [
                 "u128",
                 3
+              ]
+            }
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u32",
+                13
               ]
             }
           }

@@ -4,13 +4,14 @@ import { AmmV3 } from "../anchor/amm_v3";
 import {
   PoolState,
   TickState,
-  PositionState,
+  ProtocolPositionState,
   ObservationState,
   Observation,
   AmmConfig,
   PositionRewardInfo,
   RewardInfo,
   TickArrayState,
+  PersonalPositionState,
 } from "./states";
 
 export class StateFetcher {
@@ -21,16 +22,7 @@ export class StateFetcher {
   }
 
   public async getAmmConfig(address: PublicKey): Promise<AmmConfig> {
-    const { bump, index, owner, protocolFeeRate, tradeFeeRate, tickSpacing } =
-      await this.program.account.ammConfig.fetch(address);
-    return {
-      bump,
-      index,
-      owner,
-      protocolFeeRate,
-      tradeFeeRate,
-      tickSpacing,
-    };
+    return (await this.program.account.ammConfig.fetch(address)) as AmmConfig;
   }
 
   public async getPoolState(address: PublicKey): Promise<PoolState> {
@@ -38,16 +30,9 @@ export class StateFetcher {
   }
 
   public async getTickArrayState(address: PublicKey): Promise<TickArrayState> {
-    const { ammPool, startTickIndex, ticks, initializedTickCount } =
-      await this.program.account.tickArrayState.fetch(address);
-
-    const tickStates = ticks as TickState[];
-    return {
-      ammPool,
-      startTickIndex,
-      ticks: tickStates,
-      initializedTickCount,
-    };
+    return (await this.program.account.tickArrayState.fetch(
+      address
+    )) as TickArrayState;
   }
 
   public async getMultipleTickArrayState(
@@ -61,63 +46,34 @@ export class StateFetcher {
 
   public async getPersonalPositionState(
     address: PublicKey
-  ): Promise<PositionState> {
-    const {
-      bump,
-      nftMint,
-      poolId,
-      tickLowerIndex,
-      tickUpperIndex,
-      liquidity,
-      feeGrowthInside0LastX64,
-      feeGrowthInside1LastX64,
-      tokenFeesOwed0,
-      tokenFeesOwed1,
-      rewardInfos,
-    } = await this.program.account.personalPositionState.fetch(address);
-
-    const rewards = rewardInfos as PositionRewardInfo[];
-
-    return {
-      bump,
-      nftMint,
-      poolId,
-      tickLowerIndex,
-      tickUpperIndex,
-      liquidity,
-      feeGrowthInside0LastX64,
-      feeGrowthInside1LastX64,
-      tokenFeesOwed0,
-      tokenFeesOwed1,
-      rewardInfos: rewards,
-    };
+  ): Promise<PersonalPositionState> {
+    return (await this.program.account.personalPositionState.fetch(
+      address
+    )) as PersonalPositionState;
   }
 
   public async getMultiplePersonalPositionStates(
     addresses: PublicKey[]
-  ): Promise<PositionState[]> {
+  ): Promise<PersonalPositionState[]> {
     const result =
       await this.program.account.personalPositionState.fetchMultiple(addresses);
-    return result as PositionState[];
+    return result as PersonalPositionState[];
   }
 
   public async getMultiplePoolStates(
     addresses: PublicKey[]
   ): Promise<PoolState[]> {
-    const result =
-      await this.program.account.poolState.fetchMultiple(addresses);
+    const result = await this.program.account.poolState.fetchMultiple(
+      addresses
+    );
     return result as PoolState[];
   }
 
   public async getObservationState(
     address: PublicKey
   ): Promise<ObservationState> {
-    const { initialized, observations } =
-      await this.program.account.observationState.fetch(address);
-
-    return {
-      initialized,
-      observations: observations as Observation[],
-    };
+    return (await this.program.account.observationState.fetch(
+      address
+    )) as ObservationState;
   }
 }
