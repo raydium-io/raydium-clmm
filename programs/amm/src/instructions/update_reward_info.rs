@@ -3,14 +3,8 @@ use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 pub struct UpdateRewardInfos<'info> {
-    /// The program account acting as the core liquidity custodian for token holder
-    pub amm_config: Box<Account<'info, AmmConfig>>,
-
-    /// The program account for the liquidity pool from which fees are collected
-    #[account(
-        mut,
-        constraint = pool_state.amm_config == amm_config.key()
-    )]
+    /// tThe liquidity pool for which reward info to update
+    #[account(mut)]
     pub pool_state: Box<Account<'info, PoolState>>,
 }
 

@@ -1,4 +1,5 @@
 use crate::error::ErrorCode;
+use crate::libraries::U256;
 use crate::libraries::{
     big_num::{U1024, U128},
     check_current_tick_array_is_initialized, fixed_point_64,
@@ -147,7 +148,6 @@ impl PoolState {
 
     pub fn initialize_reward(
         &mut self,
-        curr_timestamp: u64,
         index: usize,
         open_time: u64,
         end_time: u64,
@@ -158,7 +158,6 @@ impl PoolState {
         if index >= REWARD_NUM {
             return Err(ErrorCode::InvalidRewardIndex.into());
         }
-
         let lowest_index = match self.reward_infos.iter().position(|r| !r.initialized()) {
             Some(lowest_index) => lowest_index,
             None => return Err(ErrorCode::InvalidRewardIndex.into()),
@@ -171,13 +170,9 @@ impl PoolState {
         if lowest_index != index {
             return Err(ErrorCode::InvalidRewardIndex.into());
         }
-        if open_time > curr_timestamp {
-            self.reward_infos[index].reward_state = RewardState::Initialized as u8;
-            self.reward_infos[index].last_update_time = open_time;
-        } else {
-            self.reward_infos[index].reward_state = RewardState::Opening as u8;
-            self.reward_infos[index].last_update_time = curr_timestamp;
-        }
+
+        self.reward_infos[index].reward_state = RewardState::Initialized as u8;
+        self.reward_infos[index].last_update_time = open_time;
         self.reward_infos[index].open_time = open_time;
         self.reward_infos[index].end_time = end_time;
         self.reward_infos[index].emissions_per_second_x64 = reward_per_second_x64;
@@ -185,9 +180,8 @@ impl PoolState {
         self.reward_infos[index].token_vault = *token_vault;
         #[cfg(feature = "enable-log")]
         msg!(
-            "reward_index:{},curr_timestamp:{}, reward_infos:{:?}",
+            "reward_index:{}, reward_infos:{:?}",
             index,
-            curr_timestamp,
             self.reward_infos[index],
         );
         Ok(())
@@ -199,6 +193,9 @@ impl PoolState {
         &mut self,
         curr_timestamp: u64,
     ) -> Result<([RewardInfo; REWARD_NUM])> {
+        #[cfg(feature = "enable-log")]
+        msg!("current block timestamp:{}", curr_timestamp);
+
         // No-op if no liquidity or no change in timestamp
         if self.liquidity == 0 || curr_timestamp <= self.reward_last_updated_timestamp {
             return Ok(self.reward_infos);
@@ -209,6 +206,14 @@ impl PoolState {
         for i in 0..REWARD_NUM {
             if !next_reward_infos[i].initialized() {
                 continue;
+            }
+            if curr_timestamp < next_reward_infos[i].open_time {
+                continue;
+            }
+            if curr_timestamp >= next_reward_infos[i].open_time
+                && curr_timestamp < next_reward_infos[i].end_time
+            {
+                next_reward_infos[i].reward_state = RewardState::Opening as u8;
             }
             let mut latest_update_timestamp = curr_timestamp;
             if latest_update_timestamp > next_reward_infos[i].end_time {
@@ -222,10 +227,10 @@ impl PoolState {
             let reward_info = &mut next_reward_infos[i];
             let time_delta = latest_update_timestamp - reward_info.last_update_time;
 
-            let reward_growth_delta = U128::from(time_delta)
+            let reward_growth_delta = U256::from(time_delta)
                 .mul_div_floor(
-                    U128::from(reward_info.emissions_per_second_x64),
-                    U128::from(self.liquidity),
+                    U256::from(reward_info.emissions_per_second_x64),
+                    U256::from(self.liquidity),
                 )
                 .unwrap();
 
@@ -248,9 +253,8 @@ impl PoolState {
                 .unwrap();
             #[cfg(feature = "enable-log")]
             msg!(
-                "reward_index:{}, currency timestamp:{},latest_update_timestamp:{},reward_info.reward_last_update_time:{},time_delta:{},reward_emission_per_second_x64:{},reward_growth_delta:{},reward_info.reward_growth_global_x64:{}",
+                "reward_index:{},latest_update_timestamp:{},reward_info.reward_last_update_time:{},time_delta:{},reward_emission_per_second_x64:{},reward_growth_delta:{},reward_info.reward_growth_global_x64:{}",
                 i,
-                curr_timestamp,
                 latest_update_timestamp,
                 reward_info.last_update_time,
                 time_delta,
@@ -259,6 +263,10 @@ impl PoolState {
                 reward_info.reward_growth_global_x64
             );
             reward_info.last_update_time = latest_update_timestamp;
+            if reward_info.last_update_time == next_reward_infos[i].end_time {
+                next_reward_infos[i].reward_state = RewardState::Ended as u8;
+                continue;
+            }
         }
         self.reward_infos = next_reward_infos;
         self.reward_last_updated_timestamp = curr_timestamp;

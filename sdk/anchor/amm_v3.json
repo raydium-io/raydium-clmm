@@ -195,7 +195,7 @@
       "accounts": [
         {
           "name": "owner",
-          "isMut": false,
+          "isMut": true,
           "isSigner": true
         },
         {
@@ -216,7 +216,7 @@
       "accounts": [
         {
           "name": "owner",
-          "isMut": false,
+          "isMut": true,
           "isSigner": true
         },
         {
@@ -320,11 +320,6 @@
     {
       "name": "updateRewardInfos",
       "accounts": [
-        {
-          "name": "ammConfig",
-          "isMut": false,
-          "isSigner": false
-        },
         {
           "name": "poolState",
           "isMut": true,
@@ -870,6 +865,15 @@
           {
             "name": "tickSpacing",
             "type": "u16"
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u64",
+                8
+              ]
+            }
           }
         ]
       }
@@ -963,6 +967,15 @@
                   "defined": "PositionRewardInfo"
                 },
                 3
+              ]
+            }
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u64",
+                8
               ]
             }
           }
@@ -1107,6 +1120,10 @@
             "type": "u8"
           },
           {
+            "name": "poolId",
+            "type": "publicKey"
+          },
+          {
             "name": "tickLowerIndex",
             "type": "i32"
           },
@@ -1142,6 +1159,15 @@
                 3
               ]
             }
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u64",
+                8
+              ]
+            }
           }
         ]
       }
@@ -1166,13 +1192,22 @@
                 {
                   "defined": "TickState"
                 },
-                80
+                60
               ]
             }
           },
           {
             "name": "initializedTickCount",
             "type": "u8"
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u8",
+                115
+              ]
+            }
           }
         ]
       }
@@ -1326,6 +1361,15 @@
               "array": [
                 "u128",
                 3
+              ]
+            }
+          },
+          {
+            "name": "padding",
+            "type": {
+              "array": [
+                "u32",
+                13
               ]
             }
           }

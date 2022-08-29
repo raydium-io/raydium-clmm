@@ -16,9 +16,10 @@ import {
   ONE,
   MIN_SQRT_PRICE_X64,
   MAX_SQRT_PRICE_X64,
+  MathUtil,
 } from "../math";
 
-import { PositionState } from "../states";
+import { PoolState, PersonalPositionState } from "../states";
 
 import {
   getAmmConfigAddress,
@@ -31,6 +32,7 @@ import {
   isWSOLTokenMint,
   makeCreateWrappedNativeAccountInstructions,
   makeCloseAccountInstruction,
+  getPoolRewardVaultAddress,
 } from "../utils";
 
 import {
@@ -52,12 +54,13 @@ import {
 import {
   createAmmConfigInstruction,
   updateAmmConfigInstruction,
+  initializeRewardInstruction,
+  setRewardEmissionsInstruction,
 } from "./admin";
 
 import { AmmPool } from "../pool";
 import { Context } from "../base";
 import Decimal from "decimal.js";
-import { WSOL } from "@raydium-io/raydium-sdk";
 
 type CreatePoolAccounts = {
   poolCreator: PublicKey;
@@ -109,7 +112,7 @@ export class AmmInstruction {
   /**
    *
    * @param ctx
-   * @param owner
+   * @param authority
    * @param index
    * @param tickSpacing
    * @param tradeFeeRate
@@ -118,7 +121,7 @@ export class AmmInstruction {
    */
   public static async createAmmConfig(
     ctx: Context,
-    owner: PublicKey,
+    authority: PublicKey,
     index: number,
     tickSpacing: number,
     tradeFeeRate: number,
@@ -139,7 +142,7 @@ export class AmmInstruction {
           protocolFeeRate,
         },
         {
-          owner: owner,
+          owner: authority,
           ammConfig: address,
           systemProgram: SystemProgram.programId,
         }
@@ -150,7 +153,7 @@ export class AmmInstruction {
   public static async setAmmConfigNewOwner(
     ctx: Context,
     ammConfig: PublicKey,
-    owner: PublicKey,
+    authority: PublicKey,
     newOwner: PublicKey
   ): Promise<TransactionInstruction> {
     return await updateAmmConfigInstruction(
@@ -162,7 +165,7 @@ export class AmmInstruction {
         flag: 0,
       },
       {
-        owner,
+        owner: authority,
         ammConfig,
       }
     );
@@ -171,7 +174,7 @@ export class AmmInstruction {
   public static async setAmmConfigTradeFeeRate(
     ctx: Context,
     ammConfig: PublicKey,
-    owner: PublicKey,
+    authority: PublicKey,
     tradeFeeRate: number
   ): Promise<TransactionInstruction> {
     return await updateAmmConfigInstruction(
@@ -183,7 +186,7 @@ export class AmmInstruction {
         flag: 1,
       },
       {
-        owner,
+        owner: authority,
         ammConfig,
       }
     );
@@ -192,7 +195,7 @@ export class AmmInstruction {
   public static async setAmmConfigProtocolFeeRate(
     ctx: Context,
     ammConfig: PublicKey,
-    owner: PublicKey,
+    authority: PublicKey,
     protocolFeeRate: number
   ): Promise<TransactionInstruction> {
     return await updateAmmConfigInstruction(
@@ -204,12 +207,106 @@ export class AmmInstruction {
         flag: 2,
       },
       {
-        owner,
+        owner: authority,
         ammConfig,
       }
     );
   }
 
+  public static async initializeReward(
+    ctx: Context,
+    authority: PublicKey,
+    ammPool: AmmPool,
+    rewardTokenMint: PublicKey,
+    rewardIndex: number,
+    openTime: BN,
+    endTime: BN,
+    emissionsPerSecond: number
+  ): Promise<{
+    instructions: TransactionInstruction[];
+    signers: Signer[];
+  }> {
+    let instructions: TransactionInstruction[] = [];
+    let signers: Signer[] = [];
+
+    const { tokenAccount, isWSol } = await getATAOrRandomWsolTokenAccount(
+      ctx,
+      authority,
+      rewardTokenMint,
+      new BN(0),
+      instructions,
+      signers
+    );
+
+    const [rewardTokenVault] = await getPoolRewardVaultAddress(
+      ammPool.address,
+      rewardTokenMint,
+      ctx.program.programId
+    );
+
+    const emissionsPerSecondX64 = MathUtil.decimalToX64(
+      new Decimal(emissionsPerSecond)
+    );
+    const ix = await initializeRewardInstruction(
+      ctx.program,
+      {
+        rewardIndex,
+        openTime,
+        endTime,
+        emissionsPerSecondX64,
+      },
+      {
+        rewardFunder: authority,
+        rewardTokenVault: rewardTokenVault,
+        funderTokenAccount: tokenAccount,
+        rewardTokenMint: rewardTokenMint,
+        ammConfig: ammPool.poolState.ammConfig,
+        poolState: ammPool.address,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+        rent: SYSVAR_RENT_PUBKEY,
+      }
+    );
+
+    instructions.push(ix);
+
+    if (isWSol) {
+      const closeIx = makeCloseAccountInstruction({
+        tokenAccount,
+        owner: authority,
+        payer: authority,
+      });
+      instructions.push(closeIx);
+    }
+    return {
+      instructions,
+      signers,
+    };
+  }
+
+  public static async setRewardEmissions(
+    ctx: Context,
+    authority: PublicKey,
+    ammPool: AmmPool,
+    rewardIndex: number,
+    emissionsPerSecond: number
+  ): Promise<TransactionInstruction> {
+    const emissionsPerSecondX64 = MathUtil.decimalToX64(
+      new Decimal(emissionsPerSecond)
+    );
+    return await setRewardEmissionsInstruction(
+      ctx.program,
+      {
+        rewardIndex,
+        emissionsPerSecondX64,
+      },
+      {
+        authority,
+        ammConfig: ammPool.poolState.ammConfig,
+        poolState: ammPool.address,
+      }
+    );
+  }
   /**
    *
    * @param ctx
@@ -511,7 +608,7 @@ export class AmmInstruction {
   public static async increaseLiquidity(
     accounts: LiquidityChangeAccounts,
     ammPool: AmmPool,
-    positionState: PositionState,
+    positionState: PersonalPositionState,
     liquidity: BN,
     amountSlippage?: number
   ): Promise<{
@@ -536,12 +633,12 @@ export class AmmInstruction {
         true,
         amountSlippage
       );
-    console.log(
-      "increaseLiquidity amount0Max:",
-      amount0Max.toString(),
-      "amount1Max:",
-      amount1Max.toString()
-    );
+    // console.log(
+    //   "increaseLiquidity amount0Max:",
+    //   amount0Max.toString(),
+    //   "amount1Max:",
+    //   amount1Max.toString()
+    // );
     // prepare tickArray
     const tickArrayLowerStartIndex = getTickArrayStartIndexByTick(
       tickLowerIndex,
@@ -663,7 +760,7 @@ export class AmmInstruction {
   public static async decreaseLiquidityWithInputAmount(
     accounts: LiquidityChangeAccounts,
     ammPool: AmmPool,
-    positionState: PositionState,
+    positionState: PersonalPositionState,
     token0AmountDesired: BN,
     token1AmountDesired: BN,
     amountSlippage?: number
@@ -708,7 +805,7 @@ export class AmmInstruction {
   public static async decreaseLiquidity(
     accounts: LiquidityChangeAccounts,
     ammPool: AmmPool,
-    positionState: PositionState,
+    positionState: PersonalPositionState,
     liquidity: BN,
     amountSlippage?: number
   ): Promise<{
@@ -798,6 +895,14 @@ export class AmmInstruction {
         signers
       );
 
+    const { rewardAccounts, wSolAccount } = await getRewardAccounts(
+      ctx,
+      accounts.positionNftOwner,
+      ammPool,
+      instructions,
+      signers
+    );
+
     const ix = await decreaseLiquidityInstruction(
       ctx.program,
       {
@@ -819,7 +924,7 @@ export class AmmInstruction {
         personalPosition,
         tokenProgram: TOKEN_PROGRAM_ID,
       },
-      []
+      rewardAccounts
     );
     instructions.push(ix);
 
@@ -834,6 +939,14 @@ export class AmmInstruction {
     if (isToken1WsolAccount) {
       const closeIx = makeCloseAccountInstruction({
         tokenAccount: token1Account,
+        owner: accounts.positionNftOwner,
+        payer: accounts.positionNftOwner,
+      });
+      instructions.push(closeIx);
+    }
+    if (!wSolAccount.equals(PublicKey.default)) {
+      const closeIx = makeCloseAccountInstruction({
+        tokenAccount: wSolAccount,
         owner: accounts.positionNftOwner,
         payer: accounts.positionNftOwner,
       });
@@ -1403,4 +1516,51 @@ async function getATAOrRandomWsolTokenAccount(
     tokenAccount,
     isWSol,
   };
+}
+
+async function getRewardAccounts(
+  ctx: Context,
+  owner: PublicKey,
+  pool: AmmPool,
+  instructions: TransactionInstruction[],
+  signers: Signer[]
+): Promise<{
+  rewardAccounts: AccountMeta[];
+  wSolAccount: PublicKey;
+}> {
+  var rewardAccounts: AccountMeta[] = [];
+  var wSolAccount = PublicKey.default;
+  for (const rewardInfo of pool.poolState.rewardInfos) {
+    if (!rewardInfo.tokenMint.equals(PublicKey.default)) {
+      const [rewardTokenVault] = await getPoolRewardVaultAddress(
+        pool.address,
+        rewardInfo.tokenMint,
+        ctx.program.programId
+      );
+      rewardAccounts.push({
+        pubkey: rewardTokenVault,
+        isSigner: false,
+        isWritable: true,
+      });
+
+      const { tokenAccount: ownerRewardTokenAccount, isWSol } =
+        await getATAOrRandomWsolTokenAccount(
+          ctx,
+          owner,
+          rewardInfo.tokenMint,
+          new BN(0),
+          instructions,
+          signers
+        );
+      rewardAccounts.push({
+        pubkey: ownerRewardTokenAccount,
+        isSigner: false,
+        isWritable: true,
+      });
+      if (isWSol) {
+        wSolAccount = ownerRewardTokenAccount;
+      }
+    }
+  }
+  return { rewardAccounts, wSolAccount };
 }

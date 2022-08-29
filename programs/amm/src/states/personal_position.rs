@@ -1,7 +1,8 @@
 use super::pool::RewardInfo;
-use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
+use crate::libraries::{big_num::U256, fixed_point_64, full_math::MulDiv};
 use crate::pool::REWARD_NUM;
 use anchor_lang::prelude::*;
+
 #[account]
 #[derive(Default, Debug)]
 pub struct PersonalPositionState {
@@ -59,8 +60,8 @@ impl PersonalPositionState {
                 .checked_sub(curr_reward_info.growth_inside_last_x64)
                 .unwrap_or(0);
 
-            let amount_owed_delta = U128::from(reward_growth_delta)
-                .mul_div_floor(U128::from(self.liquidity), U128::from(fixed_point_64::Q64))
+            let amount_owed_delta = U256::from(reward_growth_delta)
+                .mul_div_floor(U256::from(self.liquidity), U256::from(fixed_point_64::Q64))
                 .unwrap()
                 .as_u64();
             self.reward_infos[i].growth_inside_last_x64 = reward_growth_inside;

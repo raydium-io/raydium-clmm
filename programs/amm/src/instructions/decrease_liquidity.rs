@@ -242,7 +242,7 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
     if remaining_accounts_len != valid_reward_count * 2 {
         return err!(ErrorCode::InvalidRewardInputAccountNumber);
     }
-    let mut reward_amouts: [u64; REWARD_NUM] = [0, 0, 0];
+    let mut reward_amounts: [u64; REWARD_NUM] = [0, 0, 0];
     let mut remaining_accounts = remaining_accounts.iter();
     for i in 0..remaining_accounts_len / 2 {
         let reward_token_vault =
@@ -286,8 +286,8 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
 
             pool_state.add_reward_clamed(i, transfer_amount)?;
         }
-        reward_amouts[i] = transfer_amount
+        reward_amounts[i] = transfer_amount
     }
 
-    Ok(reward_amouts)
+    Ok(reward_amounts)
 }

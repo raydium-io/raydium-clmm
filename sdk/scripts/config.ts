@@ -138,4 +138,30 @@ export const Config = {
     amountIn: new BN("100000"),
     amountOutSlippage: 0.005,
   },
+  "initialize-reward": [
+    {
+      poolId: "8PHbPyeLZeXAMgvtWxMZt9gePvzvXP9RbfN4aTEGSfHG",
+      rewardTokenMint: "6pc7UqAjU4guU8pmimv1iCf5oDphQB5dANFmD7UvwcYk",
+      rewardIndex: 0,
+      openTime: new BN(1661503428),
+      endTime:  new BN(1661503488),
+      emissionsPerSecond: 0.1, 
+    },
+    {
+      poolId: "8PHbPyeLZeXAMgvtWxMZt9gePvzvXP9RbfN4aTEGSfHG",
+      rewardTokenMint: "6pc7UqAjU4guU8pmimv1iCf5oDphQB5dANFmD7UvwcYk",
+      rewardIndex: 1,
+      openTime: new BN(1661503428),
+      endTime:  new BN(1661503488),
+      emissionsPerSecond: 0.1,
+    },
+    {
+      poolId: "8PHbPyeLZeXAMgvtWxMZt9gePvzvXP9RbfN4aTEGSfHG",
+      rewardTokenMint: "6pc7UqAjU4guU8pmimv1iCf5oDphQB5dANFmD7UvwcYk",
+      rewardIndex: 2,
+      openTime: new BN(1661503428),
+      endTime:  new BN(1661503488),
+      emissionsPerSecond: 0.1,
+    },
+  ],
 };

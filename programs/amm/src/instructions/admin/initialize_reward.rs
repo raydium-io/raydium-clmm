@@ -1,5 +1,5 @@
 use crate::error::ErrorCode;
-use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
+use crate::libraries::{fixed_point_64, full_math::MulDiv, U256};
 use crate::states::*;
 use crate::util::transfer_from_user_to_pool_vault;
 use anchor_lang::prelude::*;
@@ -44,7 +44,7 @@ pub struct InitializeReward<'info> {
         token::authority = pool_state
     )]
     pub reward_token_vault: Box<Account<'info, TokenAccount>>,
-    
+
     #[account(address = token::ID)]
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
@@ -66,6 +66,7 @@ pub struct InitializeRewardParam {
 impl InitializeRewardParam {
     pub fn check(&self, curr_timestamp: u64) -> Result<()> {
         if self.open_time >= self.end_time
+            || self.open_time < curr_timestamp
             || self.end_time < curr_timestamp
             || self.emissions_per_second_x64 == 0
             || self.reward_index >= REWARD_NUM as u8
@@ -88,20 +89,29 @@ pub fn initialize_reward(
 
     // Clock
     let clock = Clock::get()?;
+    #[cfg(feature = "enable-log")]
+    msg!("current block timestamp:{}", clock.unix_timestamp);
     param.check(clock.unix_timestamp as u64)?;
-    let reward_amount = U128::from(param.end_time - param.open_time)
-        .mul_div_floor(
-            U128::from(param.emissions_per_second_x64),
-            U128::from(fixed_point_64::Q64),
+
+    let reward_amount = U256::from(param.end_time - param.open_time)
+        .mul_div_ceil(
+            U256::from(param.emissions_per_second_x64),
+            U256::from(fixed_point_64::Q64),
         )
         .unwrap()
         .as_u64();
 
     require_gte!(ctx.accounts.funder_token_account.amount, reward_amount);
+    transfer_from_user_to_pool_vault(
+        &ctx.accounts.reward_funder,
+        &ctx.accounts.funder_token_account,
+        &ctx.accounts.reward_token_vault,
+        &ctx.accounts.token_program,
+        reward_amount,
+    )?;
 
     let pool_state = &mut ctx.accounts.pool_state;
     pool_state.initialize_reward(
-        clock.unix_timestamp as u64,
         param.reward_index as usize,
         param.open_time,
         param.end_time,
@@ -110,12 +120,5 @@ pub fn initialize_reward(
         &ctx.accounts.reward_token_vault.key(),
     )?;
 
-    transfer_from_user_to_pool_vault(
-        &ctx.accounts.reward_funder,
-        &ctx.accounts.funder_token_account,
-        &ctx.accounts.reward_token_vault,
-        &ctx.accounts.token_program,
-        reward_amount,
-    )?;
     Ok(())
 }
