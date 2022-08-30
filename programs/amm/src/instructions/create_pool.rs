@@ -25,7 +25,7 @@ pub struct CreatePool<'info> {
         payer = pool_creator,
         space = PoolState::LEN
     )]
-    pub pool_state: Box<Account<'info, PoolState>>,
+    pub pool_state: AccountLoader<'info, PoolState>,
 
     /// Token_0 mint, the key must grater then token_1 mint.
     #[account(
@@ -78,7 +78,7 @@ pub struct CreatePool<'info> {
 }
 
 pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()> {
-    let pool_state = &mut ctx.accounts.pool_state;
+    let mut pool_state = ctx.accounts.pool_state.load_init()?;
     let observation_state_loader = initialize_observation_account(
         ctx.accounts.observation_state.to_account_info(),
         &crate::id(),

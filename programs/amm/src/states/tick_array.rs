@@ -29,14 +29,14 @@ impl TickArrayState {
         payer: AccountInfo<'info>,
         tick_array_account_info: AccountInfo<'info>,
         system_program: AccountInfo<'info>,
-        pool_state: &Box<Account<'info, PoolState>>,
+        pool_state_loader: &AccountLoader<'info, PoolState>,
         tick_array_start_index: i32,
     ) -> Result<AccountLoader<'info, TickArrayState>> {
         let tick_array_state = if tick_array_account_info.owner == &system_program::ID {
             let (expect_pda_address, bump) = Pubkey::find_program_address(
                 &[
                     TICK_ARRAY_SEED.as_bytes(),
-                    pool_state.key().as_ref(),
+                    pool_state_loader.key().as_ref(),
                     &tick_array_start_index.to_be_bytes(),
                 ],
                 &crate::id(),
@@ -49,7 +49,7 @@ impl TickArrayState {
                 tick_array_account_info.clone(),
                 &[
                     TICK_ARRAY_SEED.as_bytes(),
-                    pool_state.key().as_ref(),
+                    pool_state_loader.key().as_ref(),
                     &tick_array_start_index.to_be_bytes(),
                     &[bump],
                 ],
@@ -65,8 +65,8 @@ impl TickArrayState {
                 let mut tick_array_account = tick_array_state_loader.load_init()?;
                 tick_array_account.initialize(
                     tick_array_start_index,
-                    pool_state.tick_spacing,
-                    pool_state.key(),
+                    pool_state_loader.load()?.tick_spacing,
+                    pool_state_loader.key(),
                 )?;
             }
 

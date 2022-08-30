@@ -20,9 +20,10 @@ pub const OBSERVATION_UPDATE_DURATION_DEFAULT: u16 = 15;
 
 /// The pool state
 ///
-/// PDA of `[POOL_SEED, market, token_mint_0, token_mint_1, fee]`
+/// PDA of `[POOL_SEED, config, token_mint_0, token_mint_1]`
 ///
-#[account]
+#[account(zero_copy)]
+#[repr(packed)]
 #[derive(Default, Debug)]
 pub struct PoolState {
     /// Bump to identify PDA
@@ -158,7 +159,8 @@ impl PoolState {
         if index >= REWARD_NUM {
             return Err(ErrorCode::InvalidRewardIndex.into());
         }
-        let lowest_index = match self.reward_infos.iter().position(|r| !r.initialized()) {
+        let reward_infos = self.reward_infos;
+        let lowest_index = match reward_infos.iter().position(|r| !r.initialized()) {
             Some(lowest_index) => lowest_index,
             None => return Err(ErrorCode::InvalidRewardIndex.into()),
         };
@@ -467,6 +469,7 @@ mod test {
     mod tick_array_bitmap_test {
 
         use super::*;
+        use std::convert::identity;
 
         #[test]
         fn get_arrary_start_index_negative() {
@@ -474,7 +477,7 @@ mod test {
             pool_state.tick_spacing = 10;
             pool_state.flip_tick_array_bit(-600).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [
                     0,
                     0,
@@ -496,7 +499,7 @@ mod test {
             );
             pool_state.flip_tick_array_bit(-1200).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [
                     0,
                     0,
@@ -518,7 +521,7 @@ mod test {
             );
             pool_state.flip_tick_array_bit(-1800).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [
                     0,
                     0,
@@ -540,7 +543,7 @@ mod test {
             );
             pool_state.flip_tick_array_bit(-38400).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [
                     0,
                     0,
@@ -562,7 +565,7 @@ mod test {
             );
             pool_state.flip_tick_array_bit(-39000).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [
                     0,
                     0,
@@ -584,7 +587,7 @@ mod test {
             );
             pool_state.flip_tick_array_bit(-307200).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [
                     1,
                     0,
@@ -606,7 +609,7 @@ mod test {
             );
             pool_state.flip_tick_array_bit(-307200).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [
                     0,
                     0,
@@ -634,27 +637,27 @@ mod test {
             pool_state.tick_spacing = 10;
             pool_state.flip_tick_array_bit(0).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
             );
             pool_state.flip_tick_array_bit(600).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0]
             );
             pool_state.flip_tick_array_bit(1200).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0]
             );
             pool_state.flip_tick_array_bit(38400).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [0, 0, 0, 0, 0, 0, 0, 0, 7, 1, 0, 0, 0, 0, 0, 0]
             );
             pool_state.flip_tick_array_bit(306600).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [
                     0,
                     0,
@@ -676,7 +679,7 @@ mod test {
             );
             pool_state.flip_tick_array_bit(306600).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [0, 0, 0, 0, 0, 0, 0, 0, 7, 1, 0, 0, 0, 0, 0, 0]
             )
         }

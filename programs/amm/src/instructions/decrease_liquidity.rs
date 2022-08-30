@@ -1,3 +1,5 @@
+use std::cell::RefMut;
+
 use super::calculate_latest_token_fees;
 use super::modify_position;
 use crate::error::ErrorCode;
@@ -22,7 +24,7 @@ pub struct DecreaseLiquidity<'info> {
     pub personal_position: Box<Account<'info, PersonalPositionState>>,
 
     #[account(mut)]
-    pub pool_state: Box<Account<'info, PoolState>>,
+    pub pool_state: AccountLoader<'info, PoolState>,
 
     #[account(
         mut,
@@ -39,16 +41,14 @@ pub struct DecreaseLiquidity<'info> {
     /// Token_0 vault
     #[account(
         mut,
-        token::mint = pool_state.token_mint_0,
-        constraint = token_vault_0.key() == pool_state.token_vault_0
+        constraint = token_vault_0.key() == pool_state.load()?.token_vault_0
     )]
     pub token_vault_0: Box<Account<'info, TokenAccount>>,
 
     /// Token_1 vault
     #[account(
         mut,
-        token::mint = pool_state.token_mint_1,
-        constraint = token_vault_1.key() == pool_state.token_vault_1
+        constraint = token_vault_1.key() == pool_state.load()?.token_vault_1
     )]
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
@@ -85,11 +85,11 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     amount_1_min: u64,
 ) -> Result<()> {
     assert!(liquidity <= ctx.accounts.personal_position.liquidity);
-    let pool_state = &mut ctx.accounts.pool_state;
+    let mut pool_state = ctx.accounts.pool_state.load_mut()?;
     let protocol_position_state = &mut ctx.accounts.protocol_position;
 
     let (decrease_amount_0, decrease_amount_1) = burn_liquidity(
-        pool_state,
+        &mut pool_state,
         &ctx.accounts.tick_array_lower,
         &ctx.accounts.tick_array_upper,
         protocol_position_state,
@@ -141,7 +141,8 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
             latest_fees_owed_0,
         );
         transfer_from_pool_vault_to_user(
-            pool_state,
+            &pool_state,
+            &ctx.accounts.pool_state,
             &ctx.accounts.token_vault_0,
             &ctx.accounts.recipient_token_account_0,
             &ctx.accounts.token_program,
@@ -155,7 +156,8 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
             latest_fees_owed_1,
         );
         transfer_from_pool_vault_to_user(
-            pool_state,
+            &pool_state,
+            &ctx.accounts.pool_state,
             &ctx.accounts.token_vault_1,
             &ctx.accounts.recipient_token_account_1,
             &ctx.accounts.token_program,
@@ -164,7 +166,8 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     }
 
     let reward_amounts = collect_rewards(
-        pool_state,
+        &mut pool_state,
+        &ctx.accounts.pool_state,
         ctx.remaining_accounts,
         ctx.accounts.token_program.clone(),
         personal_position,
@@ -184,7 +187,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
 }
 
 pub fn burn_liquidity<'b, 'info>(
-    pool_state: &mut Box<Account<'info, PoolState>>,
+    pool_state: &mut RefMut<PoolState>,
     tick_array_lower_state: &AccountLoader<'info, TickArrayState>,
     tick_array_upper_state: &AccountLoader<'info, TickArrayState>,
     protocol_position_state: &mut Box<Account<'info, ProtocolPositionState>>,
@@ -227,13 +230,14 @@ pub fn burn_liquidity<'b, 'info>(
 }
 
 pub fn collect_rewards<'a, 'b, 'c, 'info>(
-    pool_state: &mut Box<Account<'info, PoolState>>,
+    pool_state: &mut RefMut<PoolState>,
+    authority: &AccountLoader<'info, PoolState>,
     remaining_accounts: &[AccountInfo<'info>],
     token_program: Program<'info, Token>,
     personal_position_state: &mut PersonalPositionState,
 ) -> Result<[u64; REWARD_NUM]> {
     let mut valid_reward_count = 0;
-    for item in &pool_state.reward_infos {
+    for item in pool_state.reward_infos {
         if item.initialized() {
             valid_reward_count = valid_reward_count + 1;
         }
@@ -277,7 +281,8 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
                 reward_amount_owed.checked_sub(transfer_amount).unwrap();
 
             transfer_from_pool_vault_to_user(
-                pool_state,
+                &pool_state,
+                &authority,
                 &reward_token_vault,
                 &recipient_token_account,
                 &token_program,

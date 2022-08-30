@@ -35,9 +35,8 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
             continue;
         }
         let amm_config = Box::new(Account::<AmmConfig>::try_from(account_info)?);
-        let mut pool_state = Box::new(Account::<PoolState>::try_from(
-            remaining_accounts.next().unwrap(),
-        )?);
+        let mut pool_state_loader =
+            AccountLoader::<PoolState>::try_from(remaining_accounts.next().unwrap())?;
         let output_token_account = Box::new(Account::<TokenAccount>::try_from(
             &remaining_accounts.next().unwrap(),
         )?);
@@ -50,7 +49,10 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
         let mut observation_state =
             AccountLoader::<ObservationState>::try_from(remaining_accounts.next().unwrap())?;
         // check observation account is owned by the pool
-        require_keys_eq!(pool_state.observation_key, observation_state.key());
+        require_keys_eq!(
+            pool_state_loader.load()?.observation_key,
+            observation_state.key()
+        );
 
         let mut tick_array =
             AccountLoader::<TickArrayState>::try_from(remaining_accounts.next().unwrap())?;
@@ -61,7 +63,7 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
                 signer: ctx.accounts.payer.clone(),
                 amm_config: &amm_config,
                 input_token_account: input_token_account.clone(),
-                pool_state: &mut pool_state,
+                pool_state: &mut pool_state_loader,
                 output_token_account: output_token_account.clone(),
                 input_vault: input_vault.clone(),
                 output_vault: output_vault.clone(),

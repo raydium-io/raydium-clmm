@@ -9,6 +9,7 @@ use anchor_spl::token;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use mpl_token_metadata::{instruction::create_metadata_accounts_v2, state::Creator};
 use spl_token::instruction::AuthorityType;
+use std::cell::RefMut;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
 use std::ops::Deref;
@@ -28,9 +29,6 @@ pub struct AddLiquidityParam<'b, 'info> {
 
     /// The address that holds pool tokens for token_1
     pub token_vault_1: &'b mut Box<Account<'info, TokenAccount>>,
-
-    /// Mint liquidity for this pool
-    pub pool_state: &'b mut Box<Account<'info, PoolState>>,
 
     /// The bitmap storing initialization state of the lower tick
     pub tick_array_lower: &'b AccountLoader<'info, TickArrayState>,
@@ -59,7 +57,7 @@ pub struct OpenPosition<'info> {
     #[account(
         init,
         mint::decimals = 0,
-        mint::authority = pool_state,
+        mint::authority = pool_state.key(),
         payer = payer
     )]
     pub position_nft_mint: Box<Account<'info, Mint>>,
@@ -80,7 +78,7 @@ pub struct OpenPosition<'info> {
 
     /// Add liquidity for this pool
     #[account(mut)]
-    pub pool_state: Box<Account<'info, PoolState>>,
+    pub pool_state: AccountLoader<'info, PoolState>,
 
     /// Store the information of market marking in range
     #[account(
@@ -148,16 +146,14 @@ pub struct OpenPosition<'info> {
     /// The address that holds pool tokens for token_0
     #[account(
         mut,
-        token::mint = pool_state.token_mint_0,
-        constraint = token_vault_0.key() == pool_state.token_vault_0
+        constraint = token_vault_0.key() == pool_state.load()?.token_vault_0
     )]
     pub token_vault_0: Box<Account<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_1
     #[account(
         mut,
-        token::mint = pool_state.token_mint_1,
-        constraint = token_vault_1.key() == pool_state.token_vault_1
+        constraint = token_vault_1.key() == pool_state.load()?.token_vault_1
     )]
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
@@ -189,16 +185,17 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
 ) -> Result<()> {
+    let mut pool_state = ctx.accounts.pool_state.load_mut()?;
     check_ticks_order(tick_lower_index, tick_upper_index)?;
     check_tick_array_start_index(
         tick_array_lower_start_index,
         tick_lower_index,
-        ctx.accounts.pool_state.tick_spacing,
+        pool_state.tick_spacing,
     )?;
     check_tick_array_start_index(
         tick_array_upper_start_index,
         tick_upper_index,
-        ctx.accounts.pool_state.tick_spacing,
+        pool_state.tick_spacing,
     )?;
 
     let tick_array_lower_state = TickArrayState::get_or_create_tick_array(
@@ -228,13 +225,12 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         protocol_position.pool_id = ctx.accounts.pool_state.key();
     }
 
-    let mut add_liquidity_accounts = AddLiquidityParam {
+    let mut add_liquidity_context = AddLiquidityParam {
         payer: &ctx.accounts.payer,
         token_account_0: &mut ctx.accounts.token_account_0,
         token_account_1: &mut ctx.accounts.token_account_1,
         token_vault_0: &mut ctx.accounts.token_vault_0,
         token_vault_1: &mut ctx.accounts.token_vault_1,
-        pool_state: &mut ctx.accounts.pool_state.clone(),
         tick_array_lower: &tick_array_lower_state,
         tick_array_upper: &tick_array_upper_state,
         protocol_position: &mut ctx.accounts.protocol_position,
@@ -242,7 +238,8 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     };
 
     let (amount_0, amount_1) = add_liquidity(
-        &mut add_liquidity_accounts,
+        &mut add_liquidity_context,
+        &mut pool_state,
         liquidity,
         amount_0_max,
         amount_1_max,
@@ -252,10 +249,10 @@ pub fn open_position<'a, 'b, 'c, 'info>(
 
     let seeds = [
         &POOL_SEED.as_bytes(),
-        ctx.accounts.pool_state.amm_config.as_ref(),
-        ctx.accounts.pool_state.token_mint_0.as_ref(),
-        ctx.accounts.pool_state.token_mint_1.as_ref(),
-        &[ctx.accounts.pool_state.bump] as &[u8],
+        pool_state.amm_config.as_ref(),
+        pool_state.token_mint_0.as_ref(),
+        pool_state.token_mint_1.as_ref(),
+        &[pool_state.bump] as &[u8],
     ];
 
     create_nft_with_metadata(
@@ -278,7 +275,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     personal_position.tick_lower_index = tick_lower_index;
     personal_position.tick_upper_index = tick_upper_index;
 
-    let updated_protocol_position = add_liquidity_accounts.protocol_position;
+    let updated_protocol_position = add_liquidity_context.protocol_position;
     personal_position.fee_growth_inside_0_last_x64 =
         updated_protocol_position.fee_growth_inside_0_last_x64;
     personal_position.fee_growth_inside_1_last_x64 =
@@ -304,7 +301,8 @@ pub fn open_position<'a, 'b, 'c, 'info>(
 
 /// Add liquidity to an initialized pool
 pub fn add_liquidity<'b, 'info>(
-    accounts: &mut AddLiquidityParam<'b, 'info>,
+    context: &mut AddLiquidityParam<'b, 'info>,
+    pool_state: &mut RefMut<PoolState>,
     liquidity: u128,
     amount_0_max: u64,
     amount_1_max: u64,
@@ -312,24 +310,24 @@ pub fn add_liquidity<'b, 'info>(
     tick_upper_index: i32,
 ) -> Result<(u64, u64)> {
     assert!(liquidity > 0);
-    let balance_0_before = accounts.token_vault_0.amount;
-    let balance_1_before = accounts.token_vault_1.amount;
+    let balance_0_before = context.token_vault_0.amount;
+    let balance_1_before = context.token_vault_1.amount;
 
-    let mut tick_array_lower = accounts.tick_array_lower.load_mut()?;
-    let tick_lower_state = tick_array_lower
-        .get_tick_state_mut(tick_lower_index, accounts.pool_state.tick_spacing as i32)?;
+    let mut tick_array_lower = context.tick_array_lower.load_mut()?;
+    let tick_lower_state =
+        tick_array_lower.get_tick_state_mut(tick_lower_index, pool_state.tick_spacing as i32)?;
 
-    let mut tick_array_upper = accounts.tick_array_upper.load_mut()?;
-    let tick_upper_state = tick_array_upper
-        .get_tick_state_mut(tick_upper_index, accounts.pool_state.tick_spacing as i32)?;
+    let mut tick_array_upper = context.tick_array_upper.load_mut()?;
+    let tick_upper_state =
+        tick_array_upper.get_tick_state_mut(tick_upper_index, pool_state.tick_spacing as i32)?;
 
     tick_lower_state.tick = tick_lower_index;
     tick_upper_state.tick = tick_upper_index;
 
     let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = modify_position(
         i128::try_from(liquidity).unwrap(),
-        accounts.pool_state,
-        accounts.protocol_position,
+        pool_state,
+        context.protocol_position,
         tick_lower_state,
         tick_upper_state,
     )?;
@@ -339,9 +337,7 @@ pub fn add_liquidity<'b, 'info>(
         tick_array_lower.update_initialized_tick_count(true)?;
 
         if before_init_tick_count == 0 {
-            accounts
-                .pool_state
-                .flip_tick_array_bit(tick_array_lower.start_tick_index)?;
+            pool_state.flip_tick_array_bit(tick_array_lower.start_tick_index)?;
         }
     }
     if flip_tick_upper {
@@ -349,9 +345,7 @@ pub fn add_liquidity<'b, 'info>(
         tick_array_upper.update_initialized_tick_count(true)?;
 
         if before_init_tick_count == 0 {
-            accounts
-                .pool_state
-                .flip_tick_array_bit(tick_array_upper.start_tick_index)?;
+            pool_state.flip_tick_array_bit(tick_array_upper.start_tick_index)?;
         }
     }
 
@@ -359,27 +353,27 @@ pub fn add_liquidity<'b, 'info>(
     let amount_1 = amount_1_int as u64;
     if amount_0 > 0 {
         transfer_from_user_to_pool_vault(
-            &accounts.payer,
-            &accounts.token_account_0,
-            &accounts.token_vault_0,
-            &accounts.token_program,
+            &context.payer,
+            &context.token_account_0,
+            &context.token_vault_0,
+            &context.token_program,
             amount_0,
         )?;
     }
     if amount_1 > 0 {
         transfer_from_user_to_pool_vault(
-            &accounts.payer,
-            &accounts.token_account_1,
-            &accounts.token_vault_1,
-            &accounts.token_program,
+            &context.payer,
+            &context.token_account_1,
+            &context.token_vault_1,
+            &context.token_program,
             amount_1,
         )?;
     }
 
-    accounts.token_vault_0.reload()?;
-    accounts.token_vault_1.reload()?;
-    require_eq!(amount_0, accounts.token_vault_0.amount - balance_0_before);
-    require_eq!(amount_1, accounts.token_vault_1.amount - balance_1_before);
+    context.token_vault_0.reload()?;
+    context.token_vault_1.reload()?;
+    require_eq!(amount_0, context.token_vault_0.amount - balance_0_before);
+    require_eq!(amount_1, context.token_vault_1.amount - balance_1_before);
     #[cfg(feature = "enable-log")]
     msg!(
         "amount_0:{},amount_1:{},amount_0_max:{},amount_1_max:{}",
@@ -398,7 +392,7 @@ pub fn add_liquidity<'b, 'info>(
 
 pub fn modify_position<'info>(
     liquidity_delta: i128,
-    pool_state: &mut Box<Account<'info, PoolState>>,
+    pool_state: &mut RefMut<PoolState>,
     protocol_position_state: &mut Box<Account<'info, ProtocolPositionState>>,
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,
@@ -435,7 +429,7 @@ pub fn modify_position<'info>(
 /// Updates a position with the given liquidity delta and tick
 pub fn update_position<'info>(
     liquidity_delta: i128,
-    pool_state: &mut Box<Account<'info, PoolState>>,
+    pool_state: &mut RefMut<PoolState>,
     protocol_position_state: &mut Box<Account<'info, ProtocolPositionState>>,
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,

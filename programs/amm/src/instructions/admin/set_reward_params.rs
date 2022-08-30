@@ -5,7 +5,6 @@ use crate::states::pool::{PoolState, REWARD_NUM};
 use crate::util::transfer_from_user_to_pool_vault;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
-use std::ops::DerefMut;
 
 #[derive(Accounts)]
 pub struct SetRewardParams<'info> {
@@ -18,9 +17,9 @@ pub struct SetRewardParams<'info> {
 
     #[account(
         mut,
-        constraint = pool_state.amm_config == amm_config.key()
+        constraint = pool_state.load()?.amm_config == amm_config.key()
     )]
-    pub pool_state: Box<Account<'info, PoolState>>,
+    pub pool_state: AccountLoader<'info, PoolState>,
 }
 
 pub fn set_reward_params<'a, 'b, 'c, 'info>(
@@ -40,10 +39,10 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
 
     let current_timestamp = Clock::get()?.unix_timestamp as u64;
 
-    let pool_state = ctx.accounts.pool_state.deref_mut();
+    let mut pool_state = ctx.accounts.pool_state.load_mut()?;
     pool_state.update_reward_infos(current_timestamp)?;
 
-    let reward_info = &mut pool_state.reward_infos[reward_index as usize];
+    let mut reward_info = pool_state.reward_infos[reward_index as usize];
     if !reward_info.initialized() {
         return err!(ErrorCode::UnInitializedRewardInfo);
     }
@@ -101,6 +100,8 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
             reward_info.end_time = end_time;
         }
     }
+    
+    pool_state.reward_infos[reward_index as usize] = reward_info;
 
     if reward_amount > 0 {
         let mut remaining_accounts = ctx.remaining_accounts.iter();

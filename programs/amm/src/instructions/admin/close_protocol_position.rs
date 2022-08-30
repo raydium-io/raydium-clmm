@@ -11,7 +11,7 @@ pub struct CloseProtocolPosition<'info> {
     pub owner: Signer<'info>,
 
     #[account(mut)]
-    pub pool_state: Box<Account<'info, PoolState>>,
+    pub pool_state: AccountLoader<'info, PoolState>,
 
     /// CHECK: Account to mark the lower tick as initialized
     #[account(
@@ -57,7 +57,7 @@ pub fn close_protocol_position(
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
 ) -> Result<()> {
-    let pool_state = &mut ctx.accounts.pool_state;
+    let mut pool_state = ctx.accounts.pool_state.load_mut()?;
     let protocol_position = &mut ctx.accounts.protocol_position_state;
 
     check_ticks_order(tick_lower_index, tick_upper_index)?;
