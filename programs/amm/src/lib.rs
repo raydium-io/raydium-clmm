@@ -121,7 +121,7 @@ pub mod amm_v3 {
     /// * `reward_index` - the index to reward info
     /// * `open_time` - reward open timestamp
     /// * `end_time` - reward end timestamp
-    /// * `reward_per_second` - Token reward per second are earned per unit of liquidity.
+    /// * `emissions_per_second_x64` - Token reward per second are earned per unit of liquidity.
     ///
     pub fn initialize_reward(
         ctx: Context<InitializeReward>,
@@ -142,20 +142,31 @@ pub mod amm_v3 {
         instructions::update_reward_infos(ctx)
     }
 
-    /// Set reward emission per second.
+    /// Restset reward param, start a new reward cycle or extend the current cycle.
     ///
     /// # Arguments
     ///
     /// * `ctx` - The context of accounts
     /// * `reward_index` - The index of reward token in the pool.
-    /// * `emissions_per_second_x64` - The per second emission reward
+    /// * `emissions_per_second_x64` - The per second emission reward, when extend the current cycle,
+    ///    new value can't be less than old value
+    /// * `open_time` - reward open timestamp, must be set when state a new cycle
+    /// * `end_time` - reward end timestamp
     ///
-    pub fn set_reward_emissions<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, SetRewardEmissions<'info>>,
+    pub fn set_reward_params<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, SetRewardParams<'info>>,
         reward_index: u8,
         emissions_per_second_x64: u128,
+        open_time: u64,
+        end_time: u64,
     ) -> Result<()> {
-        instructions::set_reward_emissions(ctx, reward_index, emissions_per_second_x64)
+        instructions::set_reward_params(
+            ctx,
+            reward_index,
+            emissions_per_second_x64,
+            open_time,
+            end_time,
+        )
     }
 
     /// Collect the protocol fee accrued to the pool

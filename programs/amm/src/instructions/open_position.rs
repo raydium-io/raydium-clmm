@@ -283,14 +283,16 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     personal_position.pool_id = pool_state_info.key();
     personal_position.tick_lower_index = tick_lower_index;
     personal_position.tick_upper_index = tick_upper_index;
-    personal_position.liquidity = liquidity;
 
     let updated_protocol_position = add_liquidity_accounts.protocol_position;
     personal_position.fee_growth_inside_0_last_x64 =
         updated_protocol_position.fee_growth_inside_0_last_x64;
     personal_position.fee_growth_inside_1_last_x64 =
         updated_protocol_position.fee_growth_inside_1_last_x64;
+
+    // update rewards, must update before update liquidity
     personal_position.update_rewards(updated_protocol_position.reward_growth_inside)?;
+    personal_position.liquidity = liquidity;
 
     emit!(CreatePersonalPositionEvent {
         pool_state: pool_state_info.key(),
@@ -446,10 +448,10 @@ pub fn update_position<'info>(
 ) -> Result<(bool, bool)> {
     let clock = Clock::get()?;
     let updated_reward_infos = pool_state.update_reward_infos(clock.unix_timestamp as u64)?;
-    let reward_growths_outside_x64 = RewardInfo::to_reward_growths(&updated_reward_infos);
+    let reward_growths_outside_x64 = RewardInfo::get_reward_growths(&updated_reward_infos);
     #[cfg(feature = "enable-log")]
     msg!(
-        "_update_position: update_rewared_info:{:?}",
+        "update_position, pool reward_growths_outside_x64:{:?}",
         reward_growths_outside_x64
     );
 
@@ -498,7 +500,8 @@ pub fn update_position<'info>(
         pool_state.tick_current,
         &updated_reward_infos,
     );
-
+    #[cfg(feature = "enable-log")]
+    msg!("reward_growths_inside:{:?}", reward_growths_inside);
     protocol_position_state.update(
         tick_lower_state.tick,
         tick_upper_state.tick,

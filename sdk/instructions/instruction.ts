@@ -19,7 +19,7 @@ import {
   MathUtil,
 } from "../math";
 
-import { PoolState, PersonalPositionState } from "../states";
+import { PersonalPositionState } from "../states";
 
 import {
   getAmmConfigAddress,
@@ -55,7 +55,7 @@ import {
   createAmmConfigInstruction,
   updateAmmConfigInstruction,
   initializeRewardInstruction,
-  setRewardEmissionsInstruction,
+  setRewardParamsInstruction,
 } from "./admin";
 
 import { AmmPool } from "../pool";
@@ -284,28 +284,86 @@ export class AmmInstruction {
     };
   }
 
-  public static async setRewardEmissions(
+  public static async setRewardParams(
     ctx: Context,
     authority: PublicKey,
     ammPool: AmmPool,
     rewardIndex: number,
-    emissionsPerSecond: number
-  ): Promise<TransactionInstruction> {
+    emissionsPerSecond: number,
+    openTimestamp: BN,
+    endTimestamp: BN
+  ): Promise<{
+    instructions: TransactionInstruction[];
+    signers: Signer[];
+  }> {
+    let instructions: TransactionInstruction[] = [];
+    let signers: Signer[] = [];
+
+    const rewardInfo = ammPool.poolState.rewardInfos[rewardIndex];
+    const remainAccouts: AccountMeta[] = [];
+    const [rewardTokenVault] = await getPoolRewardVaultAddress(
+      ammPool.address,
+      rewardInfo.tokenMint,
+      ctx.program.programId
+    );
+    remainAccouts.push({
+      pubkey: rewardTokenVault,
+      isSigner: false,
+      isWritable: true,
+    });
+    const { tokenAccount, isWSol } = await getATAOrRandomWsolTokenAccount(
+      ctx,
+      authority,
+      rewardInfo.tokenMint,
+      new BN(0),
+      instructions,
+      signers
+    );
+    remainAccouts.push({
+      pubkey: tokenAccount,
+      isSigner: false,
+      isWritable: true,
+    });
+
+    remainAccouts.push({
+      pubkey: TOKEN_PROGRAM_ID,
+      isSigner: false,
+      isWritable: false,
+    });
+
     const emissionsPerSecondX64 = MathUtil.decimalToX64(
       new Decimal(emissionsPerSecond)
     );
-    return await setRewardEmissionsInstruction(
+
+    const ix = await setRewardParamsInstruction(
       ctx.program,
       {
         rewardIndex,
         emissionsPerSecondX64,
+        openTimestamp,
+        endTimestamp,
       },
       {
         authority,
         ammConfig: ammPool.poolState.ammConfig,
         poolState: ammPool.address,
-      }
+      },
+      remainAccouts
     );
+    instructions.push(ix);
+
+    if (isWSol) {
+      const closeIx = makeCloseAccountInstruction({
+        tokenAccount,
+        owner: authority,
+        payer: authority,
+      });
+      instructions.push(closeIx);
+    }
+    return {
+      instructions,
+      signers,
+    };
   }
   /**
    *

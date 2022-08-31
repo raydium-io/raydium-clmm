@@ -329,7 +329,7 @@
       "args": []
     },
     {
-      "name": "setRewardEmissions",
+      "name": "setRewardParams",
       "accounts": [
         {
           "name": "authority",
@@ -355,6 +355,14 @@
         {
           "name": "emissionsPerSecondX64",
           "type": "u128"
+        },
+        {
+          "name": "openTime",
+          "type": "u64"
+        },
+        {
+          "name": "endTime",
+          "type": "u64"
         }
       ]
     },
@@ -1084,7 +1092,7 @@
             "type": "u128"
           },
           {
-            "name": "rewardLastUpdatedTimestamp",
+            "name": "padding",
             "type": "u64"
           },
           {

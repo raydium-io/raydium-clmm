@@ -6,7 +6,6 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount};
 
 #[derive(Accounts)]
-// #[instruction(reward_index: u8)]
 pub struct InitializeReward<'info> {
     /// The founder deposit reward token to vault
     #[account(mut)]
@@ -118,6 +117,7 @@ pub fn initialize_reward(
         param.emissions_per_second_x64,
         &ctx.accounts.reward_token_mint.key(),
         &ctx.accounts.reward_token_vault.key(),
+        &ctx.accounts.reward_funder.key(),
     )?;
 
     Ok(())
