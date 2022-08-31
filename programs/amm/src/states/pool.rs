@@ -204,7 +204,7 @@ impl PoolState {
             if !reward_info.initialized() {
                 continue;
             }
-            if curr_timestamp < reward_info.open_time {
+            if curr_timestamp <= reward_info.open_time {
                 continue;
             }
             let latest_update_timestamp = curr_timestamp.min(reward_info.end_time);
