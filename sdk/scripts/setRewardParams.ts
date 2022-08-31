@@ -52,7 +52,7 @@ import Decimal from "decimal.js";
     let instructions: TransactionInstruction[] = [];
     let signers: Signer[] = [admin];
 
-    const ix = await AmmInstruction.setRewardParams(
+    const { instructions: ixs, signers: signer } = await AmmInstruction.setRewardParams(
       ctx,
       admin.publicKey,
       ammPool,
@@ -61,7 +61,8 @@ import Decimal from "decimal.js";
       param.openTime,
       param.endTime
     );
-    instructions.push(ix);
+    instructions.push(...ixs);
+    signers.push(...signer);
 
     let tx = await sendTransaction(
       ctx.connection,

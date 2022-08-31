@@ -48,8 +48,8 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
         return err!(ErrorCode::UnInitializedRewardInfo);
     }
 
-    if current_timestamp < reward_info.open_time {
-        return Ok(());
+    if current_timestamp <= reward_info.open_time {
+        return err!(ErrorCode::NotApproved);
     }
 
     let mut reward_amount: u64 = 0;
