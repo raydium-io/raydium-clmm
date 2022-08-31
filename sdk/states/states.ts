@@ -43,7 +43,6 @@ export type PoolState = {
   feeGrowthGlobal1X64: BN;
   protocolFeesToken0: BN;
   protocolFeesToken1: BN;
-  rewardLastUpdatedTimestamp: BN;
   rewardInfos: RewardInfo[];
   observationIndex: number;
   observationKey: PublicKey;
@@ -104,10 +103,7 @@ export type TickState = {
   liquidityGross: BN;
   feeGrowthOutside0X64: BN;
   feeGrowthOutside1X64: BN;
-  tickCumulativeOutside: BN;
-  secondsPerLiquidityOutsideX64: BN;
-  secondsOutside: number;
-  rewardGrowthsOutside: BN[];
+  rewardGrowthsOutsideX64: BN[];
   padding: number[];
 };
 
@@ -123,6 +119,6 @@ export type ProtocolPositionState = {
   feeGrowthInside1LastX64: BN;
   tokenFeesOwed0: BN;
   tokenFeesOwed1: BN;
-  rewardInfos: BN[];
+  rewardGrowthInside: BN[];
   padding: BN[];
 };

@@ -10,8 +10,8 @@ pub use collect_protocol_fee::*;
 pub mod initialize_reward;
 pub use initialize_reward::*;
 
-pub mod set_reward_emissions;
-pub use set_reward_emissions::*;
+pub mod set_reward_params;
+pub use set_reward_params::*;
 
 pub mod reset_sqrt_price;
 pub use reset_sqrt_price::*;

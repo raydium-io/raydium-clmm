@@ -11,15 +11,12 @@ import { Context, NodeWallet } from "../base";
 import { StateFetcher } from "../states";
 import { sendTransaction } from "../utils";
 import { AmmInstruction } from "../instructions";
-import { fetchAllPositionsByOwner } from "../position";
 import { Config, defaultConfirmOptions } from "./config";
 import { AmmPool } from "../pool";
 import keypairFile from "./admin-keypair.json";
 import { MathUtil, SqrtPriceMath } from "../math";
 import { assert } from "chai";
-import { getTickOffsetInArray, getTickArrayAddressByTick } from "../entities";
 import Decimal from "decimal.js";
-import { BN } from "@project-serum/anchor";
 
 (async () => {
   const admin = Keypair.fromSeed(Uint8Array.from(keypairFile.slice(0, 32)));
@@ -55,12 +52,14 @@ import { BN } from "@project-serum/anchor";
     let instructions: TransactionInstruction[] = [];
     let signers: Signer[] = [admin];
 
-    const ix = await AmmInstruction.setRewardEmissions(
+    const ix = await AmmInstruction.setRewardParams(
       ctx,
       admin.publicKey,
       ammPool,
       param.rewardIndex,
-      param.emissionsPerSecond
+      param.emissionsPerSecond,
+      param.openTime,
+      param.endTime
     );
     instructions.push(ix);
 

@@ -2,11 +2,13 @@ import { PublicKey, TransactionInstruction } from "@solana/web3.js";
 import { Program, BN } from "@project-serum/anchor";
 import { AmmV3 } from "../../anchor/amm_v3";
 
-export function setRewardEmissionsInstruction(
+export function setRewardParamsInstruction(
   program: Program<AmmV3>,
   args: {
     rewardIndex: number;
     emissionsPerSecondX64: BN;
+    openTimestamp: BN;
+    endTimestamp: BN;
   },
   accounts: {
     authority: PublicKey;
@@ -14,10 +16,16 @@ export function setRewardEmissionsInstruction(
     poolState: PublicKey;
   }
 ): Promise<TransactionInstruction> {
-  const { rewardIndex, emissionsPerSecondX64 } = args;
+  const { rewardIndex, emissionsPerSecondX64, openTimestamp, endTimestamp } =
+    args;
 
   return program.methods
-    .setRewardEmissions(rewardIndex, emissionsPerSecondX64)
+    .setRewardParams(
+      rewardIndex,
+      emissionsPerSecondX64,
+      openTimestamp,
+      endTimestamp
+    )
     .accounts(accounts)
     .instruction();
 }

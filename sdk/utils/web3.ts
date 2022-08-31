@@ -19,12 +19,11 @@ export async function accountExist(
   return true;
 }
 
-
 export async function sendTransaction(
   connection: Connection,
   ixs: TransactionInstruction[],
   signers: Array<Signer>,
-  options?: ConfirmOptions,
+  options?: ConfirmOptions
 ): Promise<TransactionSignature> {
   const tx = new Transaction();
   for (var i = 0; i < ixs.length; i++) {
@@ -56,4 +55,11 @@ export async function sendTransaction(
     );
   }
   return signature;
+}
+
+export async function getBlockTimestamp(
+  connection: Connection
+): Promise<number> {
+  let slot = await connection.getSlot();
+  return await connection.getBlockTime(slot);
 }

@@ -248,7 +248,6 @@ impl TickState {
         self.tick = tick;
         Ok(())
     }
-
     /// Updates a tick and returns true if the tick was flipped from initialized to uninitialized
     pub fn update(
         &mut self,
@@ -427,7 +426,14 @@ pub fn get_reward_growths_inside(
                 .checked_sub(tick_upper.reward_growths_outside_x64[i])
                 .unwrap()
         };
-
+        #[cfg(feature = "enable-log")]
+        msg!(
+            "get_reward_growths_inside,i:{},reward_growths_global:{},reward_growths_below:{},reward_growths_above:{}",
+            i,
+            reward_infos[i].reward_growth_global_x64,
+            reward_growths_below,
+            reward_growths_above
+        );
         reward_growths_inside[i] = reward_infos[i]
             .reward_growth_global_x64
             .checked_sub(reward_growths_below)

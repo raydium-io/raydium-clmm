@@ -57,8 +57,7 @@ impl PersonalPositionState {
             // If reward delta overflows, default to a zero value. This means the position loses all
             // rewards earned since the last time the position was modified or rewards were collected.
             let reward_growth_delta = reward_growth_inside
-                .checked_sub(curr_reward_info.growth_inside_last_x64)
-                .unwrap_or(0);
+                .saturating_sub (curr_reward_info.growth_inside_last_x64);
 
             let amount_owed_delta = U256::from(reward_growth_delta)
                 .mul_div_floor(U256::from(self.liquidity), U256::from(fixed_point_64::Q64))

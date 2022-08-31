@@ -1,12 +1,20 @@
 import { BN } from "@project-serum/anchor";
 import { AccountMeta, PublicKey } from "@solana/web3.js";
-import { AmmConfig, PoolState, StateFetcher, TickArrayState } from "../states";
+import {
+  AmmConfig,
+  PoolState,
+  RewardInfo,
+  StateFetcher,
+  TickArrayState,
+} from "../states";
 import { Context } from "../base";
 import {
   NEGATIVE_ONE,
   SwapMath,
   SqrtPriceMath,
   getTickWithPriceAndTickspacing,
+  MathUtil,
+  Q64,
 } from "../math";
 
 import { CacheDataProviderImpl } from "./cacheProviderImpl";
@@ -20,8 +28,10 @@ import {
   checkTickArrayIsInitialized,
   getAllInitializedTickArrayInfo,
 } from "../entities";
-import { getTickArrayAddress } from "../utils";
+import { getBlockTimestamp, getTickArrayAddress } from "../utils";
 import { AmmConfigCache } from "./configCache";
+
+export const REWARD_NUM = 3;
 
 export class AmmPool {
   // public readonly fee: Fee;
@@ -33,10 +43,10 @@ export class AmmPool {
   public ammConfig: AmmConfig;
 
   /**
-   * 
-   * @param ctx 
-   * @param address 
-   * @param stateFetcher 
+   *
+   * @param ctx
+   * @param address
+   * @param stateFetcher
    */
   public constructor(
     ctx: Context,
@@ -139,6 +149,47 @@ export class AmmPool {
     );
   }
 
+  public async simulate_update_rewards(): Promise<RewardInfo[]> {
+    let nextRewardInfos: RewardInfo[] = this.poolState.rewardInfos;
+    const currTimestamp = await getBlockTimestamp(this.ctx.connection);
+    for (let i = 0; i < REWARD_NUM; i++) {
+      if (nextRewardInfos[i].tokenMint.equals(PublicKey.default)) {
+        continue;
+      }
+      if (currTimestamp < nextRewardInfos[i].openTime.toNumber()) {
+        continue;
+      }
+
+      let latestUpdateTime = new BN(currTimestamp);
+      if (latestUpdateTime.gt(nextRewardInfos[i].endTime)) {
+        latestUpdateTime = nextRewardInfos[i].endTime;
+      }
+      if (!this.poolState.liquidity.eqn(0)) {
+        let timeDelta = latestUpdateTime.sub(nextRewardInfos[i].lastUpdateTime);
+
+        let rewardGrowthDeltaX64 = MathUtil.mulDivFloor(
+          timeDelta,
+          nextRewardInfos[i].emissionsPerSecondX64,
+          this.poolState.liquidity
+        );
+        nextRewardInfos[i].rewardGrowthGlobalX64 =
+          nextRewardInfos[i].rewardGrowthGlobalX64.add(rewardGrowthDeltaX64);
+
+        const rewardEmissionedDelta = MathUtil.mulDivFloor(
+          timeDelta,
+          nextRewardInfos[i].emissionsPerSecondX64,
+          Q64
+        );
+
+        nextRewardInfos[i].rewardTotalEmissioned = nextRewardInfos[
+          i
+        ].rewardTotalEmissioned.add(rewardEmissionedDelta);
+      }
+      nextRewardInfos[i].lastUpdateTime = latestUpdateTime;
+    }
+    this.poolState.rewardInfos = nextRewardInfos;
+    return nextRewardInfos;
+  }
   /**
    *
    * @param inputTokenMint
@@ -249,10 +300,6 @@ export class AmmPool {
     return [inputAmount, allNeededAccounts];
   }
 
-  /**
-   *
-   * @returns
-   */
   async getNextInitializedTickArray(
     zeroForOne: boolean
   ): Promise<[boolean, number, AccountMeta | undefined]> {

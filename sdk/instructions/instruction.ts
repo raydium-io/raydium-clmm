@@ -19,7 +19,7 @@ import {
   MathUtil,
 } from "../math";
 
-import { PoolState, PersonalPositionState } from "../states";
+import {PersonalPositionState } from "../states";
 
 import {
   getAmmConfigAddress,
@@ -55,7 +55,7 @@ import {
   createAmmConfigInstruction,
   updateAmmConfigInstruction,
   initializeRewardInstruction,
-  setRewardEmissionsInstruction,
+  setRewardParamsInstruction,
 } from "./admin";
 
 import { AmmPool } from "../pool";
@@ -284,21 +284,25 @@ export class AmmInstruction {
     };
   }
 
-  public static async setRewardEmissions(
+  public static async setRewardParams(
     ctx: Context,
     authority: PublicKey,
     ammPool: AmmPool,
     rewardIndex: number,
-    emissionsPerSecond: number
+    emissionsPerSecond: number,
+    openTimestamp: BN,
+    endTimestamp: BN
   ): Promise<TransactionInstruction> {
     const emissionsPerSecondX64 = MathUtil.decimalToX64(
       new Decimal(emissionsPerSecond)
     );
-    return await setRewardEmissionsInstruction(
+    return await setRewardParamsInstruction(
       ctx.program,
       {
         rewardIndex,
         emissionsPerSecondX64,
+        openTimestamp,
+        endTimestamp
       },
       {
         authority,

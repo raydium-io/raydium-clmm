@@ -76,7 +76,7 @@ pub struct PoolState {
     pub swap_out_amount_token_0: u128,
 
     /// The lastest updated time of reward info.
-    pub reward_last_updated_timestamp: u64,
+    pub padding: u64,
     pub reward_infos: [RewardInfo; REWARD_NUM],
 
     /// Packed initialized tick array state
@@ -141,7 +141,6 @@ impl PoolState {
         self.swap_out_amount_token_1 = 0;
         self.swap_in_amount_token_1 = 0;
         self.swap_out_amount_token_0 = 0;
-        self.reward_last_updated_timestamp = 0;
         self.reward_infos = [RewardInfo::new(self.owner); REWARD_NUM];
         Ok(())
     }
@@ -154,6 +153,7 @@ impl PoolState {
         reward_per_second_x64: u128,
         token_mint: &Pubkey,
         token_vault: &Pubkey,
+        authority: &Pubkey,
     ) -> Result<()> {
         if index >= REWARD_NUM {
             return Err(ErrorCode::InvalidRewardIndex.into());
@@ -178,6 +178,7 @@ impl PoolState {
         self.reward_infos[index].emissions_per_second_x64 = reward_per_second_x64;
         self.reward_infos[index].token_mint = *token_mint;
         self.reward_infos[index].token_vault = *token_vault;
+        self.reward_infos[index].authority = *authority;
         #[cfg(feature = "enable-log")]
         msg!(
             "reward_index:{}, reward_infos:{:?}",
@@ -196,84 +197,71 @@ impl PoolState {
         #[cfg(feature = "enable-log")]
         msg!("current block timestamp:{}", curr_timestamp);
 
-        // No-op if no liquidity or no change in timestamp
-        if self.liquidity == 0 || curr_timestamp <= self.reward_last_updated_timestamp {
-            return Ok(self.reward_infos);
-        }
-
         let mut next_reward_infos = self.reward_infos;
 
         for i in 0..REWARD_NUM {
-            if !next_reward_infos[i].initialized() {
-                continue;
-            }
-            if curr_timestamp < next_reward_infos[i].open_time {
-                continue;
-            }
-            if curr_timestamp >= next_reward_infos[i].open_time
-                && curr_timestamp < next_reward_infos[i].end_time
-            {
-                next_reward_infos[i].reward_state = RewardState::Opening as u8;
-            }
-            let mut latest_update_timestamp = curr_timestamp;
-            if latest_update_timestamp > next_reward_infos[i].end_time {
-                if next_reward_infos[i].last_update_time < next_reward_infos[i].end_time {
-                    latest_update_timestamp = next_reward_infos[i].end_time
-                } else {
-                    continue;
-                }
-            }
-
             let reward_info = &mut next_reward_infos[i];
-            let time_delta = latest_update_timestamp - reward_info.last_update_time;
-
-            let reward_growth_delta = U256::from(time_delta)
-                .mul_div_floor(
-                    U256::from(reward_info.emissions_per_second_x64),
-                    U256::from(self.liquidity),
-                )
-                .unwrap();
-
-            reward_info.reward_growth_global_x64 = reward_info
-                .reward_growth_global_x64
-                .checked_add(reward_growth_delta.as_u128())
-                .unwrap();
-
-            reward_info.reward_total_emissioned = reward_info
-                .reward_total_emissioned
-                .checked_add(
-                    U128::from(time_delta)
-                        .mul_div_floor(
-                            U128::from(reward_info.emissions_per_second_x64),
-                            U128::from(fixed_point_64::Q64),
-                        )
-                        .unwrap()
-                        .as_u64(),
-                )
-                .unwrap();
-            #[cfg(feature = "enable-log")]
-            msg!(
-                "reward_index:{},latest_update_timestamp:{},reward_info.reward_last_update_time:{},time_delta:{},reward_emission_per_second_x64:{},reward_growth_delta:{},reward_info.reward_growth_global_x64:{}",
-                i,
-                latest_update_timestamp,
-                reward_info.last_update_time,
-                time_delta,
-                reward_info.emissions_per_second_x64,
-                reward_growth_delta,
-                reward_info.reward_growth_global_x64
-            );
-            reward_info.last_update_time = latest_update_timestamp;
-            if reward_info.last_update_time == next_reward_infos[i].end_time {
-                next_reward_infos[i].reward_state = RewardState::Ended as u8;
+            if !reward_info.initialized() {
                 continue;
+            }
+            if curr_timestamp < reward_info.open_time {
+                continue;
+            }
+            let latest_update_timestamp = curr_timestamp.min(reward_info.end_time);
+
+            if self.liquidity != 0 {
+                let time_delta = latest_update_timestamp - reward_info.last_update_time;
+
+                let reward_growth_delta = U256::from(time_delta)
+                    .mul_div_floor(
+                        U256::from(reward_info.emissions_per_second_x64),
+                        U256::from(self.liquidity),
+                    )
+                    .unwrap();
+
+                reward_info.reward_growth_global_x64 = reward_info
+                    .reward_growth_global_x64
+                    .checked_add(reward_growth_delta.as_u128())
+                    .unwrap();
+
+                reward_info.reward_total_emissioned = reward_info
+                    .reward_total_emissioned
+                    .checked_add(
+                        U128::from(time_delta)
+                            .mul_div_floor(
+                                U128::from(reward_info.emissions_per_second_x64),
+                                U128::from(fixed_point_64::Q64),
+                            )
+                            .unwrap()
+                            .as_u64(),
+                    )
+                    .unwrap();
+                #[cfg(feature = "enable-log")]
+                msg!(
+                    "reward_index:{},latest_update_timestamp:{},reward_info.reward_last_update_time:{},time_delta:{},reward_emission_per_second_x64:{},reward_growth_delta:{},reward_info.reward_growth_global_x64:{}",
+                    i,
+                    latest_update_timestamp,
+                    reward_info.last_update_time,
+                    time_delta,
+                    reward_info.emissions_per_second_x64,
+                    reward_growth_delta,
+                    reward_info.reward_growth_global_x64
+                );
+            }
+            reward_info.last_update_time = latest_update_timestamp;
+            // update reward state
+            if latest_update_timestamp >= reward_info.open_time
+                && latest_update_timestamp < reward_info.end_time
+            {
+                reward_info.reward_state = RewardState::Opening as u8;
+            } else if latest_update_timestamp == next_reward_infos[i].end_time {
+                next_reward_infos[i].reward_state = RewardState::Ended as u8;
             }
         }
         self.reward_infos = next_reward_infos;
-        self.reward_last_updated_timestamp = curr_timestamp;
         #[cfg(feature = "enable-log")]
-        msg!("update pool reward info, reward_0_emissioned:{}, reward_1_emissioned:{},reward_2_emissioned:{},pool.liquidity:{}", 
+        msg!("update pool reward info, reward_0_total_emissioned:{}, reward_1_total_emissioned:{},reward_2_total_emissioned:{},pool.liquidity:{}", 
         self.reward_infos[0].reward_total_emissioned,self.reward_infos[1].reward_total_emissioned,self.reward_infos[2].reward_total_emissioned, self.liquidity);
-
         Ok(next_reward_infos)
     }
 
@@ -377,8 +365,7 @@ impl RewardInfo {
         self.token_mint.ne(&Pubkey::default())
     }
 
-    /// Maps all reward data to only the reward growth accumulators
-    pub fn to_reward_growths(reward_infos: &[RewardInfo; REWARD_NUM]) -> [u128; REWARD_NUM] {
+    pub fn get_reward_growths(reward_infos: &[RewardInfo; REWARD_NUM]) -> [u128; REWARD_NUM] {
         let mut reward_growths = [0u128; REWARD_NUM];
         for i in 0..REWARD_NUM {
             reward_growths[i] = reward_infos[i].reward_growth_global_x64;

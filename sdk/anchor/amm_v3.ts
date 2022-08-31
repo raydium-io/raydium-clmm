@@ -329,7 +329,7 @@ export type AmmV3 = {
       "args": []
     },
     {
-      "name": "setRewardEmissions",
+      "name": "setRewardParams",
       "accounts": [
         {
           "name": "authority",
@@ -355,6 +355,14 @@ export type AmmV3 = {
         {
           "name": "emissionsPerSecondX64",
           "type": "u128"
+        },
+        {
+          "name": "openTime",
+          "type": "u64"
+        },
+        {
+          "name": "endTime",
+          "type": "u64"
         }
       ]
     },
@@ -1084,7 +1092,7 @@ export type AmmV3 = {
             "type": "u128"
           },
           {
-            "name": "rewardLastUpdatedTimestamp",
+            "name": "padding",
             "type": "u64"
           },
           {
@@ -2216,7 +2224,7 @@ export const IDL: AmmV3 = {
       "args": []
     },
     {
-      "name": "setRewardEmissions",
+      "name": "setRewardParams",
       "accounts": [
         {
           "name": "authority",
@@ -2242,6 +2250,14 @@ export const IDL: AmmV3 = {
         {
           "name": "emissionsPerSecondX64",
           "type": "u128"
+        },
+        {
+          "name": "openTime",
+          "type": "u64"
+        },
+        {
+          "name": "endTime",
+          "type": "u64"
         }
       ]
     },
@@ -2971,7 +2987,7 @@ export const IDL: AmmV3 = {
             "type": "u128"
           },
           {
-            "name": "rewardLastUpdatedTimestamp",
+            "name": "padding",
             "type": "u64"
           },
           {

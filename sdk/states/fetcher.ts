@@ -29,6 +29,15 @@ export class StateFetcher {
     return (await this.program.account.poolState.fetch(address)) as PoolState;
   }
 
+  public async getMultiplePoolStates(
+    addresses: PublicKey[]
+  ): Promise<PoolState[]> {
+    const result = await this.program.account.poolState.fetchMultiple(
+      addresses
+    );
+    return result as PoolState[];
+  }
+
   public async getTickArrayState(address: PublicKey): Promise<TickArrayState> {
     return (await this.program.account.tickArrayState.fetch(
       address
@@ -60,13 +69,12 @@ export class StateFetcher {
     return result as PersonalPositionState[];
   }
 
-  public async getMultiplePoolStates(
-    addresses: PublicKey[]
-  ): Promise<PoolState[]> {
-    const result = await this.program.account.poolState.fetchMultiple(
-      addresses
-    );
-    return result as PoolState[];
+  public async getProtocolPositionState(
+    address: PublicKey
+  ): Promise<ProtocolPositionState> {
+    return (await this.program.account.protocolPositionState.fetch(
+      address
+    )) as ProtocolPositionState;
   }
 
   public async getObservationState(

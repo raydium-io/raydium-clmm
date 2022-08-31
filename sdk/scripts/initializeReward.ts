@@ -9,7 +9,7 @@ import {
 } from "@solana/web3.js";
 import { Context, NodeWallet } from "../base";
 import { StateFetcher } from "../states";
-import { sendTransaction } from "../utils";
+import { sendTransaction, getBlockTimestamp } from "../utils";
 import { AmmInstruction } from "../instructions";
 import { fetchAllPositionsByOwner } from "../position";
 import { Config, defaultConfirmOptions } from "./config";
@@ -23,6 +23,7 @@ import { BN } from "@project-serum/anchor";
 
 (async () => {
   const admin = Keypair.fromSeed(Uint8Array.from(keypairFile.slice(0, 32)));
+  console.log("admin:", admin.publicKey.toBase58());
   const connection = new Connection(
     Config.url,
     defaultConfirmOptions.commitment
@@ -55,6 +56,22 @@ import { BN } from "@project-serum/anchor";
     let instructions: TransactionInstruction[] = [];
     let signers: Signer[] = [admin];
 
+    let openTime = param.openTime;
+    let endTime = param.endTime;
+    // only for test
+    if (openTime.eqn(0)) {
+      const current = await getBlockTimestamp(ctx.connection);
+      openTime = new BN(current + 3);
+    }
+    if (endTime.eqn(0)) {
+      endTime = openTime.addn(10);
+    }
+    console.log(
+      "init param, openTime:",
+      openTime.toString(),
+      "endTime:",
+      endTime.toString()
+    );
     const { instructions: ixs, signers: signer } =
       await AmmInstruction.initializeReward(
         ctx,
@@ -62,8 +79,8 @@ import { BN } from "@project-serum/anchor";
         ammPool,
         new PublicKey(param.rewardTokenMint),
         param.rewardIndex,
-        param.openTime,
-        param.endTime,
+        openTime,
+        endTime,
         param.emissionsPerSecond
       );
     instructions.push(...ixs);
@@ -81,8 +98,8 @@ import { BN } from "@project-serum/anchor";
       new PublicKey(param.poolId)
     );
     const rewardInfo = poolStateDataUpdated.rewardInfos[param.rewardIndex];
-    assert.equal(rewardInfo.openTime.toString(), param.openTime.toString());
-    assert.equal(rewardInfo.endTime.toString(), param.endTime.toString());
+    assert.equal(rewardInfo.openTime.toString(), openTime.toString());
+    assert.equal(rewardInfo.endTime.toString(), endTime.toString());
     assert.equal(
       rewardInfo.emissionsPerSecondX64.toString(),
       MathUtil.decimalToX64(new Decimal(param.emissionsPerSecond)).toString()
