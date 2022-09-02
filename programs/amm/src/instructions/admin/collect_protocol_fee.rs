@@ -52,26 +52,21 @@ pub fn collect_protocol_fee(
     pool_state.protocol_fees_token_0 -= amount_0;
     pool_state.protocol_fees_token_1 -= amount_1;
 
-    if amount_0 > 0 {
-        transfer_from_pool_vault_to_user(
-            &pool_state,
-            &ctx.accounts.pool_state,
-            &ctx.accounts.token_vault_0,
-            &ctx.accounts.recipient_token_account_0,
-            &ctx.accounts.token_program,
-            amount_0,
-        )?;
-    }
-    if amount_1 > 0 {
-        transfer_from_pool_vault_to_user(
-            &pool_state,
-            &ctx.accounts.pool_state,
-            &ctx.accounts.token_vault_1,
-            &ctx.accounts.recipient_token_account_1,
-            &ctx.accounts.token_program,
-            amount_1,
-        )?;
-    }
+    transfer_from_pool_vault_to_user(
+        &ctx.accounts.pool_state,
+        &ctx.accounts.token_vault_0,
+        &ctx.accounts.recipient_token_account_0,
+        &ctx.accounts.token_program,
+        amount_0,
+    )?;
+
+    transfer_from_pool_vault_to_user(
+        &ctx.accounts.pool_state,
+        &ctx.accounts.token_vault_1,
+        &ctx.accounts.recipient_token_account_1,
+        &ctx.accounts.token_program,
+        amount_1,
+    )?;
 
     emit!(CollectProtocolFeeEvent {
         pool_state: ctx.accounts.pool_state.key(),

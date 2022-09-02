@@ -85,94 +85,52 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     amount_1_min: u64,
 ) -> Result<()> {
     assert!(liquidity <= ctx.accounts.personal_position.liquidity);
-    let mut pool_state = ctx.accounts.pool_state.load_mut()?;
-    let protocol_position_state = &mut ctx.accounts.protocol_position;
 
-    let (decrease_amount_0, decrease_amount_1) = burn_liquidity(
-        &mut pool_state,
-        &ctx.accounts.tick_array_lower,
-        &ctx.accounts.tick_array_upper,
-        protocol_position_state,
-        liquidity,
+    let (decrease_amount_0, latest_fees_owed_0, decrease_amount_1, latest_fees_owed_1) =
+        decrease_liquidity_and_update_position(
+            &ctx.accounts.pool_state,
+            &mut ctx.accounts.protocol_position,
+            &mut ctx.accounts.personal_position,
+            &ctx.accounts.tick_array_lower,
+            &ctx.accounts.tick_array_upper,
+            liquidity,
+            amount_0_min,
+            amount_1_min,
+        )?;
+
+    transfer_from_pool_vault_to_user(
+        &ctx.accounts.pool_state,
+        &ctx.accounts.token_vault_0,
+        &ctx.accounts.recipient_token_account_0,
+        &ctx.accounts.token_program,
+        decrease_amount_0 + latest_fees_owed_0,
     )?;
-    if liquidity > 0 {
-        require!(
-            decrease_amount_0 >= amount_0_min && decrease_amount_1 >= amount_1_min,
-            ErrorCode::PriceSlippageCheck
-        );
-    }
+
+    transfer_from_pool_vault_to_user(
+        &ctx.accounts.pool_state,
+        &ctx.accounts.token_vault_1,
+        &ctx.accounts.recipient_token_account_1,
+        &ctx.accounts.token_program,
+        decrease_amount_1 + latest_fees_owed_1,
+    )?;
 
     let personal_position = &mut ctx.accounts.personal_position;
-    personal_position.token_fees_owed_0 = calculate_latest_token_fees(
-        personal_position.token_fees_owed_0,
-        personal_position.fee_growth_inside_0_last_x64,
-        protocol_position_state.fee_growth_inside_0_last_x64,
-        personal_position.liquidity,
-    );
-
-    personal_position.token_fees_owed_1 = calculate_latest_token_fees(
-        personal_position.token_fees_owed_1,
-        personal_position.fee_growth_inside_1_last_x64,
-        protocol_position_state.fee_growth_inside_1_last_x64,
-        personal_position.liquidity,
-    );
-
-    personal_position.fee_growth_inside_0_last_x64 =
-        protocol_position_state.fee_growth_inside_0_last_x64;
-    personal_position.fee_growth_inside_1_last_x64 =
-        protocol_position_state.fee_growth_inside_1_last_x64;
-
-    let latest_fees_owed_0 = personal_position.token_fees_owed_0;
-    let latest_fees_owed_1 = personal_position.token_fees_owed_1;
-    personal_position.token_fees_owed_0 = 0;
-    personal_position.token_fees_owed_1 = 0;
-
-    // update rewards, must update before decrease liquidity
-    personal_position.update_rewards(protocol_position_state.reward_growth_inside)?;
-    personal_position.liquidity = personal_position.liquidity.checked_sub(liquidity).unwrap();
-
-    let transfer_amount_0 = decrease_amount_0 + latest_fees_owed_0;
-    let transfer_amount_1 = decrease_amount_1 + latest_fees_owed_1;
-
-    if transfer_amount_0 > 0 {
-        msg!(
-            "decrease amount:{}, fee amount:{}",
-            decrease_amount_0,
-            latest_fees_owed_0,
-        );
-        transfer_from_pool_vault_to_user(
-            &pool_state,
-            &ctx.accounts.pool_state,
-            &ctx.accounts.token_vault_0,
-            &ctx.accounts.recipient_token_account_0,
-            &ctx.accounts.token_program,
-            transfer_amount_0,
-        )?;
-    }
-    if transfer_amount_1 > 0 {
-        msg!(
-            "decrease amount:{}, fee amount:{}",
-            decrease_amount_1,
-            latest_fees_owed_1,
-        );
-        transfer_from_pool_vault_to_user(
-            &pool_state,
-            &ctx.accounts.pool_state,
-            &ctx.accounts.token_vault_1,
-            &ctx.accounts.recipient_token_account_1,
-            &ctx.accounts.token_program,
-            transfer_amount_1,
-        )?;
-    }
-
     let reward_amounts = collect_rewards(
-        &mut pool_state,
         &ctx.accounts.pool_state,
         ctx.remaining_accounts,
         ctx.accounts.token_program.clone(),
         personal_position,
     )?;
 
+    #[cfg(feature = "enable-log")]
+    msg!(
+        "decrease_amount_0:{}, fees_owed_0:{}, decrease_amount_1:{}, fees_owed_1:{}, reward_amounts:{:?}",
+        decrease_amount_0,
+        latest_fees_owed_0,
+        decrease_amount_1,
+        latest_fees_owed_1,
+        reward_amounts
+    );
     emit!(DecreaseLiquidityEvent {
         position_nft_mint: personal_position.nft_mint,
         liquidity,
@@ -186,28 +144,89 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     Ok(())
 }
 
+pub fn decrease_liquidity_and_update_position<'a, 'b, 'c, 'info>(
+    pool_state_loader: &AccountLoader<'info, PoolState>,
+    protocol_position: &mut Box<Account<'info, ProtocolPositionState>>,
+    personal_position: &mut Box<Account<'info, PersonalPositionState>>,
+    tick_array_lower: &AccountLoader<'info, TickArrayState>,
+    tick_array_upper: &AccountLoader<'info, TickArrayState>,
+    liquidity: u128,
+    amount_0_min: u64,
+    amount_1_min: u64,
+) -> Result<(u64, u64, u64, u64)> {
+    let mut pool_state = pool_state_loader.load_mut()?;
+
+    let (decrease_amount_0, decrease_amount_1) = burn_liquidity(
+        &mut pool_state,
+        tick_array_lower,
+        tick_array_upper,
+        protocol_position,
+        liquidity,
+    )?;
+    if liquidity > 0 {
+        require!(
+            decrease_amount_0 >= amount_0_min && decrease_amount_1 >= amount_1_min,
+            ErrorCode::PriceSlippageCheck
+        );
+    }
+
+    // let personal_position = &mut ctx.accounts.personal_position;
+    personal_position.token_fees_owed_0 = calculate_latest_token_fees(
+        personal_position.token_fees_owed_0,
+        personal_position.fee_growth_inside_0_last_x64,
+        protocol_position.fee_growth_inside_0_last_x64,
+        personal_position.liquidity,
+    );
+
+    personal_position.token_fees_owed_1 = calculate_latest_token_fees(
+        personal_position.token_fees_owed_1,
+        personal_position.fee_growth_inside_1_last_x64,
+        protocol_position.fee_growth_inside_1_last_x64,
+        personal_position.liquidity,
+    );
+
+    personal_position.fee_growth_inside_0_last_x64 = protocol_position.fee_growth_inside_0_last_x64;
+    personal_position.fee_growth_inside_1_last_x64 = protocol_position.fee_growth_inside_1_last_x64;
+
+    let latest_fees_owed_0 = personal_position.token_fees_owed_0;
+    let latest_fees_owed_1 = personal_position.token_fees_owed_1;
+    personal_position.token_fees_owed_0 = 0;
+    personal_position.token_fees_owed_1 = 0;
+
+    // update rewards, must update before decrease liquidity
+    personal_position.update_rewards(protocol_position.reward_growth_inside)?;
+    personal_position.liquidity = personal_position.liquidity.checked_sub(liquidity).unwrap();
+
+    Ok((
+        decrease_amount_0,
+        latest_fees_owed_0,
+        decrease_amount_1,
+        latest_fees_owed_1,
+    ))
+}
+
 pub fn burn_liquidity<'b, 'info>(
     pool_state: &mut RefMut<PoolState>,
     tick_array_lower_state: &AccountLoader<'info, TickArrayState>,
     tick_array_upper_state: &AccountLoader<'info, TickArrayState>,
-    protocol_position_state: &mut Box<Account<'info, ProtocolPositionState>>,
+    protocol_position: &mut Box<Account<'info, ProtocolPositionState>>,
     liquidity: u128,
 ) -> Result<(u64, u64)> {
     let mut tick_array_lower = tick_array_lower_state.load_mut()?;
     let tick_lower_state = tick_array_lower.get_tick_state_mut(
-        protocol_position_state.tick_lower_index,
+        protocol_position.tick_lower_index,
         pool_state.tick_spacing as i32,
     )?;
 
     let mut tick_array_upper = tick_array_upper_state.load_mut()?;
     let tick_upper_state = tick_array_upper.get_tick_state_mut(
-        protocol_position_state.tick_upper_index,
+        protocol_position.tick_upper_index,
         pool_state.tick_spacing as i32,
     )?;
     let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = modify_position(
         -i128::try_from(liquidity).unwrap(),
         pool_state,
-        protocol_position_state,
+        protocol_position,
         tick_lower_state,
         tick_upper_state,
     )?;
@@ -230,12 +249,12 @@ pub fn burn_liquidity<'b, 'info>(
 }
 
 pub fn collect_rewards<'a, 'b, 'c, 'info>(
-    pool_state: &mut RefMut<PoolState>,
-    authority: &AccountLoader<'info, PoolState>,
+    pool_state_loader: &AccountLoader<'info, PoolState>,
     remaining_accounts: &[AccountInfo<'info>],
     token_program: Program<'info, Token>,
     personal_position_state: &mut PersonalPositionState,
 ) -> Result<[u64; REWARD_NUM]> {
+    let mut pool_state = pool_state_loader.load_mut()?;
     let mut valid_reward_count = 0;
     for item in pool_state.reward_infos {
         if item.initialized() {
@@ -281,8 +300,7 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
                 reward_amount_owed.checked_sub(transfer_amount).unwrap();
 
             transfer_from_pool_vault_to_user(
-                &pool_state,
-                &authority,
+                &pool_state_loader,
                 &reward_token_vault,
                 &recipient_token_account,
                 &token_program,

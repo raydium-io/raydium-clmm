@@ -81,7 +81,7 @@ export class CacheDataProviderImpl implements CacheDataProvider {
         this.tickArrayCache.set(item.startTickIndex, item);
       }
     }
-    // console.log(this.tickArrayCache);
+    console.log(this.tickArrayCache);
   }
 
   public setTickArrayCache(cachedTickArraies: TickArray[]) {

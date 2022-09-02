@@ -2,6 +2,7 @@ use crate::libraries::tick_math;
 use crate::states::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
+use std::mem::size_of;
 
 #[derive(Accounts)]
 pub struct CreatePool<'info> {
@@ -23,7 +24,7 @@ pub struct CreatePool<'info> {
         ],
         bump,
         payer = pool_creator,
-        space = PoolState::LEN
+        space = 8 + size_of::<PoolState>()
     )]
     pub pool_state: AccountLoader<'info, PoolState>,
 
@@ -111,7 +112,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
     require_keys_eq!(observation_state.amm_pool, Pubkey::default());
     pool_state.observation_key = ctx.accounts.observation_state.key();
     observation_state.amm_pool = ctx.accounts.pool_state.key();
-
+    msg!("tick_array_bitmap:{:?}", pool_state.tick_array_bitmap);
     emit!(PoolCreatedEvent {
         token_mint_0: ctx.accounts.token_mint_0.key(),
         token_mint_1: ctx.accounts.token_mint_1.key(),

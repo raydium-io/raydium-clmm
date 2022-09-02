@@ -212,6 +212,7 @@ import { getTickOffsetInArray, getTickArrayAddressByTick } from "../entities";
     tickOffsets.push(tickUpperOffset);
 
     for (let i = 0; i < tickArraiesAfter.length; i++) {
+      console.log("tickArray start index:",tickArraiesAfter[i].startTickIndex)
       if (tickArraiesBefore[i] != undefined) {
         assert.equal(
           tickArraiesAfter[i].ticks[tickOffsets[i]].liquidityGross.toString(),

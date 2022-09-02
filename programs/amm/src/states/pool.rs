@@ -88,30 +88,6 @@ pub struct PoolState {
 }
 
 impl PoolState {
-    pub const LEN: usize = 8
-        + 1
-        + 32 * 7
-        + 1
-        + 1
-        + 2
-        + 16
-        + 16
-        + 4
-        + 2
-        + 2
-        + 16
-        + 16
-        + 8
-        + 8
-        + 16
-        + 16
-        + 16
-        + 16
-        + 8
-        + RewardInfo::LEN * REWARD_NUM
-        + 8 * 16
-        + 512;
-
     pub fn key(&self) -> Pubkey {
         Pubkey::create_program_address(
             &[
@@ -173,7 +149,7 @@ impl PoolState {
             return Err(ErrorCode::InvalidRewardIndex.into());
         }
 
-        self.reward_infos[index].reward_state = RewardState::Initialized as u8;
+        // self.reward_infos[index].reward_state = RewardState::Initialized as u8;
         self.reward_infos[index].last_update_time = open_time;
         self.reward_infos[index].open_time = open_time;
         self.reward_infos[index].end_time = end_time;
@@ -252,13 +228,13 @@ impl PoolState {
             }
             reward_info.last_update_time = latest_update_timestamp;
             // update reward state
-            if latest_update_timestamp >= reward_info.open_time
-                && latest_update_timestamp < reward_info.end_time
-            {
-                reward_info.reward_state = RewardState::Opening as u8;
-            } else if latest_update_timestamp == next_reward_infos[i].end_time {
-                next_reward_infos[i].reward_state = RewardState::Ended as u8;
-            }
+            // if latest_update_timestamp >= reward_info.open_time
+            //     && latest_update_timestamp < reward_info.end_time
+            // {
+            //     reward_info.reward_state = RewardState::Opening as u8;
+            // } else if latest_update_timestamp == next_reward_infos[i].end_time {
+            //     next_reward_infos[i].reward_state = RewardState::Ended as u8;
+            // }
         }
         self.reward_infos = next_reward_infos;
         #[cfg(feature = "enable-log")]
@@ -326,8 +302,6 @@ pub enum RewardState {
 
 #[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Default, Debug, PartialEq)]
 pub struct RewardInfo {
-    /// Reward state
-    pub reward_state: u8,
     /// Reward open time
     pub open_time: u64,
     /// Reward end time
@@ -352,7 +326,7 @@ pub struct RewardInfo {
 }
 
 impl RewardInfo {
-    pub const LEN: usize = 1 + 8 + 8 + 8 + 16 + 8 + 8 + 32 + 32 + 32 + 16;
+    pub const LEN: usize = 8 + 8 + 8 + 16 + 8 + 8 + 32 + 32 + 32 + 16;
     /// Creates a new RewardInfo
     pub fn new(authority: Pubkey) -> Self {
         Self {

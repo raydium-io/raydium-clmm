@@ -4,6 +4,7 @@ use crate::libraries::{liquidity_math, tick_math};
 use crate::pool::{RewardInfo, REWARD_NUM};
 use crate::util::*;
 use anchor_lang::{prelude::*, system_program};
+use std::mem::size_of;
 
 pub const TICK_ARRAY_SEED: &str = "tick_array";
 pub const TICK_ARRAY_SIZE_USIZE: usize = 60;
@@ -23,7 +24,7 @@ pub struct TickArrayState {
 }
 
 impl TickArrayState {
-    pub const LEN: usize = 8 + 32 + 4 + TickState::LEN * TICK_ARRAY_SIZE_USIZE + 1 + 115;
+    // pub const LEN: usize = 8 + 32 + 4 + TickState::LEN * TICK_ARRAY_SIZE_USIZE + 1 + 115;
 
     pub fn get_or_create_tick_array<'info>(
         payer: AccountInfo<'info>,
@@ -31,6 +32,7 @@ impl TickArrayState {
         system_program: AccountInfo<'info>,
         pool_state_loader: &AccountLoader<'info, PoolState>,
         tick_array_start_index: i32,
+        tick_spacing: u16,
     ) -> Result<AccountLoader<'info, TickArrayState>> {
         let tick_array_state = if tick_array_account_info.owner == &system_program::ID {
             let (expect_pda_address, bump) = Pubkey::find_program_address(
@@ -53,23 +55,20 @@ impl TickArrayState {
                     &tick_array_start_index.to_be_bytes(),
                     &[bump],
                 ],
-                TickArrayState::LEN,
+                8 + size_of::<TickArrayState>(),
             )?;
-
             let tick_array_state_loader = AccountLoader::<TickArrayState>::try_from_unchecked(
                 &crate::id(),
                 &tick_array_account_info,
             )?;
-
             {
                 let mut tick_array_account = tick_array_state_loader.load_init()?;
                 tick_array_account.initialize(
                     tick_array_start_index,
-                    pool_state_loader.load()?.tick_spacing,
+                    tick_spacing,
                     pool_state_loader.key(),
                 )?;
             }
-
             // save the 8 byte discriminator
             tick_array_state_loader.exit(&crate::id())?;
             tick_array_state_loader

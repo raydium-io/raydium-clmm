@@ -473,8 +473,7 @@ pub fn swap_internal<'b, 'info>(
         // x -> y，transfer y token from pool vault to user.
         if amount_1 < 0 {
             transfer_from_pool_vault_to_user(
-                &pool_state,
-                ctx.pool_state,
+                &ctx.pool_state,
                 &vault_1,
                 &token_account_1,
                 &ctx.token_program,
@@ -495,8 +494,7 @@ pub fn swap_internal<'b, 'info>(
         }
         if amount_0 < 0 {
             transfer_from_pool_vault_to_user(
-                &pool_state,
-                ctx.pool_state,
+                &ctx.pool_state,
                 &vault_0,
                 &token_account_0,
                 &ctx.token_program,

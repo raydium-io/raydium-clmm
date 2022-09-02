@@ -37,12 +37,21 @@ import { assert } from "chai";
       programId: ctx.program.programId,
     });
 
-    const tokenMint0 = new PublicKey(param.tokenMint0);
-    const tokenMint1 = new PublicKey(param.tokenMint1);
-    const [decimals0, decimals1] = (
+    let tokenMint0 = new PublicKey(param.tokenMint0);
+    let tokenMint1 = new PublicKey(param.tokenMint1);
+    let [decimals0, decimals1] = (
       await connection.getMultipleAccountsInfo([tokenMint0, tokenMint1])
     ).map((t) => (t ? MintLayout.decode(t.data).decimals : 0));
+    // @ts-ignore
+    if ((tokenMint0._bn as BN).gt(tokenMint1._bn as BN)) {
+      const tmp = decimals0;
+      decimals0 = decimals1;
+      decimals1 = tmp;
 
+      const tmpToken = tokenMint0;
+      tokenMint0 = tokenMint1;
+      tokenMint1 = tmpToken;
+    }
     console.log("decimals0:", decimals0, "decimals1:", decimals1);
 
     const [address, ixs] = await AmmInstruction.createPool(
@@ -80,5 +89,8 @@ import { assert } from "chai";
     assert.isTrue(poolData.tokenMint1.equals(tokenMint1));
     assert.equal(poolData.ammConfig.toString(), param.ammConfig);
     assert.isTrue(poolData.liquidity.eqn(0));
+    for (const each of poolData.tickArrayBitmap) {
+      assert.equal(each.toString(), "0");
+    }
   }
 })();

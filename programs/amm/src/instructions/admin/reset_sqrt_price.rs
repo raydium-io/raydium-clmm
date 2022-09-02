@@ -63,7 +63,6 @@ pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price_x64: u128) -> R
     pool_state.pool_check_reset(sqrt_price_x64, tick)?;
 
     transfer_from_pool_vault_to_user(
-        &pool_state,
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_0,
         &ctx.accounts.recipient_token_account_0,
@@ -71,7 +70,6 @@ pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price_x64: u128) -> R
         ctx.accounts.token_vault_0.amount,
     )?;
     transfer_from_pool_vault_to_user(
-        &pool_state,
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_1,
         &ctx.accounts.recipient_token_account_1,

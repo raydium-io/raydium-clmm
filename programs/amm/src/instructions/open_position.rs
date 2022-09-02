@@ -185,79 +185,106 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
 ) -> Result<()> {
-    let mut pool_state = ctx.accounts.pool_state.load_mut()?;
-    check_ticks_order(tick_lower_index, tick_upper_index)?;
-    check_tick_array_start_index(
-        tick_array_lower_start_index,
-        tick_lower_index,
-        pool_state.tick_spacing,
-    )?;
-    check_tick_array_start_index(
-        tick_array_upper_start_index,
-        tick_upper_index,
-        pool_state.tick_spacing,
-    )?;
+    {
+        let pool_state = &mut ctx.accounts.pool_state.load_mut()?;
+        check_ticks_order(tick_lower_index, tick_upper_index)?;
+        check_tick_array_start_index(
+            tick_array_lower_start_index,
+            tick_lower_index,
+            pool_state.tick_spacing,
+        )?;
+        check_tick_array_start_index(
+            tick_array_upper_start_index,
+            tick_upper_index,
+            pool_state.tick_spacing,
+        )?;
 
-    let tick_array_lower_state = TickArrayState::get_or_create_tick_array(
-        ctx.accounts.payer.to_account_info(),
-        ctx.accounts.tick_array_lower.to_account_info(),
-        ctx.accounts.system_program.to_account_info(),
-        &ctx.accounts.pool_state,
-        tick_array_lower_start_index,
-    )?;
-
-    let tick_array_upper_state = if tick_array_lower_start_index == tick_array_upper_start_index {
-        AccountLoader::<TickArrayState>::try_from(&ctx.accounts.tick_array_upper.to_account_info())?
-    } else {
-        TickArrayState::get_or_create_tick_array(
+        let tick_array_lower_state = TickArrayState::get_or_create_tick_array(
             ctx.accounts.payer.to_account_info(),
-            ctx.accounts.tick_array_upper.to_account_info(),
+            ctx.accounts.tick_array_lower.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
             &ctx.accounts.pool_state,
-            tick_array_upper_start_index,
-        )?
-    };
+            tick_array_lower_start_index,
+            pool_state.tick_spacing,
+        )?;
 
-    // check if protocol position is initilized
-    if ctx.accounts.protocol_position.bump == 0 {
-        let protocol_position = &mut ctx.accounts.protocol_position;
-        protocol_position.bump = *ctx.bumps.get("protocol_position").unwrap();
-        protocol_position.pool_id = ctx.accounts.pool_state.key();
+        let tick_array_upper_state = if tick_array_lower_start_index == tick_array_upper_start_index
+        {
+            AccountLoader::<TickArrayState>::try_from(
+                &ctx.accounts.tick_array_upper.to_account_info(),
+            )?
+        } else {
+            TickArrayState::get_or_create_tick_array(
+                ctx.accounts.payer.to_account_info(),
+                ctx.accounts.tick_array_upper.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+                &ctx.accounts.pool_state,
+                tick_array_upper_start_index,
+                pool_state.tick_spacing,
+            )?
+        };
+
+        // check if protocol position is initilized
+        if ctx.accounts.protocol_position.bump == 0 {
+            let protocol_position = &mut ctx.accounts.protocol_position;
+            protocol_position.bump = *ctx.bumps.get("protocol_position").unwrap();
+            protocol_position.pool_id = ctx.accounts.pool_state.key();
+        }
+
+        let mut add_liquidity_context = AddLiquidityParam {
+            payer: &ctx.accounts.payer,
+            token_account_0: &mut ctx.accounts.token_account_0,
+            token_account_1: &mut ctx.accounts.token_account_1,
+            token_vault_0: &mut ctx.accounts.token_vault_0,
+            token_vault_1: &mut ctx.accounts.token_vault_1,
+            tick_array_lower: &tick_array_lower_state,
+            tick_array_upper: &tick_array_upper_state,
+            protocol_position: &mut ctx.accounts.protocol_position,
+            token_program: ctx.accounts.token_program.clone(),
+        };
+
+        let (amount_0, amount_1) = add_liquidity(
+            &mut add_liquidity_context,
+            pool_state,
+            liquidity,
+            amount_0_max,
+            amount_1_max,
+            tick_lower_index,
+            tick_upper_index,
+        )?;
+
+        let personal_position = &mut ctx.accounts.personal_position;
+        personal_position.bump = *ctx.bumps.get("personal_position").unwrap();
+        personal_position.nft_mint = ctx.accounts.position_nft_mint.key();
+        personal_position.pool_id = ctx.accounts.pool_state.key();
+        personal_position.tick_lower_index = tick_lower_index;
+        personal_position.tick_upper_index = tick_upper_index;
+
+        let updated_protocol_position = add_liquidity_context.protocol_position;
+        personal_position.fee_growth_inside_0_last_x64 =
+            updated_protocol_position.fee_growth_inside_0_last_x64;
+        personal_position.fee_growth_inside_1_last_x64 =
+            updated_protocol_position.fee_growth_inside_1_last_x64;
+
+        // update rewards, must update before update liquidity
+        personal_position.update_rewards(updated_protocol_position.reward_growth_inside)?;
+        personal_position.liquidity = liquidity;
+
+        emit!(CreatePersonalPositionEvent {
+            pool_state: ctx.accounts.pool_state.key(),
+            minter: ctx.accounts.payer.key(),
+            nft_owner: ctx.accounts.position_nft_owner.key(),
+            tick_lower_index: tick_lower_index,
+            tick_upper_index: tick_upper_index,
+            liquidity: liquidity,
+            deposit_amount_0: amount_0,
+            deposit_amount_1: amount_1,
+        });
     }
-
-    let mut add_liquidity_context = AddLiquidityParam {
-        payer: &ctx.accounts.payer,
-        token_account_0: &mut ctx.accounts.token_account_0,
-        token_account_1: &mut ctx.accounts.token_account_1,
-        token_vault_0: &mut ctx.accounts.token_vault_0,
-        token_vault_1: &mut ctx.accounts.token_vault_1,
-        tick_array_lower: &tick_array_lower_state,
-        tick_array_upper: &tick_array_upper_state,
-        protocol_position: &mut ctx.accounts.protocol_position,
-        token_program: ctx.accounts.token_program.clone(),
-    };
-
-    let (amount_0, amount_1) = add_liquidity(
-        &mut add_liquidity_context,
-        &mut pool_state,
-        liquidity,
-        amount_0_max,
-        amount_1_max,
-        tick_lower_index,
-        tick_upper_index,
-    )?;
-
-    let seeds = [
-        &POOL_SEED.as_bytes(),
-        pool_state.amm_config.as_ref(),
-        pool_state.token_mint_0.as_ref(),
-        pool_state.token_mint_1.as_ref(),
-        &[pool_state.bump] as &[u8],
-    ];
 
     create_nft_with_metadata(
         &ctx.accounts.payer.to_account_info(),
-        &ctx.accounts.pool_state.to_account_info(),
+        &ctx.accounts.pool_state,
         &ctx.accounts.position_nft_mint.to_account_info(),
         &ctx.accounts.position_nft_account.to_account_info(),
         &ctx.accounts.metadata_account.to_account_info(),
@@ -265,37 +292,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         ctx.accounts.token_program.to_account_info(),
         ctx.accounts.system_program.to_account_info(),
         ctx.accounts.rent.to_account_info(),
-        seeds,
     )?;
-
-    let personal_position = &mut ctx.accounts.personal_position;
-    personal_position.bump = *ctx.bumps.get("personal_position").unwrap();
-    personal_position.nft_mint = ctx.accounts.position_nft_mint.key();
-    personal_position.pool_id = ctx.accounts.pool_state.key();
-    personal_position.tick_lower_index = tick_lower_index;
-    personal_position.tick_upper_index = tick_upper_index;
-
-    let updated_protocol_position = add_liquidity_context.protocol_position;
-    personal_position.fee_growth_inside_0_last_x64 =
-        updated_protocol_position.fee_growth_inside_0_last_x64;
-    personal_position.fee_growth_inside_1_last_x64 =
-        updated_protocol_position.fee_growth_inside_1_last_x64;
-
-    // update rewards, must update before update liquidity
-    personal_position.update_rewards(updated_protocol_position.reward_growth_inside)?;
-    personal_position.liquidity = liquidity;
-
-    emit!(CreatePersonalPositionEvent {
-        pool_state: ctx.accounts.pool_state.key(),
-        minter: ctx.accounts.payer.key(),
-        nft_owner: ctx.accounts.position_nft_owner.key(),
-        tick_lower_index: tick_lower_index,
-        tick_upper_index: tick_upper_index,
-        liquidity: liquidity,
-        deposit_amount_0: amount_0,
-        deposit_amount_1: amount_1,
-    });
-
     Ok(())
 }
 
@@ -511,7 +508,7 @@ pub fn update_position<'info>(
 
 fn create_nft_with_metadata<'info>(
     payer: &AccountInfo<'info>,
-    pool_state_info: &AccountInfo<'info>,
+    pool_state_loader: &AccountLoader<'info, PoolState>,
     position_nft_mint: &AccountInfo<'info>,
     position_nft_account: &AccountInfo<'info>,
     metadata_account: &AccountInfo<'info>,
@@ -519,8 +516,15 @@ fn create_nft_with_metadata<'info>(
     token_program: AccountInfo<'info>,
     system_program: AccountInfo<'info>,
     rent: AccountInfo<'info>,
-    seeds: [&[u8]; 5],
 ) -> Result<()> {
+    let pool_state = pool_state_loader.load()?;
+    let seeds = [
+        &POOL_SEED.as_bytes(),
+        pool_state.amm_config.as_ref(),
+        pool_state.token_mint_0.as_ref(),
+        pool_state.token_mint_1.as_ref(),
+        &[pool_state.bump] as &[u8],
+    ];
     // Mint the NFT
     token::mint_to(
         CpiContext::new_with_signer(
@@ -528,25 +532,24 @@ fn create_nft_with_metadata<'info>(
             token::MintTo {
                 mint: position_nft_mint.clone(),
                 to: position_nft_account.clone(),
-                authority: pool_state_info.clone(),
+                authority: pool_state_loader.to_account_info(),
             },
             &[&seeds[..]],
         ),
         1,
     )?;
-
     let create_metadata_ix = create_metadata_accounts_v2(
         metadata_program.key(),
         metadata_account.key(),
         position_nft_mint.key(),
-        pool_state_info.key(),
+        pool_state_loader.key(),
         payer.key(),
-        pool_state_info.key(),
+        pool_state_loader.key(),
         String::from("Raydium AMM V3 Positions"),
         String::from(""),
         String::from(""),
         Some(vec![Creator {
-            address: pool_state_info.key(),
+            address: pool_state_loader.key(),
             verified: true,
             share: 100,
         }]),
@@ -562,19 +565,18 @@ fn create_nft_with_metadata<'info>(
             metadata_account.clone(),
             position_nft_mint.clone(),
             payer.to_account_info().clone(),
-            pool_state_info.clone(),
+            pool_state_loader.to_account_info(),
             system_program.clone(),
             rent.clone(),
         ],
         &[&seeds[..]],
     )?;
-
     // Disable minting
     token::set_authority(
         CpiContext::new_with_signer(
             token_program.clone(),
             token::SetAuthority {
-                current_authority: pool_state_info.clone(),
+                current_authority: pool_state_loader.to_account_info(),
                 account_or_mint: position_nft_mint.clone(),
             },
             &[&seeds[..]],
