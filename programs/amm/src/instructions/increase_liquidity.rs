@@ -16,7 +16,7 @@ pub struct IncreaseLiquidity<'info> {
     pub nft_account: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
-    pub pool_state: Box<Account<'info, PoolState>>,
+    pub pool_state: AccountLoader<'info, PoolState>,
 
     #[account(
         mut,
@@ -59,16 +59,14 @@ pub struct IncreaseLiquidity<'info> {
     /// The address that holds pool tokens for token_0
     #[account(
         mut,
-        token::mint = pool_state.token_mint_0,
-        constraint = token_vault_0.key() == pool_state.token_vault_0
+        constraint = token_vault_0.key() == pool_state.load()?.token_vault_0
     )]
     pub token_vault_0: Box<Account<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_1
     #[account(
         mut,
-        token::mint = pool_state.token_mint_1,
-        constraint = token_vault_1.key() == pool_state.token_vault_1
+        constraint = token_vault_1.key() == pool_state.load()?.token_vault_1
     )]
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
@@ -82,31 +80,32 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     amount_0_max: u64,
     amount_1_max: u64,
 ) -> Result<()> {
+    let mut pool_state = ctx.accounts.pool_state.load_mut()?;
     let tick_lower = ctx.accounts.personal_position.tick_lower_index;
     let tick_upper = ctx.accounts.personal_position.tick_upper_index;
-    let mut accounts = AddLiquidityParam {
+    let mut add_liquidity_context = AddLiquidityParam {
         payer: &ctx.accounts.nft_owner,
-        token_account_0: ctx.accounts.token_account_0.as_mut(),
-        token_account_1: ctx.accounts.token_account_1.as_mut(),
-        token_vault_0: ctx.accounts.token_vault_0.as_mut(),
-        token_vault_1: ctx.accounts.token_vault_1.as_mut(),
-        pool_state: ctx.accounts.pool_state.as_mut(),
+        token_account_0: &mut ctx.accounts.token_account_0,
+        token_account_1: &mut ctx.accounts.token_account_1,
+        token_vault_0: &mut ctx.accounts.token_vault_0,
+        token_vault_1: &mut ctx.accounts.token_vault_1,
         tick_array_lower: &ctx.accounts.tick_array_lower,
         tick_array_upper: &ctx.accounts.tick_array_upper,
-        protocol_position: ctx.accounts.protocol_position.as_mut(),
+        protocol_position: &mut ctx.accounts.protocol_position,
         token_program: ctx.accounts.token_program.clone(),
     };
     let (amount_0, amount_1) = add_liquidity(
-        &mut accounts,
+        &mut add_liquidity_context,
+        &mut pool_state,
         liquidity,
         amount_0_max,
         amount_1_max,
         tick_lower,
         tick_upper,
     )?;
-    let updated_protocol_position = accounts.protocol_position;
+    let updated_protocol_position = add_liquidity_context.protocol_position;
 
-    let personal_position = ctx.accounts.personal_position.as_mut();
+    let personal_position = &mut ctx.accounts.personal_position;
     personal_position.token_fees_owed_0 = calculate_latest_token_fees(
         personal_position.token_fees_owed_0,
         personal_position.fee_growth_inside_0_last_x64,

@@ -8,6 +8,8 @@ use crate::libraries::{
 };
 use crate::states::{MAX_TICK_ARRAY_START_INDEX, MIN_TICK_ARRAY_START_INDEX, TICK_ARRAY_SIZE};
 use anchor_lang::prelude::*;
+#[cfg(feature = "enable-log")]
+use std::convert::identity;
 use std::ops::BitXor;
 
 /// Seed to derive account address and signature
@@ -20,9 +22,10 @@ pub const OBSERVATION_UPDATE_DURATION_DEFAULT: u16 = 15;
 
 /// The pool state
 ///
-/// PDA of `[POOL_SEED, market, token_mint_0, token_mint_1, fee]`
+/// PDA of `[POOL_SEED, config, token_mint_0, token_mint_1]`
 ///
-#[account]
+#[account(zero_copy)]
+#[repr(packed)]
 #[derive(Default, Debug)]
 pub struct PoolState {
     /// Bump to identify PDA
@@ -82,35 +85,11 @@ pub struct PoolState {
     /// Packed initialized tick array state
     pub tick_array_bitmap: [u64; 16],
     // Unused bytes for future upgrades.
-    // pub padding1: [u64; 32],
-    // pub padding2: [u64; 32],
+    pub padding1: [u64; 32],
+    pub padding2: [u64; 32],
 }
 
 impl PoolState {
-    pub const LEN: usize = 8
-        + 1
-        + 32 * 7
-        + 1
-        + 1
-        + 2
-        + 16
-        + 16
-        + 4
-        + 2
-        + 2
-        + 16
-        + 16
-        + 8
-        + 8
-        + 16
-        + 16
-        + 16
-        + 16
-        + 8
-        + RewardInfo::LEN * REWARD_NUM
-        + 8 * 16
-        + 512;
-
     pub fn key(&self) -> Pubkey {
         Pubkey::create_program_address(
             &[
@@ -158,7 +137,8 @@ impl PoolState {
         if index >= REWARD_NUM {
             return Err(ErrorCode::InvalidRewardIndex.into());
         }
-        let lowest_index = match self.reward_infos.iter().position(|r| !r.initialized()) {
+        let reward_infos = self.reward_infos;
+        let lowest_index = match reward_infos.iter().position(|r| !r.initialized()) {
             Some(lowest_index) => lowest_index,
             None => return Err(ErrorCode::InvalidRewardIndex.into()),
         };
@@ -171,7 +151,7 @@ impl PoolState {
             return Err(ErrorCode::InvalidRewardIndex.into());
         }
 
-        self.reward_infos[index].reward_state = RewardState::Initialized as u8;
+        // self.reward_infos[index].reward_state = RewardState::Initialized as u8;
         self.reward_infos[index].last_update_time = open_time;
         self.reward_infos[index].open_time = open_time;
         self.reward_infos[index].end_time = end_time;
@@ -241,11 +221,11 @@ impl PoolState {
                     "reward_index:{},latest_update_timestamp:{},reward_info.reward_last_update_time:{},time_delta:{},reward_emission_per_second_x64:{},reward_growth_delta:{},reward_info.reward_growth_global_x64:{}",
                     i,
                     latest_update_timestamp,
-                    reward_info.last_update_time,
+                    identity(reward_info.last_update_time),
                     time_delta,
-                    reward_info.emissions_per_second_x64,
+                    identity(reward_info.emissions_per_second_x64),
                     reward_growth_delta,
-                    reward_info.reward_growth_global_x64
+                    identity(reward_info.reward_growth_global_x64)
                 );
             }
             reward_info.last_update_time = latest_update_timestamp;
@@ -261,7 +241,7 @@ impl PoolState {
         self.reward_infos = next_reward_infos;
         #[cfg(feature = "enable-log")]
         msg!("update pool reward info, reward_0_total_emissioned:{}, reward_1_total_emissioned:{},reward_2_total_emissioned:{},pool.liquidity:{}", 
-        self.reward_infos[0].reward_total_emissioned,self.reward_infos[1].reward_total_emissioned,self.reward_infos[2].reward_total_emissioned, self.liquidity);
+        identity(self.reward_infos[0].reward_total_emissioned),identity(self.reward_infos[1].reward_total_emissioned),identity(self.reward_infos[2].reward_total_emissioned), identity(self.liquidity));
         Ok(next_reward_infos)
     }
 
@@ -322,7 +302,9 @@ pub enum RewardState {
     Ended,
 }
 
-#[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Default, Debug, PartialEq)]
+#[zero_copy]
+#[repr(packed)]
+#[derive(Default, Debug)]
 pub struct RewardInfo {
     /// Reward state
     pub reward_state: u8,
@@ -350,7 +332,6 @@ pub struct RewardInfo {
 }
 
 impl RewardInfo {
-    pub const LEN: usize = 1 + 8 + 8 + 8 + 16 + 8 + 8 + 32 + 32 + 32 + 16;
     /// Creates a new RewardInfo
     pub fn new(authority: Pubkey) -> Self {
         Self {
@@ -467,6 +448,7 @@ mod test {
     mod tick_array_bitmap_test {
 
         use super::*;
+        use std::convert::identity;
 
         #[test]
         fn get_arrary_start_index_negative() {
@@ -474,7 +456,7 @@ mod test {
             pool_state.tick_spacing = 10;
             pool_state.flip_tick_array_bit(-600).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [
                     0,
                     0,
@@ -496,7 +478,7 @@ mod test {
             );
             pool_state.flip_tick_array_bit(-1200).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [
                     0,
                     0,
@@ -518,7 +500,7 @@ mod test {
             );
             pool_state.flip_tick_array_bit(-1800).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [
                     0,
                     0,
@@ -540,7 +522,7 @@ mod test {
             );
             pool_state.flip_tick_array_bit(-38400).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [
                     0,
                     0,
@@ -562,7 +544,7 @@ mod test {
             );
             pool_state.flip_tick_array_bit(-39000).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [
                     0,
                     0,
@@ -584,7 +566,7 @@ mod test {
             );
             pool_state.flip_tick_array_bit(-307200).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [
                     1,
                     0,
@@ -606,7 +588,7 @@ mod test {
             );
             pool_state.flip_tick_array_bit(-307200).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [
                     0,
                     0,
@@ -634,27 +616,27 @@ mod test {
             pool_state.tick_spacing = 10;
             pool_state.flip_tick_array_bit(0).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
             );
             pool_state.flip_tick_array_bit(600).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0]
             );
             pool_state.flip_tick_array_bit(1200).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0]
             );
             pool_state.flip_tick_array_bit(38400).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [0, 0, 0, 0, 0, 0, 0, 0, 7, 1, 0, 0, 0, 0, 0, 0]
             );
             pool_state.flip_tick_array_bit(306600).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [
                     0,
                     0,
@@ -676,7 +658,7 @@ mod test {
             );
             pool_state.flip_tick_array_bit(306600).unwrap();
             assert_eq!(
-                pool_state.tick_array_bitmap,
+                identity(pool_state.tick_array_bitmap),
                 [0, 0, 0, 0, 0, 0, 0, 0, 7, 1, 0, 0, 0, 0, 0, 0]
             )
         }

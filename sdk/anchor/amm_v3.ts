@@ -1114,6 +1114,24 @@ export type AmmV3 = {
                 16
               ]
             }
+          },
+          {
+            "name": "padding1",
+            "type": {
+              "array": [
+                "u64",
+                32
+              ]
+            }
+          },
+          {
+            "name": "padding2",
+            "type": {
+              "array": [
+                "u64",
+                32
+              ]
+            }
           }
         ]
       }
@@ -1605,12 +1623,10 @@ export type AmmV3 = {
       "name": "UpdateRewardInfosEvent",
       "fields": [
         {
-          "name": "rewardInfos",
+          "name": "rewardGrowthGlobalX64",
           "type": {
             "array": [
-              {
-                "defined": "RewardInfo"
-              },
+              "u128",
               3
             ]
           },
@@ -3009,6 +3025,24 @@ export const IDL: AmmV3 = {
                 16
               ]
             }
+          },
+          {
+            "name": "padding1",
+            "type": {
+              "array": [
+                "u64",
+                32
+              ]
+            }
+          },
+          {
+            "name": "padding2",
+            "type": {
+              "array": [
+                "u64",
+                32
+              ]
+            }
           }
         ]
       }
@@ -3500,12 +3534,10 @@ export const IDL: AmmV3 = {
       "name": "UpdateRewardInfosEvent",
       "fields": [
         {
-          "name": "rewardInfos",
+          "name": "rewardGrowthGlobalX64",
           "type": {
             "array": [
-              {
-                "defined": "RewardInfo"
-              },
+              "u128",
               3
             ]
           },

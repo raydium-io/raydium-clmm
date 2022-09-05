@@ -9,6 +9,9 @@ pub fn transfer_from_user_to_pool_vault<'info>(
     token_program: &Program<'info, Token>,
     amount: u64,
 ) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
     msg!(
         "deposit to vault, from_account:{},to_vault:{}, amount: {}",
         from.key(),
@@ -29,24 +32,28 @@ pub fn transfer_from_user_to_pool_vault<'info>(
 }
 
 pub fn transfer_from_pool_vault_to_user<'info>(
-    pool: &Account<'info, PoolState>,
+    pool_state_loader: &AccountLoader<'info, PoolState>,
     from_vault: &Account<'info, TokenAccount>,
     to: &Account<'info, TokenAccount>,
     token_program: &Program<'info, Token>,
     amount: u64,
 ) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
     msg!(
         "withdraw from vault, from_vault:{}, to_account:{}, amount: {}",
         from_vault.key(),
         to.key(),
         amount
     );
+    let pool_state = pool_state_loader.load()?;
     let pool_state_seeds = [
         &POOL_SEED.as_bytes(),
-        &pool.amm_config.as_ref(),
-        &pool.token_mint_0.to_bytes() as &[u8],
-        &pool.token_mint_1.to_bytes() as &[u8],
-        &[pool.bump],
+        &pool_state.amm_config.as_ref(),
+        &pool_state.token_mint_0.to_bytes() as &[u8],
+        &pool_state.token_mint_1.to_bytes() as &[u8],
+        &[pool_state.bump],
     ];
     token::transfer(
         CpiContext::new_with_signer(
@@ -54,7 +61,7 @@ pub fn transfer_from_pool_vault_to_user<'info>(
             Transfer {
                 from: from_vault.to_account_info(),
                 to: to.to_account_info(),
-                authority: pool.to_account_info(),
+                authority: pool_state_loader.to_account_info(),
             },
             &[&pool_state_seeds[..]],
         ),

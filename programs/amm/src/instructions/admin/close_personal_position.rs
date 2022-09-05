@@ -8,7 +8,7 @@ pub struct ClosePersonalPosition<'info> {
     #[account(mut, address = crate::admin::id())]
     pub owner: Signer<'info>,
 
-    pub pool_state: Box<Account<'info, PoolState>>,
+    pub pool_state: AccountLoader<'info, PoolState>,
 
     #[account(mut, constraint = personal_position.pool_id == pool_state.key())]
     pub personal_position: Box<Account<'info, PersonalPositionState>>,

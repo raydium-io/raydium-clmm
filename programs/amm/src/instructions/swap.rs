@@ -21,34 +21,34 @@ pub struct SwapSingle<'info> {
     pub payer: Signer<'info>,
 
     /// The factory state to read protocol fees
-    #[account(address = pool_state.amm_config)]
+    #[account(address = pool_state.load()?.amm_config)]
     pub amm_config: Box<Account<'info, AmmConfig>>,
 
     /// The program account of the pool in which the swap will be performed
     #[account(mut)]
-    pub pool_state: Box<Account<'info, PoolState>>,
+    pub pool_state: AccountLoader<'info, PoolState>,
 
     /// The user token account for input token
     #[account(mut)]
-    pub input_token_account: Account<'info, TokenAccount>,
+    pub input_token_account: Box<Account<'info, TokenAccount>>,
 
     /// The user token account for output token
     #[account(mut)]
-    pub output_token_account: Account<'info, TokenAccount>,
+    pub output_token_account: Box<Account<'info, TokenAccount>>,
 
     /// The vault token account for input token
     #[account(mut)]
-    pub input_vault: Account<'info, TokenAccount>,
+    pub input_vault: Box<Account<'info, TokenAccount>>,
 
     /// The vault token account for output token
     #[account(mut)]
-    pub output_vault: Account<'info, TokenAccount>,
+    pub output_vault: Box<Account<'info, TokenAccount>>,
 
     #[account(mut, constraint = tick_array.load()?.amm_pool == pool_state.key())]
     pub tick_array: AccountLoader<'info, TickArrayState>,
 
     /// The program account for the most recent oracle observation
-    #[account(mut, address = pool_state.observation_key)]
+    #[account(mut, address = pool_state.load()?.observation_key)]
     pub observation_state: AccountLoader<'info, ObservationState>,
 
     /// SPL program for token transfers
@@ -60,26 +60,27 @@ pub struct SwapAccounts<'b, 'info> {
     pub signer: Signer<'info>,
 
     /// The user token account for input token
-    pub input_token_account: Account<'info, TokenAccount>,
+    pub input_token_account: Box<Account<'info, TokenAccount>>,
 
     /// The user token account for output token
-    pub output_token_account: Account<'info, TokenAccount>,
+    pub output_token_account: Box<Account<'info, TokenAccount>>,
 
     /// The vault token account for input token
-    pub input_vault: Account<'info, TokenAccount>,
+    pub input_vault: Box<Account<'info, TokenAccount>>,
 
     /// The vault token account for output token
-    pub output_vault: Account<'info, TokenAccount>,
+    pub output_vault: Box<Account<'info, TokenAccount>>,
 
     /// SPL program for token transfers
     pub token_program: Program<'info, Token>,
 
     /// The factory state to read protocol fees
-    pub amm_config: &'b Account<'info, AmmConfig>,
+    pub amm_config: &'b Box<Account<'info, AmmConfig>>,
 
     /// The program account of the pool in which the swap will be performed
-    pub pool_state: &'b mut Account<'info, PoolState>,
+    pub pool_state: &'b mut AccountLoader<'info, PoolState>,
 
+    /// The tick_array account of current or next initialized
     pub tick_array_state: &'b mut AccountLoader<'info, TickArrayState>,
 
     /// The program account for the oracle observation
@@ -135,28 +136,30 @@ struct StepComputations {
 pub fn swap_internal<'b, 'info>(
     ctx: &mut SwapAccounts<'b, 'info>,
     remaining_accounts: &[AccountInfo<'info>],
+    // pool_state: &mut RefMut<PoolState>,
     amount_specified: i64,
     sqrt_price_limit_x64: u128,
     zero_for_one: bool,
 ) -> Result<(i64, i64)> {
     require!(amount_specified != 0, ErrorCode::InvaildSwapAmountSpecified);
+    let mut pool_state = ctx.pool_state.load_mut()?;
     require!(
         if zero_for_one {
-            sqrt_price_limit_x64 < ctx.pool_state.sqrt_price_x64
+            sqrt_price_limit_x64 < pool_state.sqrt_price_x64
                 && sqrt_price_limit_x64 > tick_math::MIN_SQRT_PRICE_X64
         } else {
-            sqrt_price_limit_x64 > ctx.pool_state.sqrt_price_x64
+            sqrt_price_limit_x64 > pool_state.sqrt_price_x64
                 && sqrt_price_limit_x64 < tick_math::MAX_SQRT_PRICE_X64
         },
         ErrorCode::SqrtPriceLimitOverflow
     );
     require!(
         if zero_for_one {
-            ctx.input_vault.key() == ctx.pool_state.token_vault_0
-                && ctx.output_vault.key() == ctx.pool_state.token_vault_1
+            ctx.input_vault.key() == pool_state.token_vault_0
+                && ctx.output_vault.key() == pool_state.token_vault_1
         } else {
-            ctx.input_vault.key() == ctx.pool_state.token_vault_1
-                && ctx.output_vault.key() == ctx.pool_state.token_vault_0
+            ctx.input_vault.key() == pool_state.token_vault_1
+                && ctx.output_vault.key() == pool_state.token_vault_0
         },
         ErrorCode::InvalidInputPoolVault
     );
@@ -164,26 +167,24 @@ pub fn swap_internal<'b, 'info>(
     let amm_config = ctx.amm_config.deref();
 
     let cache = &mut SwapCache {
-        liquidity_start: ctx.pool_state.liquidity,
+        liquidity_start: pool_state.liquidity,
         block_timestamp: oracle::_block_timestamp(),
         protocol_fee_rate: amm_config.protocol_fee_rate,
     };
 
-    let updated_reward_infos = ctx
-        .pool_state
-        .update_reward_infos(cache.block_timestamp as u64)?;
+    let updated_reward_infos = pool_state.update_reward_infos(cache.block_timestamp as u64)?;
 
     let exact_input = amount_specified > 0;
 
     let mut state = SwapState {
         amount_specified_remaining: amount_specified,
         amount_calculated: 0,
-        sqrt_price_x64: ctx.pool_state.sqrt_price_x64,
-        tick: ctx.pool_state.tick_current,
+        sqrt_price_x64: pool_state.sqrt_price_x64,
+        tick: pool_state.tick_current,
         fee_growth_global_x64: if zero_for_one {
-            ctx.pool_state.fee_growth_global_0_x64
+            pool_state.fee_growth_global_0_x64
         } else {
-            ctx.pool_state.fee_growth_global_1_x64
+            pool_state.fee_growth_global_1_x64
         },
         protocol_fee: 0,
         liquidity: cache.liquidity_start,
@@ -198,8 +199,7 @@ pub fn swap_internal<'b, 'info>(
     // check tick_array account is owned by the pool
     require_keys_eq!(tick_array_current_loader.amm_pool, ctx.pool_state.key());
 
-    let mut current_vaild_tick_array_start_index = ctx
-        .pool_state
+    let mut current_vaild_tick_array_start_index = pool_state
         .get_first_initialized_tick_array(zero_for_one)
         .unwrap();
 
@@ -234,7 +234,7 @@ pub fn swap_internal<'b, 'info>(
         step.sqrt_price_start_x64 = state.sqrt_price_x64;
 
         let mut next_initialized_tick = if let Some(tick_state) = tick_array_current_loader
-            .next_initialized_tick(state.tick, ctx.pool_state.tick_spacing, zero_for_one)?
+            .next_initialized_tick(state.tick, pool_state.tick_spacing, zero_for_one)?
         {
             Box::new(*tick_state)
         } else {
@@ -249,9 +249,9 @@ pub fn swap_internal<'b, 'info>(
         if !next_initialized_tick.is_initialized() {
             current_vaild_tick_array_start_index =
                 tick_array_bit_map::next_initialized_tick_array_start_index(
-                    U1024(ctx.pool_state.tick_array_bitmap),
+                    U1024(pool_state.tick_array_bitmap),
                     current_vaild_tick_array_start_index,
-                    ctx.pool_state.tick_spacing.into(),
+                    pool_state.tick_spacing.into(),
                     zero_for_one,
                 )
                 .unwrap();
@@ -350,10 +350,10 @@ pub fn swap_internal<'b, 'info>(
                     if zero_for_one {
                         state.fee_growth_global_x64
                     } else {
-                        ctx.pool_state.fee_growth_global_0_x64
+                        pool_state.fee_growth_global_0_x64
                     },
                     if zero_for_one {
-                        ctx.pool_state.fee_growth_global_1_x64
+                        pool_state.fee_growth_global_1_x64
                     } else {
                         state.fee_growth_global_x64
                     },
@@ -393,38 +393,26 @@ pub fn swap_internal<'b, 'info>(
     }
 
     // update tick
-    if state.tick != ctx.pool_state.tick_current {
-        ctx.pool_state.tick_current = state.tick;
+    if state.tick != pool_state.tick_current {
+        pool_state.tick_current = state.tick;
     }
     // update the previous price to the observation
     let next_observation_index = observation_state
         .update_check(
             oracle::_block_timestamp(),
-            ctx.pool_state.sqrt_price_x64,
-            ctx.pool_state.observation_index,
-            ctx.pool_state.observation_update_duration.into(),
+            pool_state.sqrt_price_x64,
+            pool_state.observation_index,
+            pool_state.observation_update_duration.into(),
         )
         .unwrap();
     match next_observation_index {
-        Option::Some(index) => ctx.pool_state.observation_index = index,
+        Option::Some(index) => pool_state.observation_index = index,
         Option::None => {}
     }
-    ctx.pool_state.sqrt_price_x64 = state.sqrt_price_x64;
+    pool_state.sqrt_price_x64 = state.sqrt_price_x64;
 
     if cache.liquidity_start != state.liquidity {
-        ctx.pool_state.liquidity = state.liquidity;
-    }
-
-    if zero_for_one {
-        ctx.pool_state.fee_growth_global_0_x64 = state.fee_growth_global_x64;
-        if state.protocol_fee > 0 {
-            ctx.pool_state.protocol_fees_token_0 += state.protocol_fee;
-        }
-    } else {
-        ctx.pool_state.fee_growth_global_1_x64 = state.fee_growth_global_x64;
-        if state.protocol_fee > 0 {
-            ctx.pool_state.protocol_fees_token_1 += state.protocol_fee;
-        }
+        pool_state.liquidity = state.liquidity;
     }
 
     let (amount_0, amount_1) = if zero_for_one == exact_input {
@@ -439,6 +427,22 @@ pub fn swap_internal<'b, 'info>(
         )
     };
 
+    if zero_for_one {
+        pool_state.fee_growth_global_0_x64 = state.fee_growth_global_x64;
+        if state.protocol_fee > 0 {
+            pool_state.protocol_fees_token_0 += state.protocol_fee;
+        }
+        pool_state.swap_in_amount_token_0 += amount_0 as u128;
+        pool_state.swap_out_amount_token_1 += amount_1.neg() as u128;
+    } else {
+        pool_state.fee_growth_global_1_x64 = state.fee_growth_global_x64;
+        if state.protocol_fee > 0 {
+            pool_state.protocol_fees_token_1 += state.protocol_fee;
+        }
+        pool_state.swap_in_amount_token_1 += amount_1 as u128;
+        pool_state.swap_out_amount_token_0 += amount_0.neg() as u128;
+    }
+
     Ok((amount_0, amount_1))
 }
 
@@ -451,8 +455,7 @@ pub fn exact_internal<'b, 'info>(
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
 ) -> Result<u64> {
-    let pool_state_info = ctx.pool_state.to_account_info();
-    let zero_for_one = ctx.input_vault.mint == ctx.pool_state.token_mint_0;
+    let zero_for_one = ctx.input_vault.mint == ctx.pool_state.load()?.token_mint_0;
     let input_balance_before = ctx.input_vault.amount;
     let output_balance_before = ctx.output_vault.amount;
 
@@ -504,9 +507,6 @@ pub fn exact_internal<'b, 'info>(
             ctx.input_vault.clone(),
         )
     };
-    // check vault account is valid
-    assert!(vault_0.key() == ctx.pool_state.token_vault_0);
-    assert!(vault_1.key() == ctx.pool_state.token_vault_1);
 
     if zero_for_one {
         //  x -> y, deposit x token from user to pool vault.
@@ -518,18 +518,16 @@ pub fn exact_internal<'b, 'info>(
                 &ctx.token_program,
                 amount_0 as u64,
             )?;
-            ctx.pool_state.swap_in_amount_token_0 += amount_0 as u128;
         }
         // x -> y，transfer y token from pool vault to user.
         if amount_1 < 0 {
             transfer_from_pool_vault_to_user(
-                ctx.pool_state,
+                &ctx.pool_state,
                 &vault_1,
                 &token_account_1,
                 &ctx.token_program,
                 amount_1.neg() as u64,
             )?;
-            ctx.pool_state.swap_out_amount_token_1 += amount_1.neg() as u128;
         }
     } else {
         if amount_1 > 0 {
@@ -540,54 +538,32 @@ pub fn exact_internal<'b, 'info>(
                 &ctx.token_program,
                 amount_1 as u64,
             )?;
-            ctx.pool_state.swap_in_amount_token_1 += amount_1 as u128;
         }
         if amount_0 < 0 {
             transfer_from_pool_vault_to_user(
-                ctx.pool_state,
+                &ctx.pool_state,
                 &vault_0,
                 &token_account_0,
                 &ctx.token_program,
                 amount_0.neg() as u64,
             )?;
-            ctx.pool_state.swap_out_amount_token_0 += amount_0.neg() as u128;
         }
     }
+    ctx.output_vault.reload()?;
+    ctx.input_vault.reload()?;
 
+    let pool_state = ctx.pool_state.load()?;
     emit!(SwapEvent {
-        pool_state: pool_state_info.key(),
+        pool_state: ctx.pool_state.key(),
         sender: ctx.signer.key(),
         token_account_0: token_account_0.key(),
         token_account_1: token_account_1.key(),
         amount_0,
         amount_1,
-        sqrt_price_x64: ctx.pool_state.sqrt_price_x64,
-        liquidity: ctx.pool_state.liquidity,
-        tick: ctx.pool_state.tick_current
+        sqrt_price_x64: pool_state.sqrt_price_x64,
+        liquidity: pool_state.liquidity,
+        tick: pool_state.tick_current
     });
-
-    ctx.input_vault.reload()?;
-    ctx.output_vault.reload()?;
-
-    if zero_for_one {
-        require_eq!(
-            amount_0,
-            (ctx.input_vault.amount as i64 - input_balance_before as i64)
-        );
-        require_eq!(
-            amount_1,
-            (ctx.output_vault.amount as i64 - output_balance_before as i64)
-        );
-    } else {
-        require_eq!(
-            amount_1,
-            (ctx.input_vault.amount as i64 - input_balance_before as i64)
-        );
-        require_eq!(
-            amount_0,
-            (ctx.output_vault.amount as i64 - output_balance_before as i64)
-        );
-    }
 
     if is_base_input {
         Ok(output_balance_before
@@ -612,13 +588,13 @@ pub fn swap<'a, 'b, 'c, 'info>(
     let amount = exact_internal(
         &mut SwapAccounts {
             signer: ctx.accounts.payer.clone(),
-            amm_config: ctx.accounts.amm_config.as_mut(),
+            amm_config: &ctx.accounts.amm_config,
             input_token_account: ctx.accounts.input_token_account.clone(),
             output_token_account: ctx.accounts.output_token_account.clone(),
             input_vault: ctx.accounts.input_vault.clone(),
             output_vault: ctx.accounts.output_vault.clone(),
             token_program: ctx.accounts.token_program.clone(),
-            pool_state: ctx.accounts.pool_state.as_mut(),
+            pool_state: &mut ctx.accounts.pool_state,
             tick_array_state: &mut ctx.accounts.tick_array,
             observation_state: &mut ctx.accounts.observation_state,
         },

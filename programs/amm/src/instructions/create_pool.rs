@@ -2,7 +2,7 @@ use crate::libraries::tick_math;
 use crate::states::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use std::ops::DerefMut;
+use std::mem::size_of;
 
 #[derive(Accounts)]
 pub struct CreatePool<'info> {
@@ -24,9 +24,9 @@ pub struct CreatePool<'info> {
         ],
         bump,
         payer = pool_creator,
-        space = PoolState::LEN
+        space = 8 + size_of::<PoolState>()
     )]
-    pub pool_state: Box<Account<'info, PoolState>>,
+    pub pool_state: AccountLoader<'info, PoolState>,
 
     /// Token_0 mint, the key must grater then token_1 mint.
     #[account(
@@ -79,7 +79,7 @@ pub struct CreatePool<'info> {
 }
 
 pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()> {
-    let pool_state = ctx.accounts.pool_state.deref_mut();
+    let mut pool_state = ctx.accounts.pool_state.load_init()?;
     let observation_state_loader = initialize_observation_account(
         ctx.accounts.observation_state.to_account_info(),
         &crate::id(),
@@ -107,7 +107,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
     pool_state.tick_current = tick;
     pool_state.observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
     pool_state.reward_infos = [RewardInfo::new(ctx.accounts.pool_creator.key()); REWARD_NUM];
-    
+
     require_eq!(observation_state.initialized, false);
     require_keys_eq!(observation_state.amm_pool, Pubkey::default());
     pool_state.observation_key = ctx.accounts.observation_state.key();

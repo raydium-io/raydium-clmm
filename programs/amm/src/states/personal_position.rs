@@ -1,4 +1,3 @@
-use super::pool::RewardInfo;
 use crate::libraries::{big_num::U256, fixed_point_64, full_math::MulDiv};
 use crate::pool::REWARD_NUM;
 use anchor_lang::prelude::*;
@@ -56,8 +55,8 @@ impl PersonalPositionState {
             // Calculate reward delta.
             // If reward delta overflows, default to a zero value. This means the position loses all
             // rewards earned since the last time the position was modified or rewards were collected.
-            let reward_growth_delta = reward_growth_inside
-                .saturating_sub (curr_reward_info.growth_inside_last_x64);
+            let reward_growth_delta =
+                reward_growth_inside.saturating_sub(curr_reward_info.growth_inside_last_x64);
 
             let amount_owed_delta = U256::from(reward_growth_delta)
                 .mul_div_floor(U256::from(self.liquidity), U256::from(fixed_point_64::Q64))
@@ -180,5 +179,5 @@ pub struct CollectPersonalFeeEvent {
 #[event]
 pub struct UpdateRewardInfosEvent {
     /// Reward info
-    pub reward_infos: [RewardInfo; REWARD_NUM],
+    pub reward_growth_global_x64: [u128; REWARD_NUM],
 }

@@ -19,12 +19,12 @@ pub struct InitializeReward<'info> {
     pub funder_token_account: Box<Account<'info, TokenAccount>>,
 
     /// For check the reward_funder authority
-    #[account(address = pool_state.amm_config)]
+    #[account(address = pool_state.load()?.amm_config)]
     pub amm_config: Box<Account<'info, AmmConfig>>,
 
     /// Set reward for this pool
     #[account(mut)]
-    pub pool_state: Box<Account<'info, PoolState>>,
+    pub pool_state: AccountLoader<'info, PoolState>,
 
     /// Reward mint
     pub reward_token_mint: Box<Account<'info, Mint>>,
@@ -101,15 +101,8 @@ pub fn initialize_reward(
         .as_u64();
 
     require_gte!(ctx.accounts.funder_token_account.amount, reward_amount);
-    transfer_from_user_to_pool_vault(
-        &ctx.accounts.reward_funder,
-        &ctx.accounts.funder_token_account,
-        &ctx.accounts.reward_token_vault,
-        &ctx.accounts.token_program,
-        reward_amount,
-    )?;
 
-    let pool_state = &mut ctx.accounts.pool_state;
+    let mut pool_state = ctx.accounts.pool_state.load_mut()?;
     pool_state.initialize_reward(
         param.reward_index as usize,
         param.open_time,
@@ -118,6 +111,14 @@ pub fn initialize_reward(
         &ctx.accounts.reward_token_mint.key(),
         &ctx.accounts.reward_token_vault.key(),
         &ctx.accounts.reward_funder.key(),
+    )?;
+
+    transfer_from_user_to_pool_vault(
+        &ctx.accounts.reward_funder,
+        &ctx.accounts.funder_token_account,
+        &ctx.accounts.reward_token_vault,
+        &ctx.accounts.token_program,
+        reward_amount,
     )?;
 
     Ok(())
