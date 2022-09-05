@@ -114,6 +114,14 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         decrease_amount_1 + latest_fees_owed_1,
     )?;
 
+    let personal_position = &mut ctx.accounts.personal_position;
+    let reward_amounts = collect_rewards(
+        &ctx.accounts.pool_state,
+        ctx.remaining_accounts,
+        ctx.accounts.token_program.clone(),
+        personal_position,
+    )?;
+
     #[cfg(feature = "enable-log")]
     msg!(
         "decrease_amount_0:{}, fees_owed_0:{}, decrease_amount_1:{}, fees_owed_1:{}, reward_amounts:{:?}",
@@ -123,15 +131,6 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         latest_fees_owed_1,
         reward_amounts
     );
-
-    let personal_position = &mut ctx.accounts.personal_position;
-    let reward_amounts = collect_rewards(
-        &ctx.accounts.pool_state,
-        ctx.remaining_accounts,
-        ctx.accounts.token_program.clone(),
-        personal_position,
-    )?;
-
     emit!(DecreaseLiquidityEvent {
         position_nft_mint: personal_position.nft_mint,
         liquidity,
