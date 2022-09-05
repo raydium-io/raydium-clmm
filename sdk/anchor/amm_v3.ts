@@ -1623,12 +1623,10 @@ export type AmmV3 = {
       "name": "UpdateRewardInfosEvent",
       "fields": [
         {
-          "name": "rewardInfos",
+          "name": "rewardGrowthGlobalX64",
           "type": {
             "array": [
-              {
-                "defined": "RewardInfo"
-              },
+              "u128",
               3
             ]
           },
@@ -3536,12 +3534,10 @@ export const IDL: AmmV3 = {
       "name": "UpdateRewardInfosEvent",
       "fields": [
         {
-          "name": "rewardInfos",
+          "name": "rewardGrowthGlobalX64",
           "type": {
             "array": [
-              {
-                "defined": "RewardInfo"
-              },
+              "u128",
               3
             ]
           },

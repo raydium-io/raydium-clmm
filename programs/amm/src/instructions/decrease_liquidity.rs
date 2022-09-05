@@ -114,14 +114,6 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         decrease_amount_1 + latest_fees_owed_1,
     )?;
 
-    let personal_position = &mut ctx.accounts.personal_position;
-    let reward_amounts = collect_rewards(
-        &ctx.accounts.pool_state,
-        ctx.remaining_accounts,
-        ctx.accounts.token_program.clone(),
-        personal_position,
-    )?;
-
     #[cfg(feature = "enable-log")]
     msg!(
         "decrease_amount_0:{}, fees_owed_0:{}, decrease_amount_1:{}, fees_owed_1:{}, reward_amounts:{:?}",
@@ -131,6 +123,15 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         latest_fees_owed_1,
         reward_amounts
     );
+
+    let personal_position = &mut ctx.accounts.personal_position;
+    let reward_amounts = collect_rewards(
+        &ctx.accounts.pool_state,
+        ctx.remaining_accounts,
+        ctx.accounts.token_program.clone(),
+        personal_position,
+    )?;
+
     emit!(DecreaseLiquidityEvent {
         position_nft_mint: personal_position.nft_mint,
         liquidity,
@@ -254,17 +255,19 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
     token_program: Program<'info, Token>,
     personal_position_state: &mut PersonalPositionState,
 ) -> Result<[u64; REWARD_NUM]> {
-    let mut pool_state = pool_state_loader.load_mut()?;
-    let mut valid_reward_count = 0;
-    for item in pool_state.reward_infos {
-        if item.initialized() {
-            valid_reward_count = valid_reward_count + 1;
-        }
-    }
+    // let mut pool_state = pool_state_loader.load_mut()?;
+    // let mut valid_reward_count = 0;
+    // for item in pool_state.reward_infos {
+    //     if item.initialized() {
+    //         valid_reward_count = valid_reward_count + 1;
+    //     }
+    // }
+    check_required_accounts_length(pool_state_loader, remaining_accounts)?;
+
     let remaining_accounts_len = remaining_accounts.len();
-    if remaining_accounts_len != valid_reward_count * 2 {
-        return err!(ErrorCode::InvalidRewardInputAccountNumber);
-    }
+    // if remaining_accounts_len != valid_reward_count * 2 {
+    //     return err!(ErrorCode::InvalidRewardInputAccountNumber);
+    // }
     let mut reward_amounts: [u64; REWARD_NUM] = [0, 0, 0];
     let mut remaining_accounts = remaining_accounts.iter();
     for i in 0..remaining_accounts_len / 2 {
@@ -275,7 +278,7 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
         require_keys_eq!(reward_token_vault.mint, recipient_token_account.mint);
         require_keys_eq!(
             reward_token_vault.key(),
-            pool_state.reward_infos[i].token_vault
+            pool_state_loader.load_mut()?.reward_infos[i].token_vault
         );
 
         let reward_amount_owed = personal_position_state.reward_infos[i].reward_amount_owed;
@@ -298,6 +301,9 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
             );
             personal_position_state.reward_infos[i].reward_amount_owed =
                 reward_amount_owed.checked_sub(transfer_amount).unwrap();
+            pool_state_loader
+                .load_mut()?
+                .add_reward_clamed(i, transfer_amount)?;
 
             transfer_from_pool_vault_to_user(
                 &pool_state_loader,
@@ -306,11 +312,27 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
                 &token_program,
                 transfer_amount,
             )?;
-
-            pool_state.add_reward_clamed(i, transfer_amount)?;
         }
         reward_amounts[i] = transfer_amount
     }
 
     Ok(reward_amounts)
+}
+
+fn check_required_accounts_length(
+    pool_state_loader: &AccountLoader<PoolState>,
+    remaining_accounts: &[AccountInfo],
+) -> Result<()> {
+    let pool_state = pool_state_loader.load()?;
+    let mut valid_reward_count = 0;
+    for item in pool_state.reward_infos {
+        if item.initialized() {
+            valid_reward_count = valid_reward_count + 1;
+        }
+    }
+    let remaining_accounts_len = remaining_accounts.len();
+    if remaining_accounts_len != valid_reward_count * 2 {
+        return err!(ErrorCode::InvalidRewardInputAccountNumber);
+    }
+    Ok(())
 }

@@ -16,7 +16,7 @@ pub fn update_reward_infos<'a, 'b, 'c, 'info>(
     let updated_reward_infos = pool_state.update_reward_infos(clock.unix_timestamp as u64)?;
 
     emit!(UpdateRewardInfosEvent {
-        reward_infos: updated_reward_infos
+        reward_growth_global_x64: RewardInfo::get_reward_growths(&updated_reward_infos)
     });
 
     Ok(())

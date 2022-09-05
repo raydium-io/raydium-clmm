@@ -4,6 +4,8 @@ use crate::libraries::{liquidity_math, tick_math};
 use crate::pool::{RewardInfo, REWARD_NUM};
 use crate::util::*;
 use anchor_lang::{prelude::*, system_program};
+#[cfg(feature = "enable-log")]
+use std::convert::identity;
 use std::mem::size_of;
 
 pub const TICK_ARRAY_SEED: &str = "tick_array";
@@ -24,8 +26,6 @@ pub struct TickArrayState {
 }
 
 impl TickArrayState {
-    // pub const LEN: usize = 8 + 32 + 4 + TickState::LEN * TICK_ARRAY_SIZE_USIZE + 1 + 115;
-
     pub fn get_or_create_tick_array<'info>(
         payer: AccountInfo<'info>,
         tick_array_account_info: AccountInfo<'info>,
@@ -255,7 +255,7 @@ impl TickState {
         fee_growth_global_0_x64: u128,
         fee_growth_global_1_x64: u128,
         upper: bool,
-        reward_growths_outside_x64: [u128; REWARD_NUM],
+        reward_infos: &[RewardInfo; REWARD_NUM],
     ) -> Result<bool> {
         let liquidity_gross_before = self.liquidity_gross;
         let liquidity_gross_after =
@@ -269,7 +269,7 @@ impl TickState {
             if self.tick <= tick_current {
                 self.fee_growth_outside_0_x64 = fee_growth_global_0_x64;
                 self.fee_growth_outside_1_x64 = fee_growth_global_1_x64;
-                self.reward_growths_outside_x64 = reward_growths_outside_x64;
+                self.reward_growths_outside_x64 = RewardInfo::get_reward_growths(reward_infos);
             }
         }
 
@@ -425,20 +425,21 @@ pub fn get_reward_growths_inside(
                 .checked_sub(tick_upper.reward_growths_outside_x64[i])
                 .unwrap()
         };
-        #[cfg(feature = "enable-log")]
-        msg!(
-            "get_reward_growths_inside,i:{},reward_growths_global:{},reward_growths_below:{},reward_growths_above:{}",
-            i,
-            reward_infos[i].reward_growth_global_x64,
-            reward_growths_below,
-            reward_growths_above
-        );
         reward_growths_inside[i] = reward_infos[i]
             .reward_growth_global_x64
             .checked_sub(reward_growths_below)
             .unwrap()
             .checked_sub(reward_growths_above)
             .unwrap();
+        #[cfg(feature = "enable-log")]
+        msg!(
+            "get_reward_growths_inside,i:{},reward_growth_global:{},reward_growth_below:{},reward_growth_above:{}, reward_growth_inside:{}",
+            i,
+            identity(reward_infos[i].reward_growth_global_x64),
+            reward_growths_below,
+            reward_growths_above,
+            reward_growths_inside[i]
+        );
     }
 
     reward_growths_inside

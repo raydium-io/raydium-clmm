@@ -243,15 +243,20 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             token_program: ctx.accounts.token_program.clone(),
         };
 
-        let (amount_0, amount_1) = add_liquidity(
-            &mut add_liquidity_context,
-            pool_state,
-            liquidity,
-            amount_0_max,
-            amount_1_max,
-            tick_lower_index,
-            tick_upper_index,
-        )?;
+        let mut amount_0: u64 = 0;
+        let mut amount_1: u64 = 0;
+
+        if liquidity > 0 {
+            (amount_0, amount_1) = add_liquidity(
+                &mut add_liquidity_context,
+                pool_state,
+                liquidity,
+                amount_0_max,
+                amount_1_max,
+                tick_lower_index,
+                tick_upper_index,
+            )?;
+        }
 
         let personal_position = &mut ctx.accounts.personal_position;
         personal_position.bump = *ctx.bumps.get("personal_position").unwrap();
@@ -433,12 +438,32 @@ pub fn update_position<'info>(
 ) -> Result<(bool, bool)> {
     let clock = Clock::get()?;
     let updated_reward_infos = pool_state.update_reward_infos(clock.unix_timestamp as u64)?;
-    let reward_growths_outside_x64 = RewardInfo::get_reward_growths(&updated_reward_infos);
-    #[cfg(feature = "enable-log")]
-    msg!(
-        "update_position, pool reward_growths_outside_x64:{:?}",
-        reward_growths_outside_x64
+
+    // Update reward outside if needed
+    let reward_growths_inside = tick_array::get_reward_growths_inside(
+        tick_lower_state.deref(),
+        tick_upper_state.deref(),
+        pool_state.tick_current,
+        &updated_reward_infos,
     );
+
+    // Update fees
+    let (fee_growth_inside_0_x64, fee_growth_inside_1_x64) = tick_array::get_fee_growth_inside(
+        tick_lower_state.deref(),
+        tick_upper_state.deref(),
+        pool_state.tick_current,
+        pool_state.fee_growth_global_0_x64,
+        pool_state.fee_growth_global_1_x64,
+    );
+
+    protocol_position_state.update(
+        tick_lower_state.tick,
+        tick_upper_state.tick,
+        liquidity_delta,
+        fee_growth_inside_0_x64,
+        fee_growth_inside_1_x64,
+        reward_growths_inside,
+    )?;
 
     let mut flipped_lower = false;
     let mut flipped_upper = false;
@@ -452,7 +477,7 @@ pub fn update_position<'info>(
             pool_state.fee_growth_global_0_x64,
             pool_state.fee_growth_global_1_x64,
             false,
-            reward_growths_outside_x64,
+            &updated_reward_infos,
         )?;
         flipped_upper = tick_upper_state.update(
             pool_state.tick_current,
@@ -460,7 +485,7 @@ pub fn update_position<'info>(
             pool_state.fee_growth_global_0_x64,
             pool_state.fee_growth_global_1_x64,
             true,
-            reward_growths_outside_x64,
+            &updated_reward_infos,
         )?;
         #[cfg(feature = "enable-log")]
         msg!(
@@ -469,32 +494,6 @@ pub fn update_position<'info>(
             identity(tick_lower_state.reward_growths_outside_x64)
         );
     }
-    // Update fees accrued to the position
-    let (fee_growth_inside_0_x64, fee_growth_inside_1_x64) = tick_array::get_fee_growth_inside(
-        tick_lower_state.deref(),
-        tick_upper_state.deref(),
-        pool_state.tick_current,
-        pool_state.fee_growth_global_0_x64,
-        pool_state.fee_growth_global_1_x64,
-    );
-
-    // Update reward accrued to the position
-    let reward_growths_inside = tick_array::get_reward_growths_inside(
-        tick_lower_state.deref(),
-        tick_upper_state.deref(),
-        pool_state.tick_current,
-        &updated_reward_infos,
-    );
-    #[cfg(feature = "enable-log")]
-    msg!("reward_growths_inside:{:?}", reward_growths_inside);
-    protocol_position_state.update(
-        tick_lower_state.tick,
-        tick_upper_state.tick,
-        liquidity_delta,
-        fee_growth_inside_0_x64,
-        fee_growth_inside_1_x64,
-        reward_growths_inside,
-    )?;
     if liquidity_delta < 0 {
         if flipped_lower {
             tick_lower_state.clear();

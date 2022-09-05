@@ -1623,12 +1623,10 @@
       "name": "UpdateRewardInfosEvent",
       "fields": [
         {
-          "name": "rewardInfos",
+          "name": "rewardGrowthGlobalX64",
           "type": {
             "array": [
-              {
-                "defined": "RewardInfo"
-              },
+              "u128",
               3
             ]
           },

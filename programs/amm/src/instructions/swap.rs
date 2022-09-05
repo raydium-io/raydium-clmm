@@ -415,18 +415,6 @@ pub fn swap_internal<'b, 'info>(
         pool_state.liquidity = state.liquidity;
     }
 
-    if zero_for_one {
-        pool_state.fee_growth_global_0_x64 = state.fee_growth_global_x64;
-        if state.protocol_fee > 0 {
-            pool_state.protocol_fees_token_0 += state.protocol_fee;
-        }
-    } else {
-        pool_state.fee_growth_global_1_x64 = state.fee_growth_global_x64;
-        if state.protocol_fee > 0 {
-            pool_state.protocol_fees_token_1 += state.protocol_fee;
-        }
-    }
-
     let (amount_0, amount_1) = if zero_for_one == exact_input {
         (
             amount_specified.saturating_sub(state.amount_specified_remaining),
@@ -439,82 +427,21 @@ pub fn swap_internal<'b, 'info>(
         )
     };
 
-    let (token_account_0, token_account_1, vault_0, vault_1) = if zero_for_one {
-        (
-            ctx.input_token_account.clone(),
-            ctx.output_token_account.clone(),
-            ctx.input_vault.clone(),
-            ctx.output_vault.clone(),
-        )
-    } else {
-        (
-            ctx.output_token_account.clone(),
-            ctx.input_token_account.clone(),
-            ctx.output_vault.clone(),
-            ctx.input_vault.clone(),
-        )
-    };
-    // check vault account is valid
-    assert!(vault_0.key() == pool_state.token_vault_0);
-    assert!(vault_1.key() == pool_state.token_vault_1);
-
     if zero_for_one {
-        //  x -> y, deposit x token from user to pool vault.
-        if amount_0 > 0 {
-            transfer_from_user_to_pool_vault(
-                &ctx.signer,
-                &token_account_0,
-                &vault_0,
-                &ctx.token_program,
-                amount_0 as u64,
-            )?;
-            pool_state.swap_in_amount_token_0 += amount_0 as u128;
+        pool_state.fee_growth_global_0_x64 = state.fee_growth_global_x64;
+        if state.protocol_fee > 0 {
+            pool_state.protocol_fees_token_0 += state.protocol_fee;
         }
-        // x -> y，transfer y token from pool vault to user.
-        if amount_1 < 0 {
-            transfer_from_pool_vault_to_user(
-                &ctx.pool_state,
-                &vault_1,
-                &token_account_1,
-                &ctx.token_program,
-                amount_1.neg() as u64,
-            )?;
-            pool_state.swap_out_amount_token_1 += amount_1.neg() as u128;
-        }
+        pool_state.swap_in_amount_token_0 += amount_0 as u128;
+        pool_state.swap_out_amount_token_1 += amount_1.neg() as u128;
     } else {
-        if amount_1 > 0 {
-            transfer_from_user_to_pool_vault(
-                &ctx.signer,
-                &token_account_1,
-                &vault_1,
-                &ctx.token_program,
-                amount_1 as u64,
-            )?;
-            pool_state.swap_in_amount_token_1 += amount_1 as u128;
+        pool_state.fee_growth_global_1_x64 = state.fee_growth_global_x64;
+        if state.protocol_fee > 0 {
+            pool_state.protocol_fees_token_1 += state.protocol_fee;
         }
-        if amount_0 < 0 {
-            transfer_from_pool_vault_to_user(
-                &ctx.pool_state,
-                &vault_0,
-                &token_account_0,
-                &ctx.token_program,
-                amount_0.neg() as u64,
-            )?;
-            pool_state.swap_out_amount_token_0 += amount_0.neg() as u128;
-        }
+        pool_state.swap_in_amount_token_1 += amount_1 as u128;
+        pool_state.swap_out_amount_token_0 += amount_0.neg() as u128;
     }
-
-    emit!(SwapEvent {
-        pool_state: ctx.pool_state.key(),
-        sender: ctx.signer.key(),
-        token_account_0: token_account_0.key(),
-        token_account_1: token_account_1.key(),
-        amount_0,
-        amount_1,
-        sqrt_price_x64: pool_state.sqrt_price_x64,
-        liquidity: pool_state.liquidity,
-        tick: pool_state.tick_current
-    });
 
     Ok((amount_0, amount_1))
 }
@@ -565,28 +492,78 @@ pub fn exact_internal<'b, 'info>(
         ErrorCode::TooSmallInputOrOutputAmount
     );
 
-    ctx.input_vault.reload()?;
-    ctx.output_vault.reload()?;
+    let (token_account_0, token_account_1, vault_0, vault_1) = if zero_for_one {
+        (
+            ctx.input_token_account.clone(),
+            ctx.output_token_account.clone(),
+            ctx.input_vault.clone(),
+            ctx.output_vault.clone(),
+        )
+    } else {
+        (
+            ctx.output_token_account.clone(),
+            ctx.input_token_account.clone(),
+            ctx.output_vault.clone(),
+            ctx.input_vault.clone(),
+        )
+    };
 
     if zero_for_one {
-        require_eq!(
-            amount_0,
-            (ctx.input_vault.amount as i64 - input_balance_before as i64)
-        );
-        require_eq!(
-            amount_1,
-            (ctx.output_vault.amount as i64 - output_balance_before as i64)
-        );
+        //  x -> y, deposit x token from user to pool vault.
+        if amount_0 > 0 {
+            transfer_from_user_to_pool_vault(
+                &ctx.signer,
+                &token_account_0,
+                &vault_0,
+                &ctx.token_program,
+                amount_0 as u64,
+            )?;
+        }
+        // x -> y，transfer y token from pool vault to user.
+        if amount_1 < 0 {
+            transfer_from_pool_vault_to_user(
+                &ctx.pool_state,
+                &vault_1,
+                &token_account_1,
+                &ctx.token_program,
+                amount_1.neg() as u64,
+            )?;
+        }
     } else {
-        require_eq!(
-            amount_1,
-            (ctx.input_vault.amount as i64 - input_balance_before as i64)
-        );
-        require_eq!(
-            amount_0,
-            (ctx.output_vault.amount as i64 - output_balance_before as i64)
-        );
+        if amount_1 > 0 {
+            transfer_from_user_to_pool_vault(
+                &ctx.signer,
+                &token_account_1,
+                &vault_1,
+                &ctx.token_program,
+                amount_1 as u64,
+            )?;
+        }
+        if amount_0 < 0 {
+            transfer_from_pool_vault_to_user(
+                &ctx.pool_state,
+                &vault_0,
+                &token_account_0,
+                &ctx.token_program,
+                amount_0.neg() as u64,
+            )?;
+        }
     }
+    ctx.output_vault.reload()?;
+    ctx.input_vault.reload()?;
+
+    let pool_state = ctx.pool_state.load()?;
+    emit!(SwapEvent {
+        pool_state: ctx.pool_state.key(),
+        sender: ctx.signer.key(),
+        token_account_0: token_account_0.key(),
+        token_account_1: token_account_1.key(),
+        amount_0,
+        amount_1,
+        sqrt_price_x64: pool_state.sqrt_price_x64,
+        liquidity: pool_state.liquidity,
+        tick: pool_state.tick_current
+    });
 
     if is_base_input {
         Ok(output_balance_before

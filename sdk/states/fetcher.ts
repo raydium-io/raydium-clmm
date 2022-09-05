@@ -3,13 +3,9 @@ import { PublicKey } from "@solana/web3.js";
 import { AmmV3 } from "../anchor/amm_v3";
 import {
   PoolState,
-  TickState,
   ProtocolPositionState,
   ObservationState,
-  Observation,
   AmmConfig,
-  PositionRewardInfo,
-  RewardInfo,
   TickArrayState,
   PersonalPositionState,
 } from "./states";
@@ -26,11 +22,7 @@ export class StateFetcher {
   }
 
   public async getPoolState(address: PublicKey): Promise<PoolState> {
-    const aa = await this.program.account.poolState.fetch(address)
-    console.log("-------------------------------",aa.tickArrayBitmap)
-    console.log("-------------------------------",aa.tickArrayBitmap[0].toString())
-    console.log("-------------------------------",aa.tickArrayBitmap[1].toString())
-    return aa as PoolState;
+    return await this.program.account.poolState.fetch(address) as PoolState;
   }
 
   public async getMultiplePoolStates(

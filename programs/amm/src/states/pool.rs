@@ -8,6 +8,8 @@ use crate::libraries::{
 };
 use crate::states::{MAX_TICK_ARRAY_START_INDEX, MIN_TICK_ARRAY_START_INDEX, TICK_ARRAY_SIZE};
 use anchor_lang::prelude::*;
+#[cfg(feature = "enable-log")]
+use std::convert::identity;
 use std::ops::BitXor;
 
 /// Seed to derive account address and signature
@@ -219,27 +221,27 @@ impl PoolState {
                     "reward_index:{},latest_update_timestamp:{},reward_info.reward_last_update_time:{},time_delta:{},reward_emission_per_second_x64:{},reward_growth_delta:{},reward_info.reward_growth_global_x64:{}",
                     i,
                     latest_update_timestamp,
-                    reward_info.last_update_time,
+                    identity(reward_info.last_update_time),
                     time_delta,
-                    reward_info.emissions_per_second_x64,
+                    identity(reward_info.emissions_per_second_x64),
                     reward_growth_delta,
-                    reward_info.reward_growth_global_x64
+                    identity(reward_info.reward_growth_global_x64)
                 );
             }
             reward_info.last_update_time = latest_update_timestamp;
             // update reward state
-            // if latest_update_timestamp >= reward_info.open_time
-            //     && latest_update_timestamp < reward_info.end_time
-            // {
-            //     reward_info.reward_state = RewardState::Opening as u8;
-            // } else if latest_update_timestamp == next_reward_infos[i].end_time {
-            //     next_reward_infos[i].reward_state = RewardState::Ended as u8;
-            // }
+            if latest_update_timestamp >= reward_info.open_time
+                && latest_update_timestamp < reward_info.end_time
+            {
+                reward_info.reward_state = RewardState::Opening as u8;
+            } else if latest_update_timestamp == next_reward_infos[i].end_time {
+                next_reward_infos[i].reward_state = RewardState::Ended as u8;
+            }
         }
         self.reward_infos = next_reward_infos;
         #[cfg(feature = "enable-log")]
         msg!("update pool reward info, reward_0_total_emissioned:{}, reward_1_total_emissioned:{},reward_2_total_emissioned:{},pool.liquidity:{}", 
-        self.reward_infos[0].reward_total_emissioned,self.reward_infos[1].reward_total_emissioned,self.reward_infos[2].reward_total_emissioned, self.liquidity);
+        identity(self.reward_infos[0].reward_total_emissioned),identity(self.reward_infos[1].reward_total_emissioned),identity(self.reward_infos[2].reward_total_emissioned), identity(self.liquidity));
         Ok(next_reward_infos)
     }
 
@@ -300,8 +302,12 @@ pub enum RewardState {
     Ended,
 }
 
-#[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Default, Debug, PartialEq)]
+#[zero_copy]
+#[repr(packed)]
+#[derive(Default, Debug)]
 pub struct RewardInfo {
+    /// Reward state
+    pub reward_state: u8,
     /// Reward open time
     pub open_time: u64,
     /// Reward end time
@@ -326,7 +332,6 @@ pub struct RewardInfo {
 }
 
 impl RewardInfo {
-    pub const LEN: usize = 8 + 8 + 8 + 16 + 8 + 8 + 32 + 32 + 32 + 16;
     /// Creates a new RewardInfo
     pub fn new(authority: Pubkey) -> Self {
         Self {
