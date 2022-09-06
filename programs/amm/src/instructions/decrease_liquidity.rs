@@ -53,11 +53,11 @@ pub struct DecreaseLiquidity<'info> {
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
     /// Stores init state for the lower tick
-    #[account(mut, constraint = tick_array_lower.load()?.amm_pool == pool_state.key())]
+    #[account(mut, constraint = tick_array_lower.load()?.pool_id == pool_state.key())]
     pub tick_array_lower: AccountLoader<'info, TickArrayState>,
 
     /// Stores init state for the upper tick
-    #[account(mut, constraint = tick_array_upper.load()?.amm_pool == pool_state.key())]
+    #[account(mut, constraint = tick_array_upper.load()?.pool_id == pool_state.key())]
     pub tick_array_upper: AccountLoader<'info, TickArrayState>,
 
     /// The destination token account for receive amount_0

@@ -44,7 +44,7 @@ pub struct SwapSingle<'info> {
     #[account(mut)]
     pub output_vault: Box<Account<'info, TokenAccount>>,
 
-    #[account(mut, constraint = tick_array.load()?.amm_pool == pool_state.key())]
+    #[account(mut, constraint = tick_array.load()?.pool_id == pool_state.key())]
     pub tick_array: AccountLoader<'info, TickArrayState>,
 
     /// The program account for the most recent oracle observation
@@ -192,12 +192,12 @@ pub fn swap_internal<'b, 'info>(
 
     let mut observation_state = ctx.observation_state.load_mut()?;
     // check observation account is owned by the pool
-    require_keys_eq!(observation_state.amm_pool, ctx.pool_state.key());
+    require_keys_eq!(observation_state.pool_id, ctx.pool_state.key());
     let mut remaining_accounts_iter = remaining_accounts.iter();
 
     let mut tick_array_current_loader = ctx.tick_array_state.load_mut()?;
     // check tick_array account is owned by the pool
-    require_keys_eq!(tick_array_current_loader.amm_pool, ctx.pool_state.key());
+    require_keys_eq!(tick_array_current_loader.pool_id, ctx.pool_state.key());
 
     let mut current_vaild_tick_array_start_index = pool_state
         .get_first_initialized_tick_array(zero_for_one)

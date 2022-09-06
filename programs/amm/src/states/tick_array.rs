@@ -6,7 +6,6 @@ use crate::util::*;
 use anchor_lang::{prelude::*, system_program};
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
-use std::mem::size_of;
 
 pub const TICK_ARRAY_SEED: &str = "tick_array";
 pub const TICK_ARRAY_SIZE_USIZE: usize = 60;
@@ -17,7 +16,7 @@ pub const MAX_TICK_ARRAY_START_INDEX: i32 = 306600;
 #[account(zero_copy)]
 #[repr(packed)]
 pub struct TickArrayState {
-    pub amm_pool: Pubkey,
+    pub pool_id: Pubkey,
     pub start_tick_index: i32,
     pub ticks: [TickState; TICK_ARRAY_SIZE_USIZE],
     pub initialized_tick_count: u8,
@@ -26,6 +25,8 @@ pub struct TickArrayState {
 }
 
 impl TickArrayState {
+    pub const LEN: usize = 8 + 32 + 4 + TickState::LEN * TICK_ARRAY_SIZE_USIZE + 1 + 115;
+
     pub fn get_or_create_tick_array<'info>(
         payer: AccountInfo<'info>,
         tick_array_account_info: AccountInfo<'info>,
@@ -55,7 +56,7 @@ impl TickArrayState {
                     &tick_array_start_index.to_be_bytes(),
                     &[bump],
                 ],
-                8 + size_of::<TickArrayState>(),
+                TickArrayState::LEN,
             )?;
             let tick_array_state_loader = AccountLoader::<TickArrayState>::try_from_unchecked(
                 &crate::id(),
@@ -89,7 +90,7 @@ impl TickArrayState {
     ) -> Result<()> {
         require_eq!(0, start_index % (TICK_ARRAY_SIZE * (tick_spacing) as i32));
         self.start_tick_index = start_index;
-        self.amm_pool = pool_key;
+        self.pool_id = pool_key;
         Ok(())
     }
 
@@ -204,7 +205,7 @@ impl Default for TickArrayState {
     #[inline]
     fn default() -> TickArrayState {
         TickArrayState {
-            amm_pool: Pubkey::default(),
+            pool_id: Pubkey::default(),
             ticks: [TickState::default(); TICK_ARRAY_SIZE_USIZE],
             start_tick_index: 0,
             initialized_tick_count: 0,

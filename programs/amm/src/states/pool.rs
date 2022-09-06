@@ -90,6 +90,30 @@ pub struct PoolState {
 }
 
 impl PoolState {
+    pub const LEN: usize = 8
+        + 1
+        + 32 * 7
+        + 1
+        + 1
+        + 2
+        + 16
+        + 16
+        + 4
+        + 2
+        + 2
+        + 16
+        + 16
+        + 8
+        + 8
+        + 16
+        + 16
+        + 16
+        + 16
+        + 8
+        + RewardInfo::LEN * REWARD_NUM
+        + 8 * 16
+        + 512;
+
     pub fn key(&self) -> Pubkey {
         Pubkey::create_program_address(
             &[
@@ -332,6 +356,8 @@ pub struct RewardInfo {
 }
 
 impl RewardInfo {
+    pub const LEN: usize = 1 + 8 + 8 + 8 + 16 + 8 + 8 + 32 + 32 + 32 + 16;
+
     /// Creates a new RewardInfo
     pub fn new(authority: Pubkey) -> Self {
         Self {

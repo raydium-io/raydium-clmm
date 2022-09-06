@@ -30,7 +30,7 @@ impl Observation {
 pub struct ObservationState {
     /// Whether the ObservationState is initialized
     pub initialized: bool,
-    pub amm_pool: Pubkey,
+    pub pool_id: Pubkey,
     /// observation array
     pub observations: [Observation; OBSERVATION_NUM],
     /// padding for feature update
@@ -42,7 +42,7 @@ impl Default for ObservationState {
     fn default() -> ObservationState {
         ObservationState {
             initialized: false,
-            amm_pool: Pubkey::default(),
+            pool_id: Pubkey::default(),
             observations: [Observation::default(); OBSERVATION_NUM],
             padding: [0u128; 5],
         }

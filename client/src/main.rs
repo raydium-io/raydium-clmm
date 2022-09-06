@@ -766,7 +766,7 @@ fn main() -> Result<()> {
                             let tick_array = deserialize_anchor_account::<
                                 raydium_amm_v3::states::TickArrayState,
                             >(item.1)?;
-                            if pool_id == tick_array.amm_pool {
+                            if pool_id == tick_array.pool_id {
                                 close_pool.pool_tick_arrays.push(item.0);
                             }
                         } else if data_len == raydium_amm_v3::states::ObservationState::LEN {
@@ -774,7 +774,7 @@ fn main() -> Result<()> {
                             let pool_observation = deserialize_anchor_account::<
                                 raydium_amm_v3::states::ObservationState,
                             >(item.1)?;
-                            if pool_id == pool_observation.amm_pool {
+                            if pool_id == pool_observation.pool_id {
                                 close_pool.pool_observation = Some(item.0);
                             }
                         } else if data_len == raydium_amm_v3::states::ProtocolPositionState::LEN {

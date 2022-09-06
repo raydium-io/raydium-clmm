@@ -12,7 +12,7 @@ pub struct ClosePool<'info> {
     pub pool_state: AccountLoader<'info, PoolState>,
 
     /// The program account for the oracle observation
-    #[account(mut, constraint = observation_state.load()?.amm_pool == pool_state.key())]
+    #[account(mut, constraint = observation_state.load()?.pool_id == pool_state.key())]
     pub observation_state: AccountLoader<'info, ObservationState>,
 }
 
