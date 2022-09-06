@@ -225,6 +225,28 @@ pub fn admin_close_protocol_position_instr(
     Ok(instructions)
 }
 
+pub fn admin_close_pool_instr(
+    config: &ClientConfig,
+    pool_account_key: Pubkey,
+    obvservation_key: Pubkey,
+) -> Result<Vec<Instruction>> {
+    let admin = read_keypair_file(&config.admin_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(admin));
+    let program = client.program(config.raydium_v3_program);
+    let instructions = program
+        .request()
+        .accounts(raydium_accounts::ClosePool {
+            owner: program.payer(),
+            pool_state: pool_account_key,
+            observation_state: obvservation_key,
+        })
+        .args(raydium_instruction::ClosePool)
+        .instructions()?;
+    Ok(instructions)
+}
+
 pub fn open_position_instr(
     config: &ClientConfig,
     pool_account_key: Pubkey,

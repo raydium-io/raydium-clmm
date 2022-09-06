@@ -21,3 +21,6 @@ pub use close_personal_position::*;
 
 pub mod close_protocol_position;
 pub use close_protocol_position::*;
+
+pub mod close_pool;
+pub use close_pool::*;

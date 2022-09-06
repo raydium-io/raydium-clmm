@@ -113,6 +113,11 @@ pub mod amm_v3 {
         )
     }
 
+    /// close_pool
+    pub fn close_pool(ctx: Context<ClosePool>) -> Result<()> {
+        instructions::close_pool(ctx)
+    }
+
     /// Initialize a reward info for a given pool and reward index
     ///
     /// # Arguments

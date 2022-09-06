@@ -14,6 +14,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     transaction::Transaction,
 };
+use std::mem::size_of;
 use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -37,6 +38,16 @@ pub struct ClientConfig {
     mint1: Option<Pubkey>,
     pool_id_account: Option<Pubkey>,
     amm_config_index: u16,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct PoolAccounts {
+    pool_id: Option<Pubkey>,
+    pool_config: Option<Pubkey>,
+    pool_observation: Option<Pubkey>,
+    pool_protocol_positions: Vec<Pubkey>,
+    pool_personal_positions: Vec<Pubkey>,
+    pool_tick_arrays: Vec<Pubkey>,
 }
 
 fn load_cfg(client_config: &String) -> Result<ClientConfig> {
@@ -731,6 +742,87 @@ fn main() -> Result<()> {
                     println!(
                         "invalid command: [admin_close_protocol_position tick_lower tick_upper]"
                     );
+                }
+            }
+            "admin_close_pool" => {
+                if v.len() == 2 {
+                    let pool_id = Pubkey::from_str(&v[1]).unwrap();
+                    // check all accounts have been closed except amm_config and pool, observation
+                    let rsps = rpc_client.get_program_accounts(&pool_config.raydium_v3_program)?;
+                    let mut close_pool = PoolAccounts::default();
+                    for item in rsps {
+                        let data_len = item.1.data.len();
+                        if data_len == size_of::<raydium_amm_v3::states::PoolState>() + 8 {
+                            println!("pool_id:{}", item.0);
+                            if pool_id == item.0 {
+                                close_pool.pool_id = Some(pool_id);
+                            }
+                        } else if data_len == raydium_amm_v3::states::AmmConfig::LEN {
+                            println!("config_id:{}", item.0);
+                        } else if data_len
+                            == size_of::<raydium_amm_v3::states::TickArrayState>() + 8
+                        {
+                            println!("tick_array:{}", item.0);
+                            let tick_array = deserialize_anchor_account::<
+                                raydium_amm_v3::states::TickArrayState,
+                            >(item.1)?;
+                            if pool_id == tick_array.amm_pool {
+                                close_pool.pool_tick_arrays.push(item.0);
+                            }
+                        } else if data_len == raydium_amm_v3::states::ObservationState::LEN {
+                            println!("observation:{}", item.0);
+                            let pool_observation = deserialize_anchor_account::<
+                                raydium_amm_v3::states::ObservationState,
+                            >(item.1)?;
+                            if pool_id == pool_observation.amm_pool {
+                                close_pool.pool_observation = Some(item.0);
+                            }
+                        } else if data_len == raydium_amm_v3::states::ProtocolPositionState::LEN {
+                            println!("protocol_position:{}", item.0);
+                            let protocol_position = deserialize_anchor_account::<
+                                raydium_amm_v3::states::ProtocolPositionState,
+                            >(item.1)?;
+                            if pool_id == protocol_position.pool_id {
+                                close_pool.pool_protocol_positions.push(item.0);
+                            }
+                        } else if data_len == raydium_amm_v3::states::PersonalPositionState::LEN {
+                            println!("personal_position:{}", item.0);
+                            let personal_position = deserialize_anchor_account::<
+                                raydium_amm_v3::states::PersonalPositionState,
+                            >(item.1)?;
+                            if pool_id == personal_position.pool_id {
+                                close_pool.pool_personal_positions.push(item.0);
+                            }
+                        }
+                    }
+                    if close_pool.pool_id.is_some()
+                        && close_pool.pool_observation.is_some()
+                        && close_pool.pool_protocol_positions.is_empty()
+                        && close_pool.pool_personal_positions.is_empty()
+                        && close_pool.pool_tick_arrays.is_empty()
+                    {
+                        let admin_close_pool_instr = admin_close_pool_instr(
+                            &pool_config.clone(),
+                            close_pool.pool_id.unwrap(),
+                            close_pool.pool_observation.unwrap(),
+                        )
+                        .unwrap();
+                        // send
+                        let signers = vec![&payer, &admin];
+                        let recent_hash = rpc_client.get_latest_blockhash()?;
+                        let txn = Transaction::new_signed_with_payer(
+                            &admin_close_pool_instr,
+                            Some(&payer.pubkey()),
+                            &signers,
+                            recent_hash,
+                        );
+                        let signature = send_txn(&rpc_client, &txn, true)?;
+                        println!("{}", signature);
+                    } else {
+                        println!("close_pool:{:#?}", close_pool);
+                    }
+                } else {
+                    println!("invalid command: [admin_close_pool pool_id]");
                 }
             }
             "admin_reset_sqrt_price" => {
