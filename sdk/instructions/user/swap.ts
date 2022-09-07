@@ -23,40 +23,16 @@ export function swapInstruction(
     outputTokenAccount: PublicKey;
     inputVault: PublicKey;
     outputVault: PublicKey;
-    tickArray: PublicKey;
     observationState: PublicKey;
     tokenProgram: PublicKey;
+    tickArray: PublicKey;
     remainings: AccountMeta[];
   }
 ): Promise<TransactionInstruction> {
   const { amount, otherAmountThreshold, sqrtPriceLimitX64, isBaseInput } = args;
-  const {
-    payer,
-    ammConfig,
-    poolState,
-    inputTokenAccount,
-    outputTokenAccount,
-    inputVault,
-    outputVault,
-    tickArray,
-    observationState,
-    tokenProgram,
-  } = accounts;
-
   return program.methods
     .swap(amount, otherAmountThreshold, sqrtPriceLimitX64, isBaseInput)
-    .accounts({
-      payer,
-      ammConfig,
-      poolState,
-      inputTokenAccount,
-      outputTokenAccount,
-      inputVault,
-      outputVault,
-      tickArray,
-      observationState,
-      tokenProgram,
-    })
+    .accounts(accounts)
     .remainingAccounts(accounts.remainings)
     .instruction();
 }

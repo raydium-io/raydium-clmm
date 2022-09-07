@@ -3,9 +3,13 @@ use crate::error::ErrorCode;
 use crate::libraries::{liquidity_math, tick_math};
 use crate::pool::{RewardInfo, REWARD_NUM};
 use crate::util::*;
-use anchor_lang::{prelude::*, system_program};
+use crate::Result;
+use anchor_lang::{error::ErrorCode as anchorErrorCode, prelude::*, system_program};
+use arrayref::array_ref;
+use std::cell::RefMut;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
+use std::ops::DerefMut;
 
 pub const TICK_ARRAY_SEED: &str = "tick_array";
 pub const TICK_ARRAY_SIZE_USIZE: usize = 60;
@@ -26,6 +30,32 @@ pub struct TickArrayState {
 
 impl TickArrayState {
     pub const LEN: usize = 8 + 32 + 4 + TickState::LEN * TICK_ARRAY_SIZE_USIZE + 1 + 115;
+
+    fn discriminator() -> [u8; 8] {
+        [192, 155, 85, 205, 49, 249, 129, 42]
+    }
+
+    pub fn load_mut<'a>(account_info: &'a AccountInfo) -> Result<RefMut<'a, Self>> {
+        if account_info.owner != &crate::id() {
+            return Err(Error::from(anchorErrorCode::AccountOwnedByWrongProgram)
+                .with_pubkeys((*account_info.owner, crate::id())));
+        }
+        if !account_info.is_writable {
+            return Err(anchorErrorCode::AccountNotMutable.into());
+        }
+        require_eq!(account_info.data_len(), TickArrayState::LEN);
+
+        let data = account_info.try_borrow_mut_data()?;
+        let disc_bytes = array_ref![data, 0, 8];
+        if disc_bytes != &TickArrayState::discriminator() {
+            return Err(anchorErrorCode::AccountDiscriminatorMismatch.into());
+        }
+        Ok(RefMut::map(data, |data| {
+            bytemuck::from_bytes_mut(
+                &mut data.deref_mut()[8..std::mem::size_of::<TickArrayState>() + 8],
+            )
+        }))
+    }
 
     pub fn get_or_create_tick_array<'info>(
         payer: AccountInfo<'info>,

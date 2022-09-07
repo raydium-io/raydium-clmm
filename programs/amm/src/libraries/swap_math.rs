@@ -8,38 +8,29 @@ use crate::states::config::FEE_RATE_DENOMINATOR_VALUE;
 pub struct SwapStep {
     /// The price after swapping the amount in/out, not to exceed the price target
     pub sqrt_price_next_x64: u128,
-
-    /// The amount to be swapped in, of either token0 or token1, based on the direction of the swap
     pub amount_in: u64,
-
-    /// The amount to be received, of either token0 or token1, based on the direction of the swap
     pub amount_out: u64,
-
-    /// The amount of input that will be taken as a fee
     pub fee_amount: u64,
 }
 
 /// Computes the result of swapping some amount in, or amount out, given the parameters of the swap
-///
-/// The fee, plus amount in, will never exceed the amount remaining if the swap's
-/// `amount_specified` is positive, i.e. in an exact input swap
-///
 pub fn compute_swap_step(
     sqrt_price_current_x64: u128,
     sqrt_price_target_x64: u128,
     liquidity: u128,
-    amount_remaining: i64,
-    fee_pips: u32,
+    amount_remaining: u64,
+    fee_rate: u32,
+    is_base_input: bool,
 ) -> SwapStep {
     let zero_for_one = sqrt_price_current_x64 >= sqrt_price_target_x64;
-    let exact_in = amount_remaining >= 0;
+    // let exact_in = amount_remaining >= 0;
     let mut swap_step = SwapStep::default();
-    if exact_in {
+    if is_base_input {
         // round up amount_in
         // In exact input case, amount_remaining is positive
         let amount_remaining_less_fee = (amount_remaining as u64)
             .mul_div_floor(
-                (FEE_RATE_DENOMINATOR_VALUE - fee_pips).into(),
+                (FEE_RATE_DENOMINATOR_VALUE - fee_rate).into(),
                 FEE_RATE_DENOMINATOR_VALUE as u64,
             )
             .unwrap();
@@ -68,7 +59,6 @@ pub fn compute_swap_step(
                 zero_for_one,
             )
         };
-        // msg!("swap_step.amount_in: {}, sqrt_ratio_target_x64:{}, sqrt_ratio_current_x64:{},swap_step.sqrt_ratio_next_x64:{},liquidity:{},amount_remaining_less_fee:{}", swap_step.amount_in,sqrt_ratio_target_x64,sqrt_ratio_current_x64,swap_step.sqrt_ratio_next_x64,liquidity,amount_remaining_less_fee);
     } else {
         // round down amount_out
         swap_step.amount_out = if zero_for_one {
@@ -87,13 +77,13 @@ pub fn compute_swap_step(
             )
         };
         // In exact output case, amount_remaining is negative
-        swap_step.sqrt_price_next_x64 = if (-amount_remaining as u64) >= swap_step.amount_out {
+        swap_step.sqrt_price_next_x64 = if amount_remaining >= swap_step.amount_out {
             sqrt_price_target_x64
         } else {
             sqrt_price_math::get_next_sqrt_price_from_output(
                 sqrt_price_current_x64,
                 liquidity,
-                -amount_remaining as u64,
+                amount_remaining ,
                 zero_for_one,
             )
         }
@@ -104,7 +94,7 @@ pub fn compute_swap_step(
     // get the input / output amounts when target price is not reached
     if zero_for_one {
         // if max is reached for exact input case, entire amount_in is needed
-        if !(max && exact_in) {
+        if !(max && is_base_input) {
             swap_step.amount_in = liquidity_amounts::get_amount_0_delta_unsigned(
                 swap_step.sqrt_price_next_x64,
                 sqrt_price_current_x64,
@@ -113,7 +103,7 @@ pub fn compute_swap_step(
             )
         };
         // if max is reached for exact output case, entire amount_out is needed
-        if !(max && !exact_in) {
+        if !(max && !is_base_input) {
             swap_step.amount_out = liquidity_amounts::get_amount_1_delta_unsigned(
                 swap_step.sqrt_price_next_x64,
                 sqrt_price_current_x64,
@@ -122,7 +112,7 @@ pub fn compute_swap_step(
             );
         };
     } else {
-        if !(max && exact_in) {
+        if !(max && is_base_input) {
             swap_step.amount_in = liquidity_amounts::get_amount_1_delta_unsigned(
                 sqrt_price_current_x64,
                 swap_step.sqrt_price_next_x64,
@@ -130,7 +120,7 @@ pub fn compute_swap_step(
                 true,
             )
         };
-        if !(max && !exact_in) {
+        if !(max && !is_base_input) {
             swap_step.amount_out = liquidity_amounts::get_amount_0_delta_unsigned(
                 sqrt_price_current_x64,
                 swap_step.sqrt_price_next_x64,
@@ -141,11 +131,11 @@ pub fn compute_swap_step(
     }
 
     // For exact output case, cap the output amount to not exceed the remaining output amount
-    if !exact_in && swap_step.amount_out > (-amount_remaining as u64) {
-        swap_step.amount_out = -amount_remaining as u64;
+    if !is_base_input && swap_step.amount_out > amount_remaining  {
+        swap_step.amount_out = amount_remaining;
     }
 
-    swap_step.fee_amount = if exact_in && swap_step.sqrt_price_next_x64 != sqrt_price_target_x64 {
+    swap_step.fee_amount = if is_base_input && swap_step.sqrt_price_next_x64 != sqrt_price_target_x64 {
         // we didn't reach the target, so take the remainder of the maximum input as fee
         // swap dust is granted as fee
         (amount_remaining as u64)
@@ -156,8 +146,8 @@ pub fn compute_swap_step(
         swap_step
             .amount_in
             .mul_div_ceil(
-                fee_pips.into(),
-                (FEE_RATE_DENOMINATOR_VALUE - fee_pips).into(),
+                fee_rate.into(),
+                (FEE_RATE_DENOMINATOR_VALUE - fee_rate).into(),
             )
             .unwrap()
     };

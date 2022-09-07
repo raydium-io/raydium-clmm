@@ -215,7 +215,8 @@ export class AmmPool {
     const zeroForOne = inputTokenMint.equals(this.poolState.tokenMint0);
     let allNeededAccounts: AccountMeta[] = [];
     let [isExist, nextStartIndex, nextAccountMeta] =
-      await this.getNextInitializedTickArray(zeroForOne);
+      await this.getFirstInitializedTickArray(zeroForOne);
+    // if isExist is false, indicates that current swap direction does not have a valid tick array
     if (!isExist) {
       throw new Error("Invalid tick array");
     }
@@ -269,8 +270,8 @@ export class AmmPool {
 
     const zeroForOne = outputTokenMint.equals(this.poolState.tokenMint1);
     let allNeededAccounts: AccountMeta[] = [];
-    let [isExist, nextStartIndex, nextAccountMeta] =
-      await this.getNextInitializedTickArray(zeroForOne);
+    let [isExist, firstTickArrayStartIndex, nextAccountMeta] =
+      await this.getFirstInitializedTickArray(zeroForOne);
     if (!isExist) {
       throw new Error("Invalid tick array");
     }
@@ -290,7 +291,7 @@ export class AmmPool {
       this.poolState.tickSpacing,
       this.poolState.sqrtPriceX64,
       outputAmount.mul(NEGATIVE_ONE),
-      nextStartIndex,
+      firstTickArrayStartIndex,
       sqrtPriceLimitX64
     );
     allNeededAccounts.push(...reaminAccounts);
@@ -300,12 +301,13 @@ export class AmmPool {
     return [inputAmount, allNeededAccounts];
   }
 
-  async getNextInitializedTickArray(
+  private async getFirstInitializedTickArray(
     zeroForOne: boolean
   ): Promise<[boolean, number, AccountMeta | undefined]> {
     const tickArrayBitmap = mergeTickArrayBitmap(
       this.poolState.tickArrayBitmap
     );
+    // check if currrent tick's array is initialized
     let [isInitialized, startIndex] = checkTickArrayIsInitialized(
       tickArrayBitmap,
       this.poolState.tickCurrent,
@@ -327,8 +329,11 @@ export class AmmPool {
         },
       ];
     }
-    let [isExist, nextStartIndex] =
-      this.nextInitializedTickArrayStartIndex(zeroForOne);
+    // if currenct tickarray is not initialized, then find next
+    let [isExist, nextStartIndex] = this.nextInitializedTickArrayStartIndex(
+      tickArrayBitmap,
+      zeroForOne
+    );
     if (isExist) {
       const [address, _] = await getTickArrayAddress(
         this.address,
@@ -350,13 +355,14 @@ export class AmmPool {
 
   /**
    *
+   * @param tickArrayBitmap
    * @param zeroForOne
    * @returns
    */
-  nextInitializedTickArrayStartIndex(zeroForOne: boolean): [boolean, number] {
-    const tickArrayBitmap = mergeTickArrayBitmap(
-      this.poolState.tickArrayBitmap
-    );
+  private nextInitializedTickArrayStartIndex(
+    tickArrayBitmap: BN,
+    zeroForOne: boolean
+  ): [boolean, number] {
     let currentOffset = getTickArrayOffsetInBitmapByTick(
       this.poolState.tickCurrent,
       this.poolState.tickSpacing

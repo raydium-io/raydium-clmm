@@ -199,7 +199,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             pool_state.tick_spacing,
         )?;
 
-        let tick_array_lower_state = TickArrayState::get_or_create_tick_array(
+        let tick_array_lower_loader = TickArrayState::get_or_create_tick_array(
             ctx.accounts.payer.to_account_info(),
             ctx.accounts.tick_array_lower.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
@@ -208,21 +208,21 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             pool_state.tick_spacing,
         )?;
 
-        let tick_array_upper_state = if tick_array_lower_start_index == tick_array_upper_start_index
-        {
-            AccountLoader::<TickArrayState>::try_from(
-                &ctx.accounts.tick_array_upper.to_account_info(),
-            )?
-        } else {
-            TickArrayState::get_or_create_tick_array(
-                ctx.accounts.payer.to_account_info(),
-                ctx.accounts.tick_array_upper.to_account_info(),
-                ctx.accounts.system_program.to_account_info(),
-                &ctx.accounts.pool_state,
-                tick_array_upper_start_index,
-                pool_state.tick_spacing,
-            )?
-        };
+        let tick_array_upper_loader =
+            if tick_array_lower_start_index == tick_array_upper_start_index {
+                AccountLoader::<TickArrayState>::try_from(
+                    &ctx.accounts.tick_array_upper.to_account_info(),
+                )?
+            } else {
+                TickArrayState::get_or_create_tick_array(
+                    ctx.accounts.payer.to_account_info(),
+                    ctx.accounts.tick_array_upper.to_account_info(),
+                    ctx.accounts.system_program.to_account_info(),
+                    &ctx.accounts.pool_state,
+                    tick_array_upper_start_index,
+                    pool_state.tick_spacing,
+                )?
+            };
 
         // check if protocol position is initilized
         if ctx.accounts.protocol_position.bump == 0 {
@@ -237,8 +237,8 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             token_account_1: &mut ctx.accounts.token_account_1,
             token_vault_0: &mut ctx.accounts.token_vault_0,
             token_vault_1: &mut ctx.accounts.token_vault_1,
-            tick_array_lower: &tick_array_lower_state,
-            tick_array_upper: &tick_array_upper_state,
+            tick_array_lower: &tick_array_lower_loader,
+            tick_array_upper: &tick_array_upper_loader,
             protocol_position: &mut ctx.accounts.protocol_position,
             token_program: ctx.accounts.token_program.clone(),
         };
@@ -316,10 +316,12 @@ pub fn add_liquidity<'b, 'info>(
     let balance_1_before = context.token_vault_1.amount;
 
     let mut tick_array_lower = context.tick_array_lower.load_mut()?;
+    require_keys_eq!(tick_array_lower.pool_id, pool_state.key());
     let tick_lower_state =
         tick_array_lower.get_tick_state_mut(tick_lower_index, pool_state.tick_spacing as i32)?;
 
     let mut tick_array_upper = context.tick_array_upper.load_mut()?;
+    require_keys_eq!(tick_array_upper.pool_id, pool_state.key());
     let tick_upper_state =
         tick_array_upper.get_tick_state_mut(tick_upper_index, pool_state.tick_spacing as i32)?;
 

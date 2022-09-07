@@ -260,6 +260,27 @@ export type AmmV3 = {
       ]
     },
     {
+      "name": "closePool",
+      "accounts": [
+        {
+          "name": "owner",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "observationState",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "initializeReward",
       "accounts": [
         {
@@ -779,11 +800,6 @@ export type AmmV3 = {
           "isSigner": false
         },
         {
-          "name": "tickArray",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
           "name": "observationState",
           "isMut": true,
           "isSigner": false
@@ -791,6 +807,11 @@ export type AmmV3 = {
         {
           "name": "tokenProgram",
           "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tickArray",
+          "isMut": true,
           "isSigner": false
         }
       ],
@@ -896,7 +917,7 @@ export type AmmV3 = {
             "type": "bool"
           },
           {
-            "name": "ammPool",
+            "name": "poolId",
             "type": "publicKey"
           },
           {
@@ -1204,7 +1225,7 @@ export type AmmV3 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "ammPool",
+            "name": "poolId",
             "type": "publicKey"
           },
           {
@@ -2171,6 +2192,27 @@ export const IDL: AmmV3 = {
       ]
     },
     {
+      "name": "closePool",
+      "accounts": [
+        {
+          "name": "owner",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "poolState",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "observationState",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "initializeReward",
       "accounts": [
         {
@@ -2690,11 +2732,6 @@ export const IDL: AmmV3 = {
           "isSigner": false
         },
         {
-          "name": "tickArray",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
           "name": "observationState",
           "isMut": true,
           "isSigner": false
@@ -2702,6 +2739,11 @@ export const IDL: AmmV3 = {
         {
           "name": "tokenProgram",
           "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tickArray",
+          "isMut": true,
           "isSigner": false
         }
       ],
@@ -2807,7 +2849,7 @@ export const IDL: AmmV3 = {
             "type": "bool"
           },
           {
-            "name": "ammPool",
+            "name": "poolId",
             "type": "publicKey"
           },
           {
@@ -3115,7 +3157,7 @@ export const IDL: AmmV3 = {
         "kind": "struct",
         "fields": [
           {
-            "name": "ammPool",
+            "name": "poolId",
             "type": "publicKey"
           },
           {

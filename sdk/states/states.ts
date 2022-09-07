@@ -14,6 +14,7 @@ export type AmmConfig = {
 };
 
 export type ObservationState = {
+  poolId:PublicKey;
   initialized: boolean;
   observations: Observation[];
   padding: BN[];
@@ -90,7 +91,7 @@ export type PositionRewardInfo = {
 };
 
 export type TickArrayState = {
-  ammPool: PublicKey;
+  poolId: PublicKey;
   startTickIndex: number;
   ticks: TickState[];
   initializedTickCount: number;

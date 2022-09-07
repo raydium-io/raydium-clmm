@@ -453,10 +453,13 @@ pub struct SwapEvent {
     pub token_account_1: Pubkey,
 
     /// The delta of the token_0 balance of the pool
-    pub amount_0: i64,
+    pub amount_0: u64,
 
     /// The delta of the token_1 balance of the pool
-    pub amount_1: i64,
+    pub amount_1: u64,
+
+    /// if true, amount_0 is negtive and amount_1 is positive
+    pub zero_for_one: bool,
 
     /// The sqrt(price) of the pool after the swap, as a Q64.64
     pub sqrt_price_x64: u128,

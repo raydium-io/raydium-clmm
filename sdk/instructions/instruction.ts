@@ -1427,10 +1427,11 @@ export class AmmInstruction {
         outputTokenAccount,
         inputVault,
         outputVault,
-        tickArray,
         observationState: ammPool.poolState.observationKey,
-        remainings: [...remainingAccounts],
         tokenProgram: TOKEN_PROGRAM_ID,
+        tickArray,
+        remainings: [...remainingAccounts],
+
       }
     );
   }

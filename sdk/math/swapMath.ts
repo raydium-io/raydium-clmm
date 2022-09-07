@@ -54,7 +54,7 @@ export abstract class SwapMath {
     tickSpacing: number,
     currentSqrtPriceX64: BN,
     amountSpecified: BN,
-    lastSavedTickArrayStartIndex: number | undefined,
+    lastSavedTickArrayStartIndex: number,
     sqrtPriceLimitX64?: BN
   ): Promise<{
     amountCalculated: BN;
@@ -76,7 +76,7 @@ export abstract class SwapMath {
         throw new Error("sqrtPriceX64 must greater than MIN_SQRT_PRICE_X64");
       }
 
-      if (sqrtPriceLimitX64.gt(currentSqrtPriceX64)) {
+      if (sqrtPriceLimitX64.gte(currentSqrtPriceX64)) {
         throw new Error("sqrtPriceX64 must smaller than current");
       }
     } else {

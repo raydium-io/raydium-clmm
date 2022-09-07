@@ -44,15 +44,15 @@ pub struct SwapSingle<'info> {
     #[account(mut)]
     pub output_vault: Box<Account<'info, TokenAccount>>,
 
-    #[account(mut, constraint = tick_array.load()?.pool_id == pool_state.key())]
-    pub tick_array: AccountLoader<'info, TickArrayState>,
-
     /// The program account for the most recent oracle observation
     #[account(mut, address = pool_state.load()?.observation_key)]
     pub observation_state: AccountLoader<'info, ObservationState>,
 
     /// SPL program for token transfers
     pub token_program: Program<'info, Token>,
+
+    #[account(mut, constraint = tick_array.load()?.pool_id == pool_state.key())]
+    pub tick_array: AccountLoader<'info, TickArrayState>,
 }
 
 pub struct SwapAccounts<'b, 'info> {
@@ -100,9 +100,9 @@ pub struct SwapCache {
 #[derive(Debug)]
 pub struct SwapState {
     // the amount remaining to be swapped in/out of the input/output asset
-    pub amount_specified_remaining: i64,
+    pub amount_specified_remaining: u64,
     // the amount already swapped out/in of the output/input asset
-    pub amount_calculated: i64,
+    pub amount_calculated: u64,
     // current sqrt(price)
     pub sqrt_price_x64: u128,
     // the tick associated with the current price
@@ -136,11 +136,11 @@ struct StepComputations {
 pub fn swap_internal<'b, 'info>(
     ctx: &mut SwapAccounts<'b, 'info>,
     remaining_accounts: &[AccountInfo<'info>],
-    // pool_state: &mut RefMut<PoolState>,
-    amount_specified: i64,
+    amount_specified: u64,
     sqrt_price_limit_x64: u128,
     zero_for_one: bool,
-) -> Result<(i64, i64)> {
+    is_base_input: bool,
+) -> Result<(u64, u64)> {
     require!(amount_specified != 0, ErrorCode::InvaildSwapAmountSpecified);
     let mut pool_state = ctx.pool_state.load_mut()?;
     require!(
@@ -174,8 +174,6 @@ pub fn swap_internal<'b, 'info>(
 
     let updated_reward_infos = pool_state.update_reward_infos(cache.block_timestamp as u64)?;
 
-    let exact_input = amount_specified > 0;
-
     let mut state = SwapState {
         amount_specified_remaining: amount_specified,
         amount_calculated: 0,
@@ -195,9 +193,9 @@ pub fn swap_internal<'b, 'info>(
     require_keys_eq!(observation_state.pool_id, ctx.pool_state.key());
     let mut remaining_accounts_iter = remaining_accounts.iter();
 
-    let mut tick_array_current_loader = ctx.tick_array_state.load_mut()?;
+    let mut tick_array_current = ctx.tick_array_state.load_mut()?;
     // check tick_array account is owned by the pool
-    require_keys_eq!(tick_array_current_loader.pool_id, ctx.pool_state.key());
+    require_keys_eq!(tick_array_current.pool_id, ctx.pool_state.key());
 
     let mut current_vaild_tick_array_start_index = pool_state
         .get_first_initialized_tick_array(zero_for_one)
@@ -221,8 +219,8 @@ pub fn swap_internal<'b, 'info>(
     while state.amount_specified_remaining != 0 && state.sqrt_price_x64 != sqrt_price_limit_x64 {
         #[cfg(feature = "enable-log")]
         msg!(
-            "while begin, exact_input:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{},state_liquidity:{},state.protocol_fee:{},cache.protocol_fee_rate:{}",
-            exact_input,
+            "while begin, is_base_input:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{},state_liquidity:{},state.protocol_fee:{},cache.protocol_fee_rate:{}",
+            is_base_input,
             state.fee_growth_global_x64,
             state.sqrt_price_x64,
             state.tick,
@@ -233,7 +231,7 @@ pub fn swap_internal<'b, 'info>(
         let mut step = StepComputations::default();
         step.sqrt_price_start_x64 = state.sqrt_price_x64;
 
-        let mut next_initialized_tick = if let Some(tick_state) = tick_array_current_loader
+        let mut next_initialized_tick = if let Some(tick_state) = tick_array_current
             .next_initialized_tick(state.tick, pool_state.tick_spacing, zero_for_one)?
         {
             Box::new(*tick_state)
@@ -255,11 +253,11 @@ pub fn swap_internal<'b, 'info>(
                     zero_for_one,
                 )
                 .unwrap();
-            let tick_array_loader_next =
-                AccountLoader::<TickArrayState>::try_from(remaining_accounts_iter.next().unwrap())?;
-            let mut tick_array_next = tick_array_loader_next.load_mut()?;
+            let tick_array_info_next = remaining_accounts_iter.next().unwrap();
+            tick_array_current = TickArrayState::load_mut(tick_array_info_next)?;
+            require_keys_eq!(tick_array_current.pool_id, ctx.pool_state.key());
             require_keys_eq!(
-                tick_array_loader_next.key(),
+                tick_array_info_next.key(),
                 Pubkey::find_program_address(
                     &[
                         TICK_ARRAY_SEED.as_bytes(),
@@ -271,8 +269,7 @@ pub fn swap_internal<'b, 'info>(
                 .0
             );
             let mut first_initialized_tick =
-                tick_array_next.first_initialized_tick(zero_for_one)?;
-
+                tick_array_current.first_initialized_tick(zero_for_one)?;
             next_initialized_tick = Box::new(*first_initialized_tick.deref_mut());
         }
         step.tick_next = next_initialized_tick.tick;
@@ -299,24 +296,30 @@ pub fn swap_internal<'b, 'info>(
             state.liquidity,
             state.amount_specified_remaining,
             ctx.amm_config.trade_fee_rate,
+            is_base_input,
         );
         state.sqrt_price_x64 = swap_step.sqrt_price_next_x64;
         step.amount_in = swap_step.amount_in;
         step.amount_out = swap_step.amount_out;
         step.fee_amount = swap_step.fee_amount;
 
-        if exact_input {
-            state.amount_specified_remaining -=
-                i64::try_from(step.amount_in + step.fee_amount).unwrap();
+        if is_base_input {
+            state.amount_specified_remaining = state
+                .amount_specified_remaining
+                .checked_sub(step.amount_in + step.fee_amount)
+                .unwrap();
             state.amount_calculated = state
                 .amount_calculated
-                .checked_sub(i64::try_from(step.amount_out).unwrap())
+                .checked_add(step.amount_out)
                 .unwrap();
         } else {
-            state.amount_specified_remaining += i64::try_from(step.amount_out).unwrap();
+            state.amount_specified_remaining = state
+                .amount_specified_remaining
+                .checked_sub(step.amount_out)
+                .unwrap();
             state.amount_calculated = state
                 .amount_calculated
-                .checked_add(i64::try_from(step.amount_in + step.fee_amount).unwrap())
+                .checked_add(step.amount_in + step.fee_amount)
                 .unwrap();
         }
 
@@ -328,16 +331,21 @@ pub fn swap_internal<'b, 'info>(
                 .unwrap()
                 .checked_div((FEE_RATE_DENOMINATOR_VALUE) as u64)
                 .unwrap();
-            step.fee_amount -= delta;
-            state.protocol_fee += delta;
+            step.fee_amount = step.fee_amount.checked_sub(delta).unwrap();
+            state.protocol_fee = state.protocol_fee.checked_add(delta).unwrap();
         }
 
         // update global fee tracker
         if state.liquidity > 0 {
-            state.fee_growth_global_x64 += U128::from(step.fee_amount)
+            let fee_growth_global_x64_delta = U128::from(step.fee_amount)
                 .mul_div_floor(U128::from(fixed_point_64::Q64), U128::from(state.liquidity))
                 .unwrap()
                 .as_u128();
+
+            state.fee_growth_global_x64 = state
+                .fee_growth_global_x64
+                .checked_add(fee_growth_global_x64_delta)
+                .unwrap();
         }
         // shift tick if we reached the next price
         if state.sqrt_price_x64 == step.sqrt_price_next_x64 {
@@ -378,8 +386,8 @@ pub fn swap_internal<'b, 'info>(
 
         #[cfg(feature = "enable-log")]
         msg!(
-            "end, exact_input:{},step_amount_in:{}, step_amount_out:{}, step_fee_amount:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{}, state_liquidity:{},state.protocol_fee:{},cache.protocol_fee_rate:{}",
-            exact_input,
+            "end, is_base_input:{},step_amount_in:{}, step_amount_out:{}, step_fee_amount:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{}, state_liquidity:{},state.protocol_fee:{},cache.protocol_fee_rate:{}",
+            is_base_input,
             step.amount_in,
             step.amount_out,
             step.fee_amount,
@@ -415,32 +423,54 @@ pub fn swap_internal<'b, 'info>(
         pool_state.liquidity = state.liquidity;
     }
 
-    let (amount_0, amount_1) = if zero_for_one == exact_input {
+    let (amount_0, amount_1) = if zero_for_one == is_base_input {
         (
-            amount_specified.saturating_sub(state.amount_specified_remaining),
+            amount_specified
+                .checked_sub(state.amount_specified_remaining)
+                .unwrap(),
             state.amount_calculated,
         )
     } else {
         (
             state.amount_calculated,
-            amount_specified.saturating_sub(state.amount_specified_remaining),
+            amount_specified
+                .checked_sub(state.amount_specified_remaining)
+                .unwrap(),
         )
     };
 
     if zero_for_one {
         pool_state.fee_growth_global_0_x64 = state.fee_growth_global_x64;
         if state.protocol_fee > 0 {
-            pool_state.protocol_fees_token_0 += state.protocol_fee;
+            pool_state.protocol_fees_token_0 = pool_state
+                .protocol_fees_token_0
+                .checked_add(state.protocol_fee)
+                .unwrap();
         }
-        pool_state.swap_in_amount_token_0 += amount_0 as u128;
-        pool_state.swap_out_amount_token_1 += amount_1.neg() as u128;
+        pool_state.swap_in_amount_token_0 = pool_state
+            .swap_in_amount_token_0
+            .checked_add(amount_0 as u128)
+            .unwrap();
+        pool_state.swap_out_amount_token_1 = pool_state
+            .swap_out_amount_token_1
+            .checked_add(amount_1 as u128)
+            .unwrap();
     } else {
         pool_state.fee_growth_global_1_x64 = state.fee_growth_global_x64;
         if state.protocol_fee > 0 {
-            pool_state.protocol_fees_token_1 += state.protocol_fee;
+            pool_state.protocol_fees_token_1 = pool_state
+                .protocol_fees_token_1
+                .checked_add(state.protocol_fee)
+                .unwrap();
         }
-        pool_state.swap_in_amount_token_1 += amount_1 as u128;
-        pool_state.swap_out_amount_token_0 += amount_0.neg() as u128;
+        pool_state.swap_in_amount_token_1 = pool_state
+            .swap_in_amount_token_1
+            .checked_add(amount_1 as u128)
+            .unwrap();
+        pool_state.swap_out_amount_token_0 = pool_state
+            .swap_out_amount_token_0
+            .checked_add(amount_0 as u128)
+            .unwrap();
     }
 
     Ok((amount_0, amount_1))
@@ -459,11 +489,6 @@ pub fn exact_internal<'b, 'info>(
     let input_balance_before = ctx.input_vault.amount;
     let output_balance_before = ctx.output_vault.amount;
 
-    let mut amount_specified = i64::try_from(amount_specified).unwrap();
-    if !is_base_input {
-        amount_specified = -i64::try_from(amount_specified).unwrap();
-    };
-
     let (amount_0, amount_1) = swap_internal(
         ctx,
         remaining_accounts,
@@ -478,6 +503,7 @@ pub fn exact_internal<'b, 'info>(
             sqrt_price_limit_x64
         },
         zero_for_one,
+        is_base_input,
     )?;
 
     #[cfg(feature = "enable-log")]
@@ -510,44 +536,37 @@ pub fn exact_internal<'b, 'info>(
 
     if zero_for_one {
         //  x -> y, deposit x token from user to pool vault.
-        if amount_0 > 0 {
-            transfer_from_user_to_pool_vault(
-                &ctx.signer,
-                &token_account_0,
-                &vault_0,
-                &ctx.token_program,
-                amount_0 as u64,
-            )?;
-        }
+        transfer_from_user_to_pool_vault(
+            &ctx.signer,
+            &token_account_0,
+            &vault_0,
+            &ctx.token_program,
+            amount_0,
+        )?;
         // x -> y，transfer y token from pool vault to user.
-        if amount_1 < 0 {
-            transfer_from_pool_vault_to_user(
-                &ctx.pool_state,
-                &vault_1,
-                &token_account_1,
-                &ctx.token_program,
-                amount_1.neg() as u64,
-            )?;
-        }
+        transfer_from_pool_vault_to_user(
+            &ctx.pool_state,
+            &vault_1,
+            &token_account_1,
+            &ctx.token_program,
+            amount_1,
+        )?;
     } else {
-        if amount_1 > 0 {
-            transfer_from_user_to_pool_vault(
-                &ctx.signer,
-                &token_account_1,
-                &vault_1,
-                &ctx.token_program,
-                amount_1 as u64,
-            )?;
-        }
-        if amount_0 < 0 {
-            transfer_from_pool_vault_to_user(
-                &ctx.pool_state,
-                &vault_0,
-                &token_account_0,
-                &ctx.token_program,
-                amount_0.neg() as u64,
-            )?;
-        }
+        transfer_from_user_to_pool_vault(
+            &ctx.signer,
+            &token_account_1,
+            &vault_1,
+            &ctx.token_program,
+            amount_1,
+        )?;
+
+        transfer_from_pool_vault_to_user(
+            &ctx.pool_state,
+            &vault_0,
+            &token_account_0,
+            &ctx.token_program,
+            amount_0,
+        )?;
     }
     ctx.output_vault.reload()?;
     ctx.input_vault.reload()?;
@@ -560,6 +579,7 @@ pub fn exact_internal<'b, 'info>(
         token_account_1: token_account_1.key(),
         amount_0,
         amount_1,
+        zero_for_one,
         sqrt_price_x64: pool_state.sqrt_price_x64,
         liquidity: pool_state.liquidity,
         tick: pool_state.tick_current
