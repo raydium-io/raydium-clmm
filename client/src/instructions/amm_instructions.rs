@@ -505,14 +505,14 @@ pub fn swap_instr(
     pool_account_key: Pubkey,
     input_vault: Pubkey,
     output_vault: Pubkey,
-    tick_array: Pubkey,
     observation_state: Pubkey,
     user_input_token: Pubkey,
     user_out_put_token: Pubkey,
+    tick_array: Pubkey,
     remaining_accounts: Vec<AccountMeta>,
     amount: u64,
     other_amount_threshold: u64,
-    sqrt_price_limit_x64: u128,
+    sqrt_price_limit_x64: Option<u128>,
     is_base_input: bool,
 ) -> Result<Vec<Instruction>> {
     let payer = read_keypair_file(&config.payer_path)?;
@@ -538,7 +538,7 @@ pub fn swap_instr(
         .args(raydium_instruction::Swap {
             amount,
             other_amount_threshold,
-            sqrt_price_limit_x64,
+            sqrt_price_limit_x64: sqrt_price_limit_x64.unwrap_or(0u128),
             is_base_input,
         })
         .instructions()?;

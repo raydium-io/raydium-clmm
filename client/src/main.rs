@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 use anchor_client::{Client, Cluster};
+use anchor_lang::prelude::AccountMeta;
 use anyhow::{format_err, Result};
+use arrayref::array_ref;
 use configparser::ini::Ini;
 use rand::rngs::OsRng;
 use solana_account_decoder::{
@@ -14,17 +16,22 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     transaction::Transaction,
 };
-use std::mem::size_of;
 use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
+use std::{collections::VecDeque, mem::size_of};
 
 mod instructions;
 use instructions::amm_instructions::*;
 use instructions::rpc::*;
 use instructions::token_instructions::*;
 use instructions::utils::*;
-use raydium_amm_v3::libraries::{fixed_point_64, tick_math};
+use raydium_amm_v3::{
+    libraries::{fixed_point_64, tick_array_bit_map, tick_math},
+    states::{PoolState, TickArrayState},
+};
+
+use crate::instructions::utils;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClientConfig {
     http_url: String,
@@ -141,6 +148,65 @@ fn write_keypair_file(keypair: &Keypair, outfile: &str) -> Result<String> {
 }
 fn path_is_exist(path: &str) -> bool {
     Path::new(path).exists()
+}
+
+fn load_cur_and_next_five_tick_array(
+    rpc_client: &RpcClient,
+    pool_config: &ClientConfig,
+    pool_state: &PoolState,
+    zero_for_one: bool,
+) -> VecDeque<TickArrayState> {
+    let mut current_vaild_tick_array_start_index = pool_state
+        .get_first_initialized_tick_array(zero_for_one)
+        .unwrap();
+    let mut tick_array_keys = Vec::new();
+    tick_array_keys.push(
+        Pubkey::find_program_address(
+            &[
+                raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
+                &current_vaild_tick_array_start_index.to_be_bytes(),
+            ],
+            &pool_config.raydium_v3_program,
+        )
+        .0,
+    );
+    let mut max_array_size = 5;
+    while max_array_size != 0 {
+        let next_tick_array_index = tick_array_bit_map::next_initialized_tick_array_start_index(
+            raydium_amm_v3::libraries::U1024(pool_state.tick_array_bitmap),
+            current_vaild_tick_array_start_index,
+            pool_state.tick_spacing.into(),
+            zero_for_one,
+        );
+        if next_tick_array_index.is_none() {
+            break;
+        }
+        current_vaild_tick_array_start_index = next_tick_array_index.unwrap();
+        tick_array_keys.push(
+            Pubkey::find_program_address(
+                &[
+                    raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                    pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
+                    &current_vaild_tick_array_start_index.to_be_bytes(),
+                ],
+                &pool_config.raydium_v3_program,
+            )
+            .0,
+        );
+        max_array_size -= 1;
+    }
+    let tick_array_rsps = rpc_client.get_multiple_accounts(&tick_array_keys).unwrap();
+    let mut tick_arrays = VecDeque::new();
+    for tick_array in tick_array_rsps {
+        let tick_array_state =
+            deserialize_anchor_account::<raydium_amm_v3::states::TickArrayState>(
+                &tick_array.unwrap(),
+            )
+            .unwrap();
+        tick_arrays.push_back(tick_array_state);
+    }
+    tick_arrays
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -612,7 +678,7 @@ fn main() -> Result<()> {
                             Some(rsp) => {
                                 let position = deserialize_anchor_account::<
                                     raydium_amm_v3::states::PersonalPositionState,
-                                >(rsp)?;
+                                >(&rsp)?;
                                 user_positions.push(position);
                             }
                         }
@@ -765,7 +831,7 @@ fn main() -> Result<()> {
                             println!("tick_array:{}", item.0);
                             let tick_array = deserialize_anchor_account::<
                                 raydium_amm_v3::states::TickArrayState,
-                            >(item.1)?;
+                            >(&item.1)?;
                             if pool_id == tick_array.pool_id {
                                 close_pool.pool_tick_arrays.push(item.0);
                             }
@@ -773,7 +839,7 @@ fn main() -> Result<()> {
                             println!("observation:{}", item.0);
                             let pool_observation = deserialize_anchor_account::<
                                 raydium_amm_v3::states::ObservationState,
-                            >(item.1)?;
+                            >(&item.1)?;
                             if pool_id == pool_observation.pool_id {
                                 close_pool.pool_observation = Some(item.0);
                             }
@@ -781,7 +847,7 @@ fn main() -> Result<()> {
                             println!("protocol_position:{}", item.0);
                             let protocol_position = deserialize_anchor_account::<
                                 raydium_amm_v3::states::ProtocolPositionState,
-                            >(item.1)?;
+                            >(&item.1)?;
                             if pool_id == protocol_position.pool_id {
                                 close_pool.pool_protocol_positions.push(item.0);
                             }
@@ -789,7 +855,7 @@ fn main() -> Result<()> {
                             println!("personal_position:{}", item.0);
                             let personal_position = deserialize_anchor_account::<
                                 raydium_amm_v3::states::PersonalPositionState,
-                            >(item.1)?;
+                            >(&item.1)?;
                             if pool_id == personal_position.pool_id {
                                 close_pool.pool_personal_positions.push(item.0);
                             }
@@ -914,7 +980,7 @@ fn main() -> Result<()> {
                             Some(rsp) => {
                                 let position = deserialize_anchor_account::<
                                     raydium_amm_v3::states::PersonalPositionState,
-                                >(rsp)?;
+                                >(&rsp)?;
                                 user_positions.push(position);
                             }
                         }
@@ -1012,7 +1078,7 @@ fn main() -> Result<()> {
                             Some(rsp) => {
                                 let position = deserialize_anchor_account::<
                                     raydium_amm_v3::states::PersonalPositionState,
-                                >(rsp)?;
+                                >(&rsp)?;
                                 user_positions.push(position);
                             }
                         }
@@ -1109,7 +1175,7 @@ fn main() -> Result<()> {
                             Some(rsp) => {
                                 let position = deserialize_anchor_account::<
                                     raydium_amm_v3::states::PersonalPositionState,
-                                >(rsp)?;
+                                >(&rsp)?;
                                 user_positions.push(position);
                             }
                         }
@@ -1199,21 +1265,250 @@ fn main() -> Result<()> {
                     println!("{:?}", tick_state);
                 }
             }
-            // "single_swap" => {
-            //     let tick1 = tick_math::get_tick_at_sqrt_price(18446744073709551616)?;
-            //     let tick2 = tick_math::get_tick_at_sqrt_price(18446744073709541616)?;
-            //     println!("tick1:{}, tick2:{}", tick1, tick2);
-            //     let ret = raydium_amm_v3::libraries::get(
-            //         18446744073709551616,
-            //         18446744073709541616,
-            //         52022602764,
-            //     );
-            //     println!("{}", ret);
-            //     // load pool to get observation
-            //     let program = anchor_client.program(pool_config.raydium_v3_program);
-            //     let _pool: raydium_amm_v3::states::PoolState =
-            //         program.account(pool_config.pool_id_account.unwrap())?;
-            // }
+            "swap_base_in" => {
+                if v.len() == 4 || v.len() == 5 {
+                    let user_input_token = Pubkey::from_str(&v[1]).unwrap();
+                    let user_output_token = Pubkey::from_str(&v[2]).unwrap();
+                    let amount_in = v[3].parse::<u64>().unwrap();
+                    let mut sqrt_price_limit_x64 = None;
+                    if v.len() == 5 {
+                        sqrt_price_limit_x64 = Some(v[4].parse::<u128>().unwrap());
+                    }
+                    let is_base_input = true;
+
+                    // load mult account
+                    let load_accounts = vec![
+                        user_input_token,
+                        user_output_token,
+                        pool_config.amm_config_key,
+                        pool_config.pool_id_account.unwrap(),
+                    ];
+                    let rsps = rpc_client.get_multiple_accounts(&load_accounts)?;
+                    let [user_input_account, user_output_account, amm_config_account, pool_account] =
+                        array_ref![rsps, 0, 4];
+                    let user_input_state = spl_token::state::Account::unpack(
+                        &user_input_account.as_ref().unwrap().data,
+                    )
+                    .unwrap();
+                    let user_output_state = spl_token::state::Account::unpack(
+                        &user_output_account.as_ref().unwrap().data,
+                    )
+                    .unwrap();
+                    let amm_config_state =
+                        deserialize_anchor_account::<raydium_amm_v3::states::AmmConfig>(
+                            amm_config_account.as_ref().unwrap(),
+                        )?;
+                    let pool_state = deserialize_anchor_account::<raydium_amm_v3::states::PoolState>(
+                        pool_account.as_ref().unwrap(),
+                    )?;
+                    let zero_for_one = user_input_state.mint == pool_state.token_mint_0
+                        && user_output_state.mint == pool_state.token_mint_1;
+                    // load tick_arrays
+                    let mut tick_arrays = load_cur_and_next_five_tick_array(
+                        &rpc_client,
+                        &pool_config,
+                        &pool_state,
+                        zero_for_one,
+                    );
+
+                    let (other_amount_threshold, mut tick_array_indexs) =
+                        utils::get_out_put_amount_and_remaining_accounts(
+                            amount_in,
+                            sqrt_price_limit_x64,
+                            zero_for_one,
+                            is_base_input,
+                            &amm_config_state,
+                            &pool_state,
+                            &mut tick_arrays,
+                        )
+                        .unwrap();
+
+                    let current_or_next_tick_array_key = Pubkey::find_program_address(
+                        &[
+                            raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                            pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
+                            &tick_array_indexs.pop_front().unwrap().to_be_bytes(),
+                        ],
+                        &pool_config.raydium_v3_program,
+                    )
+                    .0;
+                    let remaining_accounts = tick_array_indexs
+                        .into_iter()
+                        .map(|index| {
+                            AccountMeta::new(
+                                Pubkey::find_program_address(
+                                    &[
+                                        raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                                        pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
+                                        &index.to_be_bytes(),
+                                    ],
+                                    &pool_config.raydium_v3_program,
+                                )
+                                .0,
+                                false,
+                            )
+                        })
+                        .collect();
+                    let swap_instr = swap_instr(
+                        &pool_config.clone(),
+                        pool_state.amm_config,
+                        pool_config.pool_id_account.unwrap(),
+                        if zero_for_one {
+                            pool_state.token_vault_0
+                        } else {
+                            pool_state.token_vault_1
+                        },
+                        if zero_for_one {
+                            pool_state.token_vault_1
+                        } else {
+                            pool_state.token_vault_0
+                        },
+                        pool_state.observation_key,
+                        user_input_token,
+                        user_output_token,
+                        current_or_next_tick_array_key,
+                        remaining_accounts,
+                        amount_in,
+                        other_amount_threshold,
+                        sqrt_price_limit_x64,
+                        is_base_input,
+                    )
+                    .unwrap();
+                    // send
+                    let signers = vec![&payer];
+                    let recent_hash = rpc_client.get_latest_blockhash()?;
+                    let txn = Transaction::new_signed_with_payer(
+                        &swap_instr,
+                        Some(&payer.pubkey()),
+                        &signers,
+                        recent_hash,
+                    );
+                    let signature = send_txn(&rpc_client, &txn, true)?;
+                    println!("{}", signature);
+                }
+            }
+            "swap_base_out" => {
+                if v.len() == 4 || v.len() == 5 {
+                    let user_input_token = Pubkey::from_str(&v[1]).unwrap();
+                    let user_output_token = Pubkey::from_str(&v[2]).unwrap();
+                    let amount_in = v[3].parse::<u64>().unwrap();
+                    let mut sqrt_price_limit_x64 = None;
+                    if v.len() == 5 {
+                        sqrt_price_limit_x64 = Some(v[4].parse::<u128>().unwrap());
+                    }
+                    let is_base_input = false;
+
+                    // load mult account
+                    let load_accounts = vec![
+                        user_input_token,
+                        user_output_token,
+                        pool_config.amm_config_key,
+                        pool_config.pool_id_account.unwrap(),
+                    ];
+                    let rsps = rpc_client.get_multiple_accounts(&load_accounts)?;
+                    let [user_input_account, user_output_account, amm_config_account, pool_account] =
+                        array_ref![rsps, 0, 4];
+                    let user_input_state = spl_token::state::Account::unpack(
+                        &user_input_account.as_ref().unwrap().data,
+                    )
+                    .unwrap();
+                    let user_output_state = spl_token::state::Account::unpack(
+                        &user_output_account.as_ref().unwrap().data,
+                    )
+                    .unwrap();
+                    let amm_config_state =
+                        deserialize_anchor_account::<raydium_amm_v3::states::AmmConfig>(
+                            amm_config_account.as_ref().unwrap(),
+                        )?;
+                    let pool_state = deserialize_anchor_account::<raydium_amm_v3::states::PoolState>(
+                        pool_account.as_ref().unwrap(),
+                    )?;
+                    let zero_for_one = user_input_state.mint == pool_state.token_mint_0
+                        && user_output_state.mint == pool_state.token_mint_1;
+                    // load tick_arrays
+                    let mut tick_arrays = load_cur_and_next_five_tick_array(
+                        &rpc_client,
+                        &pool_config,
+                        &pool_state,
+                        zero_for_one,
+                    );
+
+                    let (other_amount_threshold, mut tick_array_indexs) =
+                        utils::get_out_put_amount_and_remaining_accounts(
+                            amount_in,
+                            sqrt_price_limit_x64,
+                            zero_for_one,
+                            is_base_input,
+                            &amm_config_state,
+                            &pool_state,
+                            &mut tick_arrays,
+                        )
+                        .unwrap();
+
+                    let current_or_next_tick_array_key = Pubkey::find_program_address(
+                        &[
+                            raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                            pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
+                            &tick_array_indexs.pop_front().unwrap().to_be_bytes(),
+                        ],
+                        &pool_config.raydium_v3_program,
+                    )
+                    .0;
+                    let remaining_accounts = tick_array_indexs
+                        .into_iter()
+                        .map(|index| {
+                            AccountMeta::new(
+                                Pubkey::find_program_address(
+                                    &[
+                                        raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                                        pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
+                                        &index.to_be_bytes(),
+                                    ],
+                                    &pool_config.raydium_v3_program,
+                                )
+                                .0,
+                                false,
+                            )
+                        })
+                        .collect();
+                    let swap_instr = swap_instr(
+                        &pool_config.clone(),
+                        pool_state.amm_config,
+                        pool_config.pool_id_account.unwrap(),
+                        if zero_for_one {
+                            pool_state.token_vault_0
+                        } else {
+                            pool_state.token_vault_1
+                        },
+                        if zero_for_one {
+                            pool_state.token_vault_1
+                        } else {
+                            pool_state.token_vault_0
+                        },
+                        pool_state.observation_key,
+                        user_input_token,
+                        user_output_token,
+                        current_or_next_tick_array_key,
+                        remaining_accounts,
+                        amount_in,
+                        other_amount_threshold,
+                        sqrt_price_limit_x64,
+                        is_base_input,
+                    )
+                    .unwrap();
+                    // send
+                    let signers = vec![&payer];
+                    let recent_hash = rpc_client.get_latest_blockhash()?;
+                    let txn = Transaction::new_signed_with_payer(
+                        &swap_instr,
+                        Some(&payer.pubkey()),
+                        &signers,
+                        recent_hash,
+                    );
+                    let signature = send_txn(&rpc_client, &txn, true)?;
+                    println!("{}", signature);
+                }
+            }
             "tick_to_x64" => {
                 if v.len() == 2 {
                     let tick = v[1].parse::<i32>().unwrap();
