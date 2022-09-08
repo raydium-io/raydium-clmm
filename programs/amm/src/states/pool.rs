@@ -78,7 +78,7 @@ pub struct PoolState {
     pub swap_in_amount_token_1: u128,
     pub swap_out_amount_token_0: u128,
 
-    /// The lastest updated time of reward info.
+    /// Leave blank for future use
     pub padding: u64,
     pub reward_infos: [RewardInfo; REWARD_NUM],
 

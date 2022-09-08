@@ -1,5 +1,3 @@
-use std::cell::RefMut;
-
 use super::calculate_latest_token_fees;
 use super::modify_position;
 use crate::error::ErrorCode;
@@ -7,6 +5,7 @@ use crate::states::*;
 use crate::util::transfer_from_pool_vault_to_user;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
+use std::cell::RefMut;
 
 #[derive(Accounts)]
 pub struct DecreaseLiquidity<'info> {
@@ -170,7 +169,6 @@ pub fn decrease_liquidity_and_update_position<'a, 'b, 'c, 'info>(
         );
     }
 
-    // let personal_position = &mut ctx.accounts.personal_position;
     personal_position.token_fees_owed_0 = calculate_latest_token_fees(
         personal_position.token_fees_owed_0,
         personal_position.fee_growth_inside_0_last_x64,
@@ -254,19 +252,9 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
     token_program: Program<'info, Token>,
     personal_position_state: &mut PersonalPositionState,
 ) -> Result<[u64; REWARD_NUM]> {
-    // let mut pool_state = pool_state_loader.load_mut()?;
-    // let mut valid_reward_count = 0;
-    // for item in pool_state.reward_infos {
-    //     if item.initialized() {
-    //         valid_reward_count = valid_reward_count + 1;
-    //     }
-    // }
     check_required_accounts_length(pool_state_loader, remaining_accounts)?;
-
+    
     let remaining_accounts_len = remaining_accounts.len();
-    // if remaining_accounts_len != valid_reward_count * 2 {
-    //     return err!(ErrorCode::InvalidRewardInputAccountNumber);
-    // }
     let mut reward_amounts: [u64; REWARD_NUM] = [0, 0, 0];
     let mut remaining_accounts = remaining_accounts.iter();
     for i in 0..remaining_accounts_len / 2 {

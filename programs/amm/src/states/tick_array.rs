@@ -175,6 +175,8 @@ impl TickArrayState {
         err!(ErrorCode::InvalidTickArray)
     }
 
+    /// Get next initialized tick in tick array, `current_tick_index` can be any tick index, in other words, `current_tick_index` not exactly a point in the tickarray,
+    /// and current_tick_index % tick_spacing maybe not equal zero.
     pub fn next_initialized_tick(
         &mut self,
         current_tick_index: i32,
@@ -187,11 +189,11 @@ impl TickArrayState {
             let tick_state = self.first_initialized_tick(zero_for_one)?;
             return Ok(Some(tick_state));
         }
-        let is_start_index = current_tick_array_start_index == current_tick_index;
         let mut offset_in_array =
             (current_tick_index - self.start_tick_index) / (tick_spacing as i32);
+            
         if zero_for_one {
-            if is_start_index {
+            if (current_tick_index - self.start_tick_index) % (tick_spacing as i32) == 0 {
                 offset_in_array = offset_in_array - 1;
             }
             while offset_in_array >= 0 {
@@ -201,7 +203,7 @@ impl TickArrayState {
                 offset_in_array = offset_in_array - 1;
             }
         } else {
-            if is_start_index {
+            if (current_tick_index - self.start_tick_index) % (tick_spacing as i32) == 0 {
                 offset_in_array = offset_in_array + 1;
             }
             while offset_in_array < TICK_ARRAY_SIZE {

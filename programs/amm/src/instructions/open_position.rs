@@ -312,8 +312,6 @@ pub fn add_liquidity<'b, 'info>(
     tick_upper_index: i32,
 ) -> Result<(u64, u64)> {
     assert!(liquidity > 0);
-    let balance_0_before = context.token_vault_0.amount;
-    let balance_1_before = context.token_vault_1.amount;
 
     let mut tick_array_lower = context.tick_array_lower.load_mut()?;
     require_keys_eq!(tick_array_lower.pool_id, pool_state.key());
@@ -352,32 +350,12 @@ pub fn add_liquidity<'b, 'info>(
             pool_state.flip_tick_array_bit(tick_array_upper.start_tick_index)?;
         }
     }
+    require_gt!(amount_0_int, 0);
+    require_gt!(amount_1_int, 0);
 
     let amount_0 = amount_0_int as u64;
     let amount_1 = amount_1_int as u64;
-    if amount_0 > 0 {
-        transfer_from_user_to_pool_vault(
-            &context.payer,
-            &context.token_account_0,
-            &context.token_vault_0,
-            &context.token_program,
-            amount_0,
-        )?;
-    }
-    if amount_1 > 0 {
-        transfer_from_user_to_pool_vault(
-            &context.payer,
-            &context.token_account_1,
-            &context.token_vault_1,
-            &context.token_program,
-            amount_1,
-        )?;
-    }
 
-    context.token_vault_0.reload()?;
-    context.token_vault_1.reload()?;
-    require_eq!(amount_0, context.token_vault_0.amount - balance_0_before);
-    require_eq!(amount_1, context.token_vault_1.amount - balance_1_before);
     #[cfg(feature = "enable-log")]
     msg!(
         "amount_0:{},amount_1:{},amount_0_max:{},amount_1_max:{}",
@@ -390,6 +368,22 @@ pub fn add_liquidity<'b, 'info>(
         amount_0 <= amount_0_max && amount_1 <= amount_1_max,
         ErrorCode::PriceSlippageCheck
     );
+
+    transfer_from_user_to_pool_vault(
+        &context.payer,
+        &context.token_account_0,
+        &context.token_vault_0,
+        &context.token_program,
+        amount_0,
+    )?;
+
+    transfer_from_user_to_pool_vault(
+        &context.payer,
+        &context.token_account_1,
+        &context.token_vault_1,
+        &context.token_program,
+        amount_1,
+    )?;
 
     Ok((amount_0, amount_1))
 }
