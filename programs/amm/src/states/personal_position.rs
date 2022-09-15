@@ -64,7 +64,7 @@ impl PersonalPositionState {
                 .as_u64();
             self.reward_infos[i].growth_inside_last_x64 = reward_growth_inside;
 
-            // Overflows allowed. Must collect rewards owed before overflow.
+            // Overflows not allowed. Must collect rewards owed before overflow.
             self.reward_infos[i].reward_amount_owed = curr_reward_info
                 .reward_amount_owed
                 .checked_add(amount_owed_delta)
@@ -87,14 +87,14 @@ impl PositionRewardInfo {
     pub const LEN: usize = 16 + 8;
 }
 
-/// Emitted when liquidity is minted for a given position
+/// Emitted when create a new position
 #[event]
 pub struct CreatePersonalPositionEvent {
-    /// The pool for which liquidity was minted
+    /// The pool for which liquidity was added
     #[index]
     pub pool_state: Pubkey,
 
-    /// The address that minted the liquidity
+    /// The address that create the position
     pub minter: Pubkey,
 
     /// The owner of the position and recipient of any minted liquidity
@@ -111,10 +111,10 @@ pub struct CreatePersonalPositionEvent {
     /// The amount of liquidity minted to the position range
     pub liquidity: u128,
 
-    /// How much token_0 was required for the minted liquidity
+    /// The amount of token_0 was deposit for the liquidity
     pub deposit_amount_0: u64,
 
-    /// How much token_1 was required for the minted liquidity
+    /// The amount of token_1 was deposit for the liquidity
     pub deposit_amount_1: u64,
 }
 
@@ -138,9 +138,9 @@ pub struct IncreaseLiquidityEvent {
 /// Emitted when liquidity is decreased.
 #[event]
 pub struct DecreaseLiquidityEvent {
-    /// The ID of the token for which liquidity was increased
+    /// The ID of the token for which liquidity was decreased
     pub position_nft_mint: Pubkey,
-    /// The amount by which liquidity for the NFT position was increased
+    /// The amount by which liquidity for the position was decreased
     pub liquidity: u128,
     /// The amount of token_0 that was paid for the decrease in liquidity
     pub decrease_amount_0: u64,
@@ -154,8 +154,7 @@ pub struct DecreaseLiquidityEvent {
     pub reward_amounts: [u64; REWARD_NUM],
 }
 
-/// Emitted when tokens are collected for a position NFT
-/// The amounts reported may not be exactly equivalent to the amounts transferred, due to rounding behavior
+/// Emitted when tokens are collected for a position 
 #[event]
 pub struct CollectPersonalFeeEvent {
     /// The ID of the token for which underlying tokens were collected
@@ -175,7 +174,7 @@ pub struct CollectPersonalFeeEvent {
     pub amount_1: u64,
 }
 
-/// Emitted when Reward are updated for a position NFT
+/// Emitted when Reward are updated for a pool
 #[event]
 pub struct UpdateRewardInfosEvent {
     /// Reward info

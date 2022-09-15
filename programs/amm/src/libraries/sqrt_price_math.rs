@@ -62,9 +62,7 @@ pub fn get_next_sqrt_price_from_amount_0_rounding_up(
                 .checked_mul(U256::from(sqrt_price_x64))
                 .unwrap(),
         );
-        assert!(numerator_1 > product);
-
-        let denominator = numerator_1 - product;
+        let denominator = numerator_1.checked_sub(product).unwrap();
         numerator_1
             .mul_div_ceil(U256::from(sqrt_price_x64), denominator)
             .unwrap()
@@ -100,9 +98,7 @@ pub fn get_next_sqrt_price_from_amount_1_rounding_down(
             U256::from((amount as u128) << fixed_point_64::RESOLUTION),
             U256::from(liquidity),
         );
-
-        assert!(sqrt_price_x64 > quotient.as_u128());
-        sqrt_price_x64 - quotient.as_u128()
+        sqrt_price_x64.checked_sub(quotient.as_u128()).unwrap()
     }
 }
 

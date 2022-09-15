@@ -1,5 +1,5 @@
 use super::full_math::MulDiv;
-use super::liquidity_amounts;
+use super::liquidity_math;
 use super::sqrt_price_math;
 use crate::states::config::FEE_RATE_DENOMINATOR_VALUE;
 
@@ -35,14 +35,14 @@ pub fn compute_swap_step(
             )
             .unwrap();
         swap_step.amount_in = if zero_for_one {
-            liquidity_amounts::get_amount_0_delta_unsigned(
+            liquidity_math::get_delta_amount_0_unsigned(
                 sqrt_price_target_x64,
                 sqrt_price_current_x64,
                 liquidity,
                 true,
             )
         } else {
-            liquidity_amounts::get_amount_1_delta_unsigned(
+            liquidity_math::get_delta_amount_1_unsigned(
                 sqrt_price_current_x64,
                 sqrt_price_target_x64,
                 liquidity,
@@ -62,14 +62,14 @@ pub fn compute_swap_step(
     } else {
         // round down amount_out
         swap_step.amount_out = if zero_for_one {
-            liquidity_amounts::get_amount_1_delta_unsigned(
+            liquidity_math::get_delta_amount_1_unsigned(
                 sqrt_price_target_x64,
                 sqrt_price_current_x64,
                 liquidity,
                 false,
             )
         } else {
-            liquidity_amounts::get_amount_0_delta_unsigned(
+            liquidity_math::get_delta_amount_0_unsigned(
                 sqrt_price_current_x64,
                 sqrt_price_target_x64,
                 liquidity,
@@ -95,7 +95,7 @@ pub fn compute_swap_step(
     if zero_for_one {
         // if max is reached for exact input case, entire amount_in is needed
         if !(max && is_base_input) {
-            swap_step.amount_in = liquidity_amounts::get_amount_0_delta_unsigned(
+            swap_step.amount_in = liquidity_math::get_delta_amount_0_unsigned(
                 swap_step.sqrt_price_next_x64,
                 sqrt_price_current_x64,
                 liquidity,
@@ -104,7 +104,7 @@ pub fn compute_swap_step(
         };
         // if max is reached for exact output case, entire amount_out is needed
         if !(max && !is_base_input) {
-            swap_step.amount_out = liquidity_amounts::get_amount_1_delta_unsigned(
+            swap_step.amount_out = liquidity_math::get_delta_amount_1_unsigned(
                 swap_step.sqrt_price_next_x64,
                 sqrt_price_current_x64,
                 liquidity,
@@ -113,7 +113,7 @@ pub fn compute_swap_step(
         };
     } else {
         if !(max && is_base_input) {
-            swap_step.amount_in = liquidity_amounts::get_amount_1_delta_unsigned(
+            swap_step.amount_in = liquidity_math::get_delta_amount_1_unsigned(
                 sqrt_price_current_x64,
                 swap_step.sqrt_price_next_x64,
                 liquidity,
@@ -121,7 +121,7 @@ pub fn compute_swap_step(
             )
         };
         if !(max && !is_base_input) {
-            swap_step.amount_out = liquidity_amounts::get_amount_0_delta_unsigned(
+            swap_step.amount_out = liquidity_math::get_delta_amount_0_unsigned(
                 sqrt_price_current_x64,
                 swap_step.sqrt_price_next_x64,
                 liquidity,

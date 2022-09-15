@@ -1,5 +1,5 @@
 use crate::error::ErrorCode;
-use crate::libraries::{liquidity_amounts, liquidity_math};
+use crate::libraries::liquidity_math;
 use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
@@ -406,7 +406,7 @@ pub fn modify_position<'info>(
     let mut amount_1 = 0;
 
     if liquidity_delta != 0 {
-        (amount_0, amount_1) = liquidity_amounts::get_amounts_delta_signed(
+        (amount_0, amount_1) = liquidity_math::get_delta_amounts_signed(
             pool_state.tick_current,
             pool_state.sqrt_price_x64,
             tick_lower_state.tick,

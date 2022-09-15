@@ -1,8 +1,5 @@
 use super::{big_num::U128, U256};
 
-///! Math functions that do not check inputs or outputs
-///! Contains methods that perform common math functions but do not do any
-///! overflow or underflow checks
 
 pub trait UnsafeMathTrait {
     /// Returns ceil (x / y)

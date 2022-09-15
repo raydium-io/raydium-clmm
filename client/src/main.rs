@@ -589,7 +589,7 @@ fn main() -> Result<()> {
                     let tick_upper = v[1].parse::<i32>().unwrap();
                     let tick_lower = v[2].parse::<i32>().unwrap();
                     let liquidity = v[3].parse::<i128>().unwrap();
-                    let amounts = raydium_amm_v3::libraries::get_amounts_delta_signed(
+                    let amounts = raydium_amm_v3::libraries::get_delta_amounts_signed(
                         pool_account.tick_current,
                         pool_account.sqrt_price_x64,
                         tick_lower,
