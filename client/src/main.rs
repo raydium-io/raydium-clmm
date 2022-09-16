@@ -27,7 +27,7 @@ use instructions::rpc::*;
 use instructions::token_instructions::*;
 use instructions::utils::*;
 use raydium_amm_v3::{
-    libraries::{fixed_point_64, tick_array_bit_map, tick_math},
+    libraries::{fixed_point_64, liquidity_math, tick_array_bit_map, tick_math},
     states::{PoolState, TickArrayState},
 };
 
@@ -944,17 +944,69 @@ fn main() -> Result<()> {
                 println!("{:#?}", pool_account);
             }
             "open_position" | "open" => {
-                if v.len() == 7 {
-                    let tick_lower_index = v[1].parse::<i32>().unwrap();
-                    let tick_upper_index = v[2].parse::<i32>().unwrap();
-                    let liquidity = v[3].parse::<u128>().unwrap();
-                    let amount_0_max = v[4].parse::<u64>().unwrap();
-                    let amount_1_max = v[5].parse::<u64>().unwrap();
+                if v.len() == 5 {
+                    let tick_lower_price = v[1].parse::<f64>().unwrap();
+                    let tick_upper_price = v[2].parse::<f64>().unwrap();
+                    let is_base_0 = v[3].parse::<bool>().unwrap();
+                    let imput_amount = v[4].parse::<u64>().unwrap();
 
                     // load pool to get observation
                     let program = anchor_client.program(pool_config.raydium_v3_program);
                     let pool: raydium_amm_v3::states::PoolState =
                         program.account(pool_config.pool_id_account.unwrap())?;
+
+                    let tick_lower_price_x64 = price_to_sqrt_price_x64(
+                        tick_lower_price,
+                        pool.mint_decimals_0,
+                        pool.mint_decimals_1,
+                    );
+                    let tick_upper_price_x64 = price_to_sqrt_price_x64(
+                        tick_upper_price,
+                        pool.mint_decimals_0,
+                        pool.mint_decimals_1,
+                    );
+                    let tick_lower_index = tick_with_spacing(
+                        tick_math::get_tick_at_sqrt_price(tick_lower_price_x64)?,
+                        pool.tick_spacing.into(),
+                    );
+                    let tick_upper_index = tick_with_spacing(
+                        tick_math::get_tick_at_sqrt_price(tick_upper_price_x64)?,
+                        pool.tick_spacing.into(),
+                    );
+                    println!(
+                        "tick_lower_index:{}, tick_upper_index:{}",
+                        tick_lower_index, tick_upper_index
+                    );
+                    let tick_lower_price_x64 = tick_math::get_sqrt_price_at_tick(tick_lower_index)?;
+                    let tick_upper_price_x64 = tick_math::get_sqrt_price_at_tick(tick_upper_index)?;
+                    let liquidity = if is_base_0 {
+                        liquidity_math::get_liquidity_from_single_amount_0(
+                            pool.sqrt_price_x64,
+                            tick_lower_price_x64,
+                            tick_upper_price_x64,
+                            imput_amount,
+                        )
+                    } else {
+                        liquidity_math::get_liquidity_from_single_amount_1(
+                            pool.sqrt_price_x64,
+                            tick_lower_price_x64,
+                            tick_upper_price_x64,
+                            imput_amount,
+                        )
+                    };
+                    let (amount_0, amount_1) = liquidity_math::get_delta_amounts_signed(
+                        pool.tick_current,
+                        pool.sqrt_price_x64,
+                        tick_lower_index,
+                        tick_upper_index,
+                        liquidity as i128,
+                    )?;
+                    println!(
+                        "amount_0:{}, amount_1:{}, liquidity:{}",
+                        amount_0, amount_1, liquidity
+                    );
+                    let amount_0_max = amount_0 as u64;
+                    let amount_1_max = amount_1 as u64;
 
                     let tick_array_lower_start_index =
                         raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
@@ -1038,21 +1090,73 @@ fn main() -> Result<()> {
                         println!("personal position exist:{:?}", find_position);
                     }
                 } else {
-                    println!("invalid command: [open_position tick_lower_index tick_upper_index liquidity amount_0_max amount_1_max]");
+                    println!("invalid command: [open_position tick_lower_price tick_upper_price is_base_0 imput_amount]");
                 }
             }
             "increase_liquidity" => {
-                if v.len() == 7 {
-                    let tick_lower_index = v[1].parse::<i32>().unwrap();
-                    let tick_upper_index = v[2].parse::<i32>().unwrap();
-                    let liquidity = v[3].parse::<u128>().unwrap();
-                    let amount_0_max = v[4].parse::<u64>().unwrap();
-                    let amount_1_max = v[5].parse::<u64>().unwrap();
+                if v.len() == 5 {
+                    let tick_lower_price = v[1].parse::<f64>().unwrap();
+                    let tick_upper_price = v[2].parse::<f64>().unwrap();
+                    let is_base_0 = v[3].parse::<bool>().unwrap();
+                    let imput_amount = v[4].parse::<u64>().unwrap();
 
                     // load pool to get observation
                     let program = anchor_client.program(pool_config.raydium_v3_program);
                     let pool: raydium_amm_v3::states::PoolState =
                         program.account(pool_config.pool_id_account.unwrap())?;
+
+                    let tick_lower_price_x64 = price_to_sqrt_price_x64(
+                        tick_lower_price,
+                        pool.mint_decimals_0,
+                        pool.mint_decimals_1,
+                    );
+                    let tick_upper_price_x64 = price_to_sqrt_price_x64(
+                        tick_upper_price,
+                        pool.mint_decimals_0,
+                        pool.mint_decimals_1,
+                    );
+                    let tick_lower_index = tick_with_spacing(
+                        tick_math::get_tick_at_sqrt_price(tick_lower_price_x64)?,
+                        pool.tick_spacing.into(),
+                    );
+                    let tick_upper_index = tick_with_spacing(
+                        tick_math::get_tick_at_sqrt_price(tick_upper_price_x64)?,
+                        pool.tick_spacing.into(),
+                    );
+                    println!(
+                        "tick_lower_index:{}, tick_upper_index:{}",
+                        tick_lower_index, tick_upper_index
+                    );
+                    let tick_lower_price_x64 = tick_math::get_sqrt_price_at_tick(tick_lower_index)?;
+                    let tick_upper_price_x64 = tick_math::get_sqrt_price_at_tick(tick_upper_index)?;
+                    let liquidity = if is_base_0 {
+                        liquidity_math::get_liquidity_from_single_amount_0(
+                            pool.sqrt_price_x64,
+                            tick_lower_price_x64,
+                            tick_upper_price_x64,
+                            imput_amount,
+                        )
+                    } else {
+                        liquidity_math::get_liquidity_from_single_amount_1(
+                            pool.sqrt_price_x64,
+                            tick_lower_price_x64,
+                            tick_upper_price_x64,
+                            imput_amount,
+                        )
+                    };
+                    let (amount_0, amount_1) = liquidity_math::get_delta_amounts_signed(
+                        pool.tick_current,
+                        pool.sqrt_price_x64,
+                        tick_lower_index,
+                        tick_upper_index,
+                        liquidity as i128,
+                    )?;
+                    println!(
+                        "amount_0:{}, amount_1:{}, liquidity:{}",
+                        amount_0, amount_1, liquidity
+                    );
+                    let amount_0_max = amount_0 as u64;
+                    let amount_1_max = amount_1 as u64;
 
                     let tick_array_lower_start_index =
                         raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
@@ -1135,7 +1239,7 @@ fn main() -> Result<()> {
                         println!("personal position exist:{:?}", find_position);
                     }
                 } else {
-                    println!("invalid command: [increase_liquidity tick_lower_index tick_upper_index liquidity amount_0_max amount_1_max]");
+                    println!("invalid command: [increase_liquidity tick_lower_price tick_upper_price is_base_0 imput_amount]");
                 }
             }
             "decrease_liquidity" => {
