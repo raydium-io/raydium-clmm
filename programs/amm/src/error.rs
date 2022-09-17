@@ -43,6 +43,8 @@ pub enum ErrorCode {
     LiquidityAddValueErr,
     #[msg("Invaild liquidity when update position")]
     InvaildLiquidity,
+    #[msg("Both token amount must not be zero while supply liquidity")]
+    ForbidBothZeroForSupplyLiquidity,
 
     /// swap errors
     // Non fungible position manager

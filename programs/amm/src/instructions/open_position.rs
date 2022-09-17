@@ -350,8 +350,10 @@ pub fn add_liquidity<'b, 'info>(
             pool_state.flip_tick_array_bit(tick_array_upper.start_tick_index)?;
         }
     }
-    require_gt!(amount_0_int, 0);
-    require_gt!(amount_1_int, 0);
+    require!(
+        amount_0_int > 0 || amount_1_int > 0,
+        ErrorCode::ForbidBothZeroForSupplyLiquidity
+    );
 
     let amount_0 = amount_0_int as u64;
     let amount_1 = amount_1_int as u64;
