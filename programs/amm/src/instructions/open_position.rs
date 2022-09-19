@@ -542,8 +542,8 @@ fn create_nft_with_metadata<'info>(
         pool_state_loader.key(),
         payer.key(),
         pool_state_loader.key(),
-        String::from("Raydium AMM V3 Positions"),
-        String::from(""),
+        String::from("Raydium CLMM Position"),
+        String::from("RCLP"),
         String::from(""),
         Some(vec![Creator {
             address: pool_state_loader.key(),
