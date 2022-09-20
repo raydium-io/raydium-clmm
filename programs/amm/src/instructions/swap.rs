@@ -109,6 +109,8 @@ pub struct SwapState {
     pub tick: i32,
     // the global fee growth of the input token
     pub fee_growth_global_x64: u128,
+    // the global fee of the input token
+    pub fee_amount: u64,
     // amount of input token paid as protocol fee
     pub protocol_fee: u64,
     // the current liquidity in range
@@ -143,6 +145,9 @@ pub fn swap_internal<'b, 'info>(
 ) -> Result<(u64, u64)> {
     require!(amount_specified != 0, ErrorCode::InvaildSwapAmountSpecified);
     let mut pool_state = ctx.pool_state.load_mut()?;
+    if !pool_state.get_status_by_bit(PoolStatusBitIndex::Swap) {
+        return err!(ErrorCode::NotApproved);
+    }
     require!(
         if zero_for_one {
             sqrt_price_limit_x64 < pool_state.sqrt_price_x64
@@ -184,6 +189,7 @@ pub fn swap_internal<'b, 'info>(
         } else {
             pool_state.fee_growth_global_1_x64
         },
+        fee_amount: 0,
         protocol_fee: 0,
         liquidity: cache.liquidity_start,
     };
@@ -346,6 +352,7 @@ pub fn swap_internal<'b, 'info>(
                 .fee_growth_global_x64
                 .checked_add(fee_growth_global_x64_delta)
                 .unwrap();
+            state.fee_amount = state.fee_amount.checked_add(step.fee_amount).unwrap();
         }
         // shift tick if we reached the next price
         if state.sqrt_price_x64 == step.sqrt_price_next_x64 {
@@ -441,6 +448,11 @@ pub fn swap_internal<'b, 'info>(
 
     if zero_for_one {
         pool_state.fee_growth_global_0_x64 = state.fee_growth_global_x64;
+        pool_state.total_fees_token_0 = pool_state
+            .total_fees_token_0
+            .checked_add(state.fee_amount)
+            .unwrap();
+
         if state.protocol_fee > 0 {
             pool_state.protocol_fees_token_0 = pool_state
                 .protocol_fees_token_0
@@ -457,6 +469,11 @@ pub fn swap_internal<'b, 'info>(
             .unwrap();
     } else {
         pool_state.fee_growth_global_1_x64 = state.fee_growth_global_x64;
+        pool_state.total_fees_token_1 = pool_state
+            .total_fees_token_1
+            .checked_add(state.fee_amount)
+            .unwrap();
+
         if state.protocol_fee > 0 {
             pool_state.protocol_fees_token_1 = pool_state
                 .protocol_fees_token_1

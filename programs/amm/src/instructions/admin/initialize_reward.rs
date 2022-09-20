@@ -72,6 +72,10 @@ impl InitializeRewardParam {
         {
             return Err(ErrorCode::InvalidRewardInitParam.into());
         }
+        let time_delta  = self.end_time -self.open_time;
+        if time_delta < reward_period_limit::MIN_REWARD_PERIOD || time_delta > reward_period_limit::MIN_REWARD_PERIOD{
+            return Err(ErrorCode::InvalidRewardPeriod.into()); 
+        }
         Ok(())
     }
 }
