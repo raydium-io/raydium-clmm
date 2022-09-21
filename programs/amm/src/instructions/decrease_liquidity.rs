@@ -96,7 +96,6 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
             amount_0_min,
             amount_1_min,
         )?;
-
     transfer_from_pool_vault_to_user(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_0,
@@ -111,6 +110,12 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         &ctx.accounts.recipient_token_account_1,
         &ctx.accounts.token_program,
         decrease_amount_1 + latest_fees_owed_1,
+    )?;
+
+    check_unclaimed_fees_and_vault(
+        &ctx.accounts.pool_state,
+        &mut ctx.accounts.token_vault_0,
+        &mut ctx.accounts.token_vault_1,
     )?;
 
     let personal_position = &mut ctx.accounts.personal_position;
@@ -154,46 +159,58 @@ pub fn decrease_liquidity_and_update_position<'a, 'b, 'c, 'info>(
     amount_1_min: u64,
 ) -> Result<(u64, u64, u64, u64)> {
     let mut pool_state = pool_state_loader.load_mut()?;
+    let mut decrease_amount_0 = 0;
+    let mut decrease_amount_1 = 0;
+    if pool_state.get_status_by_bit(PoolStatusBitIndex::DecreaseLiquidity) {
+        (decrease_amount_0, decrease_amount_1) = burn_liquidity(
+            &mut pool_state,
+            tick_array_lower,
+            tick_array_upper,
+            protocol_position,
+            liquidity,
+        )?;
+        if liquidity > 0 {
+            require!(
+                decrease_amount_0 >= amount_0_min && decrease_amount_1 >= amount_1_min,
+                ErrorCode::PriceSlippageCheck
+            );
+        }
 
-    let (decrease_amount_0, decrease_amount_1) = burn_liquidity(
-        &mut pool_state,
-        tick_array_lower,
-        tick_array_upper,
-        protocol_position,
-        liquidity,
-    )?;
-    if liquidity > 0 {
-        require!(
-            decrease_amount_0 >= amount_0_min && decrease_amount_1 >= amount_1_min,
-            ErrorCode::PriceSlippageCheck
+        personal_position.token_fees_owed_0 = calculate_latest_token_fees(
+            personal_position.token_fees_owed_0,
+            personal_position.fee_growth_inside_0_last_x64,
+            protocol_position.fee_growth_inside_0_last_x64,
+            personal_position.liquidity,
         );
+
+        personal_position.token_fees_owed_1 = calculate_latest_token_fees(
+            personal_position.token_fees_owed_1,
+            personal_position.fee_growth_inside_1_last_x64,
+            protocol_position.fee_growth_inside_1_last_x64,
+            personal_position.liquidity,
+        );
+
+        personal_position.fee_growth_inside_0_last_x64 =
+            protocol_position.fee_growth_inside_0_last_x64;
+        personal_position.fee_growth_inside_1_last_x64 =
+            protocol_position.fee_growth_inside_1_last_x64;
+
+        // update rewards, must update before decrease liquidity
+        personal_position.update_rewards(protocol_position.reward_growth_inside)?;
+        personal_position.liquidity = personal_position.liquidity.checked_sub(liquidity).unwrap();
     }
 
-    personal_position.token_fees_owed_0 = calculate_latest_token_fees(
-        personal_position.token_fees_owed_0,
-        personal_position.fee_growth_inside_0_last_x64,
-        protocol_position.fee_growth_inside_0_last_x64,
-        personal_position.liquidity,
-    );
+    let mut latest_fees_owed_0 = 0;
+    let mut latest_fees_owed_1 = 0;
+    if pool_state.get_status_by_bit(PoolStatusBitIndex::CollectFee) {
+        latest_fees_owed_0 = personal_position.token_fees_owed_0;
+        latest_fees_owed_1 = personal_position.token_fees_owed_1;
+        personal_position.token_fees_owed_0 = 0;
+        personal_position.token_fees_owed_1 = 0;
 
-    personal_position.token_fees_owed_1 = calculate_latest_token_fees(
-        personal_position.token_fees_owed_1,
-        personal_position.fee_growth_inside_1_last_x64,
-        protocol_position.fee_growth_inside_1_last_x64,
-        personal_position.liquidity,
-    );
-
-    personal_position.fee_growth_inside_0_last_x64 = protocol_position.fee_growth_inside_0_last_x64;
-    personal_position.fee_growth_inside_1_last_x64 = protocol_position.fee_growth_inside_1_last_x64;
-
-    let latest_fees_owed_0 = personal_position.token_fees_owed_0;
-    let latest_fees_owed_1 = personal_position.token_fees_owed_1;
-    personal_position.token_fees_owed_0 = 0;
-    personal_position.token_fees_owed_1 = 0;
-
-    // update rewards, must update before decrease liquidity
-    personal_position.update_rewards(protocol_position.reward_growth_inside)?;
-    personal_position.liquidity = personal_position.liquidity.checked_sub(liquidity).unwrap();
+        pool_state.total_fees_claimed_token_0 = latest_fees_owed_0;
+        pool_state.total_fees_claimed_token_1 = latest_fees_owed_1;
+    }
 
     Ok((
         decrease_amount_0,
@@ -252,10 +269,16 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
     token_program: Program<'info, Token>,
     personal_position_state: &mut PersonalPositionState,
 ) -> Result<[u64; REWARD_NUM]> {
-    check_required_accounts_length(pool_state_loader, remaining_accounts)?;
-    
-    let remaining_accounts_len = remaining_accounts.len();
     let mut reward_amounts: [u64; REWARD_NUM] = [0, 0, 0];
+    if !pool_state_loader
+        .load()?
+        .get_status_by_bit(PoolStatusBitIndex::CollectReward)
+    {
+        return Ok(reward_amounts);
+    }
+    check_required_accounts_length(pool_state_loader, remaining_accounts)?;
+
+    let remaining_accounts_len = remaining_accounts.len();
     let mut remaining_accounts = remaining_accounts.iter();
     for i in 0..remaining_accounts_len / 2 {
         let reward_token_vault =
@@ -320,6 +343,33 @@ fn check_required_accounts_length(
     let remaining_accounts_len = remaining_accounts.len();
     if remaining_accounts_len != valid_reward_count * 2 {
         return err!(ErrorCode::InvalidRewardInputAccountNumber);
+    }
+    Ok(())
+}
+
+pub fn check_unclaimed_fees_and_vault(
+    pool_state_loader: &AccountLoader<PoolState>,
+    token_vault_0: &mut Account<TokenAccount>,
+    token_vault_1: &mut Account<TokenAccount>,
+) -> Result<()> {
+    token_vault_0.reload()?;
+    token_vault_1.reload()?;
+
+    let pool_state = &mut pool_state_loader.load_mut()?;
+
+    let unclaimed_fee_token_0 = pool_state
+        .total_fees_token_0
+        .checked_sub(pool_state.total_fees_claimed_token_0)
+        .unwrap();
+    let unclaimed_fee_token_1 = pool_state
+        .total_fees_token_1
+        .checked_sub(pool_state.total_fees_claimed_token_1)
+        .unwrap();
+
+    if unclaimed_fee_token_0 >= token_vault_0.amount
+        || unclaimed_fee_token_1 >= token_vault_1.amount
+    {
+        pool_state.set_status_by_bit(PoolStatusBitIndex::CollectFee, PoolStatusBitFlag::Disable);
     }
     Ok(())
 }

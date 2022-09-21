@@ -1,9 +1,9 @@
 use super::{add_liquidity, AddLiquidityParam};
 use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::states::*;
+use crate::error::ErrorCode;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
-
 #[derive(Accounts)]
 pub struct IncreaseLiquidity<'info> {
     /// Pays to mint the position
@@ -81,6 +81,9 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     amount_1_max: u64,
 ) -> Result<()> {
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;
+    if !pool_state.get_status_by_bit(PoolStatusBitIndex::OpenPositionOrIncreaseLiquidity) {
+        return err!(ErrorCode::NotApproved);
+    }
     let tick_lower = ctx.accounts.personal_position.tick_lower_index;
     let tick_upper = ctx.accounts.personal_position.tick_upper_index;
     let mut add_liquidity_context = AddLiquidityParam {

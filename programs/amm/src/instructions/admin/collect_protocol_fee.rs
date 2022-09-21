@@ -1,8 +1,8 @@
+use crate::decrease_liquidity::check_unclaimed_fees_and_vault;
 use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
-
 #[derive(Accounts)]
 pub struct CollectProtocolFee<'info> {
     /// Only admin can collect fee now
@@ -49,8 +49,23 @@ pub fn collect_protocol_fee(
     let amount_0 = amount_0_requested.min(pool_state.protocol_fees_token_0);
     let amount_1 = amount_1_requested.min(pool_state.protocol_fees_token_1);
 
-    pool_state.protocol_fees_token_0 -= amount_0;
-    pool_state.protocol_fees_token_1 -= amount_1;
+    pool_state.protocol_fees_token_0 = pool_state
+        .protocol_fees_token_0
+        .checked_sub(amount_0)
+        .unwrap();
+    pool_state.protocol_fees_token_1 = pool_state
+        .protocol_fees_token_1
+        .checked_sub(amount_1)
+        .unwrap();
+
+    pool_state.total_fees_claimed_token_0 = pool_state
+        .total_fees_claimed_token_0
+        .checked_add(amount_0)
+        .unwrap();
+    pool_state.total_fees_claimed_token_1 = pool_state
+        .total_fees_claimed_token_1
+        .checked_add(amount_1)
+        .unwrap();
 
     transfer_from_pool_vault_to_user(
         &ctx.accounts.pool_state,
@@ -66,6 +81,12 @@ pub fn collect_protocol_fee(
         &ctx.accounts.recipient_token_account_1,
         &ctx.accounts.token_program,
         amount_1,
+    )?;
+
+    check_unclaimed_fees_and_vault(
+        &ctx.accounts.pool_state,
+        &mut ctx.accounts.token_vault_0,
+        &mut ctx.accounts.token_vault_1,
     )?;
 
     emit!(CollectProtocolFeeEvent {

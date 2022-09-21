@@ -10,7 +10,7 @@ use crate::states::{MAX_TICK_ARRAY_START_INDEX, MIN_TICK_ARRAY_START_INDEX, TICK
 use anchor_lang::prelude::*;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
-use std::ops::BitXor;
+use std::ops::{BitAnd, BitOr, BitXor};
 
 /// Seed to derive account address and signature
 pub const POOL_SEED: &str = "pool";
@@ -19,6 +19,26 @@ pub const POOL_REWARD_VAULT_SEED: &str = "pool_reward_vault";
 // Number of rewards Token
 pub const REWARD_NUM: usize = 3;
 pub const OBSERVATION_UPDATE_DURATION_DEFAULT: u16 = 15;
+
+pub mod reward_period_limit {
+    pub const MIN_REWARD_PERIOD: u64 = 7 * 24 * 60 * 60;
+    pub const MAX_REWARD_PERIOD: u64 = 90 * 24 * 60 * 60;
+    pub const INCREASE_EMISSIONES_PERIOD: u64 = 72 * 60 * 60;
+}
+
+pub enum PoolStatusBitIndex {
+    OpenPositionOrIncreaseLiquidity,
+    DecreaseLiquidity,
+    CollectFee,
+    CollectReward,
+    Swap,
+}
+
+#[derive(PartialEq, Eq)]
+pub enum PoolStatusBitFlag {
+    Enable,
+    Disable,
+}
 
 /// The pool state
 ///
@@ -78,14 +98,28 @@ pub struct PoolState {
     pub swap_in_amount_token_1: u128,
     pub swap_out_amount_token_0: u128,
 
+    /// Bitwise representation of the state of the pool
+    /// bit0, 1: disable open position and increase liquidity, 0: normal
+    /// bit1, 1: disable decrease liquidity, 0: normal
+    /// bit2, 1: disable collect fee, 0: normal
+    /// bit3, 1: disable collect reward, 0: normal
+    /// bit4, 1: disable swap, 0: normal
+    pub status: u8,
     /// Leave blank for future use
-    pub padding: u64,
+    pub padding: [u8; 7],
+
     pub reward_infos: [RewardInfo; REWARD_NUM],
 
     /// Packed initialized tick array state
     pub tick_array_bitmap: [u64; 16],
+
+    pub total_fees_token_0: u64,
+    pub total_fees_claimed_token_0: u64,
+    pub total_fees_token_1: u64,
+    pub total_fees_claimed_token_1: u64,
+
     // Unused bytes for future upgrades.
-    pub padding1: [u64; 32],
+    pub padding1: [u64; 28],
     pub padding2: [u64; 32],
 }
 
@@ -310,6 +344,26 @@ impl PoolState {
             self.tick_spacing.into(),
             zero_for_one,
         )
+    }
+
+    pub fn set_status(&mut self, status: u8) {
+        self.status = status
+    }
+
+    pub fn set_status_by_bit(&mut self, bit: PoolStatusBitIndex, flag: PoolStatusBitFlag) {
+        let s = u8::from(1) << (bit as u8);
+        if flag == PoolStatusBitFlag::Disable {
+            self.status = self.status.bitor(s);
+        } else {
+            let m = u8::from(255).bitxor(s);
+            self.status = self.status.bitand(m);
+        }
+    }
+
+    /// Get status by bit, if it is `noraml` status, return true
+    pub fn get_status_by_bit(&self, bit: PoolStatusBitIndex) -> bool {
+        let status = u8::from(1) << (bit as u8);
+        self.status.bitand(status) == 0
     }
 }
 
@@ -690,6 +744,66 @@ mod test {
                 identity(pool_state.tick_array_bitmap),
                 [0, 0, 0, 0, 0, 0, 0, 0, 7, 1, 0, 0, 0, 0, 0, 0]
             )
+        }
+    }
+
+    mod poo_status_test {
+        use super::*;
+
+        #[test]
+        fn get_set_status_by_bit() {
+            let mut pool_state = PoolState::default();
+            pool_state.set_status(17); // 00010001
+            assert_eq!(
+                pool_state.get_status_by_bit(PoolStatusBitIndex::Swap),
+                false
+            );
+            assert_eq!(
+                pool_state.get_status_by_bit(PoolStatusBitIndex::OpenPositionOrIncreaseLiquidity),
+                false
+            );
+            assert_eq!(
+                pool_state.get_status_by_bit(PoolStatusBitIndex::DecreaseLiquidity),
+                true
+            );
+            assert_eq!(
+                pool_state.get_status_by_bit(PoolStatusBitIndex::CollectFee),
+                true
+            );
+            assert_eq!(
+                pool_state.get_status_by_bit(PoolStatusBitIndex::CollectReward),
+                true
+            );
+
+            // disable -> disable, nothing to change
+            pool_state.set_status_by_bit(PoolStatusBitIndex::Swap, PoolStatusBitFlag::Disable);
+            assert_eq!(
+                pool_state.get_status_by_bit(PoolStatusBitIndex::Swap),
+                false
+            );
+
+            // disable -> enable
+            pool_state.set_status_by_bit(PoolStatusBitIndex::Swap, PoolStatusBitFlag::Enable);
+            assert_eq!(pool_state.get_status_by_bit(PoolStatusBitIndex::Swap), true);
+
+            // enable -> enable, nothing to change
+            pool_state.set_status_by_bit(
+                PoolStatusBitIndex::DecreaseLiquidity,
+                PoolStatusBitFlag::Enable,
+            );
+            assert_eq!(
+                pool_state.get_status_by_bit(PoolStatusBitIndex::DecreaseLiquidity),
+                true
+            );
+            // enable -> disable
+            pool_state.set_status_by_bit(
+                PoolStatusBitIndex::DecreaseLiquidity,
+                PoolStatusBitFlag::Disable,
+            );
+            assert_eq!(
+                pool_state.get_status_by_bit(PoolStatusBitIndex::DecreaseLiquidity),
+                false
+            );
         }
     }
 }

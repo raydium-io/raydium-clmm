@@ -187,6 +187,9 @@ pub fn open_position<'a, 'b, 'c, 'info>(
 ) -> Result<()> {
     {
         let pool_state = &mut ctx.accounts.pool_state.load_mut()?;
+        if !pool_state.get_status_by_bit(PoolStatusBitIndex::OpenPositionOrIncreaseLiquidity) {
+            return err!(ErrorCode::NotApproved);
+        }
         check_ticks_order(tick_lower_index, tick_upper_index)?;
         check_tick_array_start_index(
             tick_array_lower_start_index,

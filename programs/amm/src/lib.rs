@@ -135,6 +135,20 @@ pub mod amm_v3 {
         instructions::initialize_reward(ctx, param)
     }
 
+    /// Collect remaining reward token for reward founder
+    /// 
+    /// # Arguments
+    ///
+    /// * `ctx`- The context of accounts
+    /// * `reward_index` - the index to reward info
+    ///
+    pub fn collect_remaining_rewards(
+        ctx: Context<CollectRemainingRewards>,
+        reward_index: u8,
+    ) -> Result<()> {
+        instructions::collect_remaining_rewards(ctx, reward_index)
+    }
+
     /// Update rewards info of the given pool, can be called for everyone
     ///
     /// # Arguments
