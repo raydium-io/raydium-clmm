@@ -142,6 +142,17 @@ impl TickArrayState {
         Ok(&mut self.ticks[offset_in_array])
     }
 
+    pub fn update_tick_state(
+        &mut self,
+        tick_index: i32,
+        tick_spacing: i32,
+        tick_state: TickState,
+    ) -> Result<()> {
+        let offset_in_array = self.get_tick_offset_in_array(tick_index, tick_spacing)?;
+        self.ticks[offset_in_array] = tick_state;
+        Ok(())
+    }
+
     fn get_tick_offset_in_array(self, tick_index: i32, tick_spacing: i32) -> Result<usize> {
         require_eq!(0, tick_index % tick_spacing);
         let start_tick_index = TickArrayState::get_arrary_start_index(tick_index, tick_spacing);
@@ -600,7 +611,6 @@ mod test {
             assert!(next_tick_state.is_some());
             assert_eq!(identity(next_tick_state.unwrap().tick), 30);
 
-            
             next_tick_state = tick_array.next_initialized_tick(105, 15, false).unwrap();
             assert!(next_tick_state.is_some());
             assert_eq!(identity(next_tick_state.unwrap().tick), 225);
@@ -612,7 +622,6 @@ mod test {
             next_tick_state = tick_array.next_initialized_tick(885, 15, false).unwrap();
             assert!(next_tick_state.is_none());
         }
-
 
         #[test]
         fn next_initialized_tick_when_tick_is_negative() {
@@ -645,7 +654,7 @@ mod test {
             next_tick_state = tick_array.next_initialized_tick(-105, 15, true).unwrap();
             assert!(next_tick_state.is_some());
             assert_eq!(identity(next_tick_state.unwrap().tick), -225);
-            
+
             next_tick_state = tick_array.next_initialized_tick(-105, 15, false).unwrap();
             assert!(next_tick_state.is_some());
             assert_eq!(identity(next_tick_state.unwrap().tick), -30);

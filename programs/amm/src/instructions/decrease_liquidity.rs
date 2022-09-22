@@ -227,31 +227,45 @@ pub fn burn_liquidity<'b, 'info>(
     protocol_position: &mut Box<Account<'info, ProtocolPositionState>>,
     liquidity: u128,
 ) -> Result<(u64, u64)> {
-    let mut tick_array_lower = tick_array_lower_state.load_mut()?;
-    let tick_lower_state = tick_array_lower.get_tick_state_mut(
+    // get tick_state
+    let mut tick_lower_state = *tick_array_lower_state.load_mut()?.get_tick_state_mut(
         protocol_position.tick_lower_index,
         pool_state.tick_spacing as i32,
     )?;
-
-    let mut tick_array_upper = tick_array_upper_state.load_mut()?;
-    let tick_upper_state = tick_array_upper.get_tick_state_mut(
+    let mut tick_upper_state = *tick_array_upper_state.load_mut()?.get_tick_state_mut(
         protocol_position.tick_upper_index,
         pool_state.tick_spacing as i32,
     )?;
+
     let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = modify_position(
         -i128::try_from(liquidity).unwrap(),
         pool_state,
         protocol_position,
+        &mut tick_lower_state,
+        &mut tick_upper_state,
+    )?;
+
+    // update tick_state
+    tick_array_lower_state.load_mut()?.update_tick_state(
+        protocol_position.tick_lower_index,
+        pool_state.tick_spacing as i32,
         tick_lower_state,
+    )?;
+    tick_array_upper_state.load_mut()?.update_tick_state(
+        protocol_position.tick_upper_index,
+        pool_state.tick_spacing as i32,
         tick_upper_state,
     )?;
+
     if flip_tick_lower {
+        let mut tick_array_lower = tick_array_lower_state.load_mut()?;
         tick_array_lower.update_initialized_tick_count(false)?;
         if tick_array_lower.initialized_tick_count == 0 {
             pool_state.flip_tick_array_bit(tick_array_lower.start_tick_index)?;
         }
     }
     if flip_tick_upper {
+        let mut tick_array_upper = tick_array_upper_state.load_mut()?;
         tick_array_upper.update_initialized_tick_count(false)?;
         if tick_array_upper.initialized_tick_count == 0 {
             pool_state.flip_tick_array_bit(tick_array_upper.start_tick_index)?;

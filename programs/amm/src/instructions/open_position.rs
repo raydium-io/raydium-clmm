@@ -316,28 +316,47 @@ pub fn add_liquidity<'b, 'info>(
 ) -> Result<(u64, u64)> {
     assert!(liquidity > 0);
 
-    let mut tick_array_lower = context.tick_array_lower.load_mut()?;
-    require_keys_eq!(tick_array_lower.pool_id, pool_state.key());
-    let tick_lower_state =
-        tick_array_lower.get_tick_state_mut(tick_lower_index, pool_state.tick_spacing as i32)?;
+    require_keys_eq!(context.tick_array_lower.load()?.pool_id, pool_state.key());
+    require_keys_eq!(context.tick_array_upper.load()?.pool_id, pool_state.key());
 
-    let mut tick_array_upper = context.tick_array_upper.load_mut()?;
-    require_keys_eq!(tick_array_upper.pool_id, pool_state.key());
-    let tick_upper_state =
-        tick_array_upper.get_tick_state_mut(tick_upper_index, pool_state.tick_spacing as i32)?;
-
-    tick_lower_state.tick = tick_lower_index;
-    tick_upper_state.tick = tick_upper_index;
+    // get tick_state
+    let mut tick_lower_state = *context
+        .tick_array_lower
+        .load_mut()?
+        .get_tick_state_mut(tick_lower_index, pool_state.tick_spacing as i32)?;
+    let mut tick_upper_state = *context
+        .tick_array_upper
+        .load_mut()?
+        .get_tick_state_mut(tick_upper_index, pool_state.tick_spacing as i32)?;
+    if tick_lower_state.tick == 0 {
+        tick_lower_state.tick = tick_lower_index;
+    }
+    if tick_upper_state.tick == 0 {
+        tick_upper_state.tick = tick_upper_index;
+    }
 
     let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = modify_position(
         i128::try_from(liquidity).unwrap(),
         pool_state,
         context.protocol_position,
+        &mut tick_lower_state,
+        &mut tick_upper_state,
+    )?;
+
+    // update tick_state
+    context.tick_array_lower.load_mut()?.update_tick_state(
+        tick_lower_index,
+        pool_state.tick_spacing as i32,
         tick_lower_state,
+    )?;
+    context.tick_array_upper.load_mut()?.update_tick_state(
+        tick_upper_index,
+        pool_state.tick_spacing as i32,
         tick_upper_state,
     )?;
 
     if flip_tick_lower {
+        let mut tick_array_lower = context.tick_array_lower.load_mut()?;
         let before_init_tick_count = tick_array_lower.initialized_tick_count;
         tick_array_lower.update_initialized_tick_count(true)?;
 
@@ -346,6 +365,7 @@ pub fn add_liquidity<'b, 'info>(
         }
     }
     if flip_tick_upper {
+        let mut tick_array_upper = context.tick_array_upper.load_mut()?;
         let before_init_tick_count = tick_array_upper.initialized_tick_count;
         tick_array_upper.update_initialized_tick_count(true)?;
 
