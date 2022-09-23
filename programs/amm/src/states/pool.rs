@@ -178,6 +178,10 @@ impl PoolState {
         self.swap_out_amount_token_1 = 0;
         self.swap_in_amount_token_1 = 0;
         self.swap_out_amount_token_0 = 0;
+        self.total_fees_token_0 = 0;
+        self.total_fees_claimed_token_0 = 0;
+        self.total_fees_token_1 = 0;
+        self.total_fees_claimed_token_1 = 0;
         self.reward_infos = [RewardInfo::new(self.owner); REWARD_NUM];
         Ok(())
     }

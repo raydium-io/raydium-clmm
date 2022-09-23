@@ -96,21 +96,14 @@ pub mod amm_v3 {
         instructions::close_personal_position(ctx)
     }
 
-    /// close_personal_position
-    pub fn close_protocol_position(
-        ctx: Context<CloseProtocolPosition>,
-        tick_lower_index: i32,
-        tick_upper_index: i32,
-        tick_array_lower_start_index: i32,
-        tick_array_upper_start_index: i32,
-    ) -> Result<()> {
-        instructions::close_protocol_position(
-            ctx,
-            tick_lower_index,
-            tick_upper_index,
-            tick_array_lower_start_index,
-            tick_array_upper_start_index,
-        )
+    /// close_protocol_position
+    pub fn close_protocol_position(ctx: Context<CloseProtocolPosition>) -> Result<()> {
+        instructions::close_protocol_position(ctx)
+    }
+
+    /// close_tick_array
+    pub fn close_tick_array(ctx: Context<CloseTickArray>) -> Result<()> {
+        instructions::close_tick_array(ctx)
     }
 
     /// close_pool
@@ -136,7 +129,7 @@ pub mod amm_v3 {
     }
 
     /// Collect remaining reward token for reward founder
-    /// 
+    ///
     /// # Arguments
     ///
     /// * `ctx`- The context of accounts

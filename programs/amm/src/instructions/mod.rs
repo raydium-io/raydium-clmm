@@ -24,6 +24,3 @@ pub use update_reward_info::*;
 
 pub mod admin;
 pub use admin::*;
-
-pub mod collect_remaining_rewards;
-pub use collect_remaining_rewards::*;

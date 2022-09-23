@@ -52,16 +52,17 @@ pub struct ResetSqrtPrice<'info> {
 }
 
 pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price_x64: u128) -> Result<()> {
-    let mut pool_state = ctx.accounts.pool_state.load_mut()?;
-    let mut observation_state = ctx.accounts.observation_state.load_mut()?;
+    {
+        let mut pool_state = ctx.accounts.pool_state.load_mut()?;
+        let mut observation_state = ctx.accounts.observation_state.load_mut()?;
 
-    // reset observation
-    observation_state.initialized = false;
-    observation_state.observations = [Observation::default(); OBSERVATION_NUM];
-    // update pool
-    let tick = tick_math::get_tick_at_sqrt_price(sqrt_price_x64)?;
-    pool_state.pool_check_reset(sqrt_price_x64, tick)?;
-
+        // reset observation
+        observation_state.initialized = false;
+        observation_state.observations = [Observation::default(); OBSERVATION_NUM];
+        // update pool
+        let tick = tick_math::get_tick_at_sqrt_price(sqrt_price_x64)?;
+        pool_state.pool_check_reset(sqrt_price_x64, tick)?;
+    }
     transfer_from_pool_vault_to_user(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_0,

@@ -38,7 +38,11 @@ pub fn collect_remaining_rewards(
         reward_info.end_time,
         ErrorCode::NotApproved
     );
-    require_keys_eq!(ctx.accounts.reward_funder.key(), reward_info.authority);
+    // require_keys_eq!(ctx.accounts.reward_funder.key(), reward_info.authority);
+    require!(
+        ctx.accounts.reward_funder.key() == crate::admin::id(),
+        ErrorCode::NotApproved
+    );
     require_keys_eq!(
         ctx.accounts.reward_token_vault.key(),
         reward_info.token_vault

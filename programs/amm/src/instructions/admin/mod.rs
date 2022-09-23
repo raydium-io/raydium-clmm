@@ -24,3 +24,9 @@ pub use close_protocol_position::*;
 
 pub mod close_pool;
 pub use close_pool::*;
+
+pub mod close_tick_array;
+pub use close_tick_array::*;
+
+pub mod collect_remaining_rewards;
+pub use collect_remaining_rewards::*;

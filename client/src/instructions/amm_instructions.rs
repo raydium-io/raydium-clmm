@@ -193,13 +193,7 @@ pub fn admin_close_personal_position_instr(
 pub fn admin_close_protocol_position_instr(
     config: &ClientConfig,
     pool_account_key: Pubkey,
-    tick_array_lower_state: Pubkey,
-    tick_array_upper_state: Pubkey,
     protocol_position_state: Pubkey,
-    tick_lower_index: i32,
-    tick_upper_index: i32,
-    tick_array_lower_start_index: i32,
-    tick_array_upper_start_index: i32,
 ) -> Result<Vec<Instruction>> {
     let admin = read_keypair_file(&config.admin_path)?;
     let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
@@ -211,16 +205,31 @@ pub fn admin_close_protocol_position_instr(
         .accounts(raydium_accounts::CloseProtocolPosition {
             owner: program.payer(),
             pool_state: pool_account_key,
-            tick_array_lower_state,
-            tick_array_upper_state,
             protocol_position_state,
         })
-        .args(raydium_instruction::CloseProtocolPosition {
-            tick_lower_index,
-            tick_upper_index,
-            tick_array_lower_start_index,
-            tick_array_upper_start_index,
+        .args(raydium_instruction::CloseProtocolPosition)
+        .instructions()?;
+    Ok(instructions)
+}
+
+pub fn admin_close_tick_array_instr(
+    config: &ClientConfig,
+    pool_account_key: Pubkey,
+    tick_array_state: Pubkey,
+) -> Result<Vec<Instruction>> {
+    let admin = read_keypair_file(&config.admin_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(admin));
+    let program = client.program(config.raydium_v3_program);
+    let instructions = program
+        .request()
+        .accounts(raydium_accounts::CloseTickArray {
+            owner: program.payer(),
+            pool_state: pool_account_key,
+            tick_array_state,
         })
+        .args(raydium_instruction::CloseTickArray)
         .instructions()?;
     Ok(instructions)
 }
@@ -229,6 +238,8 @@ pub fn admin_close_pool_instr(
     config: &ClientConfig,
     pool_account_key: Pubkey,
     obvservation_key: Pubkey,
+    token_vault_0: Pubkey,
+    token_vault_1: Pubkey,
 ) -> Result<Vec<Instruction>> {
     let admin = read_keypair_file(&config.admin_path)?;
     let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
@@ -241,6 +252,9 @@ pub fn admin_close_pool_instr(
             owner: program.payer(),
             pool_state: pool_account_key,
             observation_state: obvservation_key,
+            token_vault_0,
+            token_vault_1,
+            token_program: spl_token::id(),
         })
         .args(raydium_instruction::ClosePool)
         .instructions()?;
@@ -540,6 +554,49 @@ pub fn swap_instr(
             other_amount_threshold,
             sqrt_price_limit_x64: sqrt_price_limit_x64.unwrap_or(0u128),
             is_base_input,
+        })
+        .instructions()?;
+    Ok(instructions)
+}
+
+pub fn initialize_reward_instr(
+    config: &ClientConfig,
+    pool_account_key: Pubkey,
+    amm_config: Pubkey,
+    reward_token_mint: Pubkey,
+    reward_token_vault: Pubkey,
+    user_reward_token: Pubkey,
+    reward_index: u8,
+    open_time: u64,
+    end_time: u64,
+    emissions_per_second_x64: u128,
+) -> Result<Vec<Instruction>> {
+    let admin = read_keypair_file(&config.admin_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(admin));
+    let program = client.program(config.raydium_v3_program);
+
+    let instructions = program
+        .request()
+        .accounts(raydium_accounts::InitializeReward {
+            reward_funder: program.payer(),
+            funder_token_account: user_reward_token,
+            amm_config,
+            pool_state: pool_account_key,
+            reward_token_mint,
+            reward_token_vault,
+            token_program: spl_token::id(),
+            system_program: system_program::id(),
+            rent: sysvar::rent::id(),
+        })
+        .args(raydium_instruction::InitializeReward {
+            param: raydium_amm_v3::instructions::InitializeRewardParam {
+                reward_index,
+                open_time,
+                end_time,
+                emissions_per_second_x64,
+            },
         })
         .instructions()?;
     Ok(instructions)
