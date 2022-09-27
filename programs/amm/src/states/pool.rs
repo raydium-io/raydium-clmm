@@ -19,7 +19,13 @@ pub const POOL_REWARD_VAULT_SEED: &str = "pool_reward_vault";
 // Number of rewards Token
 pub const REWARD_NUM: usize = 3;
 pub const OBSERVATION_UPDATE_DURATION_DEFAULT: u16 = 15;
-
+#[cfg(feature = "paramset")]
+pub mod reward_period_limit {
+    pub const MIN_REWARD_PERIOD: u64 = 1 * 60 * 60;
+    pub const MAX_REWARD_PERIOD: u64 = 2 * 60 * 60;
+    pub const INCREASE_EMISSIONES_PERIOD: u64 = 30 * 60;
+}
+#[cfg(not(feature = "paramset"))]
 pub mod reward_period_limit {
     pub const MIN_REWARD_PERIOD: u64 = 7 * 24 * 60 * 60;
     pub const MAX_REWARD_PERIOD: u64 = 90 * 24 * 60 * 60;
