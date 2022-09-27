@@ -968,12 +968,11 @@ fn main() -> Result<()> {
                 }
             }
             "init_reward" => {
-                if v.len() == 6 {
-                    let reward_index = v[1].parse::<u8>().unwrap();
-                    let open_time = v[2].parse::<u64>().unwrap();
-                    let end_time = v[3].parse::<u64>().unwrap();
-                    let emissions_per_second = v[4].parse::<f64>().unwrap();
-                    let reward_token_mint = Pubkey::from_str(&v[5]).unwrap();
+                if v.len() == 5 {
+                    let open_time = v[1].parse::<u64>().unwrap();
+                    let end_time = v[2].parse::<u64>().unwrap();
+                    let emissions_per_second = v[3].parse::<f64>().unwrap();
+                    let reward_token_mint = Pubkey::from_str(&v[4]).unwrap();
 
                     let emissions_per_second_x64 =
                         (emissions_per_second * fixed_point_64::Q64 as f64) as u128;
@@ -1001,7 +1000,6 @@ fn main() -> Result<()> {
                         reward_token_mint,
                         reward_token_vault,
                         user_reward_token,
-                        reward_index,
                         open_time,
                         end_time,
                         emissions_per_second_x64,
@@ -1018,7 +1016,7 @@ fn main() -> Result<()> {
                     let signature = send_txn(&rpc_client, &txn, true)?;
                     println!("{}", signature);
                 } else {
-                    println!("invalid command: [init_reward reward_index open_time, end_time, emissions_per_second_x64, reward_token_mint]");
+                    println!("invalid command: [init_reward open_time, end_time, emissions_per_second_x64, reward_token_mint]");
                 }
             }
             "ppool" => {

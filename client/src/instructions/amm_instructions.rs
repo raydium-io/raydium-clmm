@@ -566,7 +566,6 @@ pub fn initialize_reward_instr(
     reward_token_mint: Pubkey,
     reward_token_vault: Pubkey,
     user_reward_token: Pubkey,
-    reward_index: u8,
     open_time: u64,
     end_time: u64,
     emissions_per_second_x64: u128,
@@ -592,7 +591,6 @@ pub fn initialize_reward_instr(
         })
         .args(raydium_instruction::InitializeReward {
             param: raydium_amm_v3::instructions::InitializeRewardParam {
-                reward_index,
                 open_time,
                 end_time,
                 emissions_per_second_x64,

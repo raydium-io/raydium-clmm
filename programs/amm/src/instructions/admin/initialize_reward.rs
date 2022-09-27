@@ -52,8 +52,6 @@ pub struct InitializeReward<'info> {
 
 #[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Debug, PartialEq)]
 pub struct InitializeRewardParam {
-    /// Reward index
-    pub reward_index: u8,
     /// Reward open time
     pub open_time: u64,
     /// Reward end time
@@ -68,13 +66,14 @@ impl InitializeRewardParam {
             || self.open_time < curr_timestamp
             || self.end_time < curr_timestamp
             || self.emissions_per_second_x64 == 0
-            || self.reward_index >= REWARD_NUM as u8
         {
             return Err(ErrorCode::InvalidRewardInitParam.into());
         }
-        let time_delta  = self.end_time -self.open_time;
-        if time_delta < reward_period_limit::MIN_REWARD_PERIOD || time_delta > reward_period_limit::MIN_REWARD_PERIOD{
-            return Err(ErrorCode::InvalidRewardPeriod.into()); 
+        let time_delta = self.end_time - self.open_time;
+        if time_delta < reward_period_limit::MIN_REWARD_PERIOD
+            || time_delta > reward_period_limit::MIN_REWARD_PERIOD
+        {
+            return Err(ErrorCode::InvalidRewardPeriod.into());
         }
         Ok(())
     }
@@ -108,7 +107,6 @@ pub fn initialize_reward(
 
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;
     pool_state.initialize_reward(
-        param.reward_index as usize,
         param.open_time,
         param.end_time,
         param.emissions_per_second_x64,

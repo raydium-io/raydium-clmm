@@ -188,7 +188,6 @@ impl PoolState {
 
     pub fn initialize_reward(
         &mut self,
-        index: usize,
         open_time: u64,
         end_time: u64,
         reward_per_second_x64: u128,
@@ -196,9 +195,6 @@ impl PoolState {
         token_vault: &Pubkey,
         authority: &Pubkey,
     ) -> Result<()> {
-        if index >= REWARD_NUM {
-            return Err(ErrorCode::InvalidRewardIndex.into());
-        }
         let reward_infos = self.reward_infos;
         let lowest_index = match reward_infos.iter().position(|r| !r.initialized()) {
             Some(lowest_index) => lowest_index,
@@ -209,23 +205,23 @@ impl PoolState {
             require_keys_neq!(*token_mint, self.reward_infos[i].token_mint);
         }
 
-        if lowest_index != index {
+        if lowest_index >= REWARD_NUM {
             return Err(ErrorCode::InvalidRewardIndex.into());
         }
 
-        // self.reward_infos[index].reward_state = RewardState::Initialized as u8;
-        self.reward_infos[index].last_update_time = open_time;
-        self.reward_infos[index].open_time = open_time;
-        self.reward_infos[index].end_time = end_time;
-        self.reward_infos[index].emissions_per_second_x64 = reward_per_second_x64;
-        self.reward_infos[index].token_mint = *token_mint;
-        self.reward_infos[index].token_vault = *token_vault;
-        self.reward_infos[index].authority = *authority;
+        // self.reward_infos[lowest_index].reward_state = RewardState::Initialized as u8;
+        self.reward_infos[lowest_index].last_update_time = open_time;
+        self.reward_infos[lowest_index].open_time = open_time;
+        self.reward_infos[lowest_index].end_time = end_time;
+        self.reward_infos[lowest_index].emissions_per_second_x64 = reward_per_second_x64;
+        self.reward_infos[lowest_index].token_mint = *token_mint;
+        self.reward_infos[lowest_index].token_vault = *token_vault;
+        self.reward_infos[lowest_index].authority = *authority;
         #[cfg(feature = "enable-log")]
         msg!(
             "reward_index:{}, reward_infos:{:?}",
-            index,
-            self.reward_infos[index],
+            lowest_index,
+            self.reward_infos[lowest_index],
         );
         Ok(())
     }
