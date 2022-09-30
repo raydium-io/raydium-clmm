@@ -528,15 +528,12 @@ fn main() -> Result<()> {
             }
             "cmp_key" => {
                 if v.len() == 3 {
-                    let token_mint_0 = Pubkey::from_str(&v[1]).unwrap();
-                    let token_mint_1 = Pubkey::from_str(&v[2]).unwrap();
-                    if token_mint_0 < token_mint_1 {
-                        println!("mint_0: {}", token_mint_0);
-                        println!("mint_1: {}", token_mint_1);
-                    } else {
-                        println!("mint_0: {}", token_mint_1);
-                        println!("mint_1: {}", token_mint_0);
+                    let mut token_mint_0 = Pubkey::from_str(&v[1]).unwrap();
+                    let mut token_mint_1 = Pubkey::from_str(&v[2]).unwrap();
+                    if token_mint_0 > token_mint_1 {
+                        std::mem::swap(&mut token_mint_0, &mut token_mint_1);
                     }
+                    println!("mint0:{}, mint1:{}", token_mint_0, token_mint_1);
                 } else {
                     println!("cmp_key mint mint");
                 }
@@ -606,10 +603,17 @@ fn main() -> Result<()> {
                 }
             }
             "create_pool" | "cpool" => {
-                if v.len() == 3 {
+                if v.len() == 5 {
                     let config_index = v[1].parse::<u16>().unwrap();
-                    let price = v[2].parse::<f64>().unwrap();
-                    let load_pubkeys = vec![pool_config.mint0.unwrap(), pool_config.mint1.unwrap()];
+                    let mut price = v[2].parse::<f64>().unwrap();
+                    let mut mint0 = Pubkey::from_str(&v[3]).unwrap();
+                    let mut mint1 = Pubkey::from_str(&v[4]).unwrap();
+                    if mint0 > mint1 {
+                        std::mem::swap(&mut mint0, &mut mint1);
+                        price = 1.0 / price;
+                    }
+                    println!("mint0:{}, mint1:{}, price:{}", mint0, mint1, price);
+                    let load_pubkeys = vec![mint0, mint1];
                     let rsps = rpc_client.get_multiple_accounts(&load_pubkeys)?;
                     let mint0_account =
                         spl_token::state::Mint::unpack(&rsps[0].as_ref().unwrap().data).unwrap();
@@ -643,8 +647,8 @@ fn main() -> Result<()> {
                         &pool_config.clone(),
                         amm_config_key,
                         observation_account.pubkey(),
-                        pool_config.mint0.unwrap(),
-                        pool_config.mint1.unwrap(),
+                        mint0,
+                        mint1,
                         sqrt_price_x64,
                     )?;
                     create_observation_instr.extend(create_pool_instr);

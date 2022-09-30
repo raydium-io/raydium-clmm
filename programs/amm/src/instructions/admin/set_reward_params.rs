@@ -52,15 +52,16 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
     }
     let mut reward_amount: u64 = 0;
     if reward_info.last_update_time == reward_info.end_time {
+        // reward emission has finished
         require_gt!(open_time, current_timestamp);
         require_gt!(emissions_per_second_x64, 0);
         let time_delta = end_time.checked_sub(open_time).unwrap();
         if time_delta < reward_period_limit::MIN_REWARD_PERIOD
-            || time_delta > reward_period_limit::MIN_REWARD_PERIOD
+            || time_delta > reward_period_limit::MAX_REWARD_PERIOD
         {
             return Err(ErrorCode::InvalidRewardPeriod.into());
         }
-        reward_amount = U256::from(end_time - open_time)
+        reward_amount = U256::from(time_delta)
             .mul_div_ceil(
                 U256::from(emissions_per_second_x64),
                 U256::from(fixed_point_64::Q64),
@@ -72,18 +73,24 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
         reward_info.end_time = end_time;
         reward_info.emissions_per_second_x64 = emissions_per_second_x64;
     } else {
+        // reward emission does not finish
         if emissions_per_second_x64 == 0 && end_time == 0 {
             return Err(ErrorCode::InvalidRewardInitParam.into());
         }
         if emissions_per_second_x64 > 0 {
-            if reward_info.end_time - current_timestamp > reward_period_limit::INCREASE_EMISSIONES_PERIOD {
+            if reward_info.end_time.checked_sub(current_timestamp).unwrap()
+                > reward_period_limit::INCREASE_EMISSIONES_PERIOD
+            {
                 return err!(ErrorCode::NotApproveUpdateRewardEmissiones);
             }
             // emissions_per_second_x64 must not smaller than before
             let emission_diff_x64 = emissions_per_second_x64
                 .checked_sub(reward_info.emissions_per_second_x64)
                 .unwrap();
-            let time_delta = reward_info.end_time - reward_info.last_update_time;
+            let time_delta = reward_info
+                .end_time
+                .checked_sub(reward_info.last_update_time)
+                .unwrap();
             reward_amount = U256::from(time_delta)
                 .mul_div_floor(
                     U256::from(emission_diff_x64),

@@ -69,9 +69,9 @@ impl InitializeRewardParam {
         {
             return Err(ErrorCode::InvalidRewardInitParam.into());
         }
-        let time_delta = self.end_time - self.open_time;
+        let time_delta = self.end_time.checked_sub(self.open_time).unwrap();
         if time_delta < reward_period_limit::MIN_REWARD_PERIOD
-            || time_delta > reward_period_limit::MIN_REWARD_PERIOD
+            || time_delta > reward_period_limit::MAX_REWARD_PERIOD
         {
             return Err(ErrorCode::InvalidRewardPeriod.into());
         }
@@ -113,6 +113,7 @@ pub fn initialize_reward(
         &ctx.accounts.reward_token_mint.key(),
         &ctx.accounts.reward_token_vault.key(),
         &ctx.accounts.reward_funder.key(),
+        &ctx.accounts.amm_config.owner,
     )?;
 
     transfer_from_user_to_pool_vault(

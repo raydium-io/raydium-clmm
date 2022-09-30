@@ -200,19 +200,46 @@ impl PoolState {
         token_mint: &Pubkey,
         token_vault: &Pubkey,
         authority: &Pubkey,
+        amm_config_owner: &Pubkey,
     ) -> Result<()> {
         let reward_infos = self.reward_infos;
         let lowest_index = match reward_infos.iter().position(|r| !r.initialized()) {
             Some(lowest_index) => lowest_index,
-            None => return Err(ErrorCode::InvalidRewardIndex.into()),
+            None => return Err(ErrorCode::FullRewardInfo.into()),
         };
 
-        for i in 0..lowest_index {
-            require_keys_neq!(*token_mint, self.reward_infos[i].token_mint);
+        if lowest_index >= REWARD_NUM {
+            return Err(ErrorCode::FullRewardInfo.into());
         }
 
-        if lowest_index >= REWARD_NUM {
-            return Err(ErrorCode::InvalidRewardIndex.into());
+        // one of first two reward token must be a vault token and the last reward token must be controled by the admin
+        let reward_mints: Vec<Pubkey> = reward_infos
+            .into_iter()
+            .map(|item| item.token_mint)
+            .collect();
+        // check init token_mint is not already in use
+        require!(
+            !reward_mints.contains(&token_mint),
+            ErrorCode::RewardTokenAlreadyInUse
+        );
+        // The current init token is the penult.
+        if lowest_index == REWARD_NUM - 2 {
+            // If token_mint_0 or token_mint_1 is not contains in the initialized rewards token,
+            // the current init reward token mint must be token_mint_0 or token_mint_1
+            if !reward_mints.contains(&self.token_mint_0)
+                && !reward_mints.contains(&self.token_mint_1)
+            {
+                require!(
+                    *token_mint == self.token_mint_0 || *token_mint == self.token_mint_1,
+                    ErrorCode::ExceptPoolVaultMint
+                );
+            }
+        } else if lowest_index == REWARD_NUM - 1 {
+            // the last reward token must be controled by the admin
+            require!(
+                *authority == *amm_config_owner || *authority == crate::admin::id(),
+                ErrorCode::NotApproved
+            );
         }
 
         // self.reward_infos[lowest_index].reward_state = RewardState::Initialized as u8;

@@ -66,6 +66,12 @@ pub enum ErrorCode {
     /// reward errors
     #[msg("Invalid reward index")]
     InvalidRewardIndex,
+    #[msg("The init reward token reach to the max")]
+    FullRewardInfo,
+    #[msg("The init reward token already in use")]
+    RewardTokenAlreadyInUse,
+    #[msg("The reward tokens must contain one of pool vault mint except the last reward")]
+    ExceptPoolVaultMint,
     #[msg("Invalid reward init param")]
     InvalidRewardInitParam,
     #[msg("Invalid collect reward desired amount")]
@@ -74,7 +80,9 @@ pub enum ErrorCode {
     InvalidRewardInputAccountNumber,
     #[msg("Invalid reward period")]
     InvalidRewardPeriod,
-    #[msg("Modification of emissiones is allowed within 72 hours from the end of the previous cycle")]
+    #[msg(
+        "Modification of emissiones is allowed within 72 hours from the end of the previous cycle"
+    )]
     NotApproveUpdateRewardEmissiones,
     #[msg("uninitialized reward info")]
     UnInitializedRewardInfo,
