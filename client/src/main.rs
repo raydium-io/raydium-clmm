@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 use anchor_client::{Client, Cluster};
 use anchor_lang::prelude::AccountMeta;
+use anchor_lang::AnchorDeserialize;
 use anyhow::{format_err, Result};
 use arrayref::array_ref;
 use configparser::ini::Ini;
@@ -1742,6 +1743,95 @@ fn main() -> Result<()> {
                     let price = (2.0 as f64).powi(min / 2);
                     let price_x64 = price * fixed_point_64::Q64 as f64;
                     println!("price_x64:{}", price_x64);
+                }
+            }
+            "decode_instruction" => {
+                if v.len() == 2 {
+                    let instr_data = v[1];
+                    let data = hex::decode(instr_data)?;
+                    let mut ix_data: &[u8] = &data;
+                    let mut sighash: [u8; 8] = [0; 8];
+                    sighash.copy_from_slice(&ix_data[..8]);
+                    ix_data = ix_data.get(8..).unwrap();
+
+                    match sighash {
+                        [135, 128, 47, 77, 15, 152, 240, 49] => {
+                            let ix = raydium_amm_v3::instruction::OpenPosition::deserialize(
+                                &mut &ix_data[..],
+                            )
+                            .map_err(|_| {
+                                anchor_lang::error::ErrorCode::InstructionDidNotDeserialize
+                            })
+                            .unwrap();
+                            let raydium_amm_v3::instruction::OpenPosition {
+                                tick_lower_index,
+                                tick_upper_index,
+                                tick_array_lower_start_index,
+                                tick_array_upper_start_index,
+                                liquidity,
+                                amount_0_max,
+                                amount_1_max,
+                            } = ix;
+                            println!("tick_lower_index:{}, tick_upper_index:{}, tick_array_lower_start_index:{}, tick_array_upper_start_index:{}, liquidity:{}, amount_0_max{}, amount_1_max{}", tick_lower_index, tick_upper_index, tick_array_lower_start_index, tick_array_upper_start_index, liquidity, amount_0_max, amount_1_max);
+                        }
+                        [46, 156, 243, 118, 13, 205, 251, 178] => {
+                            let ix = raydium_amm_v3::instruction::IncreaseLiquidity::deserialize(
+                                &mut &ix_data[..],
+                            )
+                            .map_err(|_| {
+                                anchor_lang::error::ErrorCode::InstructionDidNotDeserialize
+                            })
+                            .unwrap();
+                            let raydium_amm_v3::instruction::IncreaseLiquidity {
+                                liquidity,
+                                amount_0_max,
+                                amount_1_max,
+                            } = ix;
+                            println!(
+                                "liquidity:{}, amount_0_max:{}, amount_1_max:{}",
+                                liquidity, amount_0_max, amount_1_max
+                            );
+                        }
+                        [160, 38, 208, 111, 104, 91, 44, 1] => {
+                            let ix = raydium_amm_v3::instruction::DecreaseLiquidity::deserialize(
+                                &mut &ix_data[..],
+                            )
+                            .map_err(|_| {
+                                anchor_lang::error::ErrorCode::InstructionDidNotDeserialize
+                            })
+                            .unwrap();
+                            let raydium_amm_v3::instruction::DecreaseLiquidity {
+                                liquidity,
+                                amount_0_min,
+                                amount_1_min,
+                            } = ix;
+                            println!(
+                                "liquidity:{}, amount_0_min:{}, amount_1_min:{}",
+                                liquidity, amount_0_min, amount_1_min
+                            );
+                        }
+                        [248, 198, 158, 145, 225, 117, 135, 200] => {
+                            let ix =
+                                raydium_amm_v3::instruction::Swap::deserialize(&mut &ix_data[..])
+                                    .map_err(|_| {
+                                        anchor_lang::error::ErrorCode::InstructionDidNotDeserialize
+                                    })
+                                    .unwrap();
+                            let raydium_amm_v3::instruction::Swap {
+                                amount,
+                                other_amount_threshold,
+                                sqrt_price_limit_x64,
+                                is_base_input,
+                            } = ix;
+                            println!(
+                                "amount:{}, other_amount_threshold:{}, sqrt_price_limit_x64:{}, is_base_input:{}",
+                                amount, other_amount_threshold, sqrt_price_limit_x64, is_base_input
+                            );
+                        }
+                        _ => {
+                            println!("Not decode yet");
+                        }
+                    }
                 }
             }
             _ => {
