@@ -128,7 +128,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         updated_protocol_position.fee_growth_inside_1_last_x64;
 
     // update rewards, must update before increase liquidity
-    personal_position.update_rewards(updated_protocol_position.reward_growth_inside)?;
+    personal_position.update_rewards(updated_protocol_position.reward_growth_inside, true)?;
     personal_position.liquidity = personal_position.liquidity.checked_add(liquidity).unwrap();
 
     emit!(IncreaseLiquidityEvent {

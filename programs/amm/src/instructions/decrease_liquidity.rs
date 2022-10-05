@@ -196,7 +196,7 @@ pub fn decrease_liquidity_and_update_position<'a, 'b, 'c, 'info>(
             protocol_position.fee_growth_inside_1_last_x64;
 
         // update rewards, must update before decrease liquidity
-        personal_position.update_rewards(protocol_position.reward_growth_inside)?;
+        personal_position.update_rewards(protocol_position.reward_growth_inside,true)?;
         personal_position.liquidity = personal_position.liquidity.checked_sub(liquidity).unwrap();
     }
 
@@ -205,11 +205,27 @@ pub fn decrease_liquidity_and_update_position<'a, 'b, 'c, 'info>(
     if pool_state.get_status_by_bit(PoolStatusBitIndex::CollectFee) {
         latest_fees_owed_0 = personal_position.token_fees_owed_0;
         latest_fees_owed_1 = personal_position.token_fees_owed_1;
+
+        require_gt!(
+            pool_state.total_fees_token_0 - pool_state.total_fees_claimed_token_0,
+            latest_fees_owed_0
+        );
+        require_gt!(
+            pool_state.total_fees_token_1 - pool_state.total_fees_claimed_token_1,
+            latest_fees_owed_1
+        );
+
         personal_position.token_fees_owed_0 = 0;
         personal_position.token_fees_owed_1 = 0;
 
-        pool_state.total_fees_claimed_token_0 = latest_fees_owed_0;
-        pool_state.total_fees_claimed_token_1 = latest_fees_owed_1;
+        pool_state.total_fees_claimed_token_0 = pool_state
+            .total_fees_claimed_token_0
+            .checked_add(latest_fees_owed_0)
+            .unwrap();
+        pool_state.total_fees_claimed_token_1 = pool_state
+            .total_fees_claimed_token_1
+            .checked_add(latest_fees_owed_1)
+            .unwrap();
     }
 
     Ok((

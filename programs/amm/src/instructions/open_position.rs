@@ -275,7 +275,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             updated_protocol_position.fee_growth_inside_1_last_x64;
 
         // update rewards, must update before update liquidity
-        personal_position.update_rewards(updated_protocol_position.reward_growth_inside)?;
+        personal_position.update_rewards(updated_protocol_position.reward_growth_inside, false)?;
         personal_position.liquidity = liquidity;
 
         emit!(CreatePersonalPositionEvent {
