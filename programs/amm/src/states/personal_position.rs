@@ -47,30 +47,37 @@ impl PersonalPositionState {
     pub const LEN: usize =
         8 + 1 + 32 + 32 + 4 + 4 + 16 + 16 + 16 + 8 + 8 + PositionRewardInfo::LEN * REWARD_NUM + 64;
 
-    pub fn update_rewards(&mut self, reward_growths_inside: [u128; REWARD_NUM]) -> Result<()> {
+    pub fn update_rewards(
+        &mut self,
+        reward_growths_inside: [u128; REWARD_NUM],
+        add_delta: bool,
+    ) -> Result<()> {
         for i in 0..REWARD_NUM {
             let reward_growth_inside = reward_growths_inside[i];
             let curr_reward_info = self.reward_infos[i];
 
-            // Calculate reward delta.
-            // If reward delta overflows, default to a zero value. This means the position loses all
-            // rewards earned since the last time the position was modified or rewards were collected.
-            let reward_growth_delta =
-                reward_growth_inside.saturating_sub(curr_reward_info.growth_inside_last_x64);
+            if add_delta {
+                // Calculate reward delta.
+                // If reward delta overflows, default to a zero value. This means the position loses all
+                // rewards earned since the last time the position was modified or rewards were collected.
+                let reward_growth_delta =
+                    reward_growth_inside.saturating_sub(curr_reward_info.growth_inside_last_x64);
 
-            let amount_owed_delta = U256::from(reward_growth_delta)
-                .mul_div_floor(U256::from(self.liquidity), U256::from(fixed_point_64::Q64))
-                .unwrap()
-                .as_u64();
+                let amount_owed_delta = U256::from(reward_growth_delta)
+                    .mul_div_floor(U256::from(self.liquidity), U256::from(fixed_point_64::Q64))
+                    .unwrap()
+                    .as_u64();
+
+                // Overflows not allowed. Must collect rewards owed before overflow.
+                self.reward_infos[i].reward_amount_owed = curr_reward_info
+                    .reward_amount_owed
+                    .checked_add(amount_owed_delta)
+                    .unwrap();
+
+                #[cfg(feature = "enable-log")]
+                msg!("update personal reward, index:{}, owed_before:{:?}, amount_owed_delta:{}, owed_after:{}, reward_growth_delta:{}, self.liquidity:{}", i, curr_reward_info.reward_amount_owed,amount_owed_delta, self.reward_infos[i].reward_amount_owed,reward_growth_delta,self.liquidity );
+            }
             self.reward_infos[i].growth_inside_last_x64 = reward_growth_inside;
-
-            // Overflows not allowed. Must collect rewards owed before overflow.
-            self.reward_infos[i].reward_amount_owed = curr_reward_info
-                .reward_amount_owed
-                .checked_add(amount_owed_delta)
-                .unwrap();
-            #[cfg(feature = "enable-log")]
-            msg!("update personal reward, index:{}, owed_before:{:?}, amount_owed_delta:{}, owed_after:{}, reward_growth_delta:{}, self.liquidity:{}", i, curr_reward_info.reward_amount_owed,amount_owed_delta, self.reward_infos[i].reward_amount_owed,reward_growth_delta,self.liquidity );
         }
         Ok(())
     }
@@ -154,7 +161,7 @@ pub struct DecreaseLiquidityEvent {
     pub reward_amounts: [u64; REWARD_NUM],
 }
 
-/// Emitted when tokens are collected for a position 
+/// Emitted when tokens are collected for a position
 #[event]
 pub struct CollectPersonalFeeEvent {
     /// The ID of the token for which underlying tokens were collected
