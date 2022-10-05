@@ -416,15 +416,11 @@ pub fn get_fee_growth_inside(
         )
     };
     let fee_growth_inside_0_x64 = fee_growth_global_0_x64
-        .checked_sub(fee_growth_below_0_x64)
-        .unwrap()
-        .checked_sub(fee_growth_above_0_x64)
-        .unwrap();
+        .wrapping_sub(fee_growth_below_0_x64)
+        .wrapping_sub(fee_growth_above_0_x64);
     let fee_growth_inside_1_x64 = fee_growth_global_1_x64
-        .checked_sub(fee_growth_below_1_x64)
-        .unwrap()
-        .checked_sub(fee_growth_above_1_x64)
-        .unwrap();
+        .wrapping_sub(fee_growth_below_1_x64)
+        .wrapping_sub(fee_growth_above_1_x64);
 
     (fee_growth_inside_0_x64, fee_growth_inside_1_x64)
 }
@@ -445,21 +441,17 @@ pub fn get_reward_growths_inside(
         }
 
         // By convention, assume all prior growth happened below the tick
-        let reward_growths_below = if tick_lower.liquidity_gross == 0 {
-            reward_infos[i].reward_growth_global_x64
-        } else if tick_current_index < tick_lower.tick {
+        let reward_growths_below = if tick_current_index >= tick_lower.tick {
+            tick_lower.reward_growths_outside_x64[i]
+        } else {
             reward_infos[i]
                 .reward_growth_global_x64
                 .checked_sub(tick_lower.reward_growths_outside_x64[i])
                 .unwrap()
-        } else {
-            tick_lower.reward_growths_outside_x64[i]
         };
 
         // By convention, assume all prior growth happened below the tick, not above
-        let reward_growths_above = if tick_upper.liquidity_gross == 0 {
-            0
-        } else if tick_current_index < tick_upper.tick {
+        let reward_growths_above = if tick_current_index < tick_upper.tick {
             tick_upper.reward_growths_outside_x64[i]
         } else {
             reward_infos[i]
@@ -469,10 +461,8 @@ pub fn get_reward_growths_inside(
         };
         reward_growths_inside[i] = reward_infos[i]
             .reward_growth_global_x64
-            .checked_sub(reward_growths_below)
-            .unwrap()
-            .checked_sub(reward_growths_above)
-            .unwrap();
+            .wrapping_sub(reward_growths_below)
+            .wrapping_sub(reward_growths_above);
         #[cfg(feature = "enable-log")]
         msg!(
             "get_reward_growths_inside,i:{},reward_growth_global:{},reward_growth_below:{},reward_growth_above:{}, reward_growth_inside:{}",

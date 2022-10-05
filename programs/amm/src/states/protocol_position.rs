@@ -91,7 +91,10 @@ impl ProtocolPositionState {
             self.token_fees_owed_1 = self.token_fees_owed_1.checked_add(tokens_owed_1).unwrap();
         }
         #[cfg(feature = "enable-log")]
-        msg!("protocol position reward_growths_inside:{:?}", reward_growths_inside);
+        msg!(
+            "protocol position reward_growths_inside:{:?}",
+            reward_growths_inside
+        );
         self.update_reward_growths_inside(reward_growths_inside);
         Ok(())
     }

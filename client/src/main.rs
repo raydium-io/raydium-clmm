@@ -17,6 +17,7 @@ use solana_client::{
     rpc_request::TokenAccountsFilter,
 };
 use solana_sdk::{
+    compute_budget::ComputeBudgetInstruction,
     program_pack::Pack,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
@@ -1139,6 +1140,10 @@ fn main() -> Result<()> {
                         // personal position not exist
                         // new nft mint
                         let nft_mint = Keypair::generate(&mut OsRng);
+                        let mut instructions = Vec::new();
+                        let request_inits_instr =
+                            ComputeBudgetInstruction::set_compute_unit_limit(1400_000u32);
+                        instructions.push(request_inits_instr);
                         let open_position_instr = open_position_instr(
                             &pool_config.clone(),
                             pool_config.pool_id_account.unwrap(),
@@ -1162,11 +1167,12 @@ fn main() -> Result<()> {
                             tick_array_lower_start_index,
                             tick_array_upper_start_index,
                         )?;
+                        instructions.extend(open_position_instr);
                         // send
-                        let signers = vec![&payer];
+                        let signers = vec![&payer, &nft_mint];
                         let recent_hash = rpc_client.get_latest_blockhash()?;
                         let txn = Transaction::new_signed_with_payer(
-                            &open_position_instr,
+                            &instructions,
                             Some(&payer.pubkey()),
                             &signers,
                             recent_hash,
@@ -1380,6 +1386,7 @@ fn main() -> Result<()> {
                             && position.tick_upper_index == tick_upper_index
                         {
                             find_position = position.clone();
+                            println!("liquidity:{:?}", find_position);
                         }
                     }
                     if find_position.nft_mint != Pubkey::default()

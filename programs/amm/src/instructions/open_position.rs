@@ -460,32 +460,6 @@ pub fn update_position<'info>(
     let clock = Clock::get()?;
     let updated_reward_infos = pool_state.update_reward_infos(clock.unix_timestamp as u64)?;
 
-    // Update reward outside if needed
-    let reward_growths_inside = tick_array::get_reward_growths_inside(
-        tick_lower_state.deref(),
-        tick_upper_state.deref(),
-        pool_state.tick_current,
-        &updated_reward_infos,
-    );
-
-    // Update fees
-    let (fee_growth_inside_0_x64, fee_growth_inside_1_x64) = tick_array::get_fee_growth_inside(
-        tick_lower_state.deref(),
-        tick_upper_state.deref(),
-        pool_state.tick_current,
-        pool_state.fee_growth_global_0_x64,
-        pool_state.fee_growth_global_1_x64,
-    );
-
-    protocol_position_state.update(
-        tick_lower_state.tick,
-        tick_upper_state.tick,
-        liquidity_delta,
-        fee_growth_inside_0_x64,
-        fee_growth_inside_1_x64,
-        reward_growths_inside,
-    )?;
-
     let mut flipped_lower = false;
     let mut flipped_upper = false;
 
@@ -515,6 +489,32 @@ pub fn update_position<'info>(
             identity(tick_lower_state.reward_growths_outside_x64)
         );
     }
+
+    // Update fees
+    let (fee_growth_inside_0_x64, fee_growth_inside_1_x64) = tick_array::get_fee_growth_inside(
+        tick_lower_state.deref(),
+        tick_upper_state.deref(),
+        pool_state.tick_current,
+        pool_state.fee_growth_global_0_x64,
+        pool_state.fee_growth_global_1_x64,
+    );
+
+    // Update reward outside if needed
+    let reward_growths_inside = tick_array::get_reward_growths_inside(
+        tick_lower_state.deref(),
+        tick_upper_state.deref(),
+        pool_state.tick_current,
+        &updated_reward_infos,
+    );
+
+    protocol_position_state.update(
+        tick_lower_state.tick,
+        tick_upper_state.tick,
+        liquidity_delta,
+        fee_growth_inside_0_x64,
+        fee_growth_inside_1_x64,
+        reward_growths_inside,
+    )?;
     if liquidity_delta < 0 {
         if flipped_lower {
             tick_lower_state.clear();
@@ -526,7 +526,8 @@ pub fn update_position<'info>(
     Ok((flipped_lower, flipped_upper))
 }
 
-const METADATA_URI: &str = "https://cloudflare-ipfs.com/ipfs/Qmefod1DZcmCCyBdPgNQog2fAbjkNWhwXKEA4ias71pXPX/";
+const METADATA_URI: &str =
+    "https://cloudflare-ipfs.com/ipfs/Qmefod1DZcmCCyBdPgNQog2fAbjkNWhwXKEA4ias71pXPX/";
 fn get_uri_with_random() -> String {
     let current_timestamp = Clock::get().unwrap().unix_timestamp as u64;
     let current_slot = Clock::get().unwrap().slot;
