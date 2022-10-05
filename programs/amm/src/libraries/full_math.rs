@@ -78,6 +78,9 @@ pub trait MulDiv<RHS = Self> {
     /// # }
     /// ```
     fn mul_div_ceil(self, num: RHS, denom: RHS) -> Option<Self::Output>;
+
+    /// Return u64 not out of bounds
+    fn to_underflow_u64(self) -> u64;
 }
 
 pub trait Upcast {
@@ -122,6 +125,10 @@ impl MulDiv for u64 {
             Some(r.as_u64())
         }
     }
+
+    fn to_underflow_u64(self) -> u64 {
+        self
+    }
 }
 
 impl MulDiv for U128 {
@@ -146,6 +153,14 @@ impl MulDiv for U128 {
             Some(r.as_u128())
         }
     }
+
+    fn to_underflow_u64(self) -> u64 {
+        if self < U128::from(u64::MAX) {
+            self.as_u64()
+        } else {
+            0
+        }
+    }
 }
 
 impl MulDiv for U256 {
@@ -168,6 +183,14 @@ impl MulDiv for U256 {
             None
         } else {
             Some(r)
+        }
+    }
+
+    fn to_underflow_u64(self) -> u64 {
+        if self < U256::from(u64::MAX) {
+            self.as_u64()
+        } else {
+            0
         }
     }
 }
