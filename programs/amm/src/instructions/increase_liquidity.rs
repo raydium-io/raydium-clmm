@@ -151,7 +151,7 @@ pub fn calculate_latest_token_fees(
         U128::from(fee_growth_inside_latest_x64.saturating_sub(fee_growth_inside_last_x64))
             .mul_div_floor(U128::from(liquidity), U128::from(fixed_point_64::Q64))
             .unwrap()
-            .as_u64();
+            .to_underflow_u64();
 
     last_total_fees.checked_add(fee_growth_delta).unwrap()
 }
