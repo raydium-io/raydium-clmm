@@ -232,6 +232,16 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             let protocol_position = &mut ctx.accounts.protocol_position;
             protocol_position.bump = *ctx.bumps.get("protocol_position").unwrap();
             protocol_position.pool_id = ctx.accounts.pool_state.key();
+            protocol_position.tick_lower_index = tick_lower_index;
+            protocol_position.tick_upper_index = tick_upper_index;
+            tick_array_lower_loader
+                .load_mut()?
+                .get_tick_state_mut(tick_lower_index, pool_state.tick_spacing as i32)?
+                .tick = tick_lower_index;
+            tick_array_upper_loader
+                .load_mut()?
+                .get_tick_state_mut(tick_upper_index, pool_state.tick_spacing as i32)?
+                .tick = tick_upper_index;
         }
 
         let mut add_liquidity_context = AddLiquidityParam {

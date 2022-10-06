@@ -1032,6 +1032,24 @@ fn main() -> Result<()> {
                     program.account(pool_config.pool_id_account.unwrap())?;
                 println!("{:#?}", pool_account);
             }
+            "pprotocol" => {
+                if v.len() == 2 {
+                    let protocol_key = Pubkey::from_str(&v[1]).unwrap();
+                    let program = anchor_client.program(pool_config.raydium_v3_program);
+                    let protocol_account: raydium_amm_v3::states::ProtocolPositionState =
+                        program.account(protocol_key)?;
+                    println!("{:#?}", protocol_account);
+                }
+            }
+            "ppersonal" => {
+                if v.len() == 2 {
+                    let personal_key = Pubkey::from_str(&v[1]).unwrap();
+                    let program = anchor_client.program(pool_config.raydium_v3_program);
+                    let personal_account: raydium_amm_v3::states::PersonalPositionState =
+                        program.account(personal_key)?;
+                    println!("{:#?}", personal_account);
+                }
+            }
             "open_position" | "open" => {
                 if v.len() == 5 {
                     let tick_lower_price = v[1].parse::<f64>().unwrap();
@@ -1723,6 +1741,14 @@ fn main() -> Result<()> {
                     let sqrt_price_x64 = v[1].parse::<u128>().unwrap();
                     let tick = tick_math::get_tick_at_sqrt_price(sqrt_price_x64)?;
                     println!("sqrt_price_x64:{}, tick:{}", sqrt_price_x64, tick);
+                }
+            }
+            "x64_to_f" => {
+                if v.len() == 2 {
+                    let x_64 = v[1].parse::<u128>().unwrap();
+                    let f = (x_64 >> fixed_point_64::RESOLUTION) as f64
+                        + (x_64 % fixed_point_64::Q64) as f64 / fixed_point_64::Q64 as f64;
+                    println!("float:{}", f);
                 }
             }
             "sqrt_price_x64_to_tick_by_self" => {
