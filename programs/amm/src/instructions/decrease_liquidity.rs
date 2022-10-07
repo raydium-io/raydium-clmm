@@ -206,11 +206,11 @@ pub fn decrease_liquidity_and_update_position<'a, 'b, 'c, 'info>(
         latest_fees_owed_0 = personal_position.token_fees_owed_0;
         latest_fees_owed_1 = personal_position.token_fees_owed_1;
 
-        require_gt!(
+        require_gte!(
             pool_state.total_fees_token_0 - pool_state.total_fees_claimed_token_0,
             latest_fees_owed_0
         );
-        require_gt!(
+        require_gte!(
             pool_state.total_fees_token_1 - pool_state.total_fees_claimed_token_1,
             latest_fees_owed_1
         );

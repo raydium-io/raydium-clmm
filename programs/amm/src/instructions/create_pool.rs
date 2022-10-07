@@ -83,7 +83,6 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
         ctx.accounts.observation_state.to_account_info(),
         &crate::id(),
     )?;
-    let mut observation_state = observation_state_loader.load_mut()?;
 
     let tick = tick_math::get_tick_at_sqrt_price(sqrt_price_x64)?;
     #[cfg(feature = "enable-log")]
@@ -92,25 +91,20 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
         sqrt_price_x64,
         tick
     );
-    pool_state.bump = *ctx.bumps.get("pool_state").unwrap();
-    pool_state.amm_config = ctx.accounts.amm_config.key();
-    pool_state.owner = ctx.accounts.pool_creator.key();
-    pool_state.token_mint_0 = ctx.accounts.token_mint_0.key();
-    pool_state.token_mint_1 = ctx.accounts.token_mint_1.key();
-    pool_state.mint_decimals_0 = ctx.accounts.token_mint_0.decimals;
-    pool_state.mint_decimals_1 = ctx.accounts.token_mint_1.decimals;
-    pool_state.token_vault_0 = ctx.accounts.token_vault_0.key();
-    pool_state.token_vault_1 = ctx.accounts.token_vault_1.key();
-    pool_state.tick_spacing = ctx.accounts.amm_config.tick_spacing;
-    pool_state.sqrt_price_x64 = sqrt_price_x64;
-    pool_state.tick_current = tick;
-    pool_state.observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
-    pool_state.reward_infos = [RewardInfo::new(ctx.accounts.pool_creator.key()); REWARD_NUM];
 
-    require_eq!(observation_state.initialized, false);
-    require_keys_eq!(observation_state.pool_id, Pubkey::default());
-    pool_state.observation_key = ctx.accounts.observation_state.key();
-    observation_state.pool_id = ctx.accounts.pool_state.key();
+    let bump = *ctx.bumps.get("pool_state").unwrap();
+    pool_state.initialize(
+        bump,
+        sqrt_price_x64,
+        tick,
+        ctx.accounts.pool_creator.key(),
+        ctx.accounts.token_vault_0.key(),
+        ctx.accounts.token_vault_1.key(),
+        ctx.accounts.amm_config.as_ref(),
+        ctx.accounts.token_mint_0.as_ref(),
+        ctx.accounts.token_mint_1.as_ref(),
+        &observation_state_loader,
+    )?;
 
     emit!(PoolCreatedEvent {
         token_mint_0: ctx.accounts.token_mint_0.key(),

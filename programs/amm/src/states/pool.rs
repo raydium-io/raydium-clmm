@@ -6,8 +6,10 @@ use crate::libraries::{
     full_math::MulDiv,
     next_initialized_tick_array_start_index,
 };
+use crate::states::*;
 use crate::states::{MAX_TICK_ARRAY_START_INDEX, MIN_TICK_ARRAY_START_INDEX, TICK_ARRAY_SIZE};
 use anchor_lang::prelude::*;
+use anchor_spl::token::Mint;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
 use std::ops::{BitAnd, BitOr, BitXor};
@@ -166,6 +168,62 @@ impl PoolState {
             &crate::id(),
         )
         .unwrap()
+    }
+
+    pub fn initialize(
+        &mut self,
+        bump: u8,
+        sqrt_price_x64: u128,
+        tick: i32,
+        pool_creator: Pubkey,
+        token_vault_0: Pubkey,
+        token_vault_1: Pubkey,
+        amm_config: &Account<AmmConfig>,
+        token_mint_0: &Account<Mint>,
+        token_mint_1: &Account<Mint>,
+        observation_state_loader: &AccountLoader<ObservationState>,
+    ) -> Result<()> {
+        self.bump = bump;
+        self.amm_config = amm_config.key();
+        self.owner = pool_creator.key();
+        self.token_mint_0 = token_mint_0.key();
+        self.token_mint_1 = token_mint_1.key();
+        self.mint_decimals_0 = token_mint_0.decimals;
+        self.mint_decimals_1 = token_mint_1.decimals;
+        self.token_vault_0 = token_vault_0;
+        self.token_vault_1 = token_vault_1;
+        self.tick_spacing = amm_config.tick_spacing;
+        self.liquidity = 0;
+        self.sqrt_price_x64 = sqrt_price_x64;
+        self.tick_current = tick;
+        self.observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
+        self.observation_index = 0;
+        self.reward_infos = [RewardInfo::new(pool_creator); REWARD_NUM];
+        self.fee_growth_global_0_x64 = 0;
+        self.fee_growth_global_1_x64 = 0;
+        self.protocol_fees_token_0 = 0;
+        self.protocol_fees_token_1 = 0;
+        self.swap_in_amount_token_0 = 0;
+        self.swap_out_amount_token_1 = 0;
+        self.swap_in_amount_token_1 = 0;
+        self.swap_out_amount_token_0 = 0;
+        self.status = 0;
+        self.padding = [0; 7];
+        self.tick_array_bitmap = [0; 16];
+        self.total_fees_token_0 = 0;
+        self.total_fees_claimed_token_0 = 0;
+        self.total_fees_token_1 = 0;
+        self.total_fees_claimed_token_1 = 0;
+        self.padding1 = [0; 28];
+        self.padding2 = [0; 32];
+
+        let mut observation_state = observation_state_loader.load_mut()?;
+        require_eq!(observation_state.initialized, false);
+        require_keys_eq!(observation_state.pool_id, Pubkey::default());
+        self.observation_key = observation_state_loader.key();
+        observation_state.pool_id = self.key();
+
+        Ok(())
     }
 
     pub fn pool_check_reset(&mut self, sqrt_price_x64: u128, tick: i32) -> Result<()> {
