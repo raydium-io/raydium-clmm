@@ -1,6 +1,6 @@
 use crate::error::ErrorCode;
 use crate::states::*;
-use crate::util::{burn, close_account, close_spl_account};
+use crate::util::{burn, close_spl_account};
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 
@@ -31,6 +31,12 @@ pub struct ClosePosition<'info> {
     // pub metadata_account: UncheckedAccount<'info>,
 
     /// Metadata for the tokenized position
+    #[account(
+        mut, 
+        seeds = [POSITION_SEED.as_bytes(), position_nft_mint.key().as_ref()],
+        bump,
+        close = nft_owner
+    )]
     pub personal_position: Box<Account<'info, PersonalPositionState>>,
 
     /// Program to create the position manager state account
@@ -82,11 +88,6 @@ pub fn close_position<'a, 'b, 'c, 'info>(
         &ctx.accounts.position_nft_account.to_account_info(),
         &ctx.accounts.token_program,
         &[],
-    )?;
-
-    close_account(
-        &ctx.accounts.personal_position.to_account_info(),
-        &ctx.accounts.nft_owner.to_account_info(),
     )?;
 
     // close_spl_account(
