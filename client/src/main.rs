@@ -26,7 +26,7 @@ use solana_sdk::{
 use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
-use std::{collections::VecDeque, mem::size_of};
+use std::{collections::VecDeque, convert::identity, mem::size_of};
 
 mod instructions;
 use instructions::amm_instructions::*;
@@ -670,7 +670,7 @@ fn main() -> Result<()> {
                     println!("invalid command: [create_pool config_index tick_spacing]");
                 }
             }
-            "admin_close_personal_position_by_pool" => {
+            "p_all_personal_position_by_pool" => {
                 println!("pool_id:{}", pool_config.pool_id_account.unwrap());
                 let position_accounts_by_pool = rpc_client.get_program_accounts_with_config(
                     &pool_config.raydium_v3_program,
@@ -695,40 +695,21 @@ fn main() -> Result<()> {
                     },
                 )?;
 
-                let mut instructions = Vec::new();
                 for position in position_accounts_by_pool {
                     let personal_position = deserialize_anchor_account::<
                         raydium_amm_v3::states::PersonalPositionState,
                     >(&position.1)?;
-                    if personal_position.pool_id != pool_config.pool_id_account.unwrap() {
+                    if personal_position.pool_id == pool_config.pool_id_account.unwrap() {
                         println!(
-                            "personal_position:{} owned by pool:{}",
-                            position.0, personal_position.pool_id
+                            "personal_position:{}, lower_index:{}, upper_index:{}",
+                            position.0,
+                            personal_position.tick_lower_index,
+                            personal_position.tick_upper_index
                         );
-                        panic!("pool id not match");
                     }
-                    let admin_close_personal_position_instr = admin_close_personal_position_instr(
-                        &pool_config.clone(),
-                        pool_config.pool_id_account.unwrap(),
-                        position.0,
-                    )
-                    .unwrap();
-                    instructions.extend(admin_close_personal_position_instr);
                 }
-
-                // send
-                let signers = vec![&payer, &admin];
-                let recent_hash = rpc_client.get_latest_blockhash()?;
-                let txn = Transaction::new_signed_with_payer(
-                    &instructions,
-                    Some(&payer.pubkey()),
-                    &signers,
-                    recent_hash,
-                );
-                let signature = send_txn(&rpc_client, &txn, true)?;
-                println!("{}", signature);
             }
-            "admin_close_protocol_position_by_pool" => {
+            "p_all_protocol_position_by_pool" => {
                 let position_accounts_by_pool = rpc_client.get_program_accounts_with_config(
                     &pool_config.raydium_v3_program,
                     RpcProgramAccountsConfig {
@@ -752,39 +733,21 @@ fn main() -> Result<()> {
                     },
                 )?;
 
-                let mut instructions = Vec::new();
                 for position in position_accounts_by_pool {
                     let protocol_position = deserialize_anchor_account::<
                         raydium_amm_v3::states::ProtocolPositionState,
                     >(&position.1)?;
-                    if protocol_position.pool_id != pool_config.pool_id_account.unwrap() {
+                    if protocol_position.pool_id == pool_config.pool_id_account.unwrap() {
                         println!(
-                            "protocol_position:{} owned by pool:{}",
-                            position.0, protocol_position.pool_id
+                            "protocol_position:{} lower_index:{}, upper_index:{}",
+                            position.0,
+                            protocol_position.tick_lower_index,
+                            protocol_position.tick_upper_index,
                         );
-                        panic!("pool id not match");
                     }
-                    let admin_close_protocol_position_instr = admin_close_protocol_position_instr(
-                        &pool_config.clone(),
-                        pool_config.pool_id_account.unwrap(),
-                        position.0,
-                    )
-                    .unwrap();
-                    instructions.extend(admin_close_protocol_position_instr);
                 }
-                // send
-                let signers = vec![&payer, &admin];
-                let recent_hash = rpc_client.get_latest_blockhash()?;
-                let txn = Transaction::new_signed_with_payer(
-                    &instructions,
-                    Some(&payer.pubkey()),
-                    &signers,
-                    recent_hash,
-                );
-                let signature = send_txn(&rpc_client, &txn, true)?;
-                println!("{}", signature);
             }
-            "admin_close_tick_array_by_pool" => {
+            "p_all_tick_array_by_pool" => {
                 let tick_arrays_by_pool = rpc_client.get_program_accounts_with_config(
                     &pool_config.raydium_v3_program,
                     RpcProgramAccountsConfig {
@@ -808,124 +771,18 @@ fn main() -> Result<()> {
                     },
                 )?;
 
-                let mut instructions = Vec::new();
                 for tick_array in tick_arrays_by_pool {
                     let tick_array_state = deserialize_anchor_account::<
                         raydium_amm_v3::states::TickArrayState,
                     >(&tick_array.1)?;
-                    if tick_array_state.pool_id != pool_config.pool_id_account.unwrap() {
+                    if tick_array_state.pool_id == pool_config.pool_id_account.unwrap() {
                         println!(
-                            "tick_array:{} owned by pool:{}",
-                            tick_array.0, tick_array_state.pool_id
+                            "tick_array:{}, {}, {}",
+                            tick_array.0,
+                            identity(tick_array_state.start_tick_index),
+                            identity(tick_array_state.initialized_tick_count)
                         );
-                        panic!("pool id not match");
                     }
-                    let admin_close_tick_array_instr = admin_close_tick_array_instr(
-                        &pool_config.clone(),
-                        pool_config.pool_id_account.unwrap(),
-                        tick_array.0,
-                    )
-                    .unwrap();
-                    instructions.extend(admin_close_tick_array_instr);
-                }
-                // send
-                let signers = vec![&payer, &admin];
-                let recent_hash = rpc_client.get_latest_blockhash()?;
-                let txn = Transaction::new_signed_with_payer(
-                    &instructions,
-                    Some(&payer.pubkey()),
-                    &signers,
-                    recent_hash,
-                );
-                let signature = send_txn(&rpc_client, &txn, true)?;
-                println!("{}", signature);
-            }
-            "admin_close_pool" => {
-                if v.len() == 2 {
-                    let pool_id = Pubkey::from_str(&v[1]).unwrap();
-                    // check all accounts have been closed except amm_config and pool, observation
-                    let rsps = rpc_client.get_program_accounts(&pool_config.raydium_v3_program)?;
-                    let mut close_pool = PoolAccounts::default();
-                    for item in rsps {
-                        let data_len = item.1.data.len();
-                        if data_len == size_of::<raydium_amm_v3::states::PoolState>() + 8 {
-                            println!("pool_id:{}", item.0);
-                            if pool_id == item.0 {
-                                close_pool.pool_id = Some(pool_id);
-                            }
-                        } else if data_len == raydium_amm_v3::states::AmmConfig::LEN {
-                            println!("config_id:{}", item.0);
-                        } else if data_len
-                            == size_of::<raydium_amm_v3::states::TickArrayState>() + 8
-                        {
-                            println!("tick_array:{}", item.0);
-                            let tick_array = deserialize_anchor_account::<
-                                raydium_amm_v3::states::TickArrayState,
-                            >(&item.1)?;
-                            if pool_id == tick_array.pool_id {
-                                close_pool.pool_tick_arrays.push(item.0);
-                            }
-                        } else if data_len == raydium_amm_v3::states::ObservationState::LEN {
-                            println!("observation:{}", item.0);
-                            let pool_observation = deserialize_anchor_account::<
-                                raydium_amm_v3::states::ObservationState,
-                            >(&item.1)?;
-                            if pool_id == pool_observation.pool_id {
-                                close_pool.pool_observation = Some(item.0);
-                            }
-                        } else if data_len == raydium_amm_v3::states::ProtocolPositionState::LEN {
-                            println!("protocol_position:{}", item.0);
-                            let protocol_position = deserialize_anchor_account::<
-                                raydium_amm_v3::states::ProtocolPositionState,
-                            >(&item.1)?;
-                            if pool_id == protocol_position.pool_id {
-                                close_pool.pool_protocol_positions.push(item.0);
-                            }
-                        } else if data_len == raydium_amm_v3::states::PersonalPositionState::LEN {
-                            println!("personal_position:{}", item.0);
-                            let personal_position = deserialize_anchor_account::<
-                                raydium_amm_v3::states::PersonalPositionState,
-                            >(&item.1)?;
-                            if pool_id == personal_position.pool_id {
-                                close_pool.pool_personal_positions.push(item.0);
-                            }
-                        }
-                    }
-                    if close_pool.pool_id.is_some()
-                        && close_pool.pool_observation.is_some()
-                        && close_pool.pool_protocol_positions.is_empty()
-                        && close_pool.pool_personal_positions.is_empty()
-                        && close_pool.pool_tick_arrays.is_empty()
-                    {
-                        let program = anchor_client.program(pool_config.raydium_v3_program);
-                        println!("{}", close_pool.pool_id.unwrap());
-                        let pool_account: raydium_amm_v3::states::PoolState =
-                            program.account(close_pool.pool_id.unwrap())?;
-
-                        let admin_close_pool_instr = admin_close_pool_instr(
-                            &pool_config.clone(),
-                            close_pool.pool_id.unwrap(),
-                            close_pool.pool_observation.unwrap(),
-                            pool_account.token_vault_0,
-                            pool_account.token_vault_1,
-                        )
-                        .unwrap();
-                        // send
-                        let signers = vec![&payer, &admin];
-                        let recent_hash = rpc_client.get_latest_blockhash()?;
-                        let txn = Transaction::new_signed_with_payer(
-                            &admin_close_pool_instr,
-                            Some(&payer.pubkey()),
-                            &signers,
-                            recent_hash,
-                        );
-                        let signature = send_txn(&rpc_client, &txn, true)?;
-                        println!("{}", signature);
-                    } else {
-                        println!("close_pool:{:#?}", close_pool);
-                    }
-                } else {
-                    println!("invalid command: [admin_close_pool pool_id]");
                 }
             }
             "admin_reset_sqrt_price" => {
