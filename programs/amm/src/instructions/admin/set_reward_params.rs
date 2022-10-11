@@ -70,6 +70,7 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
             .as_u64();
 
         reward_info.open_time = open_time;
+        reward_info.last_update_time = open_time;
         reward_info.end_time = end_time;
         reward_info.emissions_per_second_x64 = emissions_per_second_x64;
     } else {
