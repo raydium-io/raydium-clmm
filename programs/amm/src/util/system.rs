@@ -21,7 +21,7 @@ pub fn create_or_allocate_account<'a>(
         system_program::create_account(
             cpi_context.with_signer(&[siger_seed]),
             lamports,
-            space as u64,
+            u64::try_from(space).unwrap(),
             program_id,
         )?;
     } else {
@@ -41,7 +41,10 @@ pub fn create_or_allocate_account<'a>(
             account_to_allocate: target_account.clone(),
         };
         let cpi_context = CpiContext::new(system_program.clone(), cpi_accounts);
-        system_program::allocate(cpi_context.with_signer(&[siger_seed]), space as u64)?;
+        system_program::allocate(
+            cpi_context.with_signer(&[siger_seed]),
+            u64::try_from(space).unwrap(),
+        )?;
 
         let cpi_accounts = system_program::Assign {
             account_to_assign: target_account.clone(),

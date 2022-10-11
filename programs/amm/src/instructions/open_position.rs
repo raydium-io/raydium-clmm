@@ -236,11 +236,11 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             protocol_position.tick_upper_index = tick_upper_index;
             tick_array_lower_loader
                 .load_mut()?
-                .get_tick_state_mut(tick_lower_index, pool_state.tick_spacing as i32)?
+                .get_tick_state_mut(tick_lower_index, i32::from(pool_state.tick_spacing))?
                 .tick = tick_lower_index;
             tick_array_upper_loader
                 .load_mut()?
-                .get_tick_state_mut(tick_upper_index, pool_state.tick_spacing as i32)?
+                .get_tick_state_mut(tick_upper_index, i32::from(pool_state.tick_spacing))?
                 .tick = tick_upper_index;
         }
 
@@ -333,11 +333,11 @@ pub fn add_liquidity<'b, 'info>(
     let mut tick_lower_state = *context
         .tick_array_lower
         .load_mut()?
-        .get_tick_state_mut(tick_lower_index, pool_state.tick_spacing as i32)?;
+        .get_tick_state_mut(tick_lower_index, i32::from(pool_state.tick_spacing))?;
     let mut tick_upper_state = *context
         .tick_array_upper
         .load_mut()?
-        .get_tick_state_mut(tick_upper_index, pool_state.tick_spacing as i32)?;
+        .get_tick_state_mut(tick_upper_index, i32::from(pool_state.tick_spacing))?;
     if tick_lower_state.tick == 0 {
         tick_lower_state.tick = tick_lower_index;
     }
@@ -356,12 +356,12 @@ pub fn add_liquidity<'b, 'info>(
     // update tick_state
     context.tick_array_lower.load_mut()?.update_tick_state(
         tick_lower_index,
-        pool_state.tick_spacing as i32,
+        i32::from(pool_state.tick_spacing),
         tick_lower_state,
     )?;
     context.tick_array_upper.load_mut()?.update_tick_state(
         tick_upper_index,
-        pool_state.tick_spacing as i32,
+        i32::from(pool_state.tick_spacing),
         tick_upper_state,
     )?;
 
@@ -388,8 +388,8 @@ pub fn add_liquidity<'b, 'info>(
         ErrorCode::ForbidBothZeroForSupplyLiquidity
     );
 
-    let amount_0 = amount_0_int as u64;
-    let amount_1 = amount_1_int as u64;
+    let amount_0 = u64::try_from(amount_0_int).unwrap();
+    let amount_1 = u64::try_from(amount_1_int).unwrap();
 
     #[cfg(feature = "enable-log")]
     msg!(
@@ -539,7 +539,7 @@ pub fn update_position<'info>(
 const METADATA_URI: &str =
     "https://cloudflare-ipfs.com/ipfs/Qmefod1DZcmCCyBdPgNQog2fAbjkNWhwXKEA4ias71pXPX/";
 fn get_uri_with_random() -> String {
-    let current_timestamp = Clock::get().unwrap().unix_timestamp as u64;
+    let current_timestamp = u64::try_from(Clock::get().unwrap().unix_timestamp).unwrap();
     let current_slot = Clock::get().unwrap().slot;
     // 01 ~ 08
     let random_num = (current_timestamp + current_slot) % 7 + 1;

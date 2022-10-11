@@ -25,7 +25,7 @@ pub fn collect_remaining_rewards(
     ctx: Context<CollectRemainingRewards>,
     reward_index: u8,
 ) -> Result<()> {
-    let current_timestamp = Clock::get()?.unix_timestamp as u64;
+    let current_timestamp = u64::try_from(Clock::get()?.unix_timestamp).unwrap();
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;
     pool_state.update_reward_infos(current_timestamp)?;
 

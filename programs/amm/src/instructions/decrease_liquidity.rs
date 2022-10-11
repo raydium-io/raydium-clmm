@@ -196,7 +196,7 @@ pub fn decrease_liquidity_and_update_position<'a, 'b, 'c, 'info>(
             protocol_position.fee_growth_inside_1_last_x64;
 
         // update rewards, must update before decrease liquidity
-        personal_position.update_rewards(protocol_position.reward_growth_inside,true)?;
+        personal_position.update_rewards(protocol_position.reward_growth_inside, true)?;
         personal_position.liquidity = personal_position.liquidity.checked_sub(liquidity).unwrap();
     }
 
@@ -246,11 +246,11 @@ pub fn burn_liquidity<'b, 'info>(
     // get tick_state
     let mut tick_lower_state = *tick_array_lower_state.load_mut()?.get_tick_state_mut(
         protocol_position.tick_lower_index,
-        pool_state.tick_spacing as i32,
+        i32::from(pool_state.tick_spacing),
     )?;
     let mut tick_upper_state = *tick_array_upper_state.load_mut()?.get_tick_state_mut(
         protocol_position.tick_upper_index,
-        pool_state.tick_spacing as i32,
+        i32::from(pool_state.tick_spacing),
     )?;
 
     let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = modify_position(
@@ -264,12 +264,12 @@ pub fn burn_liquidity<'b, 'info>(
     // update tick_state
     tick_array_lower_state.load_mut()?.update_tick_state(
         protocol_position.tick_lower_index,
-        pool_state.tick_spacing as i32,
+        i32::from(pool_state.tick_spacing),
         tick_lower_state,
     )?;
     tick_array_upper_state.load_mut()?.update_tick_state(
         protocol_position.tick_upper_index,
-        pool_state.tick_spacing as i32,
+        i32::from(pool_state.tick_spacing),
         tick_upper_state,
     )?;
 
@@ -288,8 +288,8 @@ pub fn burn_liquidity<'b, 'info>(
         }
     }
 
-    let amount_0 = (-amount_0_int) as u64;
-    let amount_1 = (-amount_1_int) as u64;
+    let amount_0 = u64::try_from(-amount_0_int).unwrap();
+    let amount_1 = u64::try_from(-amount_1_int).unwrap();
     Ok((amount_0, amount_1))
 }
 

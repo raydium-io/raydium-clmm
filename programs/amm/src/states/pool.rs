@@ -406,12 +406,12 @@ impl PoolState {
     pub fn flip_tick_array_bit(&mut self, tick_array_start_index: i32) -> Result<()> {
         require_eq!(
             0,
-            tick_array_start_index % (TICK_ARRAY_SIZE * (self.tick_spacing) as i32)
+            tick_array_start_index % (TICK_ARRAY_SIZE * i32::from(self.tick_spacing))
         );
         assert!(tick_array_start_index >= MIN_TICK_ARRAY_START_INDEX);
         assert!(tick_array_start_index <= MAX_TICK_ARRAY_START_INDEX);
         let tick_array_offset_in_bitmap =
-            tick_array_start_index / (self.tick_spacing as i32 * TICK_ARRAY_SIZE) + 512;
+            tick_array_start_index / (i32::from(self.tick_spacing) * TICK_ARRAY_SIZE) + 512;
         let tick_array_bitmap = U1024(self.tick_array_bitmap);
         let mask = U1024::one() << tick_array_offset_in_bitmap.try_into().unwrap();
         self.tick_array_bitmap = tick_array_bitmap.bitxor(mask).0;

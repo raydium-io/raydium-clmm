@@ -61,7 +61,7 @@ impl U1024 {
     #[inline]
     pub fn as_usize(&self) -> usize {
         let arr = self.0;
-        if !self.fits_word() || arr[0] > usize::max_value() as u64 {
+        if !self.fits_word() || arr[0] > u64::try_from(usize::max_value()).unwrap() {
             panic!("Integer overflow when casting to usize")
         }
         arr[0] as usize
