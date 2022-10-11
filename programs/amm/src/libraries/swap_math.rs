@@ -31,7 +31,7 @@ pub fn compute_swap_step(
         let amount_remaining_less_fee = (amount_remaining as u64)
             .mul_div_floor(
                 (FEE_RATE_DENOMINATOR_VALUE - fee_rate).into(),
-                FEE_RATE_DENOMINATOR_VALUE as u64,
+                u64::from(FEE_RATE_DENOMINATOR_VALUE),
             )
             .unwrap();
         swap_step.amount_in = if zero_for_one {
@@ -138,7 +138,7 @@ pub fn compute_swap_step(
     swap_step.fee_amount = if is_base_input && swap_step.sqrt_price_next_x64 != sqrt_price_target_x64 {
         // we didn't reach the target, so take the remainder of the maximum input as fee
         // swap dust is granted as fee
-        (amount_remaining as u64)
+        u64::from(amount_remaining)
             .checked_sub(swap_step.amount_in)
             .unwrap()
     } else {

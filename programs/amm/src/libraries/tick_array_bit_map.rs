@@ -6,7 +6,7 @@ pub fn most_significant_bit(x: U1024) -> Option<u16> {
     if x.is_zero() {
         None
     } else {
-        Some(x.leading_zeros() as u16)
+        Some(u16::try_from(x.leading_zeros()).unwrap())
     }
 }
 
@@ -14,7 +14,7 @@ pub fn least_significant_bit(x: U1024) -> Option<u16> {
     if x.is_zero() {
         None
     } else {
-        Some(x.trailing_zeros() as u16)
+        Some(u16::try_from(x.trailing_zeros()).unwrap())
     }
 }
 
@@ -23,7 +23,7 @@ pub fn check_current_tick_array_is_initialized(
     tick_current: i32,
     tick_spacing: i32,
 ) -> (bool, i32) {
-    let multiplier = tick_spacing as i32 * TICK_ARRAY_SIZE;
+    let multiplier = i32::from(tick_spacing) * TICK_ARRAY_SIZE;
     let mut compressed = tick_current / multiplier + 512;
     if tick_current < 0 && tick_current % multiplier != 0 {
         // round towards negative infinity
@@ -49,7 +49,7 @@ pub fn next_initialized_tick_array_start_index(
     tick_spacing: i32,
     zero_for_one: bool,
 ) -> Option<i32> {
-    let multiplier = tick_spacing as i32 * TICK_ARRAY_SIZE;
+    let multiplier = i32::from(tick_spacing) * TICK_ARRAY_SIZE;
     let mut compressed = tick_array_start_index / multiplier + 512;
     if tick_array_start_index < 0 && tick_array_start_index % multiplier != 0 {
         // round towards negative infinity
@@ -64,7 +64,7 @@ pub fn next_initialized_tick_array_start_index(
         let next_bit = most_significant_bit(offset_bit_map);
         if next_bit.is_some() {
             let next_array_start_index =
-                (bit_pos - 1 - next_bit.unwrap() as i32 - 512) * multiplier;
+                (bit_pos - 1 - i32::from(next_bit.unwrap()) - 512) * multiplier;
             Some(next_array_start_index)
         } else {
             // not found til to the end
@@ -77,7 +77,7 @@ pub fn next_initialized_tick_array_start_index(
         let next_bit = least_significant_bit(offset_bit_map);
         if next_bit.is_some() {
             let next_array_start_index =
-                (bit_pos + 1 + next_bit.unwrap() as i32 - 512) * multiplier;
+                (bit_pos + 1 + i32::from(next_bit.unwrap()) - 512) * multiplier;
             Some(next_array_start_index)
         } else {
             // not found til to the end

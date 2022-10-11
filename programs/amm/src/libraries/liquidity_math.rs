@@ -17,10 +17,10 @@ use anchor_lang::prelude::*;
 pub fn add_delta(x: u128, y: i128) -> Result<u128> {
     let z: u128;
     if y < 0 {
-        z = x - (-y as u128);
+        z = x - u128::try_from(-y).unwrap();
         require!(z < x, ErrorCode::LiquiditySubValueErr);
     } else {
-        z = x + (y as u128);
+        z = x + u128::try_from(y).unwrap();
         require!(z >= x, ErrorCode::LiquidityAddValueErr);
     }
 
@@ -231,16 +231,21 @@ pub fn get_delta_amount_0_signed(
     liquidity: i128,
 ) -> i64 {
     if liquidity < 0 {
-        -(get_delta_amount_0_unsigned(
+        -(i64::try_from(get_delta_amount_0_unsigned(
             sqrt_ratio_a_x64,
             sqrt_ratio_b_x64,
-            -liquidity as u128,
+            u128::try_from(-liquidity).unwrap(),
             false,
-        ) as i64)
+        ))
+        .unwrap())
     } else {
-        // TODO check overflow, since i64::MAX < u64::MAX
-        get_delta_amount_0_unsigned(sqrt_ratio_a_x64, sqrt_ratio_b_x64, liquidity as u128, true)
-            as i64
+        i64::try_from(get_delta_amount_0_unsigned(
+            sqrt_ratio_a_x64,
+            sqrt_ratio_b_x64,
+            u128::try_from(liquidity).unwrap(),
+            true,
+        ))
+        .unwrap()
     }
 }
 
@@ -251,15 +256,21 @@ pub fn get_delta_amount_1_signed(
     liquidity: i128,
 ) -> i64 {
     if liquidity < 0 {
-        -(get_delta_amount_1_unsigned(
+        -(i64::try_from(get_delta_amount_1_unsigned(
             sqrt_ratio_a_x64,
             sqrt_ratio_b_x64,
-            -liquidity as u128,
+            u128::try_from(-liquidity).unwrap(),
             false,
-        ) as i64)
+        ))
+        .unwrap())
     } else {
-        get_delta_amount_1_unsigned(sqrt_ratio_a_x64, sqrt_ratio_b_x64, liquidity as u128, true)
-            as i64
+        i64::try_from(get_delta_amount_1_unsigned(
+            sqrt_ratio_a_x64,
+            sqrt_ratio_b_x64,
+            u128::try_from(liquidity).unwrap(),
+            true,
+        ))
+        .unwrap()
     }
 }
 

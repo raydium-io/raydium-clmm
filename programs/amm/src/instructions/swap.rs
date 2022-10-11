@@ -333,9 +333,9 @@ pub fn swap_internal<'b, 'info>(
         if cache.protocol_fee_rate > 0 {
             let delta = step
                 .fee_amount
-                .checked_mul(cache.protocol_fee_rate as u64)
+                .checked_mul(u64::from(cache.protocol_fee_rate))
                 .unwrap()
-                .checked_div((FEE_RATE_DENOMINATOR_VALUE) as u64)
+                .checked_div(u64::from(FEE_RATE_DENOMINATOR_VALUE))
                 .unwrap();
             step.fee_amount = step.fee_amount.checked_sub(delta).unwrap();
             state.protocol_fee = state.protocol_fee.checked_add(delta).unwrap();
@@ -467,11 +467,11 @@ pub fn swap_internal<'b, 'info>(
         }
         pool_state.swap_in_amount_token_0 = pool_state
             .swap_in_amount_token_0
-            .checked_add(amount_0 as u128)
+            .checked_add(u128::from(amount_0))
             .unwrap();
         pool_state.swap_out_amount_token_1 = pool_state
             .swap_out_amount_token_1
-            .checked_add(amount_1 as u128)
+            .checked_add(u128::from(amount_1))
             .unwrap();
     } else {
         pool_state.fee_growth_global_1_x64 = state.fee_growth_global_x64;
@@ -488,11 +488,11 @@ pub fn swap_internal<'b, 'info>(
         }
         pool_state.swap_in_amount_token_1 = pool_state
             .swap_in_amount_token_1
-            .checked_add(amount_1 as u128)
+            .checked_add(u128::from(amount_1))
             .unwrap();
         pool_state.swap_out_amount_token_0 = pool_state
             .swap_out_amount_token_0
-            .checked_add(amount_0 as u128)
+            .checked_add(u128::from(amount_0))
             .unwrap();
     }
 

@@ -22,6 +22,7 @@ pub struct ClosePosition<'info> {
         mut,
         associated_token::mint = position_nft_mint,
         associated_token::authority = nft_owner,
+        constraint = position_nft_account.amount == 1
     )]
     pub position_nft_account: Box<Account<'info, TokenAccount>>,
 
@@ -71,7 +72,7 @@ pub fn close_position<'a, 'b, 'c, 'info>(
             return err!(ErrorCode::ClosePositionErr);
         }
     }
-    if ctx.accounts.position_nft_account.amount == 1 {
+
         burn(
             &ctx.accounts.nft_owner,
             &ctx.accounts.position_nft_mint,
@@ -80,7 +81,7 @@ pub fn close_position<'a, 'b, 'c, 'info>(
             &[],
             1,
         )?;
-    }
+    
 
     close_spl_account(
         &ctx.accounts.nft_owner,
