@@ -834,6 +834,7 @@ fn main() -> Result<()> {
                 if v.len() == 5 {
                     let open_time = v[1].parse::<u64>().unwrap();
                     let end_time = v[2].parse::<u64>().unwrap();
+                    // emissions_per_second is mul 10^^decimals
                     let emissions_per_second = v[3].parse::<f64>().unwrap();
                     let reward_token_mint = Pubkey::from_str(&v[4]).unwrap();
 
@@ -880,6 +881,59 @@ fn main() -> Result<()> {
                     println!("{}", signature);
                 } else {
                     println!("invalid command: [init_reward open_time, end_time, emissions_per_second_x64, reward_token_mint]");
+                }
+            }
+            "set_reward_params" => {
+                if v.len() == 6 {
+                    let index = v[1].parse::<u8>().unwrap();
+                    let open_time = v[2].parse::<u64>().unwrap();
+                    let end_time = v[3].parse::<u64>().unwrap();
+                    // emissions_per_second is mul 10^^decimals
+                    let emissions_per_second = v[4].parse::<f64>().unwrap();
+                    let reward_token_mint = Pubkey::from_str(&v[5]).unwrap();
+                    let emissions_per_second_x64 =
+                        (emissions_per_second * fixed_point_64::Q64 as f64) as u128;
+
+                    let program = anchor_client.program(pool_config.raydium_v3_program);
+                    println!("{}", pool_config.pool_id_account.unwrap());
+                    let pool_account: raydium_amm_v3::states::PoolState =
+                        program.account(pool_config.pool_id_account.unwrap())?;
+
+                    let reward_token_vault = Pubkey::find_program_address(
+                        &[
+                            raydium_amm_v3::states::POOL_REWARD_VAULT_SEED.as_bytes(),
+                            pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
+                            reward_token_mint.to_bytes().as_ref(),
+                        ],
+                        &program.id(),
+                    )
+                    .0;
+                    let user_reward_token =
+                        get_associated_token_address(&admin.pubkey(), &reward_token_mint);
+                    let create_instr = set_reward_params_instr(
+                        &pool_config.clone(),
+                        pool_account.amm_config,
+                        pool_config.pool_id_account.unwrap(),
+                        reward_token_vault,
+                        user_reward_token,
+                        index,
+                        open_time,
+                        end_time,
+                        emissions_per_second_x64,
+                    )?;
+                    // send
+                    let signers = vec![&payer, &admin];
+                    let recent_hash = rpc_client.get_latest_blockhash()?;
+                    let txn = Transaction::new_signed_with_payer(
+                        &create_instr,
+                        Some(&payer.pubkey()),
+                        &signers,
+                        recent_hash,
+                    );
+                    let signature = send_txn(&rpc_client, &txn, true)?;
+                    println!("{}", signature);
+                } else {
+                    println!("invalid command: [set_reward_params index, open_time, end_time, emissions_per_second_x64, reward_token_mint]");
                 }
             }
             "ppool" => {
@@ -1344,9 +1398,9 @@ fn main() -> Result<()> {
                     let user_input_token = Pubkey::from_str(&v[1]).unwrap();
                     let user_output_token = Pubkey::from_str(&v[2]).unwrap();
                     let amount_in = v[3].parse::<u64>().unwrap();
-                    let mut sqrt_price_limit_x64 = None;
+                    let mut limit_price = None;
                     if v.len() == 5 {
-                        sqrt_price_limit_x64 = Some(v[4].parse::<u128>().unwrap());
+                        limit_price = Some(v[4].parse::<f64>().unwrap());
                     }
                     let is_base_input = true;
 
@@ -1384,6 +1438,16 @@ fn main() -> Result<()> {
                         &pool_state,
                         zero_for_one,
                     );
+
+                    let mut sqrt_price_limit_x64 = None;
+                    if limit_price.is_some() {
+                        let sqrt_price_x64 = price_to_sqrt_price_x64(
+                            limit_price.unwrap(),
+                            pool_state.mint_decimals_0,
+                            pool_state.mint_decimals_1,
+                        );
+                        sqrt_price_limit_x64 = Some(sqrt_price_x64);
+                    }
 
                     let (other_amount_threshold, mut tick_array_indexs) =
                         utils::get_out_put_amount_and_remaining_accounts(
@@ -1466,9 +1530,9 @@ fn main() -> Result<()> {
                     let user_input_token = Pubkey::from_str(&v[1]).unwrap();
                     let user_output_token = Pubkey::from_str(&v[2]).unwrap();
                     let amount_in = v[3].parse::<u64>().unwrap();
-                    let mut sqrt_price_limit_x64 = None;
+                    let mut limit_price = None;
                     if v.len() == 5 {
-                        sqrt_price_limit_x64 = Some(v[4].parse::<u128>().unwrap());
+                        limit_price = Some(v[4].parse::<f64>().unwrap());
                     }
                     let is_base_input = false;
 
@@ -1506,6 +1570,16 @@ fn main() -> Result<()> {
                         &pool_state,
                         zero_for_one,
                     );
+
+                    let mut sqrt_price_limit_x64 = None;
+                    if limit_price.is_some() {
+                        let sqrt_price_x64 = price_to_sqrt_price_x64(
+                            limit_price.unwrap(),
+                            pool_state.mint_decimals_0,
+                            pool_state.mint_decimals_1,
+                        );
+                        sqrt_price_limit_x64 = Some(sqrt_price_x64);
+                    }
 
                     let (other_amount_threshold, mut tick_array_indexs) =
                         utils::get_out_put_amount_and_remaining_accounts(
@@ -1716,6 +1790,24 @@ fn main() -> Result<()> {
                             println!(
                                 "amount:{}, other_amount_threshold:{}, sqrt_price_limit_x64:{}, is_base_input:{}",
                                 amount, other_amount_threshold, sqrt_price_limit_x64, is_base_input
+                            );
+                        }
+                        [95, 135, 192, 196, 242, 129, 230, 68] => {
+                            let ix = raydium_amm_v3::instruction::InitializeReward::deserialize(
+                                &mut &ix_data[..],
+                            )
+                            .map_err(|_| {
+                                anchor_lang::error::ErrorCode::InstructionDidNotDeserialize
+                            })
+                            .unwrap();
+                            let raydium_amm_v3::instructions::InitializeRewardParam {
+                                open_time,
+                                end_time,
+                                emissions_per_second_x64,
+                            } = ix.param;
+                            println!(
+                                "open_time:{}, end_time:{}, emissions_per_second_x64:{}",
+                                open_time, end_time, emissions_per_second_x64
                             );
                         }
                         _ => {

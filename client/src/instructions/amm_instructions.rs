@@ -506,3 +506,44 @@ pub fn initialize_reward_instr(
         .instructions()?;
     Ok(instructions)
 }
+
+pub fn set_reward_params_instr(
+    config: &ClientConfig,
+    amm_config: Pubkey,
+    pool_account_key: Pubkey,
+    reward_token_vault: Pubkey,
+    user_reward_token: Pubkey,
+    reward_index: u8,
+    open_time: u64,
+    end_time: u64,
+    emissions_per_second_x64: u128,
+) -> Result<Vec<Instruction>> {
+    let admin = read_keypair_file(&config.admin_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(admin));
+    let program = client.program(config.raydium_v3_program);
+
+    let remaining_accounts = vec![
+        AccountMeta::new(reward_token_vault, false),
+        AccountMeta::new(user_reward_token, false),
+        AccountMeta::new_readonly(spl_token::id(), false),
+    ];
+
+    let instructions = program
+        .request()
+        .accounts(raydium_accounts::SetRewardParams {
+            authority: program.payer(),
+            amm_config,
+            pool_state: pool_account_key,
+        })
+        .accounts(remaining_accounts)
+        .args(raydium_instruction::SetRewardParams {
+            reward_index,
+            emissions_per_second_x64,
+            open_time,
+            end_time,
+        })
+        .instructions()?;
+    Ok(instructions)
+}
