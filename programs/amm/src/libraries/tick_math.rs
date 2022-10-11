@@ -29,8 +29,8 @@ const BIT_PRECISION: u32 = 16;
 /// * `tick` - Price tick
 ///
 pub fn get_sqrt_price_at_tick(tick: i32) -> Result<u128, anchor_lang::error::Error> {
-    let abs_tick = u32::try_from(tick.abs()).unwrap();
-    require!(abs_tick <= u32::try_from(MAX_TICK).unwrap(), ErrorCode::TickUpperOverflow);
+    let abs_tick = tick.abs() as u32;
+    require!(abs_tick <= MAX_TICK as u32, ErrorCode::TickUpperOverflow);
 
     // i = 0
     let mut ratio = if abs_tick & 0x1 != 0 {
@@ -133,7 +133,7 @@ pub fn get_tick_at_sqrt_price(sqrt_price_x64: u128) -> Result<i32, anchor_lang::
 
     // Determine log_b(sqrt_ratio). First by calculating integer portion (msb)
     let msb: u32 = 128 - sqrt_price_x64.leading_zeros() - 1;
-    let log2p_integer_x32 = (i128::from(msb) - 64) << 32;
+    let log2p_integer_x32 = (msb as i128 - 64) << 32;
 
     // get fractional value (r/2^msb), msb always > 128
     // We begin the iteration from bit 63 (0.5 in Q64.64)
@@ -152,9 +152,9 @@ pub fn get_tick_at_sqrt_price(sqrt_price_x64: u128) -> Result<i32, anchor_lang::
 
     while bit > 0 && precision < BIT_PRECISION {
         r *= r;
-        let is_r_more_than_two = u32::try_from(r >> 127).unwrap();
+        let is_r_more_than_two = r >> 127 as u32;
         r >>= 63 + is_r_more_than_two;
-        log2p_fraction_x64 += bit * i128::from(is_r_more_than_two);
+        log2p_fraction_x64 += bit * is_r_more_than_two as i128;
         bit >>= 1;
         precision += 1;
     }
@@ -168,10 +168,10 @@ pub fn get_tick_at_sqrt_price(sqrt_price_x64: u128) -> Result<i32, anchor_lang::
     let log_sqrt_10001_x64 = log2p_x32 * 59543866431248i128;
 
     // tick - 0.01
-    let tick_low = i32::try_from((log_sqrt_10001_x64 - 184467440737095516i128) >> 64).unwrap();
+    let tick_low = ((log_sqrt_10001_x64 - 184467440737095516i128) >> 64) as i32;
 
     // tick + (2^-14 / log2(√1.001)) + 0.01
-    let tick_high = i32::try_from((log_sqrt_10001_x64 + 15793534762490258745i128) >> 64).unwrap();
+    let tick_high = ((log_sqrt_10001_x64 + 15793534762490258745i128) >> 64) as i32;
 
     Ok(if tick_low == tick_high {
         tick_low
@@ -204,6 +204,5 @@ mod test {
             let max_sqrt_price = MAX_SQRT_PRICE_X64 as f64 / fixed_point_64::Q64 as f64;
             println!("max_sqrt_price: {}", max_sqrt_price);
         }
-
     }
 }
