@@ -440,7 +440,6 @@ pub fn get_reward_growths_inside(
             continue;
         }
 
-        // By convention, assume all prior growth happened below the tick
         let reward_growths_below = if tick_current_index >= tick_lower.tick {
             tick_lower.reward_growths_outside_x64[i]
         } else {
@@ -450,7 +449,6 @@ pub fn get_reward_growths_inside(
                 .unwrap()
         };
 
-        // By convention, assume all prior growth happened below the tick, not above
         let reward_growths_above = if tick_current_index < tick_upper.tick {
             tick_upper.reward_growths_outside_x64[i]
         } else {
@@ -662,6 +660,219 @@ mod test {
             next_tick_state = tick_array.next_initialized_tick(-900, 15, false).unwrap();
             assert!(next_tick_state.is_some());
             assert_eq!(identity(next_tick_state.unwrap().tick), -225);
+        }
+    }
+
+    mod get_fee_growth_inside_test {
+        use crate::states::{
+            pool::RewardInfo,
+            tick_array::{get_fee_growth_inside, TickState},
+        };
+
+        #[test]
+        fn position_in_left_side() {
+            let tick_current = 0;
+            let fee_growth_global_0_x64 = 0;
+            let fee_growth_global_1_x64 = 1000;
+
+            let tick_lower = &mut TickState::default();
+            let tick_upper = &mut TickState::default();
+            tick_lower.tick = -10;
+            tick_lower.fee_growth_outside_1_x64 = 0;
+            tick_upper.tick = -5;
+            tick_upper.fee_growth_outside_1_x64 = 0;
+
+            let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
+                tick_lower,
+                tick_upper,
+                tick_current,
+                fee_growth_global_0_x64,
+                fee_growth_global_1_x64,
+            );
+            assert_eq!(fee_growth_inside_0, 0);
+            assert_eq!(fee_growth_inside_1, 0);
+
+            tick_lower.fee_growth_outside_1_x64 = 1000;
+            tick_upper.fee_growth_outside_1_x64 = 0;
+            let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
+                tick_lower,
+                tick_upper,
+                tick_current,
+                fee_growth_global_0_x64,
+                fee_growth_global_1_x64,
+            );
+            assert_eq!(fee_growth_inside_0, 0);
+            assert_eq!(fee_growth_inside_1, 340282366920938463463374607431768210456);
+
+            tick_lower.fee_growth_outside_1_x64 = 0;
+            tick_upper.fee_growth_outside_1_x64 = 1000;
+            let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
+                tick_lower,
+                tick_upper,
+                tick_current,
+                fee_growth_global_0_x64,
+                fee_growth_global_1_x64,
+            );
+            assert_eq!(fee_growth_inside_0, 0);
+            assert_eq!(fee_growth_inside_1, 1000);
+
+            tick_lower.fee_growth_outside_1_x64 = 1000;
+            tick_upper.fee_growth_outside_1_x64 = 1000;
+            let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
+                tick_lower,
+                tick_upper,
+                tick_current,
+                fee_growth_global_0_x64,
+                fee_growth_global_1_x64,
+            );
+            assert_eq!(fee_growth_inside_0, 0);
+            assert_eq!(fee_growth_inside_1, 0);
+        }
+
+        #[test]
+        fn position_in_range() {
+            let mut tick_current = 0;
+            let fee_growth_global_0_x64 = 0;
+            let mut fee_growth_global_1_x64 = 1000;
+
+            let tick_lower = &mut TickState::default();
+            let tick_upper = &mut TickState::default();
+            tick_lower.tick = -10;
+            tick_lower.fee_growth_outside_1_x64 = 0;
+            tick_upper.tick = 10;
+            tick_upper.fee_growth_outside_1_x64 = 0;
+
+            let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
+                tick_lower,
+                tick_upper,
+                tick_current,
+                fee_growth_global_0_x64,
+                fee_growth_global_1_x64,
+            );
+            assert_eq!(fee_growth_inside_0, 0);
+            assert_eq!(fee_growth_inside_1, 1000);
+
+            tick_lower.fee_growth_outside_1_x64 = 1000;
+            tick_upper.fee_growth_outside_1_x64 = 0;
+            let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
+                tick_lower,
+                tick_upper,
+                tick_current,
+                fee_growth_global_0_x64,
+                fee_growth_global_1_x64,
+            );
+            assert_eq!(fee_growth_inside_0, 0);
+            assert_eq!(fee_growth_inside_1, 0);
+
+            tick_lower.fee_growth_outside_1_x64 = 0;
+            tick_upper.fee_growth_outside_1_x64 = 1000;
+            let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
+                tick_lower,
+                tick_upper,
+                tick_current,
+                fee_growth_global_0_x64,
+                fee_growth_global_1_x64,
+            );
+            assert_eq!(fee_growth_inside_0, 0);
+            assert_eq!(fee_growth_inside_1, 0);
+
+            tick_lower.fee_growth_outside_1_x64 = 1000;
+            tick_upper.fee_growth_outside_1_x64 = 1000;
+            let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
+                tick_lower,
+                tick_upper,
+                tick_current,
+                fee_growth_global_0_x64,
+                fee_growth_global_1_x64,
+            );
+            assert_eq!(fee_growth_inside_0, 0);
+            assert_eq!(fee_growth_inside_1, 340282366920938463463374607431768210456);
+
+            fee_growth_global_1_x64 = 1200;
+            tick_current = 9;
+            let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
+                tick_lower,
+                tick_upper,
+                tick_current,
+                fee_growth_global_0_x64,
+                fee_growth_global_1_x64,
+            );
+            assert_eq!(fee_growth_inside_0, 0);
+            assert_eq!(fee_growth_inside_1, 340282366920938463463374607431768210656);
+
+            fee_growth_global_1_x64 = 1500;
+            tick_upper.cross(0, fee_growth_global_1_x64, &[RewardInfo::default(); 3]);
+            tick_current = 11;
+            let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
+                tick_lower,
+                tick_upper,
+                tick_current,
+                fee_growth_global_0_x64,
+                fee_growth_global_1_x64,
+            );
+            assert_eq!(fee_growth_inside_0, 0);
+            assert_eq!(fee_growth_inside_1, 340282366920938463463374607431768210956);
+
+        }
+
+        #[test]
+        fn position_in_right_side() {
+            let tick_current = 0;
+            let fee_growth_global_0_x64 = 0;
+            let fee_growth_global_1_x64 = 1000;
+
+            let tick_lower = &mut TickState::default();
+            let tick_upper = &mut TickState::default();
+            tick_lower.tick = 1;
+            tick_lower.fee_growth_outside_1_x64 = 0;
+            tick_upper.tick = 10;
+            tick_upper.fee_growth_outside_1_x64 = 0;
+
+            let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
+                tick_lower,
+                tick_upper,
+                tick_current,
+                fee_growth_global_0_x64,
+                fee_growth_global_1_x64,
+            );
+            assert_eq!(fee_growth_inside_0, 0);
+            assert_eq!(fee_growth_inside_1, 0);
+
+            tick_lower.fee_growth_outside_1_x64 = 1000;
+            tick_upper.fee_growth_outside_1_x64 = 0;
+            let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
+                tick_lower,
+                tick_upper,
+                tick_current,
+                fee_growth_global_0_x64,
+                fee_growth_global_1_x64,
+            );
+            assert_eq!(fee_growth_inside_0, 0);
+            assert_eq!(fee_growth_inside_1, 1000);
+
+            tick_lower.fee_growth_outside_1_x64 = 0;
+            tick_upper.fee_growth_outside_1_x64 = 1000;
+            let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
+                tick_lower,
+                tick_upper,
+                tick_current,
+                fee_growth_global_0_x64,
+                fee_growth_global_1_x64,
+            );
+            assert_eq!(fee_growth_inside_0, 0);
+            assert_eq!(fee_growth_inside_1, 340282366920938463463374607431768210456);
+
+            tick_lower.fee_growth_outside_1_x64 = 1000;
+            tick_upper.fee_growth_outside_1_x64 = 1000;
+            let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
+                tick_lower,
+                tick_upper,
+                tick_current,
+                fee_growth_global_0_x64,
+                fee_growth_global_1_x64,
+            );
+            assert_eq!(fee_growth_inside_0, 0);
+            assert_eq!(fee_growth_inside_1, 0);
         }
     }
 }
