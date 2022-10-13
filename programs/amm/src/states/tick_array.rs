@@ -165,6 +165,7 @@ impl TickArrayState {
         Ok(offset_in_array)
     }
 
+    /// Base on swap directioin, return the first initialized tick in the tick array.
     pub fn first_initialized_tick(&mut self, zero_for_one: bool) -> Result<&mut TickState> {
         if zero_for_one {
             let mut i = TICK_ARRAY_SIZE - 1;
@@ -233,6 +234,7 @@ impl TickArrayState {
         }
     }
 
+    /// Input an arbitrary tick_index, output the start_index of the tick_array it sits on
     pub fn get_arrary_start_index(tick_index: i32, tick_spacing: i32) -> i32 {
         let mut start = tick_index / (tick_spacing * TICK_ARRAY_SIZE);
         if tick_index < 0 && tick_index % (tick_spacing * TICK_ARRAY_SIZE) != 0 {
@@ -370,10 +372,8 @@ impl TickState {
     }
 }
 
-/// Retrieves the all time fee growth data in token_0 and token_1, per unit of liquidity,
-/// inside a position's tick boundaries.
-///
-/// Calculates `fr = fg - f_below(lower) - f_above(upper)`
+// Calculates the fee growths inside of tick_lower and tick_upper based on their positions relative to tick_current.
+/// `fee_growth_inside = fee_growth_global - fee_growth_below(lower) - fee_growth_above(upper)`
 ///
 pub fn get_fee_growth_inside(
     tick_lower: &TickState,
@@ -425,8 +425,7 @@ pub fn get_fee_growth_inside(
     (fee_growth_inside_0_x64, fee_growth_inside_1_x64)
 }
 
-// Calculates the reward growths inside of tick_lower and tick_upper based on their positions
-// relative to tick_current. An uninitialized reward will always have a reward growth of zero.
+// Calculates the reward growths inside of tick_lower and tick_upper based on their positions relative to tick_current.
 pub fn get_reward_growths_inside(
     tick_lower: &TickState,
     tick_upper: &TickState,
@@ -541,6 +540,15 @@ mod test {
             // println!("{:?}", tick_array);
             assert_eq!(-2700, tick_array.next_tick_arrary_start_index(15, true));
             assert_eq!(-900, tick_array.next_tick_arrary_start_index(15, false));
+        }
+
+        #[test]
+        fn get_tick_offset_in_array_test() {
+            let tick_array = &mut TickArrayState::default();
+            tick_array.start_tick_index = 960;
+            assert_eq!(tick_array.get_tick_offset_in_array(1105, 4).unwrap_err(),error!(anchor_lang::error::ErrorCode::RequireEqViolated));
+            assert_eq!(tick_array.get_tick_offset_in_array(808, 4).unwrap_err(),error!(ErrorCode::InvalidTickArray));
+            assert_eq!(tick_array.get_tick_offset_in_array(1108, 4).unwrap(),37);
         }
 
         #[test]
@@ -812,7 +820,6 @@ mod test {
             );
             assert_eq!(fee_growth_inside_0, 0);
             assert_eq!(fee_growth_inside_1, 340282366920938463463374607431768210956);
-
         }
 
         #[test]
