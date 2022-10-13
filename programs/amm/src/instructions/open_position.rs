@@ -228,7 +228,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             };
 
         // check if protocol position is initilized
-        if ctx.accounts.protocol_position.bump == 0 {
+        if ctx.accounts.protocol_position.pool_id == Pubkey::default() {
             let protocol_position = &mut ctx.accounts.protocol_position;
             protocol_position.bump = *ctx.bumps.get("protocol_position").unwrap();
             protocol_position.pool_id = ctx.accounts.pool_state.key();

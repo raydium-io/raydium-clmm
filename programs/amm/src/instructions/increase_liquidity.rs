@@ -27,6 +27,7 @@ pub struct IncreaseLiquidity<'info> {
             &personal_position.tick_upper_index.to_be_bytes(),
         ],
         bump,
+        constraint = protocol_position.pool_id == pool_state.key(),
     )]
     pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
 
