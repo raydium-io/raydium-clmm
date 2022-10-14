@@ -57,6 +57,7 @@ impl TickArrayState {
         }))
     }
 
+    /// Load a TickArrayState of type AccountLoader from tickarray account info, if tickarray account is not exist, then create it.
     pub fn get_or_create_tick_array<'info>(
         payer: AccountInfo<'info>,
         tick_array_account_info: AccountInfo<'info>,
@@ -153,6 +154,7 @@ impl TickArrayState {
         Ok(())
     }
 
+    /// Get tick's offset in current tick array, tick must be include in tick array， otherwise throw an error
     fn get_tick_offset_in_array(self, tick_index: i32, tick_spacing: i32) -> Result<usize> {
         require_eq!(0, tick_index % tick_spacing);
         let start_tick_index = TickArrayState::get_arrary_start_index(tick_index, tick_spacing);
@@ -226,6 +228,7 @@ impl TickArrayState {
         Ok(None)
     }
 
+    /// Base on swap directioin, return the next tick array start index.
     pub fn next_tick_arrary_start_index(&self, tick_spacing: u16, zero_for_one: bool) -> i32 {
         if zero_for_one {
             self.start_tick_index - (tick_spacing as i32) * TICK_ARRAY_SIZE
@@ -546,9 +549,15 @@ mod test {
         fn get_tick_offset_in_array_test() {
             let tick_array = &mut TickArrayState::default();
             tick_array.start_tick_index = 960;
-            assert_eq!(tick_array.get_tick_offset_in_array(1105, 4).unwrap_err(),error!(anchor_lang::error::ErrorCode::RequireEqViolated));
-            assert_eq!(tick_array.get_tick_offset_in_array(808, 4).unwrap_err(),error!(ErrorCode::InvalidTickArray));
-            assert_eq!(tick_array.get_tick_offset_in_array(1108, 4).unwrap(),37);
+            assert_eq!(
+                tick_array.get_tick_offset_in_array(1105, 4).unwrap_err(),
+                error!(anchor_lang::error::ErrorCode::RequireEqViolated)
+            );
+            assert_eq!(
+                tick_array.get_tick_offset_in_array(808, 4).unwrap_err(),
+                error!(ErrorCode::InvalidTickArray)
+            );
+            assert_eq!(tick_array.get_tick_offset_in_array(1108, 4).unwrap(), 37);
         }
 
         #[test]
@@ -677,18 +686,25 @@ mod test {
             tick_array::{get_fee_growth_inside, TickState},
         };
 
+        /// Position tick range is below current tick
         #[test]
         fn position_in_left_side() {
             let tick_current = 0;
             let fee_growth_global_0_x64 = 0;
             let fee_growth_global_1_x64 = 1000;
 
-            let tick_lower = &mut TickState::default();
-            let tick_upper = &mut TickState::default();
-            tick_lower.tick = -10;
-            tick_lower.fee_growth_outside_1_x64 = 0;
-            tick_upper.tick = -5;
-            tick_upper.fee_growth_outside_1_x64 = 0;
+            let tick_lower = &mut TickState {
+                tick: -10,
+                fee_growth_outside_0_x64: 0,
+                fee_growth_outside_1_x64: 0,
+                ..Default::default()
+            };
+            let tick_upper = &mut TickState {
+                tick: -5,
+                fee_growth_outside_0_x64: 0,
+                fee_growth_outside_1_x64: 0,
+                ..Default::default()
+            };
 
             let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
                 tick_lower,
@@ -737,18 +753,25 @@ mod test {
             assert_eq!(fee_growth_inside_1, 0);
         }
 
+        /// Current tick between position tick range
         #[test]
         fn position_in_range() {
             let mut tick_current = 0;
             let fee_growth_global_0_x64 = 0;
             let mut fee_growth_global_1_x64 = 1000;
 
-            let tick_lower = &mut TickState::default();
-            let tick_upper = &mut TickState::default();
-            tick_lower.tick = -10;
-            tick_lower.fee_growth_outside_1_x64 = 0;
-            tick_upper.tick = 10;
-            tick_upper.fee_growth_outside_1_x64 = 0;
+            let tick_lower = &mut TickState {
+                tick: -10,
+                fee_growth_outside_0_x64: 0,
+                fee_growth_outside_1_x64: 0,
+                ..Default::default()
+            };
+            let tick_upper = &mut TickState {
+                tick: 10,
+                fee_growth_outside_0_x64: 0,
+                fee_growth_outside_1_x64: 0,
+                ..Default::default()
+            };
 
             let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
                 tick_lower,
@@ -822,18 +845,25 @@ mod test {
             assert_eq!(fee_growth_inside_1, 340282366920938463463374607431768210956);
         }
 
+        /// Position tick range is above current tick
         #[test]
         fn position_in_right_side() {
             let tick_current = 0;
             let fee_growth_global_0_x64 = 0;
             let fee_growth_global_1_x64 = 1000;
 
-            let tick_lower = &mut TickState::default();
-            let tick_upper = &mut TickState::default();
-            tick_lower.tick = 1;
-            tick_lower.fee_growth_outside_1_x64 = 0;
-            tick_upper.tick = 10;
-            tick_upper.fee_growth_outside_1_x64 = 0;
+            let tick_lower = &mut TickState {
+                tick: 1,
+                fee_growth_outside_0_x64: 0,
+                fee_growth_outside_1_x64: 0,
+                ..Default::default()
+            };
+            let tick_upper = &mut TickState {
+                tick: 10,
+                fee_growth_outside_0_x64: 0,
+                fee_growth_outside_1_x64: 0,
+                ..Default::default()
+            };
 
             let (fee_growth_inside_0, fee_growth_inside_1) = get_fee_growth_inside(
                 tick_lower,
@@ -880,6 +910,230 @@ mod test {
             );
             assert_eq!(fee_growth_inside_0, 0);
             assert_eq!(fee_growth_inside_1, 0);
+        }
+    }
+
+    mod get_reward_growths_inside_test {
+        use std::str::FromStr;
+
+        use anchor_lang::prelude::Pubkey;
+
+        use crate::states::{
+            pool::RewardInfo,
+            tick_array::{get_reward_growths_inside, TickState},
+        };
+
+        #[test]
+        fn uninitialized_reward_index_test() {
+            let tick_current = 0;
+
+            let tick_lower = &mut TickState {
+                tick: -10,
+                reward_growths_outside_x64: [1000, 0, 0],
+                ..Default::default()
+            };
+            let tick_upper = &mut TickState {
+                tick: 10,
+                reward_growths_outside_x64: [1000, 0, 0],
+                ..Default::default()
+            };
+
+            let reward_infos = &[RewardInfo::default(); 3];
+            let reward_inside =
+                get_reward_growths_inside(tick_lower, tick_upper, tick_current, reward_infos);
+            assert_eq!(reward_inside, [0; 3]);
+        }
+
+        /// Position tick range is below current tick
+        #[test]
+        fn position_in_left_side() {
+            let tick_current_index = 0;
+            let tick_lower = &mut TickState {
+                tick: -10,
+                reward_growths_outside_x64: [0, 0, 0],
+                ..Default::default()
+            };
+            let tick_upper = &mut TickState {
+                tick: -5,
+                reward_growths_outside_x64: [0, 0, 0],
+                ..Default::default()
+            };
+
+            let reward_infos = &mut [
+                RewardInfo {
+                    token_mint: Pubkey::from_str("So11111111111111111111111111111111111111112")
+                        .unwrap(),
+                    reward_growth_global_x64: 1000,
+                    ..Default::default()
+                },
+                RewardInfo::default(),
+                RewardInfo::default(),
+            ];
+
+            let mut reward_inside =
+                get_reward_growths_inside(tick_lower, tick_upper, tick_current_index, reward_infos);
+            assert_eq!(reward_inside, [0, 0, 0]);
+
+            tick_lower.reward_growths_outside_x64 = [1000, 0, 0];
+            reward_inside =
+                get_reward_growths_inside(tick_lower, tick_upper, tick_current_index, reward_infos);
+            assert_eq!(
+                reward_inside,
+                [340282366920938463463374607431768210456, 0, 0]
+            );
+
+            tick_lower.reward_growths_outside_x64 = [0, 0, 0];
+            tick_upper.reward_growths_outside_x64 = [1000, 0, 0];
+            reward_inside =
+                get_reward_growths_inside(tick_lower, tick_upper, tick_current_index, reward_infos);
+            assert_eq!(reward_inside, [1000, 0, 0]);
+
+            tick_lower.reward_growths_outside_x64 = [1000, 0, 0];
+            tick_upper.reward_growths_outside_x64 = [1000, 0, 0];
+            reward_inside =
+                get_reward_growths_inside(tick_lower, tick_upper, tick_current_index, reward_infos);
+            assert_eq!(reward_inside, [0, 0, 0]);
+        }
+
+        /// Current tick between position tick range
+        #[test]
+        fn position_in_range() {
+            let mut tick_current_index = 0;
+
+            let tick_lower = &mut TickState {
+                tick: -10,
+                reward_growths_outside_x64: [0, 0, 0],
+                ..Default::default()
+            };
+            let tick_upper = &mut TickState {
+                tick: 10,
+                reward_growths_outside_x64: [0, 0, 0],
+                ..Default::default()
+            };
+
+            let reward_infos = &mut [
+                RewardInfo {
+                    token_mint: Pubkey::from_str("So11111111111111111111111111111111111111112")
+                        .unwrap(),
+                    reward_growth_global_x64: 1000,
+                    ..Default::default()
+                },
+                RewardInfo::default(),
+                RewardInfo::default(),
+            ];
+
+            let mut reward_inside =
+                get_reward_growths_inside(tick_lower, tick_upper, tick_current_index, reward_infos);
+            assert_eq!(reward_inside, [1000, 0, 0]);
+
+            tick_lower.reward_growths_outside_x64 = [1000, 0, 0];
+            reward_inside =
+                get_reward_growths_inside(tick_lower, tick_upper, tick_current_index, reward_infos);
+            assert_eq!(reward_inside, [0, 0, 0]);
+
+            tick_lower.reward_growths_outside_x64 = [0, 0, 0];
+            tick_upper.reward_growths_outside_x64 = [1000, 0, 0];
+            reward_inside =
+                get_reward_growths_inside(tick_lower, tick_upper, tick_current_index, reward_infos);
+            assert_eq!(reward_inside, [0, 0, 0]);
+
+            tick_lower.reward_growths_outside_x64 = [1000, 0, 0];
+            tick_upper.reward_growths_outside_x64 = [1000, 0, 0];
+            reward_inside =
+                get_reward_growths_inside(tick_lower, tick_upper, tick_current_index, reward_infos);
+            assert_eq!(
+                reward_inside,
+                [340282366920938463463374607431768210456, 0, 0]
+            );
+
+            let reward_infos = &mut [
+                RewardInfo {
+                    token_mint: Pubkey::from_str("So11111111111111111111111111111111111111112")
+                        .unwrap(),
+                    reward_growth_global_x64: 1200,
+                    ..Default::default()
+                },
+                RewardInfo::default(),
+                RewardInfo::default(),
+            ];
+            tick_current_index = 9;
+            reward_inside =
+                get_reward_growths_inside(tick_lower, tick_upper, tick_current_index, reward_infos);
+            assert_eq!(
+                reward_inside,
+                [340282366920938463463374607431768210656, 0, 0]
+            );
+
+            let reward_infos = &mut [
+                RewardInfo {
+                    token_mint: Pubkey::from_str("So11111111111111111111111111111111111111112")
+                        .unwrap(),
+                    reward_growth_global_x64: 1500,
+                    ..Default::default()
+                },
+                RewardInfo::default(),
+                RewardInfo::default(),
+            ];
+            tick_upper.cross(0, 0, reward_infos);
+            tick_current_index = 11;
+            reward_inside =
+                get_reward_growths_inside(tick_lower, tick_upper, tick_current_index, reward_infos);
+            assert_eq!(
+                reward_inside,
+                [340282366920938463463374607431768210956, 0, 0]
+            );
+        }
+
+        /// Position tick range is above current tick
+        #[test]
+        fn position_in_right_side() {
+            let tick_current_index = 0;
+
+            let tick_lower = &mut TickState {
+                tick: 1,
+                reward_growths_outside_x64: [0, 0, 0],
+                ..Default::default()
+            };
+            let tick_upper = &mut TickState {
+                tick: 10,
+                reward_growths_outside_x64: [0, 0, 0],
+                ..Default::default()
+            };
+
+            let reward_infos = &mut [
+                RewardInfo {
+                    token_mint: Pubkey::from_str("So11111111111111111111111111111111111111112")
+                        .unwrap(),
+                    reward_growth_global_x64: 1000,
+                    ..Default::default()
+                },
+                RewardInfo::default(),
+                RewardInfo::default(),
+            ];
+
+            let mut reward_inside =
+                get_reward_growths_inside(tick_lower, tick_upper, tick_current_index, reward_infos);
+            assert_eq!(reward_inside, [0, 0, 0]);
+
+            tick_lower.reward_growths_outside_x64 = [1000, 0, 0];
+            reward_inside =
+                get_reward_growths_inside(tick_lower, tick_upper, tick_current_index, reward_infos);
+            assert_eq!(reward_inside, [1000, 0, 0]);
+
+            tick_lower.reward_growths_outside_x64 = [0, 0, 0];
+            tick_upper.reward_growths_outside_x64 = [1000, 0, 0];
+            reward_inside =
+                get_reward_growths_inside(tick_lower, tick_upper, tick_current_index, reward_infos);
+            assert_eq!(reward_inside, [340282366920938463463374607431768210456, 0, 0]);
+
+            tick_lower.reward_growths_outside_x64 = [1000, 0, 0];
+            tick_upper.reward_growths_outside_x64 = [1000, 0, 0];
+            reward_inside =
+                get_reward_growths_inside(tick_lower, tick_upper, tick_current_index, reward_infos);
+            assert_eq!(
+                reward_inside,
+                [0, 0, 0]
+            );
         }
     }
 }
