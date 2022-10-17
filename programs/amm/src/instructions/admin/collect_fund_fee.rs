@@ -4,10 +4,10 @@ use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
 #[derive(Accounts)]
-pub struct CollectProtocolFee<'info> {
-    /// Only admin or config owner can collect fee now
+pub struct CollectFundFee<'info> {
+    /// Only admin or fund_owner can collect fee now
     #[account(
-        constraint = (owner.key() == amm_config.owner || owner.key() == crate::admin::id())
+        constraint = (owner.key() == amm_config.fund_owner || owner.key() == crate::admin::id())
     )]
     pub owner: Signer<'info>,
 
@@ -15,10 +15,8 @@ pub struct CollectProtocolFee<'info> {
     #[account(mut)]
     pub pool_state: AccountLoader<'info, PoolState>,
 
-    /// Amm config account stores owner
-    #[account(
-        address = pool_state.load()?.amm_config
-    )]
+    /// Amm config account stores fund_owner
+    #[account(address = pool_state.load()?.amm_config)]
     pub amm_config: Account<'info, AmmConfig>,
 
     /// The address that holds pool tokens for token_0
@@ -47,24 +45,18 @@ pub struct CollectProtocolFee<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-pub fn collect_protocol_fee(
-    ctx: Context<CollectProtocolFee>,
+pub fn collect_fund_fee(
+    ctx: Context<CollectFundFee>,
     amount_0_requested: u64,
     amount_1_requested: u64,
 ) -> Result<()> {
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;
 
-    let amount_0 = amount_0_requested.min(pool_state.protocol_fees_token_0);
-    let amount_1 = amount_1_requested.min(pool_state.protocol_fees_token_1);
+    let amount_0 = amount_0_requested.min(pool_state.fund_fees_token_0);
+    let amount_1 = amount_1_requested.min(pool_state.fund_fees_token_1);
 
-    pool_state.protocol_fees_token_0 = pool_state
-        .protocol_fees_token_0
-        .checked_sub(amount_0)
-        .unwrap();
-    pool_state.protocol_fees_token_1 = pool_state
-        .protocol_fees_token_1
-        .checked_sub(amount_1)
-        .unwrap();
+    pool_state.fund_fees_token_0 = pool_state.fund_fees_token_0.checked_sub(amount_0).unwrap();
+    pool_state.fund_fees_token_1 = pool_state.fund_fees_token_1.checked_sub(amount_1).unwrap();
 
     transfer_from_pool_vault_to_user(
         &ctx.accounts.pool_state,

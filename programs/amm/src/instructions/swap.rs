@@ -90,6 +90,8 @@ pub struct SwapAccounts<'b, 'info> {
 pub struct SwapCache {
     // the protocol fee for the input token
     pub protocol_fee_rate: u32,
+    // the fund fee for the input token
+    pub fund_fee_rate: u32,
     // liquidity at the beginning of the swap
     pub liquidity_start: u128,
     // the timestamp of the current block
@@ -113,6 +115,8 @@ pub struct SwapState {
     pub fee_amount: u64,
     // amount of input token paid as protocol fee
     pub protocol_fee: u64,
+    // amount of input token paid as fund fee
+    pub fund_fee: u64,
     // the current liquidity in range
     pub liquidity: u128,
 }
@@ -175,6 +179,7 @@ pub fn swap_internal<'b, 'info>(
         liquidity_start: pool_state.liquidity,
         block_timestamp: oracle::_block_timestamp(),
         protocol_fee_rate: amm_config.protocol_fee_rate,
+        fund_fee_rate: amm_config.fund_fee_rate,
     };
 
     let updated_reward_infos = pool_state.update_reward_infos(cache.block_timestamp as u64)?;
@@ -191,6 +196,7 @@ pub fn swap_internal<'b, 'info>(
         },
         fee_amount: 0,
         protocol_fee: 0,
+        fund_fee: 0,
         liquidity: cache.liquidity_start,
     };
 
@@ -340,6 +346,17 @@ pub fn swap_internal<'b, 'info>(
             step.fee_amount = step.fee_amount.checked_sub(delta).unwrap();
             state.protocol_fee = state.protocol_fee.checked_add(delta).unwrap();
         }
+        // if the fund fee is on, calculate how much is owed, decrement fee_amount, and increment fund_fee
+        if cache.fund_fee_rate > 0 {
+            let delta = step
+                .fee_amount
+                .checked_mul(u64::from(cache.fund_fee_rate))
+                .unwrap()
+                .checked_div(u64::from(FEE_RATE_DENOMINATOR_VALUE))
+                .unwrap();
+            step.fee_amount = step.fee_amount.checked_sub(delta).unwrap();
+            state.fund_fee = state.fund_fee.checked_add(delta).unwrap();
+        }
 
         // update global fee tracker
         if state.liquidity > 0 {
@@ -399,7 +416,7 @@ pub fn swap_internal<'b, 'info>(
 
         #[cfg(feature = "enable-log")]
         msg!(
-            "end, is_base_input:{},step_amount_in:{}, step_amount_out:{}, step_fee_amount:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{}, state_liquidity:{},state.protocol_fee:{},cache.protocol_fee_rate:{}",
+            "end, is_base_input:{},step_amount_in:{}, step_amount_out:{}, step_fee_amount:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{}, state_liquidity:{},state.protocol_fee:{},cache.protocol_fee_rate:{}, state.fund_fee:{}, cache.fund_fee_rate:{}",
             is_base_input,
             step.amount_in,
             step.amount_out,
@@ -409,7 +426,9 @@ pub fn swap_internal<'b, 'info>(
             state.tick,
             state.liquidity,
             state.protocol_fee,
-            cache.protocol_fee_rate
+            cache.protocol_fee_rate,
+            state.fund_fee,
+            cache.fund_fee_rate,,
         );
     }
 
@@ -465,6 +484,12 @@ pub fn swap_internal<'b, 'info>(
                 .checked_add(state.protocol_fee)
                 .unwrap();
         }
+        if state.fund_fee > 0 {
+            pool_state.fund_fees_token_0 = pool_state
+                .fund_fees_token_0
+                .checked_add(state.fund_fee)
+                .unwrap();
+        }
         pool_state.swap_in_amount_token_0 = pool_state
             .swap_in_amount_token_0
             .checked_add(u128::from(amount_0))
@@ -484,6 +509,12 @@ pub fn swap_internal<'b, 'info>(
             pool_state.protocol_fees_token_1 = pool_state
                 .protocol_fees_token_1
                 .checked_add(state.protocol_fee)
+                .unwrap();
+        }
+        if state.fund_fee > 0 {
+            pool_state.fund_fees_token_1 = pool_state
+                .fund_fees_token_1
+                .checked_add(state.fund_fee)
                 .unwrap();
         }
         pool_state.swap_in_amount_token_1 = pool_state

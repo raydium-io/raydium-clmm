@@ -121,13 +121,18 @@ pub struct PoolState {
     /// Packed initialized tick array state
     pub tick_array_bitmap: [u64; 16],
 
+    /// except protocol_fee and fund_fee
     pub total_fees_token_0: u64,
+    /// except protocol_fee and fund_fee
     pub total_fees_claimed_token_0: u64,
     pub total_fees_token_1: u64,
     pub total_fees_claimed_token_1: u64,
 
+    pub fund_fees_token_0: u64,
+    pub fund_fees_token_1: u64,
+
     // Unused bytes for future upgrades.
-    pub padding1: [u64; 28],
+    pub padding1: [u64; 26],
     pub padding2: [u64; 32],
 }
 
@@ -214,7 +219,9 @@ impl PoolState {
         self.total_fees_claimed_token_0 = 0;
         self.total_fees_token_1 = 0;
         self.total_fees_claimed_token_1 = 0;
-        self.padding1 = [0; 28];
+        self.fund_fees_token_0 = 0;
+        self.fund_fees_token_1 = 0;
+        self.padding1 = [0; 26];
         self.padding2 = [0; 32];
 
         let mut observation_state = observation_state_loader.load_mut()?;
