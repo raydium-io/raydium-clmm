@@ -59,7 +59,7 @@ impl ProtocolPositionState {
         reward_growths_inside: [u128; REWARD_NUM],
     ) -> Result<()> {
         let liquidity_next = if liquidity_delta == 0 {
-            require!(self.liquidity > 0, ErrorCode::InvaildLiquidity); // disallow pokes for 0 liquidity positions
+            require!(self.liquidity > 0, ErrorCode::InvaildLiquidity); 
             self.liquidity
         } else {
             liquidity_math::add_delta(self.liquidity, liquidity_delta)?
@@ -86,7 +86,6 @@ impl ProtocolPositionState {
         self.tick_lower_index = tick_lower_index;
         self.tick_upper_index = tick_upper_index;
         if tokens_owed_0 > 0 || tokens_owed_1 > 0 {
-            // overflow is acceptable, have to withdraw before you hit u64::MAX fees
             self.token_fees_owed_0 = self.token_fees_owed_0.checked_add(tokens_owed_0).unwrap();
             self.token_fees_owed_1 = self.token_fees_owed_1.checked_add(tokens_owed_1).unwrap();
         }
@@ -97,7 +96,7 @@ impl ProtocolPositionState {
     }
 
     pub fn update_reward_growths_inside(&mut self, reward_growths_inside: [u128; REWARD_NUM]) {
-        // just record, calculate reward owed in persional position
+        // just record, calculate reward owed in personal position
         self.reward_growth_inside = reward_growths_inside;
     }
 }
