@@ -346,7 +346,9 @@ impl PoolState {
             let latest_update_timestamp = curr_timestamp.min(reward_info.end_time);
 
             if self.liquidity != 0 {
-                let time_delta = latest_update_timestamp - reward_info.last_update_time;
+                let time_delta = latest_update_timestamp
+                    .checked_sub(reward_info.last_update_time)
+                    .unwrap();
 
                 let reward_growth_delta = U256::from(time_delta)
                     .mul_div_floor(
@@ -480,7 +482,7 @@ pub enum RewardState {
 
 #[zero_copy]
 #[repr(packed)]
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq, Eq)]
 pub struct RewardInfo {
     /// Reward state
     pub reward_state: u8,
@@ -845,7 +847,7 @@ mod test {
         }
     }
 
-    mod poo_status_test {
+    mod pool_status_test {
         use super::*;
 
         #[test]
@@ -901,6 +903,58 @@ mod test {
             assert_eq!(
                 pool_state.get_status_by_bit(PoolStatusBitIndex::DecreaseLiquidity),
                 false
+            );
+        }
+    }
+
+    mod update_reward_infos_test {
+        use super::*;
+        use anchor_lang::prelude::Pubkey;
+        use std::convert::identity;
+        use std::str::FromStr;
+
+        #[test]
+        fn reward_info_test() {
+            let pool_state = &mut PoolState::default();
+            pool_state
+                .initialize_reward(
+                    1665982800,
+                    1666069200,
+                    10,
+                    &Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+                    &Pubkey::default(),
+                    &Pubkey::default(),
+                    &Pubkey::default(),
+                )
+                .unwrap();
+
+            // before start time, nothing to update
+            let mut updated_reward_infos = pool_state.update_reward_infos(1665982700).unwrap();
+            assert_eq!(updated_reward_infos[0], pool_state.reward_infos[0]);
+
+            // pool liquidity is 0
+            updated_reward_infos = pool_state.update_reward_infos(1665982900).unwrap();
+            assert_eq!(
+                identity(updated_reward_infos[0].reward_growth_global_x64),
+                0
+            );
+
+            pool_state.liquidity = 100;
+            updated_reward_infos = pool_state.update_reward_infos(1665983000).unwrap();
+            assert_eq!(
+                identity(updated_reward_infos[0].last_update_time),
+                1665983000
+            );
+            assert_eq!(
+                identity(updated_reward_infos[0].reward_growth_global_x64),
+                10
+            );
+
+            // curr_timestamp grater than reward end time
+            updated_reward_infos = pool_state.update_reward_infos(1666069300).unwrap();
+            assert_eq!(
+                identity(updated_reward_infos[0].last_update_time),
+                1666069200
             );
         }
     }
