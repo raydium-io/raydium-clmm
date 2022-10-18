@@ -35,6 +35,7 @@ pub mod amm_v3 {
     /// * `tick_spacing` - The tickspacing binding with config, cannot be changed.
     /// * `trade_fee_rate` - Trade fee rate, can be changed.
     /// * `protocol_fee_rate` - The rate of protocol fee within tarde fee.
+    /// * `fund_fee_rate` - The rate of fund fee within tarde fee.
     ///
     pub fn create_amm_config(
         ctx: Context<CreateAmmConfig>,
@@ -44,8 +45,10 @@ pub mod amm_v3 {
         protocol_fee_rate: u32,
         fund_fee_rate: u32,
     ) -> Result<()> {
-        assert!(protocol_fee_rate > 0 && protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
         assert!(trade_fee_rate < FEE_RATE_DENOMINATOR_VALUE);
+        assert!(protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
+        assert!(fund_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
+        assert!(fund_fee_rate + protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
         instructions::create_amm_config(
             ctx,
             index,
@@ -62,10 +65,12 @@ pub mod amm_v3 {
     /// # Arguments
     ///
     /// * `ctx`- The context of accounts
-    /// * `new_owner`- The config's new owner, be set when `flag` is 0
-    /// * `trade_fee_rate`- The new trade fee rate of amm config, be set when `flag` is 1
-    /// * `protocol_fee_rate`- The new protocol fee rate of amm config, be set when `flag` is 2
-    /// * `flag`- The vaule can be 0 | 1 | 2, otherwise will report a error
+    /// * `trade_fee_rate`- The new trade fee rate of amm config, be set when `param` is 0
+    /// * `protocol_fee_rate`- The new protocol fee rate of amm config, be set when `param` is 1
+    /// * `fund_fee_rate`- The new fund fee rate of amm config, be set when `param` is 2
+    /// * `new_owner`- The config's new owner, be set when `param` is 3
+    /// * `new_fund_owner`- The config's new fund owner, be set when `param` is 4
+    /// * `param`- The vaule can be 0 | 1 | 2 | 3 | 4, otherwise will report a error
     ///
     pub fn update_amm_config(ctx: Context<UpdateAmmConfig>, param: u8, value: u32) -> Result<()> {
         instructions::update_amm_config(ctx, param, value)

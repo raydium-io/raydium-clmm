@@ -47,7 +47,8 @@ pub fn update_amm_config(ctx: Context<UpdateAmmConfig>, param: u8, value: u32) -
 }
 
 fn update_protocol_fee_rate(amm_config: &mut Account<AmmConfig>, protocol_fee_rate: u32) {
-    assert!(protocol_fee_rate > 0 && protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
+    assert!(protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
+    assert!(protocol_fee_rate + amm_config.fund_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
     amm_config.protocol_fee_rate = protocol_fee_rate;
 }
 
@@ -57,7 +58,8 @@ fn update_trade_fee_rate(amm_config: &mut Account<AmmConfig>, trade_fee_rate: u3
 }
 
 fn update_fund_fee_rate(amm_config: &mut Account<AmmConfig>, fund_fee_rate: u32) {
-    assert!(fund_fee_rate < FEE_RATE_DENOMINATOR_VALUE);
+    assert!(fund_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
+    assert!(fund_fee_rate + amm_config.protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
     amm_config.fund_fee_rate = fund_fee_rate;
 }
 

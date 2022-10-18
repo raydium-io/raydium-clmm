@@ -487,7 +487,7 @@ fn main() -> Result<()> {
                 }
             }
             "update_amm_cfg" => {
-                if v.len() == 3 {
+                if v.len() == 4 {
                     let config_index = v[1].parse::<u16>().unwrap();
                     let param = v[2].parse::<u8>().unwrap();
                     let mut remaing_accounts = Vec::new();
