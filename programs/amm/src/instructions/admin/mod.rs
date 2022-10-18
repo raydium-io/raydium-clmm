@@ -18,3 +18,6 @@ pub use reset_sqrt_price::*;
 
 pub mod collect_remaining_rewards;
 pub use collect_remaining_rewards::*;
+
+pub mod collect_fund_fee;
+pub use collect_fund_fee::*;

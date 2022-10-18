@@ -12,31 +12,35 @@ pub struct UpdateAmmConfig<'info> {
     pub amm_config: Account<'info, AmmConfig>,
 }
 
-pub fn update_amm_config(
-    ctx: Context<UpdateAmmConfig>,
-    new_owner: Pubkey,
-    trade_fee_rate: u32,
-    protocol_fee_rate: u32,
-    flag: u8,
-) -> Result<()> {
+pub fn update_amm_config(ctx: Context<UpdateAmmConfig>, param: u8, value: u32) -> Result<()> {
     require!(
         ctx.accounts.owner.key() == ctx.accounts.amm_config.owner
             || ctx.accounts.owner.key() == crate::admin::id(),
         ErrorCode::NotApproved
     );
     let amm_config = &mut ctx.accounts.amm_config;
-    let match_flag = Some(flag);
-    match match_flag {
-        Some(0) => set_new_owner(amm_config, new_owner),
-        Some(1) => update_trade_fee_rate(amm_config, trade_fee_rate),
-        Some(2) => update_protocol_fee_rate(amm_config, protocol_fee_rate),
+    let match_param = Some(param);
+    match match_param {
+        Some(0) => update_trade_fee_rate(amm_config, value),
+        Some(1) => update_protocol_fee_rate(amm_config, value),
+        Some(2) => update_fund_fee_rate(amm_config, value),
+        Some(3) => {
+            let new_owner = *ctx.remaining_accounts.iter().next().unwrap().key;
+            set_new_owner(amm_config, new_owner);
+        }
+        Some(4) => {
+            let new_fund_owner = *ctx.remaining_accounts.iter().next().unwrap().key;
+            set_new_fund_owner(amm_config, new_fund_owner);
+        }
         _ => return err!(ErrorCode::InvalidUpdateConfigFlag),
     }
 
     emit!(UpdaterConfigEvent {
         owner: amm_config.owner,
         trade_fee_rate: amm_config.trade_fee_rate,
-        protocol_fee_rate: amm_config.protocol_fee_rate
+        protocol_fee_rate: amm_config.protocol_fee_rate,
+        fund_fee_rate: amm_config.fund_fee_rate,
+        fund_owner: amm_config.fund_owner,
     });
 
     Ok(())
@@ -52,6 +56,11 @@ fn update_trade_fee_rate(amm_config: &mut Account<AmmConfig>, trade_fee_rate: u3
     amm_config.trade_fee_rate = trade_fee_rate;
 }
 
+fn update_fund_fee_rate(amm_config: &mut Account<AmmConfig>, fund_fee_rate: u32) {
+    assert!(fund_fee_rate < FEE_RATE_DENOMINATOR_VALUE);
+    amm_config.fund_fee_rate = fund_fee_rate;
+}
+
 fn set_new_owner(amm_config: &mut Account<AmmConfig>, new_owner: Pubkey) {
     #[cfg(feature = "enable-log")]
     msg!(
@@ -60,4 +69,14 @@ fn set_new_owner(amm_config: &mut Account<AmmConfig>, new_owner: Pubkey) {
         new_owner.key().to_string()
     );
     amm_config.owner = new_owner;
+}
+
+fn set_new_fund_owner(amm_config: &mut Account<AmmConfig>, new_fund_owner: Pubkey) {
+    #[cfg(feature = "enable-log")]
+    msg!(
+        "amm_config, old_fund_owner:{}, new_fund_owner:{}",
+        amm_config.fund_owner.to_string(),
+        new_fund_owner.key().to_string()
+    );
+    amm_config.fund_owner = new_fund_owner;
 }

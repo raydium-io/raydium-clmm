@@ -42,10 +42,18 @@ pub mod amm_v3 {
         tick_spacing: u16,
         trade_fee_rate: u32,
         protocol_fee_rate: u32,
+        fund_fee_rate: u32,
     ) -> Result<()> {
         assert!(protocol_fee_rate > 0 && protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
         assert!(trade_fee_rate < FEE_RATE_DENOMINATOR_VALUE);
-        instructions::create_amm_config(ctx, index, tick_spacing, protocol_fee_rate, trade_fee_rate)
+        instructions::create_amm_config(
+            ctx,
+            index,
+            tick_spacing,
+            trade_fee_rate,
+            protocol_fee_rate,
+            fund_fee_rate,
+        )
     }
 
     /// Updates the owner of the amm config
@@ -59,14 +67,8 @@ pub mod amm_v3 {
     /// * `protocol_fee_rate`- The new protocol fee rate of amm config, be set when `flag` is 2
     /// * `flag`- The vaule can be 0 | 1 | 2, otherwise will report a error
     ///
-    pub fn update_amm_config(
-        ctx: Context<UpdateAmmConfig>,
-        new_owner: Pubkey,
-        trade_fee_rate: u32,
-        protocol_fee_rate: u32,
-        flag: u8,
-    ) -> Result<()> {
-        instructions::update_amm_config(ctx, new_owner, trade_fee_rate, protocol_fee_rate, flag)
+    pub fn update_amm_config(ctx: Context<UpdateAmmConfig>, param: u8, value: u32) -> Result<()> {
+        instructions::update_amm_config(ctx, param, value)
     }
 
     /// Creates a pool for the given token pair and the initial price
@@ -175,6 +177,22 @@ pub mod amm_v3 {
         amount_1_requested: u64,
     ) -> Result<()> {
         instructions::collect_protocol_fee(ctx, amount_0_requested, amount_1_requested)
+    }
+
+    /// Collect the fund fee accrued to the pool
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    /// * `amount_0_requested` - The maximum amount of token_0 to send, can be 0 to collect fees in only token_1
+    /// * `amount_1_requested` - The maximum amount of token_1 to send, can be 0 to collect fees in only token_0
+    ///
+    pub fn collect_fund_fee(
+        ctx: Context<CollectFundFee>,
+        amount_0_requested: u64,
+        amount_1_requested: u64,
+    ) -> Result<()> {
+        instructions::collect_fund_fee(ctx, amount_0_requested, amount_1_requested)
     }
 
     /// Creates a new position wrapped in a NFT

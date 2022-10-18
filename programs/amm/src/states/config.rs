@@ -20,8 +20,12 @@ pub struct AmmConfig {
     pub trade_fee_rate: u32,
     /// The tick spacing
     pub tick_spacing: u16,
+    /// The fund fee, denominated in hundredths of a bip (10^-6)
+    pub fund_fee_rate: u32,
     // padding space for upgrade
-    pub padding: [u64; 8],
+    pub padding_u32: u32,
+    pub fund_owner: Pubkey,
+    pub padding: [u64; 3],
 }
 
 impl AmmConfig {
@@ -49,6 +53,8 @@ pub struct CreateConfigEvent {
     pub protocol_fee_rate: u32,
     pub trade_fee_rate: u32,
     pub tick_spacing: u16,
+    pub fund_fee_rate: u32,
+    pub fund_owner: Pubkey,
 }
 
 /// Emitted when update a config
@@ -57,4 +63,6 @@ pub struct UpdaterConfigEvent {
     pub owner: Pubkey,
     pub protocol_fee_rate: u32,
     pub trade_fee_rate: u32,
+    pub fund_fee_rate: u32,
+    pub fund_owner: Pubkey,
 }

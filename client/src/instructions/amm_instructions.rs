@@ -19,8 +19,9 @@ pub fn create_amm_config_instr(
     config: &ClientConfig,
     config_index: u16,
     tick_spacing: u16,
-    protocol_fee_rate: u32,
     trade_fee_rate: u32,
+    protocol_fee_rate: u32,
+    fund_fee_rate: u32,
 ) -> Result<Vec<Instruction>> {
     let payer = read_keypair_file(&config.admin_path)?;
     let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
@@ -41,8 +42,9 @@ pub fn create_amm_config_instr(
         .args(raydium_instruction::CreateAmmConfig {
             index: config_index,
             tick_spacing,
-            protocol_fee_rate,
             trade_fee_rate,
+            protocol_fee_rate,
+            fund_fee_rate,
         })
         .instructions()?;
     Ok(instructions)
@@ -51,10 +53,9 @@ pub fn create_amm_config_instr(
 pub fn update_amm_config_instr(
     config: &ClientConfig,
     amm_config: Pubkey,
-    new_owner: Pubkey,
-    trade_fee_rate: u32,
-    protocol_fee_rate: u32,
-    flag: u8,
+    remaining_accounts: Vec<AccountMeta>,
+    param: u8,
+    value: u32,
 ) -> Result<Vec<Instruction>> {
     let payer = read_keypair_file(&config.payer_path)?;
     let admin = read_keypair_file(&config.admin_path)?;
@@ -68,12 +69,8 @@ pub fn update_amm_config_instr(
             owner: admin.pubkey(),
             amm_config,
         })
-        .args(raydium_instruction::UpdateAmmConfig {
-            new_owner,
-            trade_fee_rate,
-            protocol_fee_rate,
-            flag,
-        })
+        .accounts(remaining_accounts)
+        .args(raydium_instruction::UpdateAmmConfig { param, value })
         .instructions()?;
     Ok(instructions)
 }
@@ -351,6 +348,7 @@ pub fn decrease_liquidity_instr(
     nft_mint_key: Pubkey,
     user_token_account_0: Pubkey,
     user_token_account_1: Pubkey,
+    remaining_accounts: Vec<AccountMeta>,
     liquidity: u128,
     amount_0_min: u64,
     amount_1_min: u64,
@@ -411,6 +409,7 @@ pub fn decrease_liquidity_instr(
             recipient_token_account_1: user_token_account_1,
             token_program: spl_token::id(),
         })
+        .accounts(remaining_accounts)
         .args(raydium_instruction::DecreaseLiquidity {
             liquidity,
             amount_0_min,

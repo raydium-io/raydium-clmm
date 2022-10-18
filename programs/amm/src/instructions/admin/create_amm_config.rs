@@ -32,16 +32,19 @@ pub fn create_amm_config(
     ctx: Context<CreateAmmConfig>,
     index: u16,
     tick_spacing: u16,
-    protocol_fee_rate: u32,
     trade_fee_rate: u32,
+    protocol_fee_rate: u32,
+    fund_fee_rate: u32,
 ) -> Result<()> {
     let amm_config = ctx.accounts.amm_config.deref_mut();
     amm_config.owner = ctx.accounts.owner.key();
     amm_config.bump = *ctx.bumps.get("amm_config").unwrap();
     amm_config.index = index;
-    amm_config.protocol_fee_rate = protocol_fee_rate;
     amm_config.trade_fee_rate = trade_fee_rate;
+    amm_config.protocol_fee_rate = protocol_fee_rate;
     amm_config.tick_spacing = tick_spacing;
+    amm_config.fund_fee_rate = fund_fee_rate;
+    amm_config.fund_owner = ctx.accounts.owner.key();
 
     emit!(CreateConfigEvent {
         index: amm_config.index,
@@ -49,6 +52,8 @@ pub fn create_amm_config(
         protocol_fee_rate: amm_config.protocol_fee_rate,
         trade_fee_rate: amm_config.trade_fee_rate,
         tick_spacing: amm_config.tick_spacing,
+        fund_fee_rate: amm_config.fund_fee_rate,
+        fund_owner: amm_config.fund_owner,
     });
 
     Ok(())

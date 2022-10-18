@@ -441,14 +441,16 @@ fn main() -> Result<()> {
                 if v.len() == 5 {
                     let config_index = v[1].parse::<u16>().unwrap();
                     let tick_spacing = v[2].parse::<u16>().unwrap();
-                    let protocol_fee_rate = v[3].parse::<u32>().unwrap();
-                    let trade_fee_rate = v[4].parse::<u32>().unwrap();
+                    let trade_fee_rate = v[3].parse::<u32>().unwrap();
+                    let protocol_fee_rate = v[4].parse::<u32>().unwrap();
+                    let fund_fee_rate = v[5].parse::<u32>().unwrap();
                     let create_instr = create_amm_config_instr(
                         &pool_config.clone(),
                         config_index,
                         tick_spacing,
-                        protocol_fee_rate,
                         trade_fee_rate,
+                        protocol_fee_rate,
+                        fund_fee_rate,
                     )?;
                     // send
                     let signers = vec![&payer, &admin];
@@ -487,16 +489,27 @@ fn main() -> Result<()> {
             "update_amm_cfg" => {
                 if v.len() == 3 {
                     let config_index = v[1].parse::<u16>().unwrap();
-                    let flag = v[2].parse::<u8>().unwrap();
-                    let mut new_owner = Pubkey::default();
-                    let mut trade_fee_rate = 0;
-                    let mut protocol_fee_rate = 0;
-                    if flag == 0 {
-                        new_owner = Pubkey::from_str(&v[3]).unwrap();
-                    } else if flag == 1 {
-                        trade_fee_rate = v[3].parse::<u32>().unwrap();
-                    } else {
-                        protocol_fee_rate = v[3].parse::<u32>().unwrap();
+                    let param = v[2].parse::<u8>().unwrap();
+                    let mut remaing_accounts = Vec::new();
+                    let mut value = 0;
+                    let match_param = Some(param);
+                    match match_param {
+                        Some(0) => value = v[3].parse::<u32>().unwrap(),
+                        Some(1) => value = v[3].parse::<u32>().unwrap(),
+                        Some(2) => value = v[3].parse::<u32>().unwrap(),
+                        Some(3) => {
+                            remaing_accounts.push(AccountMeta::new_readonly(
+                                Pubkey::from_str(&v[3]).unwrap(),
+                                false,
+                            ));
+                        }
+                        Some(4) => {
+                            remaing_accounts.push(AccountMeta::new_readonly(
+                                Pubkey::from_str(&v[3]).unwrap(),
+                                false,
+                            ));
+                        }
+                        _ => panic!("error input"),
                     }
                     let (amm_config_key, __bump) = Pubkey::find_program_address(
                         &[
@@ -508,10 +521,9 @@ fn main() -> Result<()> {
                     let update_amm_config_instr = update_amm_config_instr(
                         &pool_config.clone(),
                         amm_config_key,
-                        new_owner,
-                        trade_fee_rate,
-                        protocol_fee_rate,
-                        flag,
+                        remaing_accounts,
+                        param,
+                        value,
                     )?;
                     // send
                     let signers = vec![&payer, &admin];
@@ -1321,6 +1333,20 @@ fn main() -> Result<()> {
                     if find_position.nft_mint != Pubkey::default()
                         && find_position.pool_id == pool_config.pool_id_account.unwrap()
                     {
+                        let reward_vault_with_user_vault: Vec<(Pubkey, Pubkey)> = pool
+                            .reward_infos
+                            .into_iter()
+                            .map(|item| {
+                                (
+                                    item.token_vault,
+                                    get_associated_token_address(&payer.pubkey(), &item.token_mint),
+                                )
+                            })
+                            .collect();
+                        let remaining_accounts = reward_vault_with_user_vault
+                            .into_iter()
+                            .map(|item| AccountMeta::new(item.0, false))
+                            .collect();
                         // personal position exist
                         let decrease_instr = decrease_liquidity_instr(
                             &pool_config.clone(),
@@ -1336,6 +1362,7 @@ fn main() -> Result<()> {
                                 &payer.pubkey(),
                                 &pool_config.mint1.unwrap(),
                             ),
+                            remaining_accounts,
                             liquidity,
                             amount_0_min,
                             amount_1_min,
