@@ -171,7 +171,7 @@ fn swap_compute(
     tick_array_start_index_vec.push_back(tick_array_current.start_tick_index);
     let mut loop_count = 0;
     // loop across ticks until input liquidity is consumed, or the limit price is reached
-    while !state.amount_specified_remaining == 0
+    while state.amount_specified_remaining != 0
         && state.sqrt_price_x64 != sqrt_price_limit_x64
         && state.tick < tick_math::MAX_TICK
         && state.tick > tick_math::MIN_TICK

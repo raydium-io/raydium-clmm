@@ -438,7 +438,7 @@ fn main() -> Result<()> {
                 }
             }
             "create_config" | "ccfg" => {
-                if v.len() == 5 {
+                if v.len() == 6 {
                     let config_index = v[1].parse::<u16>().unwrap();
                     let tick_spacing = v[2].parse::<u16>().unwrap();
                     let trade_fee_rate = v[3].parse::<u32>().unwrap();
@@ -464,7 +464,7 @@ fn main() -> Result<()> {
                     let signature = send_txn(&rpc_client, &txn, true)?;
                     println!("{}", signature);
                 } else {
-                    println!("invalid command: [ccfg mint protocol_fee_rate]");
+                    println!("invalid command: [ccfg index tick_spacing trade_fee_rate protocol_fee_rate fund_fee_rate]");
                 }
             }
             "pcfg" => {

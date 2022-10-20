@@ -1,7 +1,6 @@
 
 .anchor
 .DS_Store
-.vscode
 target
 KeyPairs
 *.json
