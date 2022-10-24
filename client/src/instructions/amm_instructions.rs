@@ -9,7 +9,7 @@ use solana_sdk::{
 use raydium_amm_v3::accounts as raydium_accounts;
 use raydium_amm_v3::instruction as raydium_instruction;
 use raydium_amm_v3::states::{
-    AMM_CONFIG_SEED, POOL_SEED, POOL_VAULT_SEED, POSITION_SEED, TICK_ARRAY_SEED,
+    AMM_CONFIG_SEED, OPERATION_SEED, POOL_SEED, POOL_VAULT_SEED, POSITION_SEED, TICK_ARRAY_SEED,
 };
 use std::rc::Rc;
 
@@ -71,6 +71,50 @@ pub fn update_amm_config_instr(
         })
         .accounts(remaining_accounts)
         .args(raydium_instruction::UpdateAmmConfig { param, value })
+        .instructions()?;
+    Ok(instructions)
+}
+
+pub fn create_operation_account_instr(config: &ClientConfig) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.admin_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
+    let program = client.program(config.raydium_v3_program);
+    let (operation_account_key, __bump) =
+        Pubkey::find_program_address(&[OPERATION_SEED.as_bytes()], &program.id());
+    let instructions = program
+        .request()
+        .accounts(raydium_accounts::CreateOperationAccount {
+            owner: program.payer(),
+            operation_state: operation_account_key,
+            system_program: system_program::id(),
+        })
+        .args(raydium_instruction::CreateOperationAccount)
+        .instructions()?;
+    Ok(instructions)
+}
+
+pub fn update_operation_account_instr(
+    config: &ClientConfig,
+    param: u8,
+    keys: Vec<Pubkey>,
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.admin_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
+    let program = client.program(config.raydium_v3_program);
+    let (operation_account_key, __bump) =
+        Pubkey::find_program_address(&[OPERATION_SEED.as_bytes()], &program.id());
+    let instructions = program
+        .request()
+        .accounts(raydium_accounts::UpdateOperationAccount {
+            owner: program.payer(),
+            operation_state: operation_account_key,
+            system_program: system_program::id(),
+        })
+        .args(raydium_instruction::UpdateOperationAccount { param, keys })
         .instructions()?;
     Ok(instructions)
 }
@@ -469,6 +513,7 @@ pub fn initialize_reward_instr(
     config: &ClientConfig,
     pool_account_key: Pubkey,
     amm_config: Pubkey,
+    operation_account_key: Pubkey,
     reward_token_mint: Pubkey,
     reward_token_vault: Pubkey,
     user_reward_token: Pubkey,
@@ -489,6 +534,7 @@ pub fn initialize_reward_instr(
             funder_token_account: user_reward_token,
             amm_config,
             pool_state: pool_account_key,
+            operation_state: operation_account_key,
             reward_token_mint,
             reward_token_vault,
             token_program: spl_token::id(),
@@ -512,6 +558,7 @@ pub fn set_reward_params_instr(
     pool_account_key: Pubkey,
     reward_token_vault: Pubkey,
     user_reward_token: Pubkey,
+    operation_account_key: Pubkey,
     reward_index: u8,
     open_time: u64,
     end_time: u64,
@@ -535,6 +582,7 @@ pub fn set_reward_params_instr(
             authority: program.payer(),
             amm_config,
             pool_state: pool_account_key,
+            operation_state: operation_account_key,
         })
         .accounts(remaining_accounts)
         .args(raydium_instruction::SetRewardParams {

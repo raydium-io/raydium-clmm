@@ -467,6 +467,59 @@ fn main() -> Result<()> {
                     println!("invalid command: [ccfg index tick_spacing trade_fee_rate protocol_fee_rate fund_fee_rate]");
                 }
             }
+            "create_operation" => {
+                if v.len() == 2 {
+                    let create_instr = create_operation_account_instr(&pool_config.clone())?;
+                    // send
+                    let signers = vec![&payer, &admin];
+                    let recent_hash = rpc_client.get_latest_blockhash()?;
+                    let txn = Transaction::new_signed_with_payer(
+                        &create_instr,
+                        Some(&payer.pubkey()),
+                        &signers,
+                        recent_hash,
+                    );
+                    let signature = send_txn(&rpc_client, &txn, true)?;
+                    println!("{}", signature);
+                } else {
+                    println!("invalid command: [create_operation]");
+                }
+            }
+            "update_operation" => {
+                let param = v[1].parse::<u8>().unwrap();
+                let mut keys = Vec::new();
+                for i in 2..v.len() {
+                    keys.push(Pubkey::from_str(&v[i]).unwrap());
+                }
+                let create_instr =
+                    update_operation_account_instr(&pool_config.clone(), param, keys)?;
+                // send
+                let signers = vec![&payer, &admin];
+                let recent_hash = rpc_client.get_latest_blockhash()?;
+                let txn = Transaction::new_signed_with_payer(
+                    &create_instr,
+                    Some(&payer.pubkey()),
+                    &signers,
+                    recent_hash,
+                );
+                let signature = send_txn(&rpc_client, &txn, true)?;
+                println!("{}", signature);
+            }
+            "poperation" => {
+                if v.len() == 1 {
+                    let program = anchor_client.program(pool_config.raydium_v3_program);
+                    let (operation_account_key, __bump) = Pubkey::find_program_address(
+                        &[raydium_amm_v3::states::OPERATION_SEED.as_bytes()],
+                        &program.id(),
+                    );
+                    println!("{}", operation_account_key);
+                    let operation_account: raydium_amm_v3::states::OperationState =
+                        program.account(operation_account_key)?;
+                    println!("{:#?}", operation_account);
+                } else {
+                    println!("invalid command: [poperation]");
+                }
+            }
             "pcfg" => {
                 if v.len() == 2 {
                     let config_index = v[1].parse::<u16>().unwrap();
@@ -857,6 +910,11 @@ fn main() -> Result<()> {
                     println!("{}", pool_config.pool_id_account.unwrap());
                     let pool_account: raydium_amm_v3::states::PoolState =
                         program.account(pool_config.pool_id_account.unwrap())?;
+                    let operator_account_key = Pubkey::find_program_address(
+                        &[raydium_amm_v3::states::OPERATION_SEED.as_bytes()],
+                        &program.id(),
+                    )
+                    .0;
 
                     let reward_token_vault = Pubkey::find_program_address(
                         &[
@@ -873,6 +931,7 @@ fn main() -> Result<()> {
                         &pool_config.clone(),
                         pool_config.pool_id_account.unwrap(),
                         pool_account.amm_config,
+                        operator_account_key,
                         reward_token_mint,
                         reward_token_vault,
                         user_reward_token,
@@ -910,6 +969,11 @@ fn main() -> Result<()> {
                     println!("{}", pool_config.pool_id_account.unwrap());
                     let pool_account: raydium_amm_v3::states::PoolState =
                         program.account(pool_config.pool_id_account.unwrap())?;
+                    let operator_account_key = Pubkey::find_program_address(
+                        &[raydium_amm_v3::states::OPERATION_SEED.as_bytes()],
+                        &program.id(),
+                    )
+                    .0;
 
                     let reward_token_vault = Pubkey::find_program_address(
                         &[
@@ -928,6 +992,7 @@ fn main() -> Result<()> {
                         pool_config.pool_id_account.unwrap(),
                         reward_token_vault,
                         user_reward_token,
+                        operator_account_key,
                         index,
                         open_time,
                         end_time,
