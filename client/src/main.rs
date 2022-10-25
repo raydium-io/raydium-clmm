@@ -17,6 +17,7 @@ use solana_client::{
     rpc_request::TokenAccountsFilter,
 };
 use solana_sdk::{
+    commitment_config::CommitmentConfig,
     compute_budget::ComputeBudgetInstruction,
     program_pack::Pack,
     pubkey::Pubkey,
@@ -760,19 +761,33 @@ fn main() -> Result<()> {
                     },
                 )?;
 
+                let mut total_fees_owed_0 = 0;
+                let mut total_fees_owed_1 = 0;
+                let mut total_reward_owed = 0;
                 for position in position_accounts_by_pool {
                     let personal_position = deserialize_anchor_account::<
                         raydium_amm_v3::states::PersonalPositionState,
                     >(&position.1)?;
                     if personal_position.pool_id == pool_config.pool_id_account.unwrap() {
                         println!(
-                            "personal_position:{}, lower_index:{}, upper_index:{}",
+                            "personal_position:{}, lower:{}, upper:{}, liquidity:{}, token_fees_owed_0:{}, token_fees_owed_1:{}, reward_amount_owed:{}",
                             position.0,
                             personal_position.tick_lower_index,
-                            personal_position.tick_upper_index
+                            personal_position.tick_upper_index,
+                            personal_position.liquidity,
+                            personal_position.token_fees_owed_0,
+                            personal_position.token_fees_owed_1,
+                            personal_position.reward_infos[0].reward_amount_owed,
                         );
+                        total_fees_owed_0 += personal_position.token_fees_owed_0;
+                        total_fees_owed_1 += personal_position.token_fees_owed_1;
+                        total_reward_owed += personal_position.reward_infos[0].reward_amount_owed;
                     }
                 }
+                println!(
+                    "total_fees_owed_0:{}, total_fees_owed_1:{}, total_reward_owed:{}",
+                    total_fees_owed_0, total_fees_owed_1, total_reward_owed
+                );
             }
             "p_all_protocol_position_by_pool" => {
                 let position_accounts_by_pool = rpc_client.get_program_accounts_with_config(
@@ -1343,12 +1358,13 @@ fn main() -> Result<()> {
                 }
             }
             "decrease_liquidity" => {
-                if v.len() == 6 {
+                if v.len() == 6 || v.len() == 7 {
                     let tick_lower_index = v[1].parse::<i32>().unwrap();
                     let tick_upper_index = v[2].parse::<i32>().unwrap();
                     let liquidity = v[3].parse::<u128>().unwrap();
                     let amount_0_min = v[4].parse::<u64>().unwrap();
                     let amount_1_min = v[5].parse::<u64>().unwrap();
+                    let simulate = v[6].parse::<bool>().unwrap();
 
                     // load pool to get observation
                     let program = anchor_client.program(pool_config.raydium_v3_program);
@@ -1398,22 +1414,21 @@ fn main() -> Result<()> {
                     if find_position.nft_mint != Pubkey::default()
                         && find_position.pool_id == pool_config.pool_id_account.unwrap()
                     {
-                        let reward_vault_with_user_vault: Vec<(Pubkey, Pubkey)> = pool
-                            .reward_infos
-                            .into_iter()
-                            .map(|item| {
-                                (
+                        let mut reward_vault_with_user_vault: Vec<(Pubkey, Pubkey)> = Vec::new();
+                        for item in pool.reward_infos.into_iter() {
+                            if item.token_mint != Pubkey::default() {
+                                reward_vault_with_user_vault.push((
                                     item.token_vault,
                                     get_associated_token_address(&payer.pubkey(), &item.token_mint),
-                                )
-                            })
-                            .collect();
+                                ));
+                            }
+                        }
                         let remaining_accounts = reward_vault_with_user_vault
                             .into_iter()
                             .map(|item| AccountMeta::new(item.0, false))
                             .collect();
                         // personal position exist
-                        let decrease_instr = decrease_liquidity_instr(
+                        let mut decrease_instr = decrease_liquidity_instr(
                             &pool_config.clone(),
                             pool_config.pool_id_account.unwrap(),
                             pool.token_vault_0,
@@ -1436,6 +1451,13 @@ fn main() -> Result<()> {
                             tick_array_lower_start_index,
                             tick_array_upper_start_index,
                         )?;
+                        if liquidity == find_position.liquidity {
+                            let close_position_instr = close_personal_position_instr(
+                                &pool_config.clone(),
+                                find_position.nft_mint,
+                            )?;
+                            decrease_instr.extend(close_position_instr);
+                        }
                         // send
                         let signers = vec![&payer];
                         let recent_hash = rpc_client.get_latest_blockhash()?;
@@ -1445,8 +1467,18 @@ fn main() -> Result<()> {
                             &signers,
                             recent_hash,
                         );
-                        let signature = send_txn(&rpc_client, &txn, true)?;
-                        println!("{}", signature);
+                        if simulate {
+                            let ret = simulate_transaction(
+                                &rpc_client,
+                                &txn,
+                                true,
+                                CommitmentConfig::confirmed(),
+                            )?;
+                            println!("{:#?}", ret);
+                        } else {
+                            let signature = send_txn(&rpc_client, &txn, true)?;
+                            println!("{}", signature);
+                        }
                     } else {
                         // personal position not exist
                         println!("personal position exist:{:?}", find_position);

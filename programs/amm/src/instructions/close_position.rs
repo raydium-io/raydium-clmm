@@ -91,16 +91,5 @@ pub fn close_position<'a, 'b, 'c, 'info>(
         &[],
     )?;
 
-    // close_spl_account(
-    //     &ctx.accounts.amm_config.to_account_info(),
-    //     &ctx.accounts.nft_owner.to_account_info(),
-    //     &ctx.accounts.position_nft_mint.to_account_info(),
-    //     &ctx.accounts.token_program,
-    //     &[&[
-    //         AMM_CONFIG_SEED.as_bytes(),
-    //         &[ctx.accounts.amm_config.bump] as &[u8],
-    //     ]],
-    // )?;
-
     Ok(())
 }

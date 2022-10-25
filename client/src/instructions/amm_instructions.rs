@@ -463,6 +463,36 @@ pub fn decrease_liquidity_instr(
     Ok(instructions)
 }
 
+pub fn close_personal_position_instr(
+    config: &ClientConfig,
+    nft_mint_key: Pubkey,
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
+    let program = client.program(config.raydium_v3_program);
+    let nft_ata_token_account =
+        spl_associated_token_account::get_associated_token_address(&program.payer(), &nft_mint_key);
+    let (personal_position_key, __bump) = Pubkey::find_program_address(
+        &[POSITION_SEED.as_bytes(), nft_mint_key.to_bytes().as_ref()],
+        &program.id(),
+    );
+    let instructions = program
+        .request()
+        .accounts(raydium_accounts::ClosePosition {
+            nft_owner: program.payer(),
+            position_nft_mint: nft_mint_key,
+            position_nft_account: nft_ata_token_account,
+            personal_position: personal_position_key,
+            system_program: system_program::id(),
+            token_program: spl_token::id(),
+        })
+        .args(raydium_instruction::ClosePosition)
+        .instructions()?;
+    Ok(instructions)
+}
+
 pub fn swap_instr(
     config: &ClientConfig,
     amm_config: Pubkey,

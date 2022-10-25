@@ -10,7 +10,7 @@ use states::*;
 use util::access_control::*;
 
 #[cfg(feature = "devnet")]
-declare_id!("DEVeYuwvQnhz1roDpSwqmnWtoKTeYftM7Qt7gFPMF3tj");
+declare_id!("devnLjt9td6YHfAFeptfPGBwd1LwEKHNjarLtDfrNBz");
 #[cfg(not(feature = "devnet"))]
 declare_id!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 

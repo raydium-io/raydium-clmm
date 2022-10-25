@@ -335,10 +335,10 @@ pub fn swap_internal<'b, 'info>(
                 .unwrap();
         }
 
+        let step_fee_amount = step.fee_amount;
         // if the protocol fee is on, calculate how much is owed, decrement fee_amount, and increment protocol_fee
         if cache.protocol_fee_rate > 0 {
-            let delta = step
-                .fee_amount
+            let delta = step_fee_amount
                 .checked_mul(u64::from(cache.protocol_fee_rate))
                 .unwrap()
                 .checked_div(u64::from(FEE_RATE_DENOMINATOR_VALUE))
@@ -348,8 +348,7 @@ pub fn swap_internal<'b, 'info>(
         }
         // if the fund fee is on, calculate how much is owed, decrement fee_amount, and increment fund_fee
         if cache.fund_fee_rate > 0 {
-            let delta = step
-                .fee_amount
+            let delta = step_fee_amount
                 .checked_mul(u64::from(cache.fund_fee_rate))
                 .unwrap()
                 .checked_div(u64::from(FEE_RATE_DENOMINATOR_VALUE))
@@ -370,6 +369,12 @@ pub fn swap_internal<'b, 'info>(
                 .checked_add(fee_growth_global_x64_delta)
                 .unwrap();
             state.fee_amount = state.fee_amount.checked_add(step.fee_amount).unwrap();
+            #[cfg(feature = "enable-log")]
+            msg!(
+                "fee_growth_global_x64_delta:{}, state.fee_growth_global_x64:{}, state.liquidity:{}, step.fee_amount:{}, state.fee_amount:{}",
+                fee_growth_global_x64_delta,
+                state.fee_growth_global_x64, state.liquidity, step.fee_amount, state.fee_amount
+            );
         }
         // shift tick if we reached the next price
         if state.sqrt_price_x64 == step.sqrt_price_next_x64 {
@@ -428,7 +433,7 @@ pub fn swap_internal<'b, 'info>(
             state.protocol_fee,
             cache.protocol_fee_rate,
             state.fund_fee,
-            cache.fund_fee_rate,,
+            cache.fund_fee_rate,
         );
     }
 
