@@ -404,9 +404,19 @@ impl PoolState {
         }
         self.reward_infos = next_reward_infos;
         #[cfg(feature = "enable-log")]
-        msg!("update pool reward info, reward_0_total_emissioned:{}, reward_1_total_emissioned:{},reward_2_total_emissioned:{},pool.liquidity:{}", 
+        msg!("update pool reward info, reward_0_total_emissioned:{}, reward_1_total_emissioned:{}, reward_2_total_emissioned:{}, pool.liquidity:{}",
         identity(self.reward_infos[0].reward_total_emissioned),identity(self.reward_infos[1].reward_total_emissioned),identity(self.reward_infos[2].reward_total_emissioned), identity(self.liquidity));
         Ok(next_reward_infos)
+    }
+
+    pub fn check_unclaimed_reward(&self, index: usize, reward_amount_owed: u64) -> Result<()> {
+        assert!(index < REWARD_NUM);
+        let unclaimed_reward = self.reward_infos[index]
+            .reward_total_emissioned
+            .checked_sub(self.reward_infos[index].reward_claimed)
+            .unwrap();
+        require_gte!(unclaimed_reward, reward_amount_owed);
+        Ok(())
     }
 
     pub fn add_reward_clamed(&mut self, index: usize, amount: u64) -> Result<()> {

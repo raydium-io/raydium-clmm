@@ -326,6 +326,9 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
         if reward_amount_owed == 0 {
             continue;
         }
+        pool_state_loader
+            .load()?
+            .check_unclaimed_reward(i, reward_amount_owed)?;
 
         let transfer_amount = if reward_amount_owed > reward_token_vault.amount {
             reward_token_vault.amount
