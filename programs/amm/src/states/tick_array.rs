@@ -191,6 +191,7 @@ impl TickArrayState {
 
     /// Get next initialized tick in tick array, `current_tick_index` can be any tick index, in other words, `current_tick_index` not exactly a point in the tickarray,
     /// and current_tick_index % tick_spacing maybe not equal zero.
+    /// If price move to left tick <= current_tick_index, or to right tick > current_tick_index
     pub fn next_initialized_tick(
         &mut self,
         current_tick_index: i32,
