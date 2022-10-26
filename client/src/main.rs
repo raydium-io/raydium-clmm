@@ -1998,6 +1998,56 @@ fn main() -> Result<()> {
                     }
                 }
             }
+            "update_tick" => {
+                if v.len() != 3 {
+                    println!("invalid command: [update_tick index, tick_array_start_index, ticks split by comma]");
+                }
+                let tick_array_start_index = v[1].parse::<i32>().unwrap();
+                let ticks_str = v[2].parse::<String>().unwrap();
+                let ticks = ticks_str
+                    .split(",")
+                    .map(|s| s.parse::<i32>().unwrap())
+                    .collect();
+                println!(
+                    "tick_array_start_index:{},ticks:{:?}",
+                    tick_array_start_index, ticks
+                );
+                println!(
+                    "raydium_v3_program:{}",
+                    pool_config.raydium_v3_program
+                );
+                let program = anchor_client.program(pool_config.raydium_v3_program);
+                println!("pool_id:{}", pool_config.pool_id_account.unwrap());
+
+                let tick_array_account_key = Pubkey::find_program_address(
+                    &[
+                        raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                        pool_config.pool_id_account.unwrap().as_ref(),
+                        &tick_array_start_index.to_be_bytes(),
+                    ],
+                    &program.id(),
+                )
+                .0;
+                println!("tick_array_account_key:{}", tick_array_account_key);
+
+                let create_instr = update_tick_instr(
+                    &pool_config.clone(),
+                    pool_config.pool_id_account.unwrap(),
+                    tick_array_account_key,
+                    ticks,
+                )?;
+                // send
+                let signers = vec![&payer, &admin];
+                let recent_hash = rpc_client.get_latest_blockhash()?;
+                let txn = Transaction::new_signed_with_payer(
+                    &create_instr,
+                    Some(&payer.pubkey()),
+                    &signers,
+                    recent_hash,
+                );
+                let signature = send_txn(&rpc_client, &txn, true)?;
+                println!("{}", signature);
+            }
             _ => {
                 println!("command not exist");
             }

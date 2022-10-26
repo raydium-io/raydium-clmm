@@ -27,3 +27,6 @@ pub use create_operation_account::*;
 
 pub mod update_operation_account;
 pub use update_operation_account::*;
+
+pub mod update_tick;
+pub use update_tick::*;
