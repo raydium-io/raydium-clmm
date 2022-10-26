@@ -21,3 +21,9 @@ pub use collect_remaining_rewards::*;
 
 pub mod collect_fund_fee;
 pub use collect_fund_fee::*;
+
+pub mod create_operation_account;
+pub use create_operation_account::*;
+
+pub mod update_operation_account;
+pub use update_operation_account::*;

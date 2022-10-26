@@ -10,7 +10,7 @@ use states::*;
 use util::access_control::*;
 
 #[cfg(feature = "devnet")]
-declare_id!("DEVeYuwvQnhz1roDpSwqmnWtoKTeYftM7Qt7gFPMF3tj");
+declare_id!("devnLjt9td6YHfAFeptfPGBwd1LwEKHNjarLtDfrNBz");
 #[cfg(not(feature = "devnet"))]
 declare_id!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 
@@ -85,6 +85,35 @@ pub mod amm_v3 {
     ///
     pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()> {
         instructions::create_pool(ctx, sqrt_price_x64)
+    }
+
+    /// Creates an operation account for the program
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`- The context of accounts
+    ///
+    pub fn create_operation_account(ctx: Context<CreateOperationAccount>) -> Result<()> {
+        instructions::create_operation_account(ctx)
+    }
+
+    /// Update the operation account
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`- The context of accounts
+    /// * `param`- The vaule can be 0 | 1 | 2 | 3, otherwise will report a error
+    /// * `keys`- update operation owner when the `param` is 0
+    ///           remove operation owner when the `param` is 1
+    ///           update whitelist mint when the `param` is 2
+    ///           remove whitelist mint when the `param` is 3
+    ///
+    pub fn update_operation_account(
+        ctx: Context<UpdateOperationAccount>,
+        param: u8,
+        keys: Vec<Pubkey>,
+    ) -> Result<()> {
+        instructions::update_operation_account(ctx, param, keys)
     }
 
     /// Reset a pool sqrt price, only can be reset if the pool hasn't be used.

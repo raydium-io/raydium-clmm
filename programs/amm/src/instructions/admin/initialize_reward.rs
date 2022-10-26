@@ -26,6 +26,16 @@ pub struct InitializeReward<'info> {
     #[account(mut)]
     pub pool_state: AccountLoader<'info, PoolState>,
 
+    /// load info from the account to judge reward permission
+    #[account(
+        mut,
+        seeds = [
+            OPERATION_SEED.as_bytes(),
+        ],
+        bump,
+    )]
+    pub operation_state: AccountLoader<'info, OperationState>,
+
     /// Reward mint
     pub reward_token_mint: Box<Account<'info, Mint>>,
 
@@ -83,9 +93,11 @@ pub fn initialize_reward(
     ctx: Context<InitializeReward>,
     param: InitializeRewardParam,
 ) -> Result<()> {
+    let operation_state = ctx.accounts.operation_state.load()?;
     require!(
         ctx.accounts.reward_funder.key() == ctx.accounts.amm_config.owner
-            || ctx.accounts.reward_funder.key() == crate::admin::id(),
+            || ctx.accounts.reward_funder.key() == crate::admin::id()
+            || operation_state.validate_operation_owner(ctx.accounts.reward_funder.key()),
         ErrorCode::NotApproved
     );
 
@@ -114,6 +126,7 @@ pub fn initialize_reward(
         &ctx.accounts.reward_token_vault.key(),
         &ctx.accounts.reward_funder.key(),
         &ctx.accounts.amm_config.owner,
+        &operation_state,
     )?;
 
     transfer_from_user_to_pool_vault(

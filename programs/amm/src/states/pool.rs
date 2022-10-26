@@ -266,6 +266,7 @@ impl PoolState {
         token_vault: &Pubkey,
         authority: &Pubkey,
         amm_config_owner: &Pubkey,
+        operation_state: &OperationState,
     ) -> Result<()> {
         let reward_infos = self.reward_infos;
         let lowest_index = match reward_infos.iter().position(|r| !r.initialized()) {
@@ -284,9 +285,10 @@ impl PoolState {
             .collect();
         // check init token_mint is not already in use
         require!(
-            !reward_mints.contains(&token_mint),
+            !reward_mints.contains(token_mint),
             ErrorCode::RewardTokenAlreadyInUse
         );
+        let whitelist_mints = operation_state.whitelist_mints.to_vec();
         // The current init token is the penult.
         if lowest_index == REWARD_NUM - 2 {
             // If token_mint_0 or token_mint_1 is not contains in the initialized rewards token,
@@ -295,14 +297,18 @@ impl PoolState {
                 && !reward_mints.contains(&self.token_mint_1)
             {
                 require!(
-                    *token_mint == self.token_mint_0 || *token_mint == self.token_mint_1,
+                    *token_mint == self.token_mint_0
+                        || *token_mint == self.token_mint_1
+                        || whitelist_mints.contains(token_mint),
                     ErrorCode::ExceptPoolVaultMint
                 );
             }
         } else if lowest_index == REWARD_NUM - 1 {
             // the last reward token must be controled by the admin
             require!(
-                *authority == *amm_config_owner || *authority == crate::admin::id(),
+                *authority == *amm_config_owner
+                    || *authority == crate::admin::id()
+                    || operation_state.validate_operation_owner(*authority),
                 ErrorCode::NotApproved
             );
         }
@@ -398,9 +404,19 @@ impl PoolState {
         }
         self.reward_infos = next_reward_infos;
         #[cfg(feature = "enable-log")]
-        msg!("update pool reward info, reward_0_total_emissioned:{}, reward_1_total_emissioned:{},reward_2_total_emissioned:{},pool.liquidity:{}", 
+        msg!("update pool reward info, reward_0_total_emissioned:{}, reward_1_total_emissioned:{}, reward_2_total_emissioned:{}, pool.liquidity:{}",
         identity(self.reward_infos[0].reward_total_emissioned),identity(self.reward_infos[1].reward_total_emissioned),identity(self.reward_infos[2].reward_total_emissioned), identity(self.liquidity));
         Ok(next_reward_infos)
+    }
+
+    pub fn check_unclaimed_reward(&self, index: usize, reward_amount_owed: u64) -> Result<()> {
+        assert!(index < REWARD_NUM);
+        let unclaimed_reward = self.reward_infos[index]
+            .reward_total_emissioned
+            .checked_sub(self.reward_infos[index].reward_claimed)
+            .unwrap();
+        require_gte!(unclaimed_reward, reward_amount_owed);
+        Ok(())
     }
 
     pub fn add_reward_clamed(&mut self, index: usize, amount: u64) -> Result<()> {
@@ -916,6 +932,11 @@ mod test {
         #[test]
         fn reward_info_test() {
             let pool_state = &mut PoolState::default();
+            let operation_state = OperationState {
+                bump: 0,
+                operation_owners: [Pubkey::default(); OPERATION_SIZE_USIZE],
+                whitelist_mints: [Pubkey::default(); WHITE_MINT_SIZE_USIZE],
+            };
             pool_state
                 .initialize_reward(
                     1665982800,
@@ -925,6 +946,7 @@ mod test {
                     &Pubkey::default(),
                     &Pubkey::default(),
                     &Pubkey::default(),
+                    &operation_state,
                 )
                 .unwrap();
 

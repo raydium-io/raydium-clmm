@@ -17,6 +17,7 @@ use solana_client::{
     rpc_request::TokenAccountsFilter,
 };
 use solana_sdk::{
+    commitment_config::CommitmentConfig,
     compute_budget::ComputeBudgetInstruction,
     program_pack::Pack,
     pubkey::Pubkey,
@@ -467,6 +468,59 @@ fn main() -> Result<()> {
                     println!("invalid command: [ccfg index tick_spacing trade_fee_rate protocol_fee_rate fund_fee_rate]");
                 }
             }
+            "create_operation" => {
+                if v.len() == 2 {
+                    let create_instr = create_operation_account_instr(&pool_config.clone())?;
+                    // send
+                    let signers = vec![&payer, &admin];
+                    let recent_hash = rpc_client.get_latest_blockhash()?;
+                    let txn = Transaction::new_signed_with_payer(
+                        &create_instr,
+                        Some(&payer.pubkey()),
+                        &signers,
+                        recent_hash,
+                    );
+                    let signature = send_txn(&rpc_client, &txn, true)?;
+                    println!("{}", signature);
+                } else {
+                    println!("invalid command: [create_operation]");
+                }
+            }
+            "update_operation" => {
+                let param = v[1].parse::<u8>().unwrap();
+                let mut keys = Vec::new();
+                for i in 2..v.len() {
+                    keys.push(Pubkey::from_str(&v[i]).unwrap());
+                }
+                let create_instr =
+                    update_operation_account_instr(&pool_config.clone(), param, keys)?;
+                // send
+                let signers = vec![&payer, &admin];
+                let recent_hash = rpc_client.get_latest_blockhash()?;
+                let txn = Transaction::new_signed_with_payer(
+                    &create_instr,
+                    Some(&payer.pubkey()),
+                    &signers,
+                    recent_hash,
+                );
+                let signature = send_txn(&rpc_client, &txn, true)?;
+                println!("{}", signature);
+            }
+            "poperation" => {
+                if v.len() == 1 {
+                    let program = anchor_client.program(pool_config.raydium_v3_program);
+                    let (operation_account_key, __bump) = Pubkey::find_program_address(
+                        &[raydium_amm_v3::states::OPERATION_SEED.as_bytes()],
+                        &program.id(),
+                    );
+                    println!("{}", operation_account_key);
+                    let operation_account: raydium_amm_v3::states::OperationState =
+                        program.account(operation_account_key)?;
+                    println!("{:#?}", operation_account);
+                } else {
+                    println!("invalid command: [poperation]");
+                }
+            }
             "pcfg" => {
                 if v.len() == 2 {
                     let config_index = v[1].parse::<u16>().unwrap();
@@ -707,19 +761,36 @@ fn main() -> Result<()> {
                     },
                 )?;
 
+                let mut total_fees_owed_0 = 0;
+                let mut total_fees_owed_1 = 0;
+                let mut total_reward_owed = 0;
                 for position in position_accounts_by_pool {
                     let personal_position = deserialize_anchor_account::<
                         raydium_amm_v3::states::PersonalPositionState,
                     >(&position.1)?;
                     if personal_position.pool_id == pool_config.pool_id_account.unwrap() {
                         println!(
-                            "personal_position:{}, lower_index:{}, upper_index:{}",
+                            "personal_position:{}, lower:{}, upper:{}, liquidity:{}, token_fees_owed_0:{}, token_fees_owed_1:{}, reward_amount_owed:{}, fee_growth_inside:{}, fee_growth_inside_1:{}, reward_inside:{}",
                             position.0,
                             personal_position.tick_lower_index,
-                            personal_position.tick_upper_index
+                            personal_position.tick_upper_index,
+                            personal_position.liquidity,
+                            personal_position.token_fees_owed_0,
+                            personal_position.token_fees_owed_1,
+                            personal_position.reward_infos[0].reward_amount_owed,
+                            personal_position.fee_growth_inside_0_last_x64,
+                            personal_position.fee_growth_inside_1_last_x64,
+                            personal_position.reward_infos[0].growth_inside_last_x64,
                         );
+                        total_fees_owed_0 += personal_position.token_fees_owed_0;
+                        total_fees_owed_1 += personal_position.token_fees_owed_1;
+                        total_reward_owed += personal_position.reward_infos[0].reward_amount_owed;
                     }
                 }
+                println!(
+                    "total_fees_owed_0:{}, total_fees_owed_1:{}, total_reward_owed:{}",
+                    total_fees_owed_0, total_fees_owed_1, total_reward_owed
+                );
             }
             "p_all_protocol_position_by_pool" => {
                 let position_accounts_by_pool = rpc_client.get_program_accounts_with_config(
@@ -857,6 +928,11 @@ fn main() -> Result<()> {
                     println!("{}", pool_config.pool_id_account.unwrap());
                     let pool_account: raydium_amm_v3::states::PoolState =
                         program.account(pool_config.pool_id_account.unwrap())?;
+                    let operator_account_key = Pubkey::find_program_address(
+                        &[raydium_amm_v3::states::OPERATION_SEED.as_bytes()],
+                        &program.id(),
+                    )
+                    .0;
 
                     let reward_token_vault = Pubkey::find_program_address(
                         &[
@@ -873,6 +949,7 @@ fn main() -> Result<()> {
                         &pool_config.clone(),
                         pool_config.pool_id_account.unwrap(),
                         pool_account.amm_config,
+                        operator_account_key,
                         reward_token_mint,
                         reward_token_vault,
                         user_reward_token,
@@ -910,6 +987,11 @@ fn main() -> Result<()> {
                     println!("{}", pool_config.pool_id_account.unwrap());
                     let pool_account: raydium_amm_v3::states::PoolState =
                         program.account(pool_config.pool_id_account.unwrap())?;
+                    let operator_account_key = Pubkey::find_program_address(
+                        &[raydium_amm_v3::states::OPERATION_SEED.as_bytes()],
+                        &program.id(),
+                    )
+                    .0;
 
                     let reward_token_vault = Pubkey::find_program_address(
                         &[
@@ -928,6 +1010,7 @@ fn main() -> Result<()> {
                         pool_config.pool_id_account.unwrap(),
                         reward_token_vault,
                         user_reward_token,
+                        operator_account_key,
                         index,
                         open_time,
                         end_time,
@@ -1128,6 +1211,39 @@ fn main() -> Result<()> {
                     println!("invalid command: [open_position tick_lower_price tick_upper_price is_base_0 imput_amount]");
                 }
             }
+            "pall_position_by_owner" => {
+                if v.len() == 2 {
+                    let user_wallet = Pubkey::from_str(&v[1]).unwrap();
+                    let program = anchor_client.program(pool_config.raydium_v3_program);
+                    // load position
+                    let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(
+                        &rpc_client,
+                        &user_wallet,
+                        &pool_config.raydium_v3_program,
+                    );
+                    let rsps = rpc_client.get_multiple_accounts(&positions)?;
+                    let mut user_positions = Vec::new();
+                    for rsp in rsps {
+                        match rsp {
+                            None => continue,
+                            Some(rsp) => {
+                                let position = deserialize_anchor_account::<
+                                    raydium_amm_v3::states::PersonalPositionState,
+                                >(&rsp)?;
+                                let (personal_position_key, __bump) = Pubkey::find_program_address(
+                                    &[
+                                        raydium_amm_v3::states::POSITION_SEED.as_bytes(),
+                                        position.nft_mint.to_bytes().as_ref(),
+                                    ],
+                                    &program.id(),
+                                );
+                                println!("id:{}, lower:{}, upper:{}, liquidity:{}, fees_owed_0:{}, fees_owed_1:{}, fee_growth_inside_0:{}, fee_growth_inside_1:{}", personal_position_key, position.tick_lower_index, position.tick_upper_index, position.liquidity, position.token_fees_owed_0, position.token_fees_owed_1, position.fee_growth_inside_0_last_x64, position.fee_growth_inside_1_last_x64);
+                                user_positions.push(position);
+                            }
+                        }
+                    }
+                }
+            }
             "increase_liquidity" => {
                 if v.len() == 5 {
                     let tick_lower_price = v[1].parse::<f64>().unwrap();
@@ -1139,6 +1255,26 @@ fn main() -> Result<()> {
                     let program = anchor_client.program(pool_config.raydium_v3_program);
                     let pool: raydium_amm_v3::states::PoolState =
                         program.account(pool_config.pool_id_account.unwrap())?;
+
+                    // load position
+                    let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(
+                        &rpc_client,
+                        &payer.pubkey(),
+                        &pool_config.raydium_v3_program,
+                    );
+                    let rsps = rpc_client.get_multiple_accounts(&positions)?;
+                    let mut user_positions = Vec::new();
+                    for rsp in rsps {
+                        match rsp {
+                            None => continue,
+                            Some(rsp) => {
+                                let position = deserialize_anchor_account::<
+                                    raydium_amm_v3::states::PersonalPositionState,
+                                >(&rsp)?;
+                                user_positions.push(position);
+                            }
+                        }
+                    }
 
                     let tick_lower_price_x64 = price_to_sqrt_price_x64(
                         tick_lower_price,
@@ -1203,25 +1339,6 @@ fn main() -> Result<()> {
                             tick_upper_index,
                             pool.tick_spacing.into(),
                         );
-                    // load position
-                    let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(
-                        &rpc_client,
-                        &payer.pubkey(),
-                        &pool_config.raydium_v3_program,
-                    );
-                    let rsps = rpc_client.get_multiple_accounts(&positions)?;
-                    let mut user_positions = Vec::new();
-                    for rsp in rsps {
-                        match rsp {
-                            None => continue,
-                            Some(rsp) => {
-                                let position = deserialize_anchor_account::<
-                                    raydium_amm_v3::states::PersonalPositionState,
-                                >(&rsp)?;
-                                user_positions.push(position);
-                            }
-                        }
-                    }
                     let mut find_position =
                         raydium_amm_v3::states::PersonalPositionState::default();
                     for position in user_positions {
@@ -1278,12 +1395,13 @@ fn main() -> Result<()> {
                 }
             }
             "decrease_liquidity" => {
-                if v.len() == 6 {
+                if v.len() == 7 {
                     let tick_lower_index = v[1].parse::<i32>().unwrap();
                     let tick_upper_index = v[2].parse::<i32>().unwrap();
                     let liquidity = v[3].parse::<u128>().unwrap();
                     let amount_0_min = v[4].parse::<u64>().unwrap();
                     let amount_1_min = v[5].parse::<u64>().unwrap();
+                    let simulate = v[6].parse::<bool>().unwrap();
 
                     // load pool to get observation
                     let program = anchor_client.program(pool_config.raydium_v3_program);
@@ -1333,22 +1451,21 @@ fn main() -> Result<()> {
                     if find_position.nft_mint != Pubkey::default()
                         && find_position.pool_id == pool_config.pool_id_account.unwrap()
                     {
-                        let reward_vault_with_user_vault: Vec<(Pubkey, Pubkey)> = pool
-                            .reward_infos
-                            .into_iter()
-                            .map(|item| {
-                                (
+                        let mut reward_vault_with_user_vault: Vec<(Pubkey, Pubkey)> = Vec::new();
+                        for item in pool.reward_infos.into_iter() {
+                            if item.token_mint != Pubkey::default() {
+                                reward_vault_with_user_vault.push((
                                     item.token_vault,
                                     get_associated_token_address(&payer.pubkey(), &item.token_mint),
-                                )
-                            })
-                            .collect();
+                                ));
+                            }
+                        }
                         let remaining_accounts = reward_vault_with_user_vault
                             .into_iter()
                             .map(|item| AccountMeta::new(item.0, false))
                             .collect();
                         // personal position exist
-                        let decrease_instr = decrease_liquidity_instr(
+                        let mut decrease_instr = decrease_liquidity_instr(
                             &pool_config.clone(),
                             pool_config.pool_id_account.unwrap(),
                             pool.token_vault_0,
@@ -1371,6 +1488,13 @@ fn main() -> Result<()> {
                             tick_array_lower_start_index,
                             tick_array_upper_start_index,
                         )?;
+                        if liquidity == find_position.liquidity {
+                            let close_position_instr = close_personal_position_instr(
+                                &pool_config.clone(),
+                                find_position.nft_mint,
+                            )?;
+                            decrease_instr.extend(close_position_instr);
+                        }
                         // send
                         let signers = vec![&payer];
                         let recent_hash = rpc_client.get_latest_blockhash()?;
@@ -1380,14 +1504,24 @@ fn main() -> Result<()> {
                             &signers,
                             recent_hash,
                         );
-                        let signature = send_txn(&rpc_client, &txn, true)?;
-                        println!("{}", signature);
+                        if simulate {
+                            let ret = simulate_transaction(
+                                &rpc_client,
+                                &txn,
+                                true,
+                                CommitmentConfig::confirmed(),
+                            )?;
+                            println!("{:#?}", ret);
+                        } else {
+                            let signature = send_txn(&rpc_client, &txn, true)?;
+                            println!("{}", signature);
+                        }
                     } else {
                         // personal position not exist
                         println!("personal position exist:{:?}", find_position);
                     }
                 } else {
-                    println!("invalid command: [decrease_liquidity tick_lower_index tick_upper_index liquidity amount_0_min amount_1_min]");
+                    println!("invalid command: [decrease_liquidity tick_lower_index tick_upper_index liquidity amount_0_min amount_1_min, simulate]");
                 }
             }
             "ptick_state" => {
