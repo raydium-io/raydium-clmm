@@ -207,9 +207,6 @@ impl TickArrayState {
             (current_tick_index - self.start_tick_index) / (tick_spacing as i32);
 
         if zero_for_one {
-            if (current_tick_index - self.start_tick_index) % (tick_spacing as i32) == 0 {
-                offset_in_array = offset_in_array - 1;
-            }
             while offset_in_array >= 0 {
                 if self.ticks[offset_in_array as usize].is_initialized() {
                     return Ok(self.ticks.get_mut(offset_in_array as usize));
@@ -523,7 +520,29 @@ mod test {
     mod tick_array_test {
 
         use super::*;
+        use std::cell::RefCell;
         use std::convert::identity;
+
+        fn build_new_tick_array(
+            start_index: i32,
+            tick_spacing: u16,
+            initialized_tick_offsets: Vec<usize>,
+        ) -> RefCell<TickArrayState> {
+            let mut new_tick_array = TickArrayState::default();
+            new_tick_array
+                .initialize(start_index, tick_spacing, Pubkey::default())
+                .unwrap();
+
+            for offset in initialized_tick_offsets {
+                let mut new_tick = TickState::default();
+                // Indicates tick is initialized
+                new_tick.liquidity_gross = 1;
+                new_tick.tick = start_index + (offset * tick_spacing as usize) as i32;
+                new_tick_array.ticks[offset] = new_tick;
+            }
+            RefCell::new(new_tick_array)
+        }
+
         #[test]
         fn get_arrary_start_index_test() {
             assert_eq!(TickArrayState::get_arrary_start_index(120, 3), 0);
@@ -538,145 +557,130 @@ mod test {
 
         #[test]
         fn next_tick_arrary_start_index_test() {
-            let tick_array = &mut TickArrayState::default();
-            tick_array.initialize(-1800, 15, Pubkey::default()).unwrap();
-            // println!("{:?}", tick_array);
-            assert_eq!(-2700, tick_array.next_tick_arrary_start_index(15, true));
-            assert_eq!(-900, tick_array.next_tick_arrary_start_index(15, false));
+            let tick_spacing = 15;
+            let tick_array_ref = build_new_tick_array(-1800, tick_spacing, vec![]);
+            assert_eq!(
+                -2700,
+                tick_array_ref
+                    .borrow()
+                    .next_tick_arrary_start_index(tick_spacing, true)
+            );
+            assert_eq!(
+                -900,
+                tick_array_ref
+                    .borrow()
+                    .next_tick_arrary_start_index(tick_spacing, false)
+            );
         }
 
         #[test]
         fn get_tick_offset_in_array_test() {
-            let tick_array = &mut TickArrayState::default();
-            tick_array.start_tick_index = 960;
+            let tick_spacing = 4;
+            let tick_array_ref = build_new_tick_array(960, tick_spacing, vec![]);
             assert_eq!(
-                tick_array.get_tick_offset_in_array(1105, 4).unwrap_err(),
+                tick_array_ref
+                    .borrow()
+                    .get_tick_offset_in_array(1105, 4)
+                    .unwrap_err(),
                 error!(anchor_lang::error::ErrorCode::RequireEqViolated)
             );
             assert_eq!(
-                tick_array.get_tick_offset_in_array(808, 4).unwrap_err(),
+                tick_array_ref
+                    .borrow()
+                    .get_tick_offset_in_array(808, 4)
+                    .unwrap_err(),
                 error!(ErrorCode::InvalidTickArray)
             );
-            assert_eq!(tick_array.get_tick_offset_in_array(1108, 4).unwrap(), 37);
+            assert_eq!(
+                tick_array_ref
+                    .borrow()
+                    .get_tick_offset_in_array(1108, 4)
+                    .unwrap(),
+                37
+            );
         }
 
         #[test]
         fn first_initialized_tick_test() {
-            let tick_array = &mut TickArrayState::default();
-            tick_array.initialize(-900, 15, Pubkey::default()).unwrap();
-            let mut tick_state = tick_array.get_tick_state_mut(-300, 15).unwrap();
-            tick_state.liquidity_gross = 1;
-            tick_state.tick = -300;
-            tick_state = tick_array.get_tick_state_mut(-15, 15).unwrap();
-            tick_state.liquidity_gross = 1;
-            tick_state.tick = -15;
+            let tick_spacing = 15;
+            let tick_array_ref = build_new_tick_array(-900, tick_spacing, vec![40, 59]);
+            let mut tick_array = tick_array_ref.borrow_mut();
 
-            {
-                let tick = tick_array.first_initialized_tick(false).unwrap().tick;
-                assert_eq!(-300, tick);
-            }
-            {
-                let tick = tick_array.first_initialized_tick(true).unwrap().tick;
-                assert_eq!(-15, tick);
-            }
+            let tick = tick_array.first_initialized_tick(false).unwrap().tick;
+            assert_eq!(-300, tick);
+
+            let tick = tick_array.first_initialized_tick(true).unwrap().tick;
+            assert_eq!(-15, tick);
         }
 
         #[test]
         fn next_initialized_tick_when_tick_is_positive() {
-            let tick_array = &mut TickArrayState::default();
-            tick_array.initialize(0, 15, Pubkey::default()).unwrap();
-            let mut tick_state = tick_array.get_tick_state_mut(0, 15).unwrap();
-            tick_state.tick = 0;
-            tick_state.liquidity_gross = 1;
-            tick_state = tick_array.get_tick_state_mut(30, 15).unwrap();
-            tick_state.tick = 30;
-            tick_state.liquidity_gross = 1;
-            tick_state = tick_array.get_tick_state_mut(105, 15).unwrap();
-            tick_state.tick = 105;
-            tick_state.liquidity_gross = 1;
-            tick_state = tick_array.get_tick_state_mut(225, 15).unwrap();
-            tick_state.tick = 225;
-            tick_state.liquidity_gross = 1;
-            tick_state = tick_array.get_tick_state_mut(885, 15).unwrap();
-            tick_state.tick = 885;
-            tick_state.liquidity_gross = 1;
+            // init tick_index [0,30,105]
+            let tick_array_ref = build_new_tick_array(0, 15, vec![0, 2, 7]);
+            let mut tick_array = tick_array_ref.borrow_mut();
 
+            // test zero_for_one
             let mut next_tick_state = tick_array.next_initialized_tick(0, 15, true).unwrap();
-            assert!(next_tick_state.is_none());
-
-            next_tick_state = tick_array.next_initialized_tick(2, 15, true).unwrap();
-            assert!(next_tick_state.is_some());
             assert_eq!(identity(next_tick_state.unwrap().tick), 0);
 
-            next_tick_state = tick_array.next_initialized_tick(100, 15, true).unwrap();
-            assert!(next_tick_state.is_some());
+            next_tick_state = tick_array.next_initialized_tick(1, 15, true).unwrap();
+            assert_eq!(identity(next_tick_state.unwrap().tick), 0);
+
+            next_tick_state = tick_array.next_initialized_tick(29, 15, true).unwrap();
+            assert_eq!(identity(next_tick_state.unwrap().tick), 0);
+            next_tick_state = tick_array.next_initialized_tick(30, 15, true).unwrap();
+            assert_eq!(identity(next_tick_state.unwrap().tick), 30);
+            next_tick_state = tick_array.next_initialized_tick(31, 15, true).unwrap();
             assert_eq!(identity(next_tick_state.unwrap().tick), 30);
 
-            next_tick_state = tick_array.next_initialized_tick(105, 15, true).unwrap();
-            assert!(next_tick_state.is_some());
+            // test one for zero
+            let mut next_tick_state = tick_array.next_initialized_tick(0, 15, false).unwrap();
             assert_eq!(identity(next_tick_state.unwrap().tick), 30);
+
+            next_tick_state = tick_array.next_initialized_tick(29, 15, false).unwrap();
+            assert_eq!(identity(next_tick_state.unwrap().tick), 30);
+            next_tick_state = tick_array.next_initialized_tick(30, 15, false).unwrap();
+            assert_eq!(identity(next_tick_state.unwrap().tick), 105);
+            next_tick_state = tick_array.next_initialized_tick(31, 15, false).unwrap();
+            assert_eq!(identity(next_tick_state.unwrap().tick), 105);
 
             next_tick_state = tick_array.next_initialized_tick(105, 15, false).unwrap();
-            assert!(next_tick_state.is_some());
-            assert_eq!(identity(next_tick_state.unwrap().tick), 225);
-
-            next_tick_state = tick_array.next_initialized_tick(226, 15, false).unwrap();
-            assert!(next_tick_state.is_some());
-            assert_eq!(identity(next_tick_state.unwrap().tick), 885);
-
-            next_tick_state = tick_array.next_initialized_tick(885, 15, false).unwrap();
             assert!(next_tick_state.is_none());
         }
 
         #[test]
         fn next_initialized_tick_when_tick_is_negative() {
-            let tick_array = &mut TickArrayState::default();
-            tick_array.initialize(-900, 15, Pubkey::default()).unwrap();
-            let mut tick_state = tick_array.get_tick_state_mut(-15, 15).unwrap();
-            tick_state.tick = -15;
-            tick_state.liquidity_gross = 1;
-            tick_state = tick_array.get_tick_state_mut(-30, 15).unwrap();
-            tick_state.tick = -30;
-            tick_state.liquidity_gross = 1;
-            tick_state = tick_array.get_tick_state_mut(-105, 15).unwrap();
-            tick_state.tick = -105;
-            tick_state.liquidity_gross = 1;
-            tick_state = tick_array.get_tick_state_mut(-225, 15).unwrap();
-            tick_state.tick = -225;
-            tick_state.liquidity_gross = 1;
-            tick_state = tick_array.get_tick_state_mut(-900, 15).unwrap();
-            tick_state.tick = -900;
-            tick_state.liquidity_gross = 1;
+            // init tick_index [-900,-870,-795]
+            let tick_array_ref = build_new_tick_array(-900, 15, vec![0, 2, 7]);
+            let mut tick_array = tick_array_ref.borrow_mut();
 
-            let mut next_tick_state = tick_array.next_initialized_tick(0, 15, true).unwrap();
-            assert!(next_tick_state.is_some());
-            assert_eq!(identity(next_tick_state.unwrap().tick), -15);
+            // test zero for one
+            let mut next_tick_state = tick_array.next_initialized_tick(-900, 15, true).unwrap();
+            assert_eq!(identity(next_tick_state.unwrap().tick), -900);
 
-            next_tick_state = tick_array.next_initialized_tick(-2, 15, true).unwrap();
-            assert!(next_tick_state.is_some());
-            assert_eq!(identity(next_tick_state.unwrap().tick), -15);
+            next_tick_state = tick_array.next_initialized_tick(-899, 15, true).unwrap();
+            assert_eq!(identity(next_tick_state.unwrap().tick), -900);
 
-            next_tick_state = tick_array.next_initialized_tick(-105, 15, true).unwrap();
-            assert!(next_tick_state.is_some());
-            assert_eq!(identity(next_tick_state.unwrap().tick), -225);
+            next_tick_state = tick_array.next_initialized_tick(-871, 15, true).unwrap();
+            assert_eq!(identity(next_tick_state.unwrap().tick), -900);
+            next_tick_state = tick_array.next_initialized_tick(-870, 15, true).unwrap();
+            assert_eq!(identity(next_tick_state.unwrap().tick), -870);
+            next_tick_state = tick_array.next_initialized_tick(-869, 15, true).unwrap();
+            assert_eq!(identity(next_tick_state.unwrap().tick), -870);
 
-            next_tick_state = tick_array.next_initialized_tick(-105, 15, false).unwrap();
-            assert!(next_tick_state.is_some());
-            assert_eq!(identity(next_tick_state.unwrap().tick), -30);
+            // test one for zero
+            let mut next_tick_state = tick_array.next_initialized_tick(-900, 15, false).unwrap();
+            assert_eq!(identity(next_tick_state.unwrap().tick), -870);
 
-            next_tick_state = tick_array.next_initialized_tick(-224, 15, false).unwrap();
-            assert!(next_tick_state.is_some());
-            assert_eq!(identity(next_tick_state.unwrap().tick), -105);
+            next_tick_state = tick_array.next_initialized_tick(-871, 15, false).unwrap();
+            assert_eq!(identity(next_tick_state.unwrap().tick), -870);
+            next_tick_state = tick_array.next_initialized_tick(-870, 15, false).unwrap();
+            assert_eq!(identity(next_tick_state.unwrap().tick), -795);
+            next_tick_state = tick_array.next_initialized_tick(-869, 15, false).unwrap();
+            assert_eq!(identity(next_tick_state.unwrap().tick), -795);
 
-            next_tick_state = tick_array.next_initialized_tick(-226, 15, false).unwrap();
-            assert!(next_tick_state.is_some());
-            assert_eq!(identity(next_tick_state.unwrap().tick), -225);
-
-            next_tick_state = tick_array.next_initialized_tick(-900, 15, true).unwrap();
+            next_tick_state = tick_array.next_initialized_tick(-795, 15, false).unwrap();
             assert!(next_tick_state.is_none());
-            next_tick_state = tick_array.next_initialized_tick(-900, 15, false).unwrap();
-            assert!(next_tick_state.is_some());
-            assert_eq!(identity(next_tick_state.unwrap().tick), -225);
         }
     }
 
@@ -1124,16 +1128,16 @@ mod test {
             tick_upper.reward_growths_outside_x64 = [1000, 0, 0];
             reward_inside =
                 get_reward_growths_inside(tick_lower, tick_upper, tick_current_index, reward_infos);
-            assert_eq!(reward_inside, [340282366920938463463374607431768210456, 0, 0]);
+            assert_eq!(
+                reward_inside,
+                [340282366920938463463374607431768210456, 0, 0]
+            );
 
             tick_lower.reward_growths_outside_x64 = [1000, 0, 0];
             tick_upper.reward_growths_outside_x64 = [1000, 0, 0];
             reward_inside =
                 get_reward_growths_inside(tick_lower, tick_upper, tick_current_index, reward_infos);
-            assert_eq!(
-                reward_inside,
-                [0, 0, 0]
-            );
+            assert_eq!(reward_inside, [0, 0, 0]);
         }
     }
 }
