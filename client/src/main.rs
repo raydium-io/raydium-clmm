@@ -24,6 +24,7 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     transaction::Transaction,
 };
+use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -36,7 +37,7 @@ use instructions::token_instructions::*;
 use instructions::utils::*;
 use raydium_amm_v3::{
     libraries::{fixed_point_64, liquidity_math, tick_array_bit_map, tick_math},
-    states::{PoolState, TickArrayState},
+    states::{PersonalPositionState, PoolState, TickArrayState, TickState},
 };
 use spl_associated_token_account::get_associated_token_address;
 
@@ -866,6 +867,333 @@ fn main() -> Result<()> {
                             identity(tick_array_state.initialized_tick_count)
                         );
                     }
+                }
+            }
+            "load_account_data" => {
+                if v.len() == 2 {
+                    let account_address = Pubkey::from_str(&v[1]).unwrap();
+                    let account_data = rpc_client
+                        .get_account_with_commitment(
+                            &account_address,
+                            CommitmentConfig::processed(),
+                        )?
+                        .value
+                        .ok_or(format_err!("Failed to retrieve account_address"))?
+                        .data;
+                    println!("account_data: {:#?}", account_data);
+                }
+            }
+            "check_fee_reward_by_pool" => {
+                if v.len() == 2 {
+                    let filter_pool_id = Pubkey::from_str(&v[1]).unwrap();
+                    let ret = rpc_client.get_program_accounts(&pool_config.raydium_v3_program)?;
+                    let mut pool_infos = HashMap::new();
+                    let mut personal_infos: HashMap<Pubkey, Vec<(Pubkey, PersonalPositionState)>> =
+                        HashMap::new();
+                    let mut tick_array_infos: HashMap<Pubkey, Vec<(Pubkey, TickArrayState)>> =
+                        HashMap::new();
+                    // load data
+                    for item in ret.into_iter() {
+                        let data_len = item.1.data.len();
+                        match data_len {
+                            PoolState::LEN => {
+                                let pool = deserialize_anchor_account::<
+                                    raydium_amm_v3::states::PoolState,
+                                >(&item.1)?;
+                                pool_infos.insert(item.0, pool);
+                            }
+                            PersonalPositionState::LEN => {
+                                let personal = deserialize_anchor_account::<
+                                    raydium_amm_v3::states::PersonalPositionState,
+                                >(&item.1)?;
+                                if personal_infos.contains_key(&personal.pool_id) {
+                                    personal_infos
+                                        .get_mut(&personal.pool_id)
+                                        .unwrap()
+                                        .push((item.0, personal.clone()));
+                                } else {
+                                    let mut personal_vec_one_pool = Vec::new();
+                                    personal_vec_one_pool.push((item.0, personal.clone()));
+                                    personal_infos
+                                        .insert(personal.pool_id, personal_vec_one_pool.clone());
+                                }
+                            }
+                            TickArrayState::LEN => {
+                                let tick_array = deserialize_anchor_account::<
+                                    raydium_amm_v3::states::TickArrayState,
+                                >(&item.1)?;
+
+                                if tick_array_infos.contains_key(&tick_array.pool_id) {
+                                    tick_array_infos
+                                        .get_mut(&tick_array.pool_id)
+                                        .unwrap()
+                                        .push((item.0, tick_array.clone()));
+                                } else {
+                                    let mut tick_array_one_pool = Vec::new();
+                                    tick_array_one_pool.push((item.0, tick_array));
+                                    tick_array_infos
+                                        .insert(tick_array.pool_id, tick_array_one_pool.clone());
+                                }
+                            }
+                            _ => {
+                                continue;
+                            }
+                        }
+                    }
+                    for (pool_id, personal_infos) in personal_infos.into_iter() {
+                        if filter_pool_id != pool_id {
+                            continue;
+                        }
+                        let pool_info = pool_infos.get(&pool_id).unwrap().clone();
+                        println!("===============================================");
+                        println!(
+                        "pool_id:{}, liquidity:{}, tick:{}, price:{}, fee_global_0:{}, fee_global_1:{}, reward_global:{}, protocol_fee_0:{}, protocol_fee_1:{}, fund_0:{}, fund_1:{}, swap_in_0:{}, swap_in_1:{}",
+                        pool_id,
+                        identity(pool_info.liquidity),
+                        identity(pool_info.tick_current),
+                        identity(pool_info.sqrt_price_x64),
+                        identity(pool_info.fee_growth_global_0_x64),
+                        identity(pool_info.fee_growth_global_1_x64),
+                        identity(pool_info.reward_infos[0].reward_growth_global_x64),
+                        identity(pool_info.protocol_fees_token_0),
+                        identity(pool_info.protocol_fees_token_1),
+                        identity(pool_info.fund_fees_token_0),
+                        identity(pool_info.fund_fees_token_1),
+                        identity(pool_info.swap_in_amount_token_0),
+                        identity(pool_info.swap_in_amount_token_1)
+                    );
+                        println!(
+                        "total_fee_0:{}, claimed_0:{}, total_fee_1:{}, claimed_1:{}, reward_total_emissioned:{}, reward_claimed:{}, last_update_time:{}",
+                        identity(pool_info.total_fees_token_0),
+                        identity(pool_info.total_fees_claimed_token_0),
+                        identity(pool_info.total_fees_token_1),
+                        identity(pool_info.total_fees_claimed_token_1),
+                        identity(pool_info.reward_infos[0].reward_total_emissioned),
+                        identity(pool_info.reward_infos[0].reward_claimed),
+                        identity(pool_info.reward_infos[0].last_update_time)
+                    );
+                        let mut all_user_liquidity = 0;
+                        let mut all_user_owed_fee_0_before = 0;
+                        let mut all_user_owed_fee_1_before = 0;
+                        let mut all_user_owed_reward_before = 0;
+
+                        let mut all_user_owed_fee_0 = 0;
+                        let mut all_user_owed_fee_1 = 0;
+                        let mut all_user_owed_reward = 0;
+                        for (personal_key, personal_info) in personal_infos.into_iter() {
+                            let mut personal_info = personal_info.clone();
+                            if personal_info.pool_id != pool_id {
+                                println!(
+                                    "pool_id:{}, personal_info.pool_id:{}",
+                                    pool_id, personal_info.pool_id
+                                );
+                                panic!("personal_info not match poo_id");
+                            }
+                            let tick_lower_index = personal_info.tick_lower_index;
+                            let tick_upper_index = personal_info.tick_upper_index;
+                            let out_of_range = if tick_lower_index > pool_info.tick_current
+                                || tick_upper_index < pool_info.tick_current
+                            {
+                                true
+                            } else {
+                                false
+                            };
+                            if out_of_range {
+                                println!(
+                                "--##personal_key:{}, lower:{}, upper:{}, liquidity:{}, fee_insid_0:{}, fee_insid_1:{}, reward_insid:{}, fees_owed_0:{}, fees_owed_1:{}, reward_owed:{}",
+                                personal_key,
+                                personal_info.tick_lower_index,
+                                personal_info.tick_upper_index,
+                                personal_info.liquidity,
+                                personal_info.fee_growth_inside_0_last_x64,
+                                personal_info.fee_growth_inside_1_last_x64,
+                                personal_info.reward_infos[0].growth_inside_last_x64,
+                                personal_info.token_fees_owed_0,
+                                personal_info.token_fees_owed_1,
+                                personal_info.reward_infos[0].reward_amount_owed
+                            );
+                            } else {
+                                println!(
+                                "--personal_key:{}, lower:{}, upper:{}, liquidity:{}, fee_insid_0:{}, fee_insid_1:{}, reward_insid:{}, fees_owed_0:{}, fees_owed_1:{}, reward_owed:{}",
+                                personal_key,
+                                personal_info.tick_lower_index,
+                                personal_info.tick_upper_index,
+                                personal_info.liquidity,
+                                personal_info.fee_growth_inside_0_last_x64,
+                                personal_info.fee_growth_inside_1_last_x64,
+                                personal_info.reward_infos[0].growth_inside_last_x64,
+                                personal_info.token_fees_owed_0,
+                                personal_info.token_fees_owed_1,
+                                personal_info.reward_infos[0].reward_amount_owed
+                            );
+                            }
+                            if !out_of_range {
+                                all_user_liquidity += personal_info.liquidity;
+                            }
+                            all_user_owed_fee_0_before += personal_info.token_fees_owed_0;
+                            all_user_owed_fee_1_before += personal_info.token_fees_owed_1;
+                            all_user_owed_reward_before +=
+                                personal_info.reward_infos[0].reward_amount_owed;
+
+                            let tick_arrays = tick_array_infos.get(&pool_id).unwrap().clone();
+
+                            let tick_lower_start_index =
+                                raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                                    tick_lower_index,
+                                    pool_info.tick_spacing.into(),
+                                );
+                            let (tick_lower_array_key, __bump) = Pubkey::find_program_address(
+                                &[
+                                    raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                                    pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
+                                    &tick_lower_start_index.to_be_bytes(),
+                                ],
+                                &pool_config.raydium_v3_program,
+                            );
+
+                            let tick_upper_start_index =
+                                raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                                    tick_upper_index,
+                                    pool_info.tick_spacing.into(),
+                                );
+                            let (tick_upper_array_key, __bump) = Pubkey::find_program_address(
+                                &[
+                                    raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                                    pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
+                                    &tick_upper_start_index.to_be_bytes(),
+                                ],
+                                &pool_config.raydium_v3_program,
+                            );
+
+                            let mut tick_lower_state = TickState::default();
+                            let mut tick_upper_state = TickState::default();
+                            for array in tick_arrays {
+                                let mut tick_array = array.1;
+                                if array.0 == tick_lower_array_key {
+                                    if tick_array.pool_id != pool_id {
+                                        println!(
+                                            "pool_id:{}, tick_array.pool_id:{}",
+                                            pool_id, tick_array.pool_id
+                                        );
+                                        panic!("tick_array_lower not match poo_id");
+                                    }
+                                    tick_lower_state = *tick_array
+                                        .get_tick_state_mut(
+                                            tick_lower_index,
+                                            pool_info.tick_spacing.into(),
+                                        )
+                                        .unwrap();
+                                }
+                                if array.0 == tick_upper_array_key {
+                                    if tick_array.pool_id != pool_id {
+                                        println!(
+                                            "pool_id:{}, tick_array.pool_id:{}",
+                                            pool_id, tick_array.pool_id
+                                        );
+                                        panic!("tick_array_upper not match poo_id");
+                                    }
+                                    tick_upper_state = *tick_array
+                                        .get_tick_state_mut(
+                                            tick_upper_index,
+                                            pool_info.tick_spacing.into(),
+                                        )
+                                        .unwrap();
+                                }
+                            }
+                            if tick_lower_state.tick != tick_lower_index
+                                && tick_lower_state.tick != 0
+                            {
+                                println!(
+                                    "tick_lower_state.tick:{}, tick_lower_index:{}",
+                                    identity(tick_lower_state.tick),
+                                    tick_lower_index
+                                );
+                                panic!("tick index not match");
+                            }
+                            if tick_upper_state.tick != tick_upper_index
+                                && tick_lower_state.tick != 0
+                            {
+                                println!(
+                                    "tick_upper_state.tick:{}, tick_upper_index:{}",
+                                    identity(tick_upper_state.tick),
+                                    tick_upper_index
+                                );
+                                panic!("tick index not match");
+                            }
+                            println!("tick_lower:{}, liquidity_net:{}, liquidity_gross:{}, fee_outside_0:{}, fee_outside_1:{}, reward_outside:{}", identity(tick_lower_state.tick), identity(tick_lower_state.liquidity_net), identity(tick_lower_state.liquidity_gross), identity(tick_lower_state.fee_growth_outside_0_x64), identity(tick_lower_state.fee_growth_outside_1_x64), identity(tick_lower_state.reward_growths_outside_x64[0]));
+                            println!("tick_upper:{}, liquidity_net:{}, liquidity_gross:{}, fee_outside_0:{}, fee_outside_1:{}, reward_outside:{}", identity(tick_upper_state.tick), identity(tick_upper_state.liquidity_net), identity(tick_upper_state.liquidity_gross), identity(tick_upper_state.fee_growth_outside_0_x64), identity(tick_upper_state.fee_growth_outside_1_x64), identity(tick_upper_state.reward_growths_outside_x64[0]));
+                            // calc position fee and reward
+                            let updated_reward_infos = pool_info.reward_infos;
+                            let (fee_growth_inside_0_x64, fee_growth_inside_1_x64) =
+                                raydium_amm_v3::states::tick_array::get_fee_growth_inside(
+                                    &tick_lower_state,
+                                    &tick_upper_state,
+                                    pool_info.tick_current,
+                                    pool_info.fee_growth_global_0_x64,
+                                    pool_info.fee_growth_global_1_x64,
+                                );
+
+                            let reward_growths_inside =
+                                raydium_amm_v3::states::tick_array::get_reward_growths_inside(
+                                    &tick_lower_state,
+                                    &tick_upper_state,
+                                    pool_info.tick_current,
+                                    &updated_reward_infos,
+                                );
+                            personal_info.token_fees_owed_0 = raydium_amm_v3::instructions::increase_liquidity::calculate_latest_token_fees(
+                            personal_info.token_fees_owed_0,
+                            personal_info.fee_growth_inside_0_last_x64,
+                            fee_growth_inside_0_x64,
+                            personal_info.liquidity,
+                        );
+
+                            personal_info.token_fees_owed_1 = raydium_amm_v3::instructions::increase_liquidity::calculate_latest_token_fees(
+                            personal_info.token_fees_owed_1,
+                            personal_info.fee_growth_inside_1_last_x64,
+                            fee_growth_inside_1_x64,
+                            personal_info.liquidity,
+                        );
+
+                            personal_info.update_rewards(reward_growths_inside, true)?;
+                            if out_of_range {
+                                println!(
+                                "==##personal_key:{}, lower:{}, upper:{}, liquidity:{}, fee_insid_0:{}, fee_insid_1:{}, reward_insid:{}, fees_owed_0:{}, fees_owed_1:{}, reward_owed:{}",
+                                personal_key,
+                                personal_info.tick_lower_index,
+                                personal_info.tick_upper_index,
+                                personal_info.liquidity,
+                                personal_info.fee_growth_inside_0_last_x64,
+                                personal_info.fee_growth_inside_1_last_x64,
+                                personal_info.reward_infos[0].growth_inside_last_x64,
+                                personal_info.token_fees_owed_0,
+                                personal_info.token_fees_owed_1,
+                                personal_info.reward_infos[0].reward_amount_owed
+                            );
+                            } else {
+                                println!(
+                                "==personal_key:{}, lower:{}, upper:{}, liquidity:{}, fee_insid_0:{}, fee_insid_1:{}, reward_insid:{}, fees_owed_0:{}, fees_owed_1:{}, reward_owed:{}",
+                                personal_key,
+                                personal_info.tick_lower_index,
+                                personal_info.tick_upper_index,
+                                personal_info.liquidity,
+                                personal_info.fee_growth_inside_0_last_x64,
+                                personal_info.fee_growth_inside_1_last_x64,
+                                personal_info.reward_infos[0].growth_inside_last_x64,
+                                personal_info.token_fees_owed_0,
+                                personal_info.token_fees_owed_1,
+                                personal_info.reward_infos[0].reward_amount_owed
+                            );
+                            }
+
+                            all_user_owed_fee_0 += personal_info.token_fees_owed_0;
+                            all_user_owed_fee_1 += personal_info.token_fees_owed_1;
+                            all_user_owed_reward +=
+                                personal_info.reward_infos[0].reward_amount_owed;
+                        }
+                        println!("all_user_liquidity:{}, owed_fee_0_before:{}, owed_fee_1_before:{}, owed_reward_before:{}, all_user_owed_fee_0:{}, all_user_owed_fee_1:{}, all_user_owed_reward:{}", all_user_liquidity, all_user_owed_fee_0_before, all_user_owed_fee_1_before, all_user_owed_reward_before, all_user_owed_fee_0, all_user_owed_fee_1, all_user_owed_reward);
+                    }
+                } else {
+                    println!("check_fee_reward_by_pool pool_id");
                 }
             }
             "admin_reset_sqrt_price" => {
