@@ -28,19 +28,11 @@ pub fn update_tick_fee_and_reward_growth_outside(
     for tick in ticks {
         let tick_state = tick_array.get_tick_state_mut(tick, pool_state.tick_spacing as i32)?;
 
-        #[cfg(feature = "enable-log")]
-        msg!("before update tick state, fee_growth_global_0_x64:{},fee_growth_global_0_x64{}, reward_growths_outside_x64:{:?}", 
-            identity(tick_state.fee_growth_outside_0_x64), identity(tick_state.fee_growth_outside_1_x64),identity(tick_state.reward_growths_outside_x64));
-
         tick_state.cross(
             pool_state.fee_growth_global_0_x64,
             pool_state.fee_growth_global_1_x64,
             &pool_state.reward_infos,
         );
-
-        #[cfg(feature = "enable-log")]
-        msg!("before update tick state, fee_growth_global_0_x64:{},fee_growth_global_0_x64{}, reward_growths_outside_x64:{:?}", 
-            identity(tick_state.fee_growth_outside_0_x64), identity(tick_state.fee_growth_outside_1_x64),identity(tick_state.reward_growths_outside_x64));
     }
     Ok(())
 }

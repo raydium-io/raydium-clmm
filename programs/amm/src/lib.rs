@@ -141,6 +141,10 @@ pub mod amm_v3 {
         instructions::update_tick_fee_and_reward_growth_outside(ctx, ticks)
     }
 
+    pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: u128) -> Result<()> {
+        instructions::modify_pool(ctx, param, val)
+    }
+
     /// Initialize a reward info for a given pool and reward index
     ///
     /// # Arguments
