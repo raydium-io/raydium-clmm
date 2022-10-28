@@ -127,20 +127,12 @@ pub mod amm_v3 {
         instructions::reset_sqrt_price(ctx, sqrt_price_x64)
     }
 
-    /// Reset tick fee_growth_outside and reward_growth_outside.
+    /// Update pool status.
     ///
     /// # Arguments
     ///
     /// * `ctx`- The context of accounts
-    /// * `ticks` - tick indexs that to be update
     ///
-    pub fn update_tick_fee_and_reward_growth_outside(
-        ctx: Context<UpdateTickFeeAndRewardGrowth>,
-        ticks: Vec<i32>,
-    ) -> Result<()> {
-        instructions::update_tick_fee_and_reward_growth_outside(ctx, ticks)
-    }
-
     pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: Vec<u128>) -> Result<()> {
         instructions::modify_pool(ctx, param, val)
     }

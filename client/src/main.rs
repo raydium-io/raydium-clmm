@@ -887,12 +887,20 @@ fn main() -> Result<()> {
                 if v.len() == 2 {
                     let filter_pool_id = Pubkey::from_str(&v[1]).unwrap();
                     let ret = rpc_client.get_program_accounts(&pool_config.raydium_v3_program)?;
+                    // {pool_id1: pool_info1, pool_id2: pool_info2, ......}
                     let mut pool_infos = HashMap::new();
+                    // {pool_id1: [(personal_position_key1, personal_position_info1), (personal_position_key2, personal_position_info2, ......)],
+                    //  pool_id2: [(personal_position_key21, personal_position_info21), (personal_position_key22, personal_position_info22, ......)], ......}
                     let mut personal_infos: HashMap<Pubkey, Vec<(Pubkey, PersonalPositionState)>> =
                         HashMap::new();
+                    // {pool_id1: [(tick_array_key1, tick_array_info1), (tick_array_key2, tick_array_info2, ......)],
+                    //  pool_id2: [(tick_array_key21, tick_array_info21), (tick_array_key22, tick_array_info22, ......)], ......}
                     let mut tick_array_infos: HashMap<Pubkey, Vec<(Pubkey, TickArrayState)>> =
                         HashMap::new();
+                    // {token_key1: token_info1, token_key2: token_info2, ......}
+                    let mut token_infos = HashMap::new();
                     // load data
+                    let mut vault_tokens = Vec::new();
                     for item in ret.into_iter() {
                         let data_len = item.1.data.len();
                         match data_len {
@@ -901,6 +909,18 @@ fn main() -> Result<()> {
                                     raydium_amm_v3::states::PoolState,
                                 >(&item.1)?;
                                 pool_infos.insert(item.0, pool);
+
+                                let pool_vaults;
+                                if pool.reward_infos[0].token_vault == Pubkey::default() {
+                                    pool_vaults = vec![pool.token_vault_0, pool.token_vault_1];
+                                } else {
+                                    pool_vaults = vec![
+                                        pool.token_vault_0,
+                                        pool.token_vault_1,
+                                        pool.reward_infos[0].token_vault,
+                                    ];
+                                }
+                                vault_tokens.extend(pool_vaults);
                             }
                             PersonalPositionState::LEN => {
                                 let personal = deserialize_anchor_account::<
@@ -940,38 +960,75 @@ fn main() -> Result<()> {
                             }
                         }
                     }
+                    let rsps = rpc_client.get_multiple_accounts(&vault_tokens)?;
+                    for i in 0..vault_tokens.len() {
+                        let vault_key = vault_tokens[i];
+                        let vault_info =
+                            spl_token::state::Account::unpack(&rsps[i].as_ref().unwrap().data)
+                                .unwrap();
+                        token_infos.insert(vault_key, vault_info);
+                    }
                     for (pool_id, personal_infos) in personal_infos.into_iter() {
                         if filter_pool_id != pool_id {
                             continue;
                         }
-                        let pool_info = pool_infos.get(&pool_id).unwrap().clone();
+                        let mut pool_info = pool_infos.get(&pool_id).unwrap().clone();
+                        let vault0_info =
+                            token_infos.get(&pool_info.token_vault_0).unwrap().clone();
+                        let vault1_info =
+                            token_infos.get(&pool_info.token_vault_1).unwrap().clone();
+                        let reward_vault_info = token_infos
+                            .get(&pool_info.reward_infos[0].token_vault)
+                            .ok_or(spl_token::state::Account::default())
+                            .clone()
+                            .unwrap();
+                        let slot =
+                            rpc_client.get_slot_with_commitment(CommitmentConfig::processed())?;
+                        let curr_timestamp = rpc_client.get_block_time(slot)? as u64;
+                        let updated_reward_infos = pool_info.update_reward_infos(curr_timestamp)?;
+
+                        let unclaimed_fee_0 = pool_info
+                            .total_fees_token_0
+                            .checked_sub(pool_info.total_fees_claimed_token_0)
+                            .unwrap();
+                        let unclaimed_fee_1 = pool_info
+                            .total_fees_token_1
+                            .checked_sub(pool_info.total_fees_claimed_token_1)
+                            .unwrap();
+                        let unclaimed_reward = pool_info.reward_infos[0]
+                            .reward_total_emissioned
+                            .checked_sub(pool_info.reward_infos[0].reward_claimed)
+                            .unwrap();
                         println!("===============================================");
                         println!(
-                        "pool_id:{}, liquidity:{}, tick:{}, price:{}, fee_global_0:{}, fee_global_1:{}, reward_global:{}, protocol_fee_0:{}, protocol_fee_1:{}, fund_0:{}, fund_1:{}, swap_in_0:{}, swap_in_1:{}",
-                        pool_id,
-                        identity(pool_info.liquidity),
-                        identity(pool_info.tick_current),
-                        identity(pool_info.sqrt_price_x64),
-                        identity(pool_info.fee_growth_global_0_x64),
-                        identity(pool_info.fee_growth_global_1_x64),
-                        identity(pool_info.reward_infos[0].reward_growth_global_x64),
-                        identity(pool_info.protocol_fees_token_0),
-                        identity(pool_info.protocol_fees_token_1),
-                        identity(pool_info.fund_fees_token_0),
-                        identity(pool_info.fund_fees_token_1),
-                        identity(pool_info.swap_in_amount_token_0),
-                        identity(pool_info.swap_in_amount_token_1)
-                    );
+                            "pool_id:{}, liquidity:{}, tick:{}, price:{}, fee_global_0:{}, fee_global_1:{}, reward_global:{}, protocol_fee_0:{}, protocol_fee_1:{}, fund_0:{}, fund_1:{}, swap_in_0:{}, swap_in_1:{}",
+                            pool_id,
+                            identity(pool_info.liquidity),
+                            identity(pool_info.tick_current),
+                            identity(pool_info.sqrt_price_x64),
+                            identity(pool_info.fee_growth_global_0_x64),
+                            identity(pool_info.fee_growth_global_1_x64),
+                            identity(pool_info.reward_infos[0].reward_growth_global_x64),
+                            identity(pool_info.protocol_fees_token_0),
+                            identity(pool_info.protocol_fees_token_1),
+                            identity(pool_info.fund_fees_token_0),
+                            identity(pool_info.fund_fees_token_1),
+                            identity(pool_info.swap_in_amount_token_0),
+                            identity(pool_info.swap_in_amount_token_1)
+                        );
                         println!(
-                        "total_fee_0:{}, claimed_0:{}, total_fee_1:{}, claimed_1:{}, reward_total_emissioned:{}, reward_claimed:{}, last_update_time:{}",
-                        identity(pool_info.total_fees_token_0),
-                        identity(pool_info.total_fees_claimed_token_0),
-                        identity(pool_info.total_fees_token_1),
-                        identity(pool_info.total_fees_claimed_token_1),
-                        identity(pool_info.reward_infos[0].reward_total_emissioned),
-                        identity(pool_info.reward_infos[0].reward_claimed),
-                        identity(pool_info.reward_infos[0].last_update_time)
-                    );
+                            "total_fee_0:{}, claimed_0:{}, total_fee_1:{}, claimed_1:{}, reward_total_emissioned:{}, reward_claimed:{}, last_update_time:{}, unclaimed_fee_0:{}, unclaimed_fee_1:{}, unclaimed_reward:{}",
+                            identity(pool_info.total_fees_token_0),
+                            identity(pool_info.total_fees_claimed_token_0),
+                            identity(pool_info.total_fees_token_1),
+                            identity(pool_info.total_fees_claimed_token_1),
+                            identity(pool_info.reward_infos[0].reward_total_emissioned),
+                            identity(pool_info.reward_infos[0].reward_claimed),
+                            identity(pool_info.reward_infos[0].last_update_time),
+                            unclaimed_fee_0,
+                            unclaimed_fee_1,
+                            unclaimed_reward
+                        );
                         let mut all_user_liquidity = 0;
                         let mut all_user_owed_fee_0_before = 0;
                         let mut all_user_owed_fee_1_before = 0;
@@ -980,6 +1037,8 @@ fn main() -> Result<()> {
                         let mut all_user_owed_fee_0 = 0;
                         let mut all_user_owed_fee_1 = 0;
                         let mut all_user_owed_reward = 0;
+                        let mut all_user_owned_vault_0 = 0;
+                        let mut all_user_owned_vault_1 = 0;
                         for (personal_key, personal_info) in personal_infos.into_iter() {
                             let mut personal_info = personal_info.clone();
                             if personal_info.pool_id != pool_id {
@@ -991,14 +1050,14 @@ fn main() -> Result<()> {
                             }
                             let tick_lower_index = personal_info.tick_lower_index;
                             let tick_upper_index = personal_info.tick_upper_index;
-                            let out_of_range = if tick_lower_index > pool_info.tick_current
-                                || tick_upper_index < pool_info.tick_current
+                            let in_range = if pool_info.tick_current >= tick_lower_index
+                                && pool_info.tick_current < tick_upper_index
                             {
                                 true
                             } else {
                                 false
                             };
-                            if out_of_range {
+                            if !in_range {
                                 println!(
                                 "--##personal_key:{}, lower:{}, upper:{}, liquidity:{}, fee_insid_0:{}, fee_insid_1:{}, reward_insid:{}, fees_owed_0:{}, fees_owed_1:{}, reward_owed:{}",
                                 personal_key,
@@ -1027,7 +1086,7 @@ fn main() -> Result<()> {
                                 personal_info.reward_infos[0].reward_amount_owed
                             );
                             }
-                            if !out_of_range {
+                            if in_range {
                                 all_user_liquidity += personal_info.liquidity;
                             }
                             all_user_owed_fee_0_before += personal_info.token_fees_owed_0;
@@ -1045,7 +1104,7 @@ fn main() -> Result<()> {
                             let (tick_lower_array_key, __bump) = Pubkey::find_program_address(
                                 &[
                                     raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
-                                    pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
+                                    pool_id.to_bytes().as_ref(),
                                     &tick_lower_start_index.to_be_bytes(),
                                 ],
                                 &pool_config.raydium_v3_program,
@@ -1059,7 +1118,7 @@ fn main() -> Result<()> {
                             let (tick_upper_array_key, __bump) = Pubkey::find_program_address(
                                 &[
                                     raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
-                                    pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
+                                    pool_id.to_bytes().as_ref(),
                                     &tick_upper_start_index.to_be_bytes(),
                                 ],
                                 &pool_config.raydium_v3_program,
@@ -1067,7 +1126,7 @@ fn main() -> Result<()> {
 
                             let mut tick_lower_state = TickState::default();
                             let mut tick_upper_state = TickState::default();
-                            for array in tick_arrays {
+                            for array in tick_arrays.into_iter() {
                                 let mut tick_array = array.1;
                                 if array.0 == tick_lower_array_key {
                                     if tick_array.pool_id != pool_id {
@@ -1122,8 +1181,22 @@ fn main() -> Result<()> {
                             }
                             println!("tick_lower:{}, liquidity_net:{}, liquidity_gross:{}, fee_outside_0:{}, fee_outside_1:{}, reward_outside:{}", identity(tick_lower_state.tick), identity(tick_lower_state.liquidity_net), identity(tick_lower_state.liquidity_gross), identity(tick_lower_state.fee_growth_outside_0_x64), identity(tick_lower_state.fee_growth_outside_1_x64), identity(tick_lower_state.reward_growths_outside_x64[0]));
                             println!("tick_upper:{}, liquidity_net:{}, liquidity_gross:{}, fee_outside_0:{}, fee_outside_1:{}, reward_outside:{}", identity(tick_upper_state.tick), identity(tick_upper_state.liquidity_net), identity(tick_upper_state.liquidity_gross), identity(tick_upper_state.fee_growth_outside_0_x64), identity(tick_upper_state.fee_growth_outside_1_x64), identity(tick_upper_state.reward_growths_outside_x64[0]));
+                            // calc vault amount
+                            if personal_info.liquidity != 0 {
+                                let (amount_0_int, amount_1_int) =
+                                    liquidity_math::get_delta_amounts_signed(
+                                        pool_info.tick_current,
+                                        pool_info.sqrt_price_x64,
+                                        tick_lower_state.tick,
+                                        tick_upper_state.tick,
+                                        -(personal_info.liquidity as i128),
+                                    )?;
+                                let amount_0 = u64::try_from(-amount_0_int).unwrap();
+                                let amount_1 = u64::try_from(-amount_1_int).unwrap();
+                                all_user_owned_vault_0 += amount_0;
+                                all_user_owned_vault_1 += amount_1;
+                            }
                             // calc position fee and reward
-                            let updated_reward_infos = pool_info.reward_infos;
                             let (fee_growth_inside_0_x64, fee_growth_inside_1_x64) =
                                 raydium_amm_v3::states::tick_array::get_fee_growth_inside(
                                     &tick_lower_state,
@@ -1153,9 +1226,17 @@ fn main() -> Result<()> {
                             fee_growth_inside_1_x64,
                             personal_info.liquidity,
                         );
+                            if personal_info.token_fees_owed_0 >= unclaimed_fee_0
+                                || personal_info.token_fees_owed_1 >= unclaimed_fee_1
+                                || personal_info.reward_infos[0].reward_amount_owed
+                                    >= unclaimed_reward
+                            {
+                                println!("fee_growth_inside_0_x64:{}, fee_growth_inside_1_x64:{}, reward_growths_inside:{}", fee_growth_inside_0_x64, fee_growth_inside_1_x64, reward_growths_inside[0]);
+                                println!("@@@@@@@@@@@@@@@@@@@@ Too many fees or rewards @@@@@@@@@@@@@@@@@@@@");
+                            }
 
                             personal_info.update_rewards(reward_growths_inside, true)?;
-                            if out_of_range {
+                            if !in_range {
                                 println!(
                                 "==##personal_key:{}, lower:{}, upper:{}, liquidity:{}, fee_insid_0:{}, fee_insid_1:{}, reward_insid:{}, fees_owed_0:{}, fees_owed_1:{}, reward_owed:{}",
                                 personal_key,
@@ -1190,10 +1271,86 @@ fn main() -> Result<()> {
                             all_user_owed_reward +=
                                 personal_info.reward_infos[0].reward_amount_owed;
                         }
-                        println!("all_user_liquidity:{}, owed_fee_0_before:{}, owed_fee_1_before:{}, owed_reward_before:{}, all_user_owed_fee_0:{}, all_user_owed_fee_1:{}, all_user_owed_reward:{}", all_user_liquidity, all_user_owed_fee_0_before, all_user_owed_fee_1_before, all_user_owed_reward_before, all_user_owed_fee_0, all_user_owed_fee_1, all_user_owed_reward);
+                        println!("all_user_liquidity:{}, owed_fee_0_before:{}, owed_fee_1_before:{}, owed_reward_before:{}, owed_fee_0:{}, owed_fee_1:{}, owed_reward:{}, owned_vault_0:{}, owned_vault_1:{}", all_user_liquidity, all_user_owed_fee_0_before, all_user_owed_fee_1_before, all_user_owed_reward_before, all_user_owed_fee_0, all_user_owed_fee_1, all_user_owed_reward, all_user_owned_vault_0, all_user_owned_vault_1);
+
+                        println!(
+                            "vault0:{}, vault1:{}, reward_vault:{}",
+                            pool_info.token_vault_0,
+                            pool_info.token_vault_1,
+                            pool_info.reward_infos[0].token_vault
+                        );
+                        println!(
+                            "vault0_amount:{}, vault1_amount:{}, reward_vault_amount:{}",
+                            vault0_info.amount, vault1_info.amount, reward_vault_info.amount,
+                        );
+                        let simulate_vault0 = all_user_owned_vault_0
+                            + all_user_owed_fee_0
+                            + pool_info.protocol_fees_token_0
+                            + pool_info.fund_fees_token_0;
+                        let simulate_vault1 = all_user_owned_vault_1
+                            + all_user_owed_fee_1
+                            + pool_info.protocol_fees_token_1
+                            + pool_info.fund_fees_token_1;
+                        let simulate_reward_vault = all_user_owed_reward;
+                        println!(
+                            "simulate_vault0:{}, simulate_vault1:{}, simulate_reward_vault:{}",
+                            simulate_vault0, simulate_vault1, simulate_reward_vault
+                        );
+                        let owed_pool_vault0 =
+                            (simulate_vault0 as i64) - (vault0_info.amount as i64);
+                        let owed_pool_vault1 =
+                            (simulate_vault1 as i64) - (vault1_info.amount as i64);
+                        let owed_pool_reward =
+                            (simulate_reward_vault as i64) - (reward_vault_info.amount as i64);
+                        println!(
+                            "owed_pool_vault0:{}, owed_pool_vault1:{}, owed_pool_reward:{}",
+                            owed_pool_vault0, owed_pool_vault1, owed_pool_reward
+                        );
+                        let need_claimed_0 = pool_info
+                            .total_fees_token_0
+                            .checked_sub(all_user_owed_fee_0)
+                            .unwrap();
+                        let need_claimed_1 = pool_info
+                            .total_fees_token_1
+                            .checked_sub(all_user_owed_fee_1)
+                            .unwrap();
+                        let need_claimed_reward = pool_info.reward_infos[0]
+                            .reward_total_emissioned
+                            .checked_sub(all_user_owed_reward)
+                            .unwrap();
+                        println!(
+                            "need_claimed_0:{}, need_claimed_1:{}, need_claimed_reward:{}",
+                            need_claimed_0, need_claimed_1, need_claimed_reward
+                        );
                     }
                 } else {
                     println!("check_fee_reward_by_pool pool_id");
+                }
+            }
+            "modify_pool" => {
+                if v.len() == 4 || v.len() == 5 {
+                    let pool_id = Pubkey::from_str(&v[1]).unwrap();
+                    let param = v[2].parse::<u8>().unwrap();
+                    let mut val = Vec::new();
+                    val.push(v[3].parse::<u128>().unwrap());
+                    if v.len() == 5 {
+                        val.push(v[4].parse::<u128>().unwrap());
+                    }
+                    let modify_instrs =
+                        modify_pool(&pool_config.clone(), pool_id, param, val).unwrap();
+                    // send
+                    let signers = vec![&payer, &admin];
+                    let recent_hash = rpc_client.get_latest_blockhash()?;
+                    let txn = Transaction::new_signed_with_payer(
+                        &modify_instrs,
+                        Some(&payer.pubkey()),
+                        &signers,
+                        recent_hash,
+                    );
+                    let signature = send_txn(&rpc_client, &txn, true)?;
+                    println!("{}", signature);
+                } else {
+                    println!("error input");
                 }
             }
             "admin_reset_sqrt_price" => {
@@ -2325,56 +2482,6 @@ fn main() -> Result<()> {
                         }
                     }
                 }
-            }
-            "update_tick" => {
-                if v.len() != 3 {
-                    println!("invalid command: [update_tick index, tick_array_start_index, ticks split by comma]");
-                }
-                let tick_array_start_index = v[1].parse::<i32>().unwrap();
-                let ticks_str = v[2].parse::<String>().unwrap();
-                let ticks = ticks_str
-                    .split(",")
-                    .map(|s| s.parse::<i32>().unwrap())
-                    .collect();
-                println!(
-                    "tick_array_start_index:{},ticks:{:?}",
-                    tick_array_start_index, ticks
-                );
-                println!(
-                    "raydium_v3_program:{}",
-                    pool_config.raydium_v3_program
-                );
-                let program = anchor_client.program(pool_config.raydium_v3_program);
-                println!("pool_id:{}", pool_config.pool_id_account.unwrap());
-
-                let tick_array_account_key = Pubkey::find_program_address(
-                    &[
-                        raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
-                        pool_config.pool_id_account.unwrap().as_ref(),
-                        &tick_array_start_index.to_be_bytes(),
-                    ],
-                    &program.id(),
-                )
-                .0;
-                println!("tick_array_account_key:{}", tick_array_account_key);
-
-                let create_instr = update_tick_instr(
-                    &pool_config.clone(),
-                    pool_config.pool_id_account.unwrap(),
-                    tick_array_account_key,
-                    ticks,
-                )?;
-                // send
-                let signers = vec![&payer, &admin];
-                let recent_hash = rpc_client.get_latest_blockhash()?;
-                let txn = Transaction::new_signed_with_payer(
-                    &create_instr,
-                    Some(&payer.pubkey()),
-                    &signers,
-                    recent_hash,
-                );
-                let signature = send_txn(&rpc_client, &txn, true)?;
-                println!("{}", signature);
             }
             _ => {
                 println!("command not exist");

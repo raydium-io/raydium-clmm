@@ -625,35 +625,11 @@ pub fn set_reward_params_instr(
     Ok(instructions)
 }
 
-pub fn update_tick_instr(
-    config: &ClientConfig,
-    pool_account_key: Pubkey,
-    tick_array: Pubkey,
-    ticks: Vec<i32>,
-) -> Result<Vec<Instruction>> {
-    let admin = read_keypair_file(&config.admin_path)?;
-    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
-    // Client.
-    let client = Client::new(url, Rc::new(admin));
-    let program = client.program(config.raydium_v3_program);
-
-    let instructions = program
-        .request()
-        .accounts(raydium_accounts::UpdateTickFeeAndRewardGrowth {
-            authority: program.payer(),
-            pool_state: pool_account_key,
-            tick_array: tick_array,
-        })
-        .args(raydium_instruction::UpdateTickFeeAndRewardGrowthOutside { ticks })
-        .instructions()?;
-    Ok(instructions)
-}
-
 pub fn modify_pool(
     config: &ClientConfig,
     pool_account_key: Pubkey,
     param: u8,
-    val: u128,
+    val: Vec<u128>,
 ) -> Result<Vec<Instruction>> {
     let admin = read_keypair_file(&config.admin_path)?;
     let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());

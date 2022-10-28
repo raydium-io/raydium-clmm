@@ -2,7 +2,6 @@ use crate::states::*;
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
-#[instruction(index: u16)]
 pub struct CreateOperationAccount<'info> {
     /// Address to be set as operation account owner.
     #[account(
