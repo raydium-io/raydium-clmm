@@ -628,8 +628,10 @@ pub fn set_reward_params_instr(
 pub fn modify_pool(
     config: &ClientConfig,
     pool_account_key: Pubkey,
+    remaining_accounts: Vec<AccountMeta>,
     param: u8,
     val: Vec<u128>,
+    index: i32,
 ) -> Result<Vec<Instruction>> {
     let admin = read_keypair_file(&config.admin_path)?;
     let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
@@ -643,7 +645,8 @@ pub fn modify_pool(
             authority: program.payer(),
             pool_state: pool_account_key,
         })
-        .args(raydium_instruction::ModifyPool { param, val })
+        .accounts(remaining_accounts)
+        .args(raydium_instruction::ModifyPool { param, val, index })
         .instructions()?;
     Ok(instructions)
 }

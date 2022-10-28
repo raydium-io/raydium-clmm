@@ -15,7 +15,7 @@ pub struct ModifyPool<'info> {
     pub pool_state: AccountLoader<'info, PoolState>,
 }
 
-pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: Vec<u128>) -> Result<()> {
+pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: Vec<u128>, index: i32) -> Result<()> {
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;
     let match_param = Some(param);
     match match_param {
@@ -56,13 +56,27 @@ pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: Vec<u128>) -> Resul
                 require_gt!(u64::max_value() as u128, val[i]);
 
                 let new_reward_claimed = val[i] as u64;
-                
+
                 require_gte!(
                     pool_state.reward_infos[i].reward_total_emissioned,
                     new_reward_claimed
                 );
                 pool_state.reward_infos[i].reward_claimed = new_reward_claimed;
             }
+        }
+        Some(4) => {
+            let mut remaining_accounts_iter = ctx.remaining_accounts.iter();
+            let tick_array_info = remaining_accounts_iter.next().unwrap();
+            let mut tick_array_current = TickArrayState::load_mut(tick_array_info)?;
+            require_keys_eq!(tick_array_current.pool_id, ctx.accounts.pool_state.key());
+            let tick_state = tick_array_current
+                .get_tick_state_mut(index, pool_state.tick_spacing.into())
+                .unwrap();
+            tick_state.cross(
+                pool_state.fee_growth_global_0_x64,
+                pool_state.fee_growth_global_1_x64,
+                &pool_state.reward_infos,
+            );
         }
         _ => return err!(ErrorCode::InvalidUpdateConfigFlag),
     }

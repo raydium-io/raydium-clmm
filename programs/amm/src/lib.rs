@@ -133,8 +133,13 @@ pub mod amm_v3 {
     ///
     /// * `ctx`- The context of accounts
     ///
-    pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: Vec<u128>) -> Result<()> {
-        instructions::modify_pool(ctx, param, val)
+    pub fn modify_pool(
+        ctx: Context<ModifyPool>,
+        param: u8,
+        val: Vec<u128>,
+        index: i32,
+    ) -> Result<()> {
+        instructions::modify_pool(ctx, param, val, index)
     }
 
     /// Initialize a reward info for a given pool and reward index

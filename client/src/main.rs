@@ -1293,15 +1293,19 @@ fn main() -> Result<()> {
                             + pool_info.fund_fees_token_1;
                         let simulate_reward_vault = all_user_owed_reward;
                         println!(
-                            "simulate_vault0:{}, simulate_vault1:{}, simulate_reward_vault:{}",
+                            "simulate_vault0:{}, simulate_vault1:{}, simulate_reward:{}",
                             simulate_vault0, simulate_vault1, simulate_reward_vault
                         );
                         let owed_pool_vault0 =
                             (simulate_vault0 as i64) - (vault0_info.amount as i64);
                         let owed_pool_vault1 =
                             (simulate_vault1 as i64) - (vault1_info.amount as i64);
+                        let unclaimed_reward = pool_info.reward_infos[0]
+                            .reward_total_emissioned
+                            .checked_sub(pool_info.reward_infos[0].reward_claimed)
+                            .unwrap();
                         let owed_pool_reward =
-                            (simulate_reward_vault as i64) - (reward_vault_info.amount as i64);
+                            (simulate_reward_vault as i64) - (unclaimed_reward as i64);
                         println!(
                             "owed_pool_vault0:{}, owed_pool_vault1:{}, owed_pool_reward:{}",
                             owed_pool_vault0, owed_pool_vault1, owed_pool_reward
@@ -1332,12 +1336,49 @@ fn main() -> Result<()> {
                     let pool_id = Pubkey::from_str(&v[1]).unwrap();
                     let param = v[2].parse::<u8>().unwrap();
                     let mut val = Vec::new();
-                    val.push(v[3].parse::<u128>().unwrap());
-                    if v.len() == 5 {
+                    let mut index = 0;
+                    let mut remaing_accounts = Vec::new();
+
+                    let program = anchor_client.program(pool_config.raydium_v3_program);
+                    println!("{}", pool_id);
+                    let pool_account: raydium_amm_v3::states::PoolState =
+                        program.account(pool_id)?;
+                    if v.len() == 4 {
+                        if param == 0 || param == 1 || param == 3 {
+                            val.push(v[3].parse::<u128>().unwrap());
+                        } else if param == 4 {
+                            // update tick
+                            index = v[3].parse::<i32>().unwrap();
+                            let tick_start_index =
+                                raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                                    index,
+                                    pool_account.tick_spacing.into(),
+                                );
+                            let (tick_array_key, __bump) = Pubkey::find_program_address(
+                                &[
+                                    raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                                    pool_id.to_bytes().as_ref(),
+                                    &tick_start_index.to_be_bytes(),
+                                ],
+                                &pool_config.raydium_v3_program,
+                            );
+                            remaing_accounts.push(AccountMeta::new(tick_array_key, false));
+                        }
+                    } else if v.len() == 5 && param == 2 {
+                        val.push(v[3].parse::<u128>().unwrap());
                         val.push(v[4].parse::<u128>().unwrap());
+                    } else {
+                        panic!("error input");
                     }
-                    let modify_instrs =
-                        modify_pool(&pool_config.clone(), pool_id, param, val).unwrap();
+                    let modify_instrs = modify_pool(
+                        &pool_config.clone(),
+                        pool_id,
+                        remaing_accounts,
+                        param,
+                        val,
+                        index,
+                    )
+                    .unwrap();
                     // send
                     let signers = vec![&payer, &admin];
                     let recent_hash = rpc_client.get_latest_blockhash()?;
