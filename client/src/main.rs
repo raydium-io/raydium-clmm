@@ -1233,16 +1233,19 @@ fn main() -> Result<()> {
                             fee_growth_inside_1_x64,
                             personal_info.liquidity,
                         );
-                            if personal_info.token_fees_owed_0 >= unclaimed_fee_0
-                                || personal_info.token_fees_owed_1 >= unclaimed_fee_1
-                                || personal_info.reward_infos[0].reward_amount_owed
+                            personal_info.update_rewards(reward_growths_inside, true)?;
+                            if (personal_info.token_fees_owed_0 >= unclaimed_fee_0
+                                && personal_info.token_fees_owed_0 != 0)
+                                || (personal_info.token_fees_owed_1 >= unclaimed_fee_1
+                                    && personal_info.token_fees_owed_1 != 0)
+                                || (personal_info.reward_infos[0].reward_amount_owed
                                     >= unclaimed_reward
+                                    && personal_info.reward_infos[0].reward_amount_owed != 0)
                             {
                                 println!("fee_growth_inside_0_x64:{}, fee_growth_inside_1_x64:{}, reward_growths_inside:{}", fee_growth_inside_0_x64, fee_growth_inside_1_x64, reward_growths_inside[0]);
                                 println!("@@@@@@@@@@@@@@@@@@@@ Too many fees or rewards @@@@@@@@@@@@@@@@@@@@");
                             }
 
-                            personal_info.update_rewards(reward_growths_inside, true)?;
                             if !in_range {
                                 println!(
                                 "==##personal_key:{}, lower:{}, upper:{}, liquidity:{}, fee_insid_0:{}, fee_insid_1:{}, reward_insid:{}, fees_owed_0:{}, fees_owed_1:{}, reward_owed:{}",
