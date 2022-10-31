@@ -884,8 +884,11 @@ fn main() -> Result<()> {
                 }
             }
             "check_fee_reward_by_pool" => {
-                if v.len() == 2 {
-                    let filter_pool_id = Pubkey::from_str(&v[1]).unwrap();
+                if v.len() == 2 || v.len() == 1 {
+                    let mut filter_pool_id = Pubkey::default();
+                    if v.len() == 2 {
+                        filter_pool_id = Pubkey::from_str(&v[1]).unwrap();
+                    }
                     let ret = rpc_client.get_program_accounts(&pool_config.raydium_v3_program)?;
                     // {pool_id1: pool_info1, pool_id2: pool_info2, ......}
                     let mut pool_infos = HashMap::new();
@@ -969,7 +972,7 @@ fn main() -> Result<()> {
                         token_infos.insert(vault_key, vault_info);
                     }
                     for (pool_id, personal_infos) in personal_infos.into_iter() {
-                        if filter_pool_id != pool_id {
+                        if filter_pool_id != pool_id && filter_pool_id != Pubkey::default() {
                             continue;
                         }
                         let mut pool_info = pool_infos.get(&pool_id).unwrap().clone();
@@ -977,11 +980,15 @@ fn main() -> Result<()> {
                             token_infos.get(&pool_info.token_vault_0).unwrap().clone();
                         let vault1_info =
                             token_infos.get(&pool_info.token_vault_1).unwrap().clone();
-                        let reward_vault_info = token_infos
-                            .get(&pool_info.reward_infos[0].token_vault)
-                            .ok_or(spl_token::state::Account::default())
-                            .clone()
-                            .unwrap();
+                        let reward_vault_info =
+                            if pool_info.reward_infos[0].token_vault == Pubkey::default() {
+                                spl_token::state::Account::default()
+                            } else {
+                                token_infos
+                                    .get(&pool_info.reward_infos[0].token_vault)
+                                    .unwrap()
+                                    .clone()
+                            };
                         let slot =
                             rpc_client.get_slot_with_commitment(CommitmentConfig::processed())?;
                         let curr_timestamp = rpc_client.get_block_time(slot)? as u64;
@@ -1326,6 +1333,13 @@ fn main() -> Result<()> {
                             "need_claimed_0:{}, need_claimed_1:{}, need_claimed_reward:{}",
                             need_claimed_0, need_claimed_1, need_claimed_reward
                         );
+                        if unclaimed_fee_0 < all_user_owed_fee_0
+                            || unclaimed_fee_1 < all_user_owed_fee_1
+                            || unclaimed_reward < all_user_owed_reward
+                            || pool_info.liquidity != all_user_liquidity
+                        {
+                            println!("*********************** pool liquidity, fee or reward not match with the actual situation ************************");
+                        }
                     }
                 } else {
                     println!("check_fee_reward_by_pool pool_id");
@@ -1390,6 +1404,7 @@ fn main() -> Result<()> {
                         remaing_accounts.push(AccountMeta::new(protocol_position_address, false));
                         val.push(v[5].parse::<u128>().unwrap());
                         val.push(v[6].parse::<u128>().unwrap());
+                        println!("val:{:?}", val);
                     }
                     _ => panic!("invalid param"),
                 }

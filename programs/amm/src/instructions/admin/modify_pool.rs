@@ -29,7 +29,7 @@ pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: Vec<u128>, index: i
             pool_state.liquidity = val[0];
         }
         Some(2) => {
-           // update pool total_fees_claimed_token_0 and  total_fees_claimed_token_1
+            // update pool total_fees_claimed_token_0 and  total_fees_claimed_token_1
             require_eq!(val.len(), 2);
 
             require_gt!(u64::max_value() as u128, val[0]);
@@ -84,11 +84,10 @@ pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: Vec<u128>, index: i
             let mut remaining_accounts_iter = ctx.remaining_accounts.iter();
             let personal_position_info = remaining_accounts_iter.next().unwrap();
             let protocol_position_info = remaining_accounts_iter.next().unwrap();
-            let mut personal_position =
-                Account::<PersonalPositionState>::try_from(personal_position_info)?;
-            let mut protocol_position =
-                Account::<ProtocolPositionState>::try_from(protocol_position_info)?;
-
+            let personal_position =
+                &mut Account::<PersonalPositionState>::try_from(personal_position_info)?;
+            let protocol_position =
+                &mut Account::<ProtocolPositionState>::try_from(protocol_position_info)?;
             let fee_growth_inside_0_last_x64 = val[0];
             let fee_growth_inside_1_last_x64 = val[1];
 
@@ -97,6 +96,9 @@ pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: Vec<u128>, index: i
 
             protocol_position.fee_growth_inside_0_last_x64 = fee_growth_inside_0_last_x64;
             protocol_position.fee_growth_inside_1_last_x64 = fee_growth_inside_1_last_x64;
+
+            personal_position.exit(ctx.program_id)?;
+            protocol_position.exit(ctx.program_id)?;
         }
         _ => return err!(ErrorCode::InvalidUpdateConfigFlag),
     }
