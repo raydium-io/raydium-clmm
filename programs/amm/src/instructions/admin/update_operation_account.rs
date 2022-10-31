@@ -3,7 +3,6 @@ use crate::states::*;
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
-#[instruction(index: u16)]
 pub struct UpdateOperationAccount<'info> {
     /// Address to be set as operation account owner.
     #[account(
@@ -30,7 +29,7 @@ pub fn update_operation_account(
     param: u8,
     keys: Vec<Pubkey>,
 ) -> Result<()> {
-    let mut operation_state = ctx.accounts.operation_state.load_init()?;
+    let mut operation_state = ctx.accounts.operation_state.load_mut()?;
     let match_param = Some(param);
     match match_param {
         Some(0) => operation_state.update_operation_owner(keys),

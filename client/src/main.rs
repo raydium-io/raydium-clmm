@@ -469,7 +469,7 @@ fn main() -> Result<()> {
                 }
             }
             "create_operation" => {
-                if v.len() == 2 {
+                if v.len() == 1 {
                     let create_instr = create_operation_account_instr(&pool_config.clone())?;
                     // send
                     let signers = vec![&payer, &admin];
@@ -1033,9 +1033,13 @@ fn main() -> Result<()> {
             }
             "ppool" => {
                 let program = anchor_client.program(pool_config.raydium_v3_program);
-                println!("{}", pool_config.pool_id_account.unwrap());
-                let pool_account: raydium_amm_v3::states::PoolState =
-                    program.account(pool_config.pool_id_account.unwrap())?;
+                let pool_id = if v.len() == 2 {
+                    Pubkey::from_str(&v[1]).unwrap()
+                } else {
+                    pool_config.pool_id_account.unwrap()
+                };
+                println!("{}", pool_id);
+                let pool_account: raydium_amm_v3::states::PoolState = program.account(pool_id)?;
                 println!("{:#?}", pool_account);
             }
             "pprotocol" => {
@@ -1856,6 +1860,23 @@ fn main() -> Result<()> {
                         sqrt_price_f,
                         sqrt_price_f * sqrt_price_f
                     );
+                }
+            }
+            "f_price_to_tick" => {
+                if v.len() == 5 {
+                    let price = v[1].parse::<f64>().unwrap();
+                    let mint_decimals_0 = v[2].parse::<u8>().unwrap();
+                    let mint_decimals_1 = v[3].parse::<u8>().unwrap();
+                    let tick_spacing = v[4].parse::<u8>().unwrap();
+                    let tick_price_x64 =
+                        price_to_sqrt_price_x64(price, mint_decimals_0, mint_decimals_1);
+                    let tick_index = tick_with_spacing(
+                        tick_math::get_tick_at_sqrt_price(tick_price_x64)?,
+                        tick_spacing.into(),
+                    );
+                    println!("tick_index:{}", tick_index);
+                } else {
+                    println!("f_price_to_tick price mint_decimals_0 mint_decimals_1 tick_spacing")
                 }
             }
             "tick_test" => {

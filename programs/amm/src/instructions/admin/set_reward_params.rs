@@ -194,7 +194,7 @@ fn admin_update(
         require_gt!(open_time, current_timestamp);
         require_gt!(emissions_per_second_x64, 0);
         let time_delta = end_time.checked_sub(open_time).unwrap();
-        if time_delta != 0 {
+        if time_delta == 0 {
             return Err(ErrorCode::InvalidRewardPeriod.into());
         }
         reward_amount = U256::from(time_delta)
