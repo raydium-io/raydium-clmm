@@ -2563,6 +2563,25 @@ fn main() -> Result<()> {
                     }
                 }
             }
+            "p_all_pool" => {
+                let pools = rpc_client.get_program_accounts_with_config(
+                    &pool_config.raydium_v3_program,
+                    RpcProgramAccountsConfig {
+                        filters: Some(vec![RpcFilterType::DataSize(
+                            raydium_amm_v3::states::PoolState::LEN as u64,
+                        )]),
+                        account_config: RpcAccountInfoConfig {
+                            encoding: Some(UiAccountEncoding::Base64Zstd),
+                            ..RpcAccountInfoConfig::default()
+                        },
+                        with_context: Some(false),
+                    },
+                )?;
+
+                for pool in pools {
+                    println!("{}", pool.0.to_string());
+                }
+            }
             _ => {
                 println!("command not exist");
             }
