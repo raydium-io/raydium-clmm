@@ -1332,67 +1332,88 @@ fn main() -> Result<()> {
                 }
             }
             "modify_pool" => {
-                if v.len() == 4 || v.len() == 5 {
-                    let pool_id = Pubkey::from_str(&v[1]).unwrap();
-                    let param = v[2].parse::<u8>().unwrap();
-                    let mut val = Vec::new();
-                    let mut index = 0;
-                    let mut remaing_accounts = Vec::new();
+                if v.len() < 4 {
+                    panic!("error input")
+                }
+                let pool_id = Pubkey::from_str(&v[1]).unwrap();
+                let param = Some(v[2].parse::<u8>().unwrap());
 
-                    let program = anchor_client.program(pool_config.raydium_v3_program);
-                    println!("{}", pool_id);
-                    let pool_account: raydium_amm_v3::states::PoolState =
-                        program.account(pool_id)?;
-                    if v.len() == 4 {
-                        if param == 0 || param == 1 || param == 3 {
-                            val.push(v[3].parse::<u128>().unwrap());
-                        } else if param == 4 {
-                            // update tick
-                            index = v[3].parse::<i32>().unwrap();
-                            let tick_start_index =
-                                raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
-                                    index,
-                                    pool_account.tick_spacing.into(),
-                                );
-                            let (tick_array_key, __bump) = Pubkey::find_program_address(
-                                &[
-                                    raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
-                                    pool_id.to_bytes().as_ref(),
-                                    &tick_start_index.to_be_bytes(),
-                                ],
-                                &pool_config.raydium_v3_program,
-                            );
-                            remaing_accounts.push(AccountMeta::new(tick_array_key, false));
-                        }
-                    } else if v.len() == 5 && param == 2 {
+                let mut val = Vec::new();
+                let mut index = 0;
+                let mut remaing_accounts = Vec::new();
+
+                let program = anchor_client.program(pool_config.raydium_v3_program);
+                println!("{}", pool_id);
+                let pool_account: raydium_amm_v3::states::PoolState = program.account(pool_id)?;
+
+                match param {
+                    Some(0) => {
+                        // update pool status
+                        val.push(v[3].parse::<u128>().unwrap());
+                    }
+                    Some(1) => {
+                        // update pool liquidity
+                        val.push(v[3].parse::<u128>().unwrap());
+                    }
+                    Some(2) => {
+                        // update pool total_fees_claimed_token_0 and  total_fees_claimed_token_1
                         val.push(v[3].parse::<u128>().unwrap());
                         val.push(v[4].parse::<u128>().unwrap());
-                    } else {
-                        panic!("error input");
                     }
-                    let modify_instrs = modify_pool(
-                        &pool_config.clone(),
-                        pool_id,
-                        remaing_accounts,
-                        param,
-                        val,
-                        index,
-                    )
-                    .unwrap();
-                    // send
-                    let signers = vec![&payer, &admin];
-                    let recent_hash = rpc_client.get_latest_blockhash()?;
-                    let txn = Transaction::new_signed_with_payer(
-                        &modify_instrs,
-                        Some(&payer.pubkey()),
-                        &signers,
-                        recent_hash,
-                    );
-                    let signature = send_txn(&rpc_client, &txn, true)?;
-                    println!("{}", signature);
-                } else {
-                    println!("error input");
+                    Some(3) => {
+                        // update pool reward_claimed
+                        val.push(v[3].parse::<u128>().unwrap());
+                    }
+                    Some(4) => {
+                        // update tick data ,cross tick
+                        index = v[3].parse::<i32>().unwrap();
+                        let tick_start_index =
+                            raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                                index,
+                                pool_account.tick_spacing.into(),
+                            );
+                        let (tick_array_key, __bump) = Pubkey::find_program_address(
+                            &[
+                                raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
+                                pool_id.to_bytes().as_ref(),
+                                &tick_start_index.to_be_bytes(),
+                            ],
+                            &pool_config.raydium_v3_program,
+                        );
+                        remaing_accounts.push(AccountMeta::new(tick_array_key, false));
+                    }
+                    Some(5) => {
+                        // update personal and protocol position fee_growth_inside_0, fee_growth_inside_1
+                        let personal_position_address = Pubkey::from_str(&v[3]).unwrap();
+                        let protocol_position_address = Pubkey::from_str(&v[4]).unwrap();
+                        remaing_accounts.push(AccountMeta::new(personal_position_address, false));
+                        remaing_accounts.push(AccountMeta::new(protocol_position_address, false));
+                        val.push(v[5].parse::<u128>().unwrap());
+                        val.push(v[6].parse::<u128>().unwrap());
+                    }
+                    _ => panic!("invalid param"),
                 }
+
+                let modify_instrs = modify_pool(
+                    &pool_config.clone(),
+                    pool_id,
+                    remaing_accounts,
+                    param.unwrap(),
+                    val,
+                    index,
+                )
+                .unwrap();
+                // send
+                let signers = vec![&payer, &admin];
+                let recent_hash = rpc_client.get_latest_blockhash()?;
+                let txn = Transaction::new_signed_with_payer(
+                    &modify_instrs,
+                    Some(&payer.pubkey()),
+                    &signers,
+                    recent_hash,
+                );
+                let signature = send_txn(&rpc_client, &txn, true)?;
+                println!("{}", signature);
             }
             "admin_reset_sqrt_price" => {
                 if v.len() == 4 {

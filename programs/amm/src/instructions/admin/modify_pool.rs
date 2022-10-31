@@ -20,16 +20,16 @@ pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: Vec<u128>, index: i
     let match_param = Some(param);
     match match_param {
         Some(0) => {
-            // update status
+            // update pool status
             require_gte!(255, val[0]);
             pool_state.set_status(val[0] as u8);
         }
         Some(1) => {
-            // update token fee
+            // update pool liquidity
             pool_state.liquidity = val[0];
         }
         Some(2) => {
-            // update claimed token fee
+           // update pool total_fees_claimed_token_0 and  total_fees_claimed_token_1
             require_eq!(val.len(), 2);
 
             require_gt!(u64::max_value() as u128, val[0]);
@@ -65,6 +65,7 @@ pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: Vec<u128>, index: i
             }
         }
         Some(4) => {
+            // update tick data ,cross tick
             let mut remaining_accounts_iter = ctx.remaining_accounts.iter();
             let tick_array_info = remaining_accounts_iter.next().unwrap();
             let mut tick_array_current = TickArrayState::load_mut(tick_array_info)?;
@@ -77,6 +78,25 @@ pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: Vec<u128>, index: i
                 pool_state.fee_growth_global_1_x64,
                 &pool_state.reward_infos,
             );
+        }
+        Some(5) => {
+            // update personal and protocol position fee_growth_inside
+            let mut remaining_accounts_iter = ctx.remaining_accounts.iter();
+            let personal_position_info = remaining_accounts_iter.next().unwrap();
+            let protocol_position_info = remaining_accounts_iter.next().unwrap();
+            let mut personal_position =
+                Account::<PersonalPositionState>::try_from(personal_position_info)?;
+            let mut protocol_position =
+                Account::<ProtocolPositionState>::try_from(protocol_position_info)?;
+
+            let fee_growth_inside_0_last_x64 = val[0];
+            let fee_growth_inside_1_last_x64 = val[1];
+
+            personal_position.fee_growth_inside_0_last_x64 = fee_growth_inside_0_last_x64;
+            personal_position.fee_growth_inside_1_last_x64 = fee_growth_inside_1_last_x64;
+
+            protocol_position.fee_growth_inside_0_last_x64 = fee_growth_inside_0_last_x64;
+            protocol_position.fee_growth_inside_1_last_x64 = fee_growth_inside_1_last_x64;
         }
         _ => return err!(ErrorCode::InvalidUpdateConfigFlag),
     }
