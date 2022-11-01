@@ -239,17 +239,21 @@ pub fn decrease_liquidity_and_update_position<'a, 'b, 'c, 'info>(
 
 pub fn burn_liquidity<'b, 'info>(
     pool_state: &mut RefMut<PoolState>,
-    tick_array_lower_state: &AccountLoader<'info, TickArrayState>,
-    tick_array_upper_state: &AccountLoader<'info, TickArrayState>,
-    protocol_position: &mut Box<Account<'info, ProtocolPositionState>>,
+    tick_array_lower_loader: &AccountLoader<'info, TickArrayState>,
+    tick_array_upper_loader: &AccountLoader<'info, TickArrayState>,
+    protocol_position: &mut ProtocolPositionState,
     liquidity: u128,
 ) -> Result<(u64, u64)> {
+
+    require_keys_eq!(tick_array_lower_loader.load()?.pool_id, pool_state.key());
+    require_keys_eq!(tick_array_upper_loader.load()?.pool_id, pool_state.key());
+
     // get tick_state
-    let mut tick_lower_state = *tick_array_lower_state.load_mut()?.get_tick_state_mut(
+    let mut tick_lower_state = *tick_array_lower_loader.load_mut()?.get_tick_state_mut(
         protocol_position.tick_lower_index,
         i32::from(pool_state.tick_spacing),
     )?;
-    let mut tick_upper_state = *tick_array_upper_state.load_mut()?.get_tick_state_mut(
+    let mut tick_upper_state = *tick_array_upper_loader.load_mut()?.get_tick_state_mut(
         protocol_position.tick_upper_index,
         i32::from(pool_state.tick_spacing),
     )?;
@@ -263,26 +267,26 @@ pub fn burn_liquidity<'b, 'info>(
     )?;
 
     // update tick_state
-    tick_array_lower_state.load_mut()?.update_tick_state(
+    tick_array_lower_loader.load_mut()?.update_tick_state(
         protocol_position.tick_lower_index,
         i32::from(pool_state.tick_spacing),
         tick_lower_state,
     )?;
-    tick_array_upper_state.load_mut()?.update_tick_state(
+    tick_array_upper_loader.load_mut()?.update_tick_state(
         protocol_position.tick_upper_index,
         i32::from(pool_state.tick_spacing),
         tick_upper_state,
     )?;
 
     if flip_tick_lower {
-        let mut tick_array_lower = tick_array_lower_state.load_mut()?;
+        let mut tick_array_lower = tick_array_lower_loader.load_mut()?;
         tick_array_lower.update_initialized_tick_count(false)?;
         if tick_array_lower.initialized_tick_count == 0 {
             pool_state.flip_tick_array_bit(tick_array_lower.start_tick_index)?;
         }
     }
     if flip_tick_upper {
-        let mut tick_array_upper = tick_array_upper_state.load_mut()?;
+        let mut tick_array_upper = tick_array_upper_loader.load_mut()?;
         tick_array_upper.update_initialized_tick_count(false)?;
         if tick_array_upper.initialized_tick_count == 0 {
             pool_state.flip_tick_array_bit(tick_array_upper.start_tick_index)?;

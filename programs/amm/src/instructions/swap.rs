@@ -9,11 +9,11 @@ use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
+use std::cell::RefMut;
+use std::collections::VecDeque;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
-use std::iter::Iterator;
 use std::ops::Neg;
-use std::ops::{Deref, DerefMut};
 
 #[derive(Accounts)]
 pub struct SwapSingle<'info> {
@@ -73,7 +73,6 @@ pub struct SwapAccounts<'b, 'info> {
 
     /// SPL program for token transfers
     pub token_program: Program<'info, Token>,
-
     /// The factory state to read protocol fees
     pub amm_config: &'b Box<Account<'info, AmmConfig>>,
 
@@ -140,15 +139,17 @@ struct StepComputations {
 }
 
 pub fn swap_internal<'b, 'info>(
-    ctx: &mut SwapAccounts<'b, 'info>,
-    remaining_accounts: &[AccountInfo<'info>],
+    amm_config: &AmmConfig,
+    pool_state: &mut RefMut<PoolState>,
+    tick_array_states: &mut VecDeque<RefMut<TickArrayState>>,
+    observation_state: &mut RefMut<ObservationState>,
     amount_specified: u64,
     sqrt_price_limit_x64: u128,
     zero_for_one: bool,
     is_base_input: bool,
 ) -> Result<(u64, u64)> {
     require!(amount_specified != 0, ErrorCode::InvaildSwapAmountSpecified);
-    let mut pool_state = ctx.pool_state.load_mut()?;
+    // let mut pool_state = pool_state.load_mut()?;
     if !pool_state.get_status_by_bit(PoolStatusBitIndex::Swap) {
         return err!(ErrorCode::NotApproved);
     }
@@ -162,18 +163,6 @@ pub fn swap_internal<'b, 'info>(
         },
         ErrorCode::SqrtPriceLimitOverflow
     );
-    require!(
-        if zero_for_one {
-            ctx.input_vault.key() == pool_state.token_vault_0
-                && ctx.output_vault.key() == pool_state.token_vault_1
-        } else {
-            ctx.input_vault.key() == pool_state.token_vault_1
-                && ctx.output_vault.key() == pool_state.token_vault_0
-        },
-        ErrorCode::InvalidInputPoolVault
-    );
-
-    let amm_config = ctx.amm_config.deref();
 
     let cache = &mut SwapCache {
         liquidity_start: pool_state.liquidity,
@@ -200,14 +189,12 @@ pub fn swap_internal<'b, 'info>(
         liquidity: cache.liquidity_start,
     };
 
-    let mut observation_state = ctx.observation_state.load_mut()?;
     // check observation account is owned by the pool
-    require_keys_eq!(observation_state.pool_id, ctx.pool_state.key());
-    let mut remaining_accounts_iter = remaining_accounts.iter();
+    require_keys_eq!(observation_state.pool_id, pool_state.key());
 
-    let mut tick_array_current = ctx.tick_array_state.load_mut()?;
+    let mut tick_array_current = tick_array_states.pop_front().unwrap();
     // check tick_array account is owned by the pool
-    require_keys_eq!(tick_array_current.pool_id, ctx.pool_state.key());
+    require_keys_eq!(tick_array_current.pool_id, pool_state.key());
 
     let mut current_vaild_tick_array_start_index = pool_state
         .get_first_initialized_tick_array(zero_for_one)
@@ -215,11 +202,11 @@ pub fn swap_internal<'b, 'info>(
 
     // check tick_array account is correct
     require_keys_eq!(
-        ctx.tick_array_state.key(),
+        tick_array_current.key(),
         Pubkey::find_program_address(
             &[
                 TICK_ARRAY_SEED.as_bytes(),
-                ctx.pool_state.key().as_ref(),
+                pool_state.key().as_ref(),
                 &current_vaild_tick_array_start_index.to_be_bytes(),
             ],
             &crate::id()
@@ -265,24 +252,23 @@ pub fn swap_internal<'b, 'info>(
                     zero_for_one,
                 )
                 .unwrap();
-            let tick_array_info_next = remaining_accounts_iter.next().unwrap();
-            tick_array_current = TickArrayState::load_mut(tick_array_info_next)?;
-            require_keys_eq!(tick_array_current.pool_id, ctx.pool_state.key());
+            tick_array_current = tick_array_states.pop_front().unwrap();
+
+            require_keys_eq!(tick_array_current.pool_id, pool_state.key());
             require_keys_eq!(
-                tick_array_info_next.key(),
+                tick_array_current.key(),
                 Pubkey::find_program_address(
                     &[
                         TICK_ARRAY_SEED.as_bytes(),
-                        ctx.pool_state.key().as_ref(),
+                        pool_state.key().as_ref(),
                         &current_vaild_tick_array_start_index.to_be_bytes(),
                     ],
                     &crate::id()
                 )
                 .0
             );
-            let mut first_initialized_tick =
-                tick_array_current.first_initialized_tick(zero_for_one)?;
-            next_initialized_tick = Box::new(*first_initialized_tick.deref_mut());
+            let first_initialized_tick = tick_array_current.first_initialized_tick(zero_for_one)?;
+            next_initialized_tick = Box::new(*first_initialized_tick);
         }
         step.tick_next = next_initialized_tick.tick;
         step.initialized = next_initialized_tick.is_initialized();
@@ -307,7 +293,7 @@ pub fn swap_internal<'b, 'info>(
             target_price,
             state.liquidity,
             state.amount_specified_remaining,
-            ctx.amm_config.trade_fee_rate,
+            amm_config.trade_fee_rate,
             is_base_input,
         );
         state.sqrt_price_x64 = swap_step.sqrt_price_next_x64;
@@ -544,39 +530,65 @@ pub fn exact_internal<'b, 'info>(
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
 ) -> Result<u64> {
-    let zero_for_one = ctx.input_vault.mint == ctx.pool_state.load()?.token_mint_0;
+    let amount_0;
+    let amount_1;
+    let zero_for_one;
+
     let input_balance_before = ctx.input_vault.amount;
     let output_balance_before = ctx.output_vault.amount;
 
-    let (amount_0, amount_1) = swap_internal(
-        ctx,
-        remaining_accounts,
-        amount_specified,
-        if sqrt_price_limit_x64 == 0 {
+    {
+        let pool_state = &mut ctx.pool_state.load_mut()?;
+        zero_for_one = ctx.input_vault.mint == pool_state.token_mint_0;
+
+        require!(
             if zero_for_one {
-                tick_math::MIN_SQRT_PRICE_X64 + 1
+                ctx.input_vault.key() == pool_state.token_vault_0
+                    && ctx.output_vault.key() == pool_state.token_vault_1
             } else {
-                tick_math::MAX_SQRT_PRICE_X64 - 1
-            }
-        } else {
-            sqrt_price_limit_x64
-        },
-        zero_for_one,
-        is_base_input,
-    )?;
+                ctx.input_vault.key() == pool_state.token_vault_1
+                    && ctx.output_vault.key() == pool_state.token_vault_0
+            },
+            ErrorCode::InvalidInputPoolVault
+        );
 
-    #[cfg(feature = "enable-log")]
-    msg!(
-        "exact_swap_internal, is_base_input:{}, amount_0: {}, amount_1: {}",
-        is_base_input,
-        amount_0,
-        amount_1
-    );
-    require!(
-        amount_0 != 0 && amount_1 != 0,
-        ErrorCode::TooSmallInputOrOutputAmount
-    );
+        let tick_array_states = &mut VecDeque::new();
+        tick_array_states.push_back(ctx.tick_array_state.load_mut()?);
+        for tick_array_info in remaining_accounts {
+            tick_array_states.push_back(TickArrayState::load_mut(tick_array_info)?);
+        }
 
+        (amount_0, amount_1) = swap_internal(
+            &ctx.amm_config,
+            pool_state,
+            tick_array_states,
+            &mut ctx.observation_state.load_mut()?,
+            amount_specified,
+            if sqrt_price_limit_x64 == 0 {
+                if zero_for_one {
+                    tick_math::MIN_SQRT_PRICE_X64 + 1
+                } else {
+                    tick_math::MAX_SQRT_PRICE_X64 - 1
+                }
+            } else {
+                sqrt_price_limit_x64
+            },
+            zero_for_one,
+            is_base_input,
+        )?;
+
+        #[cfg(feature = "enable-log")]
+        msg!(
+            "exact_swap_internal, is_base_input:{}, amount_0: {}, amount_1: {}",
+            is_base_input,
+            amount_0,
+            amount_1
+        );
+        require!(
+            amount_0 != 0 && amount_1 != 0,
+            ErrorCode::TooSmallInputOrOutputAmount
+        );
+    }
     let (token_account_0, token_account_1, vault_0, vault_1) = if zero_for_one {
         (
             ctx.input_token_account.clone(),
@@ -632,7 +644,7 @@ pub fn exact_internal<'b, 'info>(
 
     let pool_state = ctx.pool_state.load()?;
     emit!(SwapEvent {
-        pool_state: ctx.pool_state.key(),
+        pool_state: pool_state.key(),
         sender: ctx.signer.key(),
         token_account_0: token_account_0.key(),
         token_account_1: token_account_1.key(),

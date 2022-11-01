@@ -351,7 +351,7 @@ pub fn add_liquidity<'b, 'info>(
     let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = modify_position(
         i128::try_from(liquidity).unwrap(),
         pool_state,
-        context.protocol_position,
+        context.protocol_position.as_mut(),
         &mut tick_lower_state,
         &mut tick_upper_state,
     )?;
@@ -426,10 +426,10 @@ pub fn add_liquidity<'b, 'info>(
     Ok((amount_0, amount_1))
 }
 
-pub fn modify_position<'info>(
+pub fn modify_position(
     liquidity_delta: i128,
     pool_state: &mut RefMut<PoolState>,
-    protocol_position_state: &mut Box<Account<'info, ProtocolPositionState>>,
+    protocol_position_state: &mut ProtocolPositionState,
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,
 ) -> Result<(i64, i64, bool, bool)> {
@@ -463,10 +463,10 @@ pub fn modify_position<'info>(
 }
 
 /// Updates a position with the given liquidity delta and tick
-pub fn update_position<'info>(
+pub fn update_position(
     liquidity_delta: i128,
     pool_state: &mut RefMut<PoolState>,
-    protocol_position_state: &mut Box<Account<'info, ProtocolPositionState>>,
+    protocol_position_state: &mut ProtocolPositionState,
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,
 ) -> Result<(bool, bool)> {
