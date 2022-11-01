@@ -1342,6 +1342,8 @@ fn main() -> Result<()> {
                             || pool_info.liquidity != all_user_liquidity
                         {
                             println!("*********************** pool liquidity, fee or reward not match with the actual situation ************************");
+                            println!("pool_liquidity:{},all_user_liquidity:{},unclaimed_fee_0:{},all_user_owed_fee_0:{},unclaimed_fee_1:{},all_user_owed_fee_1:{},unclaimed_reward:{},all_user_owed_reward:{}",
+                                        identity(pool_info.liquidity),all_user_liquidity, unclaimed_fee_0,all_user_owed_fee_0,unclaimed_fee_1,all_user_owed_fee_1,unclaimed_reward,all_user_owed_reward);
                         }
                     }
                 } else {
