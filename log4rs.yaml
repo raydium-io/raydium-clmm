@@ -1,0 +1,52 @@
+# log4rs.yaml
+# Scan the file at the specified rate for changes and automatically reconfigure the logger
+refresh_rate: 60 seconds
+# Collect the logs to the console or files indexed by their names
+appenders:
+  stdout:
+    kind: console
+    filters:
+    - kind: threshold
+      level: warn
+    encoder:
+      # log format
+      pattern: "{d} - {T} - {l} - {m}{n}"
+  file:
+    kind: file
+    path: "logs/report_log.log"
+    filters:
+    - kind: threshold
+      level: trace
+    encoder:
+      # log format
+      pattern: "{d} - {T} - {l} - {m}{n}"
+
+  roll: # define the rooling_file appenders
+    kind: rolling_file
+    path: "logs/detail_log.log"
+    filters:
+    - kind: threshold
+      level: trace
+    append: true
+    encoder:
+      kind: pattern
+      pattern: "{d} - {T} - {l} - {m}{n}"
+    policy:
+      kind: compound
+      trigger:
+        kind: size
+        limit: 10mb #log file size limit 
+      roller:
+#        kind: delete
+        kind: fixed_window
+        pattern: 'logs/compressed.log.{}.gz'
+        base: 0
+        count: 10
+
+# Set the default logging level to "debug" and attach the "stdout" appender to the root
+root:
+  level: trace
+  appenders:
+  - stdout
+  - file
+  - roll
