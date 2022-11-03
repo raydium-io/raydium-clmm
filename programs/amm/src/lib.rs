@@ -133,8 +133,8 @@ pub mod amm_v3 {
     ///
     /// * `ctx`- The context of accounts
     ///
-    pub fn modify_pool(
-        ctx: Context<ModifyPool>,
+    pub fn modify_pool<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, ModifyPool<'info>>,
         param: u8,
         val: Vec<u128>,
         index: i32,

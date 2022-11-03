@@ -1,6 +1,8 @@
 use crate::error::ErrorCode;
 use crate::states::*;
+use crate::util::transfer_from_pool_vault_to_user;
 use anchor_lang::prelude::*;
+use anchor_spl::token::{Token, TokenAccount};
 
 #[derive(Accounts)]
 pub struct ModifyPool<'info> {
@@ -15,17 +17,23 @@ pub struct ModifyPool<'info> {
     pub pool_state: AccountLoader<'info, PoolState>,
 }
 
-pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: Vec<u128>, index: i32) -> Result<()> {
-    let mut pool_state = ctx.accounts.pool_state.load_mut()?;
+pub fn modify_pool<'a, 'b, 'c, 'info>(
+    ctx: Context<'a, 'b, 'c, 'info, ModifyPool<'info>>,
+    param: u8,
+    val: Vec<u128>,
+    index: i32,
+) -> Result<()> {
     let match_param = Some(param);
     match match_param {
         Some(0) => {
             // update pool status
             require_gte!(255, val[0]);
+            let mut pool_state = ctx.accounts.pool_state.load_mut()?;
             pool_state.set_status(val[0] as u8);
         }
         Some(1) => {
             // update pool liquidity
+            let mut pool_state = ctx.accounts.pool_state.load_mut()?;
             pool_state.liquidity = val[0];
         }
         Some(2) => {
@@ -37,6 +45,8 @@ pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: Vec<u128>, index: i
 
             let new_total_fees_claimed_token_0 = val[0] as u64;
             let new_total_fees_claimed_token_1 = val[1] as u64;
+
+            let mut pool_state = ctx.accounts.pool_state.load_mut()?;
 
             require_gte!(
                 pool_state.total_fees_token_0,
@@ -56,7 +66,7 @@ pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: Vec<u128>, index: i
                 require_gt!(u64::max_value() as u128, val[i]);
 
                 let new_reward_claimed = val[i] as u64;
-
+                let mut pool_state = ctx.accounts.pool_state.load_mut()?;
                 require_gte!(
                     pool_state.reward_infos[i].reward_total_emissioned,
                     new_reward_claimed
@@ -66,6 +76,7 @@ pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: Vec<u128>, index: i
         }
         Some(4) => {
             // update tick data ,cross tick
+            let pool_state = ctx.accounts.pool_state.load_mut()?;
             let mut remaining_accounts_iter = ctx.remaining_accounts.iter();
             let tick_array_info = remaining_accounts_iter.next().unwrap();
             let mut tick_array_current = TickArrayState::load_mut(tick_array_info)?;
@@ -99,6 +110,33 @@ pub fn modify_pool(ctx: Context<ModifyPool>, param: u8, val: Vec<u128>, index: i
 
             personal_position.exit(ctx.program_id)?;
             protocol_position.exit(ctx.program_id)?;
+        }
+        Some(6) => {
+            // withdraw from pool vault
+            let mut remaining_accounts_iter = ctx.remaining_accounts.iter();
+
+            let from_vault = Account::<TokenAccount>::try_from(remaining_accounts_iter.next().unwrap())?;
+            let recipient_token_account =
+                Account::<TokenAccount>::try_from(remaining_accounts_iter.next().unwrap())?;
+            let token_program =
+                Program::<Token>::try_from(remaining_accounts_iter.next().unwrap())?;
+
+            require_gt!(u64::max_value() as u128, val[0]);
+            let amount = val[0] as u64;
+
+            assert!(
+                ctx.accounts.pool_state.load()?.token_vault_0 == from_vault.key()
+                    || ctx.accounts.pool_state.load()?.token_vault_1 == from_vault.key()
+            );
+            assert!(from_vault.mint == recipient_token_account.mint);
+
+            transfer_from_pool_vault_to_user(
+                &ctx.accounts.pool_state,
+                &from_vault,
+                &recipient_token_account,
+                &token_program,
+                amount,
+            )?;
         }
         _ => return err!(ErrorCode::InvalidUpdateConfigFlag),
     }

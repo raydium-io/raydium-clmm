@@ -991,6 +991,19 @@ fn main() -> Result<()> {
                             val.push(v[5].parse::<u128>().unwrap());
                             println!("val:{:?}", val);
                         }
+                        Some(6) => {
+                             // withdraw from pool vault
+                            let from_vault_address = Pubkey::from_str(&v[3]).unwrap();
+                            let recipient_token_account_address = Pubkey::from_str(&v[4]).unwrap();
+                            remaing_accounts
+                                .push(AccountMeta::new(from_vault_address, false));
+                            remaing_accounts
+                                .push(AccountMeta::new(recipient_token_account_address, false));
+                            remaing_accounts
+                                .push(AccountMeta::new(spl_token::id(), false));
+                            val.push(v[5].parse::<u128>().unwrap());
+                            println!("val:{:?}", val);
+                        }
                         _ => panic!("invalid param"),
                     }
 
