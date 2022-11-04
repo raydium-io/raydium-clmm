@@ -44,13 +44,17 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
     let mut admin_keys = operation_state.operation_owners.to_vec();
     admin_keys.push(ctx.accounts.amm_config.owner);
     admin_keys.push(crate::admin::id());
-    let admin_operator = admin_keys.contains(&ctx.accounts.authority.key());
-
-    require!(admin_operator, ErrorCode::NotApproved);
+    let admin_operator = admin_keys.contains(&ctx.accounts.authority.key())
+        && ctx.accounts.authority.key() != Pubkey::default();
 
     let current_timestamp = u64::try_from(Clock::get()?.unix_timestamp).unwrap();
 
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;
+
+    if !admin_operator {
+        require_keys_eq!(ctx.accounts.authority.key(), pool_state.owner);
+    }
+
     pool_state.update_reward_infos(current_timestamp)?;
 
     let mut reward_info = pool_state.reward_infos[reward_index as usize];
@@ -217,10 +221,9 @@ fn admin_update(
         let left_reward_time = reward_info.end_time.checked_sub(current_timestamp).unwrap();
         let extend_period = end_time.saturating_sub(reward_info.end_time);
         if emissions_per_second_x64 > 0 {
-            // emissions_per_second_x64 must not smaller than before
-            let emission_diff_x64 = emissions_per_second_x64
-                .checked_sub(reward_info.emissions_per_second_x64)
-                .unwrap();
+            // emissions_per_second_x64 can be update for admin during anytime
+            let emission_diff_x64 =
+                emissions_per_second_x64.saturating_sub(reward_info.emissions_per_second_x64);
             reward_amount = U256::from(left_reward_time)
                 .mul_div_floor(
                     U256::from(emission_diff_x64),

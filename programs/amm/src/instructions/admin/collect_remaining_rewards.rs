@@ -62,14 +62,9 @@ fn get_remaining_reward_amount(
         reward_info.end_time,
         ErrorCode::NotApproved
     );
-    // require_keys_eq!(ctx.accounts.reward_funder.key(), reward_info.authority);
-    require!(
-        reward_funder.key() == crate::admin::id(),
-        ErrorCode::NotApproved
-    );
-
+    require_keys_eq!(reward_funder.key(), pool_state.owner);
     require_keys_eq!(reward_token_vault.key(), reward_info.token_vault);
-    
+
     let amount_remaining = reward_token_vault
         .amount
         .checked_sub(reward_info.reward_total_emissioned)

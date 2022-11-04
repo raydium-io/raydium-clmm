@@ -97,6 +97,7 @@ pub fn initialize_reward(
     require!(
         ctx.accounts.reward_funder.key() == ctx.accounts.amm_config.owner
             || ctx.accounts.reward_funder.key() == crate::admin::id()
+            || ctx.accounts.reward_funder.key() == ctx.accounts.pool_state.load()?.owner
             || operation_state.validate_operation_owner(ctx.accounts.reward_funder.key()),
         ErrorCode::NotApproved
     );
