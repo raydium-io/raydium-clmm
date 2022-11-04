@@ -998,7 +998,8 @@ fn main() -> Result<()> {
                             remaing_accounts.push(AccountMeta::new(from_vault_address, false));
                             remaing_accounts
                                 .push(AccountMeta::new(recipient_token_account_address, false));
-                            remaing_accounts.push(AccountMeta::new(spl_token::id(), false));
+                            remaing_accounts
+                                .push(AccountMeta::new_readonly(spl_token::id(), false));
                             val.push(v[5].parse::<u128>().unwrap());
                             println!("val:{:?}", val);
                         }
