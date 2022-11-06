@@ -85,6 +85,24 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     amount_1_min: u64,
 ) -> Result<()> {
     assert!(liquidity <= ctx.accounts.personal_position.liquidity);
+    if !ctx
+        .accounts
+        .pool_state
+        .load()?
+        .get_status_by_bit(PoolStatusBitIndex::DecreaseLiquidity)
+        && !ctx
+            .accounts
+            .pool_state
+            .load()?
+            .get_status_by_bit(PoolStatusBitIndex::CollectFee)
+        && !ctx
+            .accounts
+            .pool_state
+            .load()?
+            .get_status_by_bit(PoolStatusBitIndex::CollectReward)
+    {
+        return err!(ErrorCode::NotApproved);
+    }
 
     let (decrease_amount_0, latest_fees_owed_0, decrease_amount_1, latest_fees_owed_1) =
         decrease_liquidity_and_update_position(

@@ -201,8 +201,7 @@ impl TickArrayState {
         let current_tick_array_start_index =
             TickArrayState::get_arrary_start_index(current_tick_index, tick_spacing as i32);
         if current_tick_array_start_index != self.start_tick_index {
-            let tick_state = self.first_initialized_tick(zero_for_one)?;
-            return Ok(Some(tick_state));
+            return Ok(None);
         }
         let mut offset_in_array =
             (current_tick_index - self.start_tick_index) / (tick_spacing as i32);
