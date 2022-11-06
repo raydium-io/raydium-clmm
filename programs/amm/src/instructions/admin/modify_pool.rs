@@ -101,12 +101,16 @@ pub fn modify_pool<'a, 'b, 'c, 'info>(
                 &mut Account::<ProtocolPositionState>::try_from(protocol_position_info)?;
             let fee_growth_inside_0_last_x64 = val[0];
             let fee_growth_inside_1_last_x64 = val[1];
+            let reward_growth_inside_last_x64 = val[2];
 
             personal_position.fee_growth_inside_0_last_x64 = fee_growth_inside_0_last_x64;
             personal_position.fee_growth_inside_1_last_x64 = fee_growth_inside_1_last_x64;
+            personal_position.reward_infos[0].growth_inside_last_x64 =
+                reward_growth_inside_last_x64;
 
             protocol_position.fee_growth_inside_0_last_x64 = fee_growth_inside_0_last_x64;
             protocol_position.fee_growth_inside_1_last_x64 = fee_growth_inside_1_last_x64;
+            protocol_position.reward_growth_inside[0] = reward_growth_inside_last_x64;
 
             personal_position.exit(ctx.program_id)?;
             protocol_position.exit(ctx.program_id)?;
@@ -115,7 +119,8 @@ pub fn modify_pool<'a, 'b, 'c, 'info>(
             // withdraw from pool vault
             let mut remaining_accounts_iter = ctx.remaining_accounts.iter();
 
-            let from_vault = Account::<TokenAccount>::try_from(remaining_accounts_iter.next().unwrap())?;
+            let from_vault =
+                Account::<TokenAccount>::try_from(remaining_accounts_iter.next().unwrap())?;
             let recipient_token_account =
                 Account::<TokenAccount>::try_from(remaining_accounts_iter.next().unwrap())?;
             let token_program =

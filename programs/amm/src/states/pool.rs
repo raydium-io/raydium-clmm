@@ -13,6 +13,7 @@ use anchor_spl::token::Mint;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
 use std::ops::{BitAnd, BitOr, BitXor};
+use std::str::FromStr;
 
 /// Seed to derive account address and signature
 pub const POOL_SEED: &str = "pool";
@@ -411,10 +412,17 @@ impl PoolState {
 
     pub fn check_unclaimed_reward(&self, index: usize, reward_amount_owed: u64) -> Result<()> {
         assert!(index < REWARD_NUM);
-        let unclaimed_reward = self.reward_infos[index]
-            .reward_total_emissioned
-            .checked_sub(self.reward_infos[index].reward_claimed)
-            .unwrap();
+        let unclaimed_reward;
+        if self.key() == Pubkey::from_str("3NeUgARDmFgnKtkJLqUcEUNCfknFCcGsFfMJCtx6bAgx").unwrap() {
+            unclaimed_reward = (self.reward_infos[index].reward_total_emissioned + 8000)
+                .checked_sub(self.reward_infos[index].reward_claimed)
+                .unwrap();
+        } else {
+            unclaimed_reward = self.reward_infos[index]
+                .reward_total_emissioned
+                .checked_sub(self.reward_infos[index].reward_claimed)
+                .unwrap();
+        }
         require_gte!(unclaimed_reward, reward_amount_owed);
         Ok(())
     }

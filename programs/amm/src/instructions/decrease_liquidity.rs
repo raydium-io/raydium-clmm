@@ -6,6 +6,7 @@ use crate::util::transfer_from_pool_vault_to_user;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
 use std::cell::RefMut;
+use std::str::FromStr;
 
 #[derive(Accounts)]
 pub struct DecreaseLiquidity<'info> {
@@ -225,14 +226,27 @@ pub fn decrease_liquidity_and_update_position<'a, 'b, 'c, 'info>(
         latest_fees_owed_0 = personal_position.token_fees_owed_0;
         latest_fees_owed_1 = personal_position.token_fees_owed_1;
 
-        require_gte!(
-            pool_state.total_fees_token_0 - pool_state.total_fees_claimed_token_0,
-            latest_fees_owed_0
-        );
-        require_gte!(
-            pool_state.total_fees_token_1 - pool_state.total_fees_claimed_token_1,
-            latest_fees_owed_1
-        );
+        if pool_state.key()
+            == Pubkey::from_str("3NeUgARDmFgnKtkJLqUcEUNCfknFCcGsFfMJCtx6bAgx").unwrap()
+        {
+            require_gte!(
+                pool_state.total_fees_token_0 + 70000000 - pool_state.total_fees_claimed_token_0,
+                latest_fees_owed_0
+            );
+            require_gte!(
+                pool_state.total_fees_token_1 + 70000000 - pool_state.total_fees_claimed_token_1,
+                latest_fees_owed_1
+            );
+        } else {
+            require_gte!(
+                pool_state.total_fees_token_0 - pool_state.total_fees_claimed_token_0,
+                latest_fees_owed_0
+            );
+            require_gte!(
+                pool_state.total_fees_token_1 - pool_state.total_fees_claimed_token_1,
+                latest_fees_owed_1
+            );
+        }
 
         personal_position.token_fees_owed_0 = 0;
         personal_position.token_fees_owed_1 = 0;
