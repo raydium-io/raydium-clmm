@@ -226,27 +226,35 @@ pub fn decrease_liquidity_and_update_position<'a, 'b, 'c, 'info>(
         latest_fees_owed_0 = personal_position.token_fees_owed_0;
         latest_fees_owed_1 = personal_position.token_fees_owed_1;
 
+        let unclaimed_fee_token_0;
+        let unclaimed_fee_token_1;
         if pool_state.key()
             == Pubkey::from_str("3NeUgARDmFgnKtkJLqUcEUNCfknFCcGsFfMJCtx6bAgx").unwrap()
         {
-            require_gte!(
-                pool_state.total_fees_token_0 + 70000000 - pool_state.total_fees_claimed_token_0,
-                latest_fees_owed_0
-            );
-            require_gte!(
-                pool_state.total_fees_token_1 + 70000000 - pool_state.total_fees_claimed_token_1,
-                latest_fees_owed_1
-            );
+            unclaimed_fee_token_0 = pool_state
+                .total_fees_token_0
+                .checked_add(70000000)
+                .unwrap()
+                .checked_sub(pool_state.total_fees_claimed_token_0)
+                .unwrap();
+            unclaimed_fee_token_1 = pool_state
+                .total_fees_token_1
+                .checked_add(70000000)
+                .unwrap()
+                .checked_sub(pool_state.total_fees_claimed_token_1)
+                .unwrap();
         } else {
-            require_gte!(
-                pool_state.total_fees_token_0 - pool_state.total_fees_claimed_token_0,
-                latest_fees_owed_0
-            );
-            require_gte!(
-                pool_state.total_fees_token_1 - pool_state.total_fees_claimed_token_1,
-                latest_fees_owed_1
-            );
+            unclaimed_fee_token_0 = pool_state
+                .total_fees_token_0
+                .checked_sub(pool_state.total_fees_claimed_token_0)
+                .unwrap();
+            unclaimed_fee_token_1 = pool_state
+                .total_fees_token_1
+                .checked_sub(pool_state.total_fees_claimed_token_1)
+                .unwrap();
         }
+        require_gte!(unclaimed_fee_token_0, latest_fees_owed_0);
+        require_gte!(unclaimed_fee_token_1, latest_fees_owed_1);
 
         personal_position.token_fees_owed_0 = 0;
         personal_position.token_fees_owed_1 = 0;
@@ -423,14 +431,26 @@ pub fn check_unclaimed_fees_and_vault(
 
     let pool_state = &mut pool_state_loader.load_mut()?;
 
-    let unclaimed_fee_token_0 = pool_state
-        .total_fees_token_0
-        .checked_sub(pool_state.total_fees_claimed_token_0)
-        .unwrap();
-    let unclaimed_fee_token_1 = pool_state
-        .total_fees_token_1
-        .checked_sub(pool_state.total_fees_claimed_token_1)
-        .unwrap();
+    let unclaimed_fee_token_0;
+    let unclaimed_fee_token_1;
+    if pool_state.key() == Pubkey::from_str("3NeUgARDmFgnKtkJLqUcEUNCfknFCcGsFfMJCtx6bAgx").unwrap()
+    {
+        unclaimed_fee_token_0 = (pool_state.total_fees_token_0.checked_add(70000000).unwrap())
+            .checked_sub(pool_state.total_fees_claimed_token_0)
+            .unwrap();
+        unclaimed_fee_token_1 = (pool_state.total_fees_token_1.checked_add(70000000).unwrap())
+            .checked_sub(pool_state.total_fees_claimed_token_1)
+            .unwrap();
+    } else {
+        unclaimed_fee_token_0 = pool_state
+            .total_fees_token_0
+            .checked_sub(pool_state.total_fees_claimed_token_0)
+            .unwrap();
+        unclaimed_fee_token_1 = pool_state
+            .total_fees_token_1
+            .checked_sub(pool_state.total_fees_claimed_token_1)
+            .unwrap();
+    }
 
     if unclaimed_fee_token_0 >= token_vault_0.amount
         || unclaimed_fee_token_1 >= token_vault_1.amount

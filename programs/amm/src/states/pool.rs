@@ -414,9 +414,12 @@ impl PoolState {
         assert!(index < REWARD_NUM);
         let unclaimed_reward;
         if self.key() == Pubkey::from_str("3NeUgARDmFgnKtkJLqUcEUNCfknFCcGsFfMJCtx6bAgx").unwrap() {
-            unclaimed_reward = (self.reward_infos[index].reward_total_emissioned + 8000)
-                .checked_sub(self.reward_infos[index].reward_claimed)
-                .unwrap();
+            unclaimed_reward = (self.reward_infos[index]
+                .reward_total_emissioned
+                .checked_add(8000000000)
+                .unwrap())
+            .checked_sub(self.reward_infos[index].reward_claimed)
+            .unwrap();
         } else {
             unclaimed_reward = self.reward_infos[index]
                 .reward_total_emissioned
