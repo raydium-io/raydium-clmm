@@ -147,6 +147,7 @@ pub fn swap_internal<'b, 'info>(
     sqrt_price_limit_x64: u128,
     zero_for_one: bool,
     is_base_input: bool,
+    block_timestamp: u32,
 ) -> Result<(u64, u64)> {
     require!(amount_specified != 0, ErrorCode::InvaildSwapAmountSpecified);
     // let mut pool_state = pool_state.load_mut()?;
@@ -166,7 +167,7 @@ pub fn swap_internal<'b, 'info>(
 
     let cache = &mut SwapCache {
         liquidity_start: pool_state.liquidity,
-        block_timestamp: oracle::_block_timestamp(),
+        block_timestamp,
         protocol_fee_rate: amm_config.protocol_fee_rate,
         fund_fee_rate: amm_config.fund_fee_rate,
     };
@@ -199,7 +200,6 @@ pub fn swap_internal<'b, 'info>(
     let mut current_vaild_tick_array_start_index = pool_state
         .get_first_initialized_tick_array(zero_for_one)
         .unwrap();
-
     // check tick_array account is correct
     require_keys_eq!(
         tick_array_current.key(),
@@ -430,7 +430,7 @@ pub fn swap_internal<'b, 'info>(
     // update the previous price to the observation
     let next_observation_index = observation_state
         .update_check(
-            oracle::_block_timestamp(),
+            block_timestamp,
             pool_state.sqrt_price_x64,
             pool_state.observation_index,
             pool_state.observation_update_duration.into(),
@@ -575,6 +575,7 @@ pub fn exact_internal<'b, 'info>(
             },
             zero_for_one,
             is_base_input,
+            oracle::block_timestamp(),
         )?;
 
         #[cfg(feature = "enable-log")]
@@ -707,4 +708,521 @@ pub fn swap<'a, 'b, 'c, 'info>(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod swap_test {
+    use super::*;
+    use crate::states::pool_test::build_pool;
+    use crate::states::tick_array_test::{
+        build_tick, build_tick_array_with_tick_states, TickArrayInfo,
+    };
+    use std::cell::RefCell;
+    use std::vec;
+
+    pub fn get_tick_array_states_mut(
+        deque_tick_array_states: &VecDeque<RefCell<TickArrayState>>,
+    ) -> RefCell<VecDeque<RefMut<TickArrayState>>> {
+        let mut tick_array_states = VecDeque::new();
+
+        for tick_array_state in deque_tick_array_states {
+            tick_array_states.push_back(tick_array_state.borrow_mut());
+        }
+        RefCell::new(tick_array_states)
+    }
+
+    fn build_swap_param<'info>(
+        tick_current: i32,
+        tick_spacing: u16,
+        sqrt_price_x64: u128,
+        liquidity: u128,
+        tick_array_infos: Vec<TickArrayInfo>,
+    ) -> (
+        AmmConfig,
+        RefCell<PoolState>,
+        VecDeque<RefCell<TickArrayState>>,
+        RefCell<ObservationState>,
+    ) {
+        let amm_config = AmmConfig {
+            tick_spacing,
+            ..Default::default()
+        };
+        let pool_state = build_pool(tick_current, tick_spacing, sqrt_price_x64, liquidity);
+
+        let observation_state = RefCell::new(ObservationState::default());
+        observation_state.borrow_mut().pool_id = pool_state.borrow().key();
+
+        let mut tick_array_states: VecDeque<RefCell<TickArrayState>> = VecDeque::new();
+        for tick_array_info in tick_array_infos {
+            tick_array_states.push_back(build_tick_array_with_tick_states(
+                pool_state.borrow().key(),
+                tick_array_info.start_tick_index,
+                tick_spacing,
+                tick_array_info.ticks,
+            ));
+            pool_state
+                .borrow_mut()
+                .flip_tick_array_bit(tick_array_info.start_tick_index)
+                .unwrap();
+        }
+
+        (amm_config, pool_state, tick_array_states, observation_state)
+    }
+
+    #[cfg(test)]
+    mod cross_tick_array_test {
+        use super::*;
+
+        #[test]
+        fn zero_for_one_base_input_test() {
+            let mut tick_currnet = -32395;
+            let mut liquidity = 5124165121219;
+            let mut sqrt_price_x64 = 3651942632306380802;
+            let (amm_config, pool_state, mut tick_array_states, observation_state) =
+                build_swap_param(
+                    tick_currnet,
+                    60,
+                    sqrt_price_x64,
+                    liquidity,
+                    vec![
+                        TickArrayInfo {
+                            start_tick_index: -32400,
+                            ticks: vec![
+                                build_tick(-32400, 277065331032, -277065331032).take(),
+                                build_tick(-29220, 1330680689, -1330680689).take(),
+                                build_tick(-28860, 6408486554, -6408486554).take(),
+                            ],
+                        },
+                        TickArrayInfo {
+                            start_tick_index: -36000,
+                            ticks: vec![
+                                build_tick(-32460, 1194569667438, 536061033698).take(),
+                                build_tick(-32520, 790917615645, 790917615645).take(),
+                                build_tick(-32580, 152146472301, 128451145459).take(),
+                                build_tick(-32640, 2625605835354, -1492054447712).take(),
+                            ],
+                        },
+                    ],
+                );
+
+            // just cross the tickarray boundary(-32400), hasn't reached the next tick array initialized tick
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                12188240002,
+                3049500711113990606,
+                true,
+                true,
+                oracle::block_timestamp_mock(),
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+            assert!(pool_state.borrow().tick_current < tick_currnet);
+            assert!(
+                pool_state.borrow().tick_current > -32460
+                    && pool_state.borrow().tick_current < -32400
+            );
+            assert!(pool_state.borrow().sqrt_price_x64 < sqrt_price_x64);
+            assert!(pool_state.borrow().liquidity == (liquidity + 277065331032));
+            assert!(amount_0 == 12188240002);
+
+            tick_currnet = pool_state.borrow().tick_current;
+            sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
+            liquidity = pool_state.borrow().liquidity;
+
+            // cross the tickarray boundary(-32400) in last step, now tickarray_current is the tickarray with start_index -36000,
+            // so we pop the tickarray with start_index -32400
+            // in this swap we will cross the tick(-32460), but not reach next tick (-32520)
+            tick_array_states.pop_front();
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                121882400020,
+                3049500711113990606,
+                true,
+                true,
+                oracle::block_timestamp_mock(),
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+            assert!(pool_state.borrow().tick_current < tick_currnet);
+            assert!(
+                pool_state.borrow().tick_current > -32520
+                    && pool_state.borrow().tick_current < -32460
+            );
+            assert!(pool_state.borrow().sqrt_price_x64 < sqrt_price_x64);
+            assert!(pool_state.borrow().liquidity == (liquidity - 536061033698));
+            assert!(amount_0 == 121882400020);
+
+            tick_currnet = pool_state.borrow().tick_current;
+            sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
+            liquidity = pool_state.borrow().liquidity;
+
+            // swap in tickarray with start_index -36000, cross the tick -32520
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                60941200010,
+                3049500711113990606,
+                true,
+                true,
+                oracle::block_timestamp_mock(),
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+            assert!(pool_state.borrow().tick_current < tick_currnet);
+            assert!(
+                pool_state.borrow().tick_current > -32580
+                    && pool_state.borrow().tick_current < -32520
+            );
+            assert!(pool_state.borrow().sqrt_price_x64 < sqrt_price_x64);
+            assert!(pool_state.borrow().liquidity == (liquidity - 790917615645));
+            assert!(amount_0 == 60941200010);
+        }
+
+        #[test]
+        fn zero_for_one_base_output_test() {
+            let mut tick_currnet = -32395;
+            let mut liquidity = 5124165121219;
+            let mut sqrt_price_x64 = 3651942632306380802;
+            let (amm_config, pool_state, mut tick_array_states, observation_state) =
+                build_swap_param(
+                    tick_currnet,
+                    60,
+                    sqrt_price_x64,
+                    liquidity,
+                    vec![
+                        TickArrayInfo {
+                            start_tick_index: -32400,
+                            ticks: vec![
+                                build_tick(-32400, 277065331032, -277065331032).take(),
+                                build_tick(-29220, 1330680689, -1330680689).take(),
+                                build_tick(-28860, 6408486554, -6408486554).take(),
+                            ],
+                        },
+                        TickArrayInfo {
+                            start_tick_index: -36000,
+                            ticks: vec![
+                                build_tick(-32460, 1194569667438, 536061033698).take(),
+                                build_tick(-32520, 790917615645, 790917615645).take(),
+                                build_tick(-32580, 152146472301, 128451145459).take(),
+                                build_tick(-32640, 2625605835354, -1492054447712).take(),
+                            ],
+                        },
+                    ],
+                );
+
+            // just cross the tickarray boundary(-32400), hasn't reached the next tick array initialized tick
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                477470480,
+                3049500711113990606,
+                true,
+                false,
+                oracle::block_timestamp_mock(),
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+            assert!(pool_state.borrow().tick_current < tick_currnet);
+            assert!(
+                pool_state.borrow().tick_current > -32460
+                    && pool_state.borrow().tick_current < -32400
+            );
+            assert!(pool_state.borrow().sqrt_price_x64 < sqrt_price_x64);
+            assert!(pool_state.borrow().liquidity == (liquidity + 277065331032));
+            assert!(amount_1 == 477470480);
+
+            tick_currnet = pool_state.borrow().tick_current;
+            sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
+            liquidity = pool_state.borrow().liquidity;
+
+            // cross the tickarray boundary(-32400) in last step, now tickarray_current is the tickarray with start_index -36000,
+            // so we pop the tickarray with start_index -32400
+            // in this swap we will cross the tick(-32460), but not reach next tick (-32520)
+            tick_array_states.pop_front();
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                4751002622,
+                3049500711113990606,
+                true,
+                false,
+                oracle::block_timestamp_mock(),
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+            assert!(pool_state.borrow().tick_current < tick_currnet);
+            assert!(
+                pool_state.borrow().tick_current > -32520
+                    && pool_state.borrow().tick_current < -32460
+            );
+            assert!(pool_state.borrow().sqrt_price_x64 < sqrt_price_x64);
+            assert!(pool_state.borrow().liquidity == (liquidity - 536061033698));
+            assert!(amount_1 == 4751002622);
+
+            tick_currnet = pool_state.borrow().tick_current;
+            sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
+            liquidity = pool_state.borrow().liquidity;
+
+            // swap in tickarray with start_index -36000
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                2358130642,
+                3049500711113990606,
+                true,
+                false,
+                oracle::block_timestamp_mock(),
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+            assert!(pool_state.borrow().tick_current < tick_currnet);
+            assert!(
+                pool_state.borrow().tick_current > -32580
+                    && pool_state.borrow().tick_current < -32520
+            );
+            assert!(pool_state.borrow().sqrt_price_x64 < sqrt_price_x64);
+            assert!(pool_state.borrow().liquidity == (liquidity - 790917615645));
+            assert!(amount_1 == 2358130642);
+        }
+
+        #[test]
+        fn one_for_zero_base_input_test() {
+            let mut tick_currnet = -32470;
+            let mut liquidity = 5124165121219;
+            let mut sqrt_price_x64 = 3638127228312488926;
+            let (amm_config, pool_state, mut tick_array_states, observation_state) =
+                build_swap_param(
+                    tick_currnet,
+                    60,
+                    sqrt_price_x64,
+                    liquidity,
+                    vec![
+                        TickArrayInfo {
+                            start_tick_index: -36000,
+                            ticks: vec![
+                                build_tick(-32460, 1194569667438, 536061033698).take(),
+                                build_tick(-32520, 790917615645, 790917615645).take(),
+                                build_tick(-32580, 152146472301, 128451145459).take(),
+                                build_tick(-32640, 2625605835354, -1492054447712).take(),
+                            ],
+                        },
+                        TickArrayInfo {
+                            start_tick_index: -32400,
+                            ticks: vec![
+                                build_tick(-32400, 277065331032, -277065331032).take(),
+                                build_tick(-29220, 1330680689, -1330680689).take(),
+                                build_tick(-28860, 6408486554, -6408486554).take(),
+                            ],
+                        },
+                    ],
+                );
+
+            // just cross the tickarray boundary(-32460), hasn't reached the next tick array initialized tick
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                887470480,
+                5882283448660210779,
+                false,
+                true,
+                oracle::block_timestamp_mock(),
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+            assert!(pool_state.borrow().tick_current > tick_currnet);
+            assert!(
+                pool_state.borrow().tick_current > -32460
+                    && pool_state.borrow().tick_current < -32400
+            );
+            assert!(pool_state.borrow().sqrt_price_x64 > sqrt_price_x64);
+            assert!(pool_state.borrow().liquidity == (liquidity + 536061033698));
+            assert!(amount_1 == 887470480);
+
+            tick_currnet = pool_state.borrow().tick_current;
+            sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
+            liquidity = pool_state.borrow().liquidity;
+
+            // cross the tickarray boundary(-32460) in last step, but not reached tick -32400, because -32400 is the next tickarray boundary,
+            // so the tickarray_current still is the tick array with start_index -36000
+            // in this swap we will cross the tick(-32400), but not reach next tick (-29220)
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                3087470480,
+                5882283448660210779,
+                false,
+                true,
+                oracle::block_timestamp_mock(),
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+            assert!(pool_state.borrow().tick_current > tick_currnet);
+            assert!(
+                pool_state.borrow().tick_current > -32400
+                    && pool_state.borrow().tick_current < -29220
+            );
+            assert!(pool_state.borrow().sqrt_price_x64 > sqrt_price_x64);
+            assert!(pool_state.borrow().liquidity == (liquidity - 277065331032));
+            assert!(amount_1 == 3087470480);
+
+            tick_currnet = pool_state.borrow().tick_current;
+            sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
+            liquidity = pool_state.borrow().liquidity;
+
+            // swap in tickarray with start_index -32400, cross the tick -29220
+            tick_array_states.pop_front();
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                200941200010,
+                5882283448660210779,
+                false,
+                true,
+                oracle::block_timestamp_mock(),
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+            assert!(pool_state.borrow().tick_current > tick_currnet);
+            assert!(
+                pool_state.borrow().tick_current > -29220
+                    && pool_state.borrow().tick_current < -28860
+            );
+            assert!(pool_state.borrow().sqrt_price_x64 > sqrt_price_x64);
+            assert!(pool_state.borrow().liquidity == (liquidity - 1330680689));
+            assert!(amount_1 == 200941200010);
+        }
+
+        #[test]
+        fn one_for_zero_base_output_test() {
+            let mut tick_currnet = -32470;
+            let mut liquidity = 5124165121219;
+            let mut sqrt_price_x64 = 3638127228312488926;
+            let (amm_config, pool_state, mut tick_array_states, observation_state) =
+                build_swap_param(
+                    tick_currnet,
+                    60,
+                    sqrt_price_x64,
+                    liquidity,
+                    vec![
+                        TickArrayInfo {
+                            start_tick_index: -36000,
+                            ticks: vec![
+                                build_tick(-32460, 1194569667438, 536061033698).take(),
+                                build_tick(-32520, 790917615645, 790917615645).take(),
+                                build_tick(-32580, 152146472301, 128451145459).take(),
+                                build_tick(-32640, 2625605835354, -1492054447712).take(),
+                            ],
+                        },
+                        TickArrayInfo {
+                            start_tick_index: -32400,
+                            ticks: vec![
+                                build_tick(-32400, 277065331032, -277065331032).take(),
+                                build_tick(-29220, 1330680689, -1330680689).take(),
+                                build_tick(-28860, 6408486554, -6408486554).take(),
+                            ],
+                        },
+                    ],
+                );
+
+            // just cross the tickarray boundary(-32460), hasn't reached the next tick array initialized tick
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                22796232052,
+                5882283448660210779,
+                false,
+                false,
+                oracle::block_timestamp_mock(),
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+            assert!(pool_state.borrow().tick_current > tick_currnet);
+            assert!(
+                pool_state.borrow().tick_current > -32460
+                    && pool_state.borrow().tick_current < -32400
+            );
+            assert!(pool_state.borrow().sqrt_price_x64 > sqrt_price_x64);
+            assert!(pool_state.borrow().liquidity == (liquidity + 536061033698));
+            assert!(amount_0 == 22796232052);
+
+            tick_currnet = pool_state.borrow().tick_current;
+            sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
+            liquidity = pool_state.borrow().liquidity;
+
+            // cross the tickarray boundary(-32460) in last step, but not reached tick -32400, because -32400 is the next tickarray boundary,
+            // so the tickarray_current still is the tick array with start_index -36000
+            // in this swap we will cross the tick(-32400), but not reach next tick (-29220)
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                79023558189,
+                5882283448660210779,
+                false,
+                false,
+                oracle::block_timestamp_mock(),
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+            assert!(pool_state.borrow().tick_current > tick_currnet);
+            assert!(
+                pool_state.borrow().tick_current > -32400
+                    && pool_state.borrow().tick_current < -29220
+            );
+            assert!(pool_state.borrow().sqrt_price_x64 > sqrt_price_x64);
+            assert!(pool_state.borrow().liquidity == (liquidity - 277065331032));
+            assert!(amount_0 == 79023558189);
+
+            tick_currnet = pool_state.borrow().tick_current;
+            sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
+            liquidity = pool_state.borrow().liquidity;
+
+            // swap in tickarray with start_index -32400, cross the tick -29220
+            tick_array_states.pop_front();
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                4315086194758,
+                5882283448660210779,
+                false,
+                false,
+                oracle::block_timestamp_mock(),
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+            assert!(pool_state.borrow().tick_current > tick_currnet);
+            assert!(
+                pool_state.borrow().tick_current > -29220
+                    && pool_state.borrow().tick_current < -28860
+            );
+            assert!(pool_state.borrow().sqrt_price_x64 > sqrt_price_x64);
+            assert!(pool_state.borrow().liquidity == (liquidity - 1330680689));
+            assert!(amount_0 == 4315086194758);
+        }
+    }
 }

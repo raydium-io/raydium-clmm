@@ -642,8 +642,32 @@ pub struct SwapEvent {
 }
 
 #[cfg(test)]
-mod test {
+pub mod pool_test {
+    use std::{cell::RefCell, str::FromStr};
+
     use super::*;
+
+    pub fn build_pool(
+        tick_current: i32,
+        tick_spacing: u16,
+        sqrt_price_x64: u128,
+        liquidity: u128,
+    ) -> RefCell<PoolState> {
+        let mut new_pool = PoolState::default();
+        new_pool.tick_current = tick_current;
+        new_pool.tick_spacing = tick_spacing;
+        new_pool.sqrt_price_x64 = sqrt_price_x64;
+        new_pool.liquidity = liquidity;
+        new_pool.token_mint_0 =
+            Pubkey::from_str("4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R").unwrap();
+        new_pool.token_mint_1 =
+            Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap();
+        new_pool.amm_config =
+            Pubkey::from_str("E64NGkDLLCdQ2yFNPcavaKptrEgmiQaNykUuLC1Qgwyp").unwrap();
+        new_pool.bump = 255;
+        RefCell::new(new_pool)
+    }
+
     mod tick_array_bitmap_test {
 
         use super::*;
