@@ -2358,18 +2358,36 @@ pub fn check_pool_fee_and_reward(
         let curr_timestamp = rpc_client.get_block_time(slot)? as u64;
         let updated_reward_infos = pool_info.update_reward_infos(curr_timestamp)?;
 
-        let unclaimed_fee_0 = pool_info
-            .total_fees_token_0
-            .checked_sub(pool_info.total_fees_claimed_token_0)
-            .unwrap();
-        let unclaimed_fee_1 = pool_info
-            .total_fees_token_1
-            .checked_sub(pool_info.total_fees_claimed_token_1)
-            .unwrap();
-        let unclaimed_reward = pool_info.reward_infos[0]
-            .reward_total_emissioned
+        let unclaimed_fee_0;
+        let unclaimed_fee_1;
+        let unclaimed_reward;
+        if pool_id == Pubkey::from_str("3NeUgARDmFgnKtkJLqUcEUNCfknFCcGsFfMJCtx6bAgx").unwrap() {
+            unclaimed_fee_0 = (pool_info.total_fees_token_0.checked_add(70000000).unwrap())
+                .checked_sub(pool_info.total_fees_claimed_token_0)
+                .unwrap();
+            unclaimed_fee_1 = (pool_info.total_fees_token_1.checked_add(70000000).unwrap())
+                .checked_sub(pool_info.total_fees_claimed_token_1)
+                .unwrap();
+            unclaimed_reward = (pool_info.reward_infos[0]
+                .reward_total_emissioned
+                .checked_add(8000000000)
+                .unwrap())
             .checked_sub(pool_info.reward_infos[0].reward_claimed)
             .unwrap();
+        } else {
+            unclaimed_fee_0 = pool_info
+                .total_fees_token_0
+                .checked_sub(pool_info.total_fees_claimed_token_0)
+                .unwrap();
+            unclaimed_fee_1 = pool_info
+                .total_fees_token_1
+                .checked_sub(pool_info.total_fees_claimed_token_1)
+                .unwrap();
+            unclaimed_reward = pool_info.reward_infos[0]
+                .reward_total_emissioned
+                .checked_sub(pool_info.reward_infos[0].reward_claimed)
+                .unwrap();
+        }
         info!("===============================================");
         info!(
             "pool_id:{}, liquidity:{}, tick:{}, price:{}, fee_global_0:{}, fee_global_1:{}, reward_global:{}, protocol_fee_0:{}, protocol_fee_1:{}, fund_0:{}, fund_1:{}, swap_in_0:{}, swap_in_1:{}",
@@ -2658,10 +2676,20 @@ pub fn check_pool_fee_and_reward(
         );
         let owed_pool_vault0 = (simulate_vault0 as i64) - (vault0_info.amount as i64);
         let owed_pool_vault1 = (simulate_vault1 as i64) - (vault1_info.amount as i64);
-        let unclaimed_reward = pool_info.reward_infos[0]
-            .reward_total_emissioned
+        let unclaimed_reward;
+        if pool_id == Pubkey::from_str("3NeUgARDmFgnKtkJLqUcEUNCfknFCcGsFfMJCtx6bAgx").unwrap() {
+            unclaimed_reward = (pool_info.reward_infos[0]
+                .reward_total_emissioned
+                .checked_add(8000000000)
+                .unwrap())
             .checked_sub(pool_info.reward_infos[0].reward_claimed)
             .unwrap();
+        } else {
+            unclaimed_reward = pool_info.reward_infos[0]
+                .reward_total_emissioned
+                .checked_sub(pool_info.reward_infos[0].reward_claimed)
+                .unwrap();
+        }
         let owed_pool_reward = (simulate_reward_vault as i64) - (unclaimed_reward as i64);
         info!(
             "owed_pool_vault0:{}, owed_pool_vault1:{}, owed_pool_reward:{}",
