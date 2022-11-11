@@ -643,7 +643,7 @@ pub struct SwapEvent {
 
 #[cfg(test)]
 pub mod pool_test {
-    use std::{cell::RefCell, str::FromStr};
+    use std::cell::RefCell;
 
     use super::*;
 
@@ -658,13 +658,19 @@ pub mod pool_test {
         new_pool.tick_spacing = tick_spacing;
         new_pool.sqrt_price_x64 = sqrt_price_x64;
         new_pool.liquidity = liquidity;
-        new_pool.token_mint_0 =
-            Pubkey::from_str("4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R").unwrap();
-        new_pool.token_mint_1 =
-            Pubkey::from_str("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v").unwrap();
-        new_pool.amm_config =
-            Pubkey::from_str("E64NGkDLLCdQ2yFNPcavaKptrEgmiQaNykUuLC1Qgwyp").unwrap();
-        new_pool.bump = 255;
+        new_pool.token_mint_0 = Pubkey::new_unique();
+        new_pool.token_mint_1 = Pubkey::new_unique();
+        new_pool.amm_config = Pubkey::new_unique();
+        new_pool.bump = Pubkey::find_program_address(
+            &[
+                &POOL_SEED.as_bytes(),
+                new_pool.amm_config.as_ref(),
+                new_pool.token_mint_0.as_ref(),
+                new_pool.token_mint_1.as_ref(),
+            ],
+            &crate::id(),
+        )
+        .1;
         RefCell::new(new_pool)
     }
 

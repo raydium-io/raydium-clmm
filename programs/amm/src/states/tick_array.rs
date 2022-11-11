@@ -213,7 +213,7 @@ impl TickArrayState {
         let current_tick_array_start_index =
             TickArrayState::get_arrary_start_index(current_tick_index, tick_spacing as i32);
         if current_tick_array_start_index != self.start_tick_index {
-           return Ok(None)
+            return Ok(None);
         }
         let mut offset_in_array =
             (current_tick_index - self.start_tick_index) / (tick_spacing as i32);
@@ -530,10 +530,10 @@ pub fn check_ticks_order(tick_lower_index: i32, tick_upper_index: i32) -> Result
 pub mod tick_array_test {
     use super::*;
     use std::cell::RefCell;
-    
+
     pub struct TickArrayInfo {
         pub start_tick_index: i32,
-        pub ticks:Vec<TickState>,
+        pub ticks: Vec<TickState>,
     }
 
     pub fn build_tick_array(
@@ -569,24 +569,22 @@ pub mod tick_array_test {
 
         for tick_state in tick_states {
             assert!(tick_state.tick != 0);
-            let offset = new_tick_array.get_tick_offset_in_array(tick_state.tick, tick_spacing as i32).unwrap();
+            let offset = new_tick_array
+                .get_tick_offset_in_array(tick_state.tick, tick_spacing as i32)
+                .unwrap();
             new_tick_array.ticks[offset] = tick_state;
         }
         RefCell::new(new_tick_array)
     }
 
-    pub fn build_tick(
-        tick: i32,
-        liquidity_gross: u128,
-        liquidity_net: i128,
-    ) -> RefCell<TickState> {
+    pub fn build_tick(tick: i32, liquidity_gross: u128, liquidity_net: i128) -> RefCell<TickState> {
         let mut new_tick = TickState::default();
         new_tick.tick = tick;
         new_tick.liquidity_gross = liquidity_gross;
         new_tick.liquidity_net = liquidity_net;
         RefCell::new(new_tick)
     }
-    
+
     fn build_tick_with_fee_reward_growth(
         tick: i32,
         fee_growth_outside_0_x64: u128,
@@ -621,12 +619,14 @@ pub mod tick_array_test {
         fn next_tick_arrary_start_index_test() {
             let tick_spacing = 15;
             let tick_array_ref = build_tick_array(-1800, tick_spacing, vec![]);
+            // zero_for_one, next tickarray start_index < current
             assert_eq!(
                 -2700,
                 tick_array_ref
                     .borrow()
                     .next_tick_arrary_start_index(tick_spacing, true)
             );
+            // one_for_zero, next tickarray start_index > current
             assert_eq!(
                 -900,
                 tick_array_ref
@@ -638,39 +638,61 @@ pub mod tick_array_test {
         #[test]
         fn get_tick_offset_in_array_test() {
             let tick_spacing = 4;
+            // tick range [960, 1196]
             let tick_array_ref = build_tick_array(960, tick_spacing, vec![]);
+
+            // not in tickarray
             assert_eq!(
                 tick_array_ref
                     .borrow()
-                    .get_tick_offset_in_array(1105, 4)
-                    .unwrap_err(),
-                error!(anchor_lang::error::ErrorCode::RequireEqViolated)
-            );
-            assert_eq!(
-                tick_array_ref
-                    .borrow()
-                    .get_tick_offset_in_array(808, 4)
+                    .get_tick_offset_in_array(808, tick_spacing as i32)
                     .unwrap_err(),
                 error!(ErrorCode::InvalidTickArray)
             );
+            // first index is tickarray start tick
             assert_eq!(
                 tick_array_ref
                     .borrow()
-                    .get_tick_offset_in_array(1108, 4)
+                    .get_tick_offset_in_array(960, tick_spacing as i32)
+                    .unwrap(),
+                0
+            );
+            // tick_index % tick_spacing != 0
+            assert_eq!(
+                tick_array_ref
+                    .borrow()
+                    .get_tick_offset_in_array(1105, tick_spacing as i32)
+                    .unwrap_err(),
+                error!(anchor_lang::error::ErrorCode::RequireEqViolated)
+            );
+            // (1108-960) / tick_spacing
+            assert_eq!(
+                tick_array_ref
+                    .borrow()
+                    .get_tick_offset_in_array(1108, tick_spacing as i32)
                     .unwrap(),
                 37
+            );
+            // the end index of tickarray
+            assert_eq!(
+                tick_array_ref
+                    .borrow()
+                    .get_tick_offset_in_array(1196, tick_spacing as i32)
+                    .unwrap(),
+                59
             );
         }
 
         #[test]
         fn first_initialized_tick_test() {
             let tick_spacing = 15;
+            // initialized ticks[-300,-15]
             let tick_array_ref = build_tick_array(-900, tick_spacing, vec![40, 59]);
             let mut tick_array = tick_array_ref.borrow_mut();
-
+            // one_for_zero, the price increase, tick from small to large
             let tick = tick_array.first_initialized_tick(false).unwrap().tick;
             assert_eq!(-300, tick);
-
+            // zero_for_one, the price decrease, tick from large to small
             let tick = tick_array.first_initialized_tick(true).unwrap().tick;
             assert_eq!(-15, tick);
         }
@@ -708,6 +730,10 @@ pub mod tick_array_test {
 
             next_tick_state = tick_array.next_initialized_tick(105, 15, false).unwrap();
             assert!(next_tick_state.is_none());
+
+            // tick not in tickarray
+            next_tick_state = tick_array.next_initialized_tick(900, 15, false).unwrap();
+            assert!(next_tick_state.is_none());
         }
 
         #[test]
@@ -742,6 +768,10 @@ pub mod tick_array_test {
             assert_eq!(identity(next_tick_state.unwrap().tick), -795);
 
             next_tick_state = tick_array.next_initialized_tick(-795, 15, false).unwrap();
+            assert!(next_tick_state.is_none());
+
+            // tick not in tickarray
+            next_tick_state = tick_array.next_initialized_tick(-10, 15, false).unwrap();
             assert!(next_tick_state.is_none());
         }
     }
@@ -1088,13 +1118,11 @@ pub mod tick_array_test {
             tick_array::{get_reward_growths_inside, TickState},
         };
         use anchor_lang::prelude::Pubkey;
-        use std::str::FromStr;
 
         fn build_reward_infos(reward_growth_global_x64: u128) -> [RewardInfo; 3] {
             [
                 RewardInfo {
-                    token_mint: Pubkey::from_str("So11111111111111111111111111111111111111112")
-                        .unwrap(),
+                    token_mint: Pubkey::new_unique(),
                     reward_growth_global_x64,
                     ..Default::default()
                 },
@@ -1220,7 +1248,7 @@ pub mod tick_array_test {
         #[test]
         fn price_in_tick_range_move_to_left_test() {
             // zero_for_one, cross tick_lower
-            
+
             // tick_lower and tick_upper all new create, and tick_lower initialize with reward_growths_outside_x64(1000)
             let reward_frowth_inside_delta = reward_growth_inside_delta_when_price_move(
                 1000,
