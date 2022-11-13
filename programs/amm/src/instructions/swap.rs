@@ -533,11 +533,13 @@ pub fn exact_internal<'b, 'info>(
     let amount_0;
     let amount_1;
     let zero_for_one;
+    let swap_price_before;
 
     let input_balance_before = ctx.input_vault.amount;
     let output_balance_before = ctx.output_vault.amount;
 
     {
+        swap_price_before = ctx.pool_state.load()?.sqrt_price_x64;
         let pool_state = &mut ctx.pool_state.load_mut()?;
         zero_for_one = ctx.input_vault.mint == pool_state.token_mint_0;
 
@@ -656,6 +658,11 @@ pub fn exact_internal<'b, 'info>(
         liquidity: pool_state.liquidity,
         tick: pool_state.tick_current
     });
+    if zero_for_one {
+        require_gt!(swap_price_before, pool_state.sqrt_price_x64);
+    } else {
+        require_gt!(pool_state.sqrt_price_x64, swap_price_before);
+    }
 
     if is_base_input {
         Ok(output_balance_before

@@ -42,7 +42,9 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
     assert!((reward_index as usize) < REWARD_NUM);
     let operation_state = ctx.accounts.operation_state.load()?;
     let mut admin_keys = operation_state.operation_owners.to_vec();
-    admin_keys.push(ctx.accounts.amm_config.owner);
+    if ctx.accounts.amm_config.owner != Pubkey::default() {
+        admin_keys.push(ctx.accounts.amm_config.owner);
+    }
     admin_keys.push(crate::admin::id());
     let admin_operator = admin_keys.contains(&ctx.accounts.authority.key())
         && ctx.accounts.authority.key() != Pubkey::default();

@@ -2,6 +2,7 @@ use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 /// Oracle provides price data useful for a wide variety of system designs
 ///
 use anchor_lang::prelude::*;
+#[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};
 /// Seed to derive account address and signature
 pub const OBSERVATION_SEED: &str = "observation";

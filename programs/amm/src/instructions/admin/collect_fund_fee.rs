@@ -7,7 +7,7 @@ use anchor_spl::token::{Token, TokenAccount};
 pub struct CollectFundFee<'info> {
     /// Only admin or fund_owner can collect fee now
     #[account(
-        constraint = (owner.key() == amm_config.fund_owner || owner.key() == crate::admin::id())
+        constraint = ((owner.key() == amm_config.fund_owner && amm_config.fund_owner != Pubkey::default()) || owner.key() == crate::admin::id())
     )]
     pub owner: Signer<'info>,
 
