@@ -445,21 +445,23 @@ impl PoolState {
 
     /// Search the first initialized tick array from pool current tick, if current tick array is initialized then direct return,
     /// else find next according to the direction
-    pub fn get_first_initialized_tick_array(&self, zero_for_one: bool) -> Option<i32> {
+    pub fn get_first_initialized_tick_array(&self, zero_for_one: bool) -> (bool, i32) {
         let (is_initialized, start_index) = check_current_tick_array_is_initialized(
             U1024(self.tick_array_bitmap),
             self.tick_current,
             self.tick_spacing.into(),
         );
         if is_initialized {
-            return Some(start_index);
+            return (is_initialized, start_index);
         }
-        next_initialized_tick_array_start_index(
+        let start_index = next_initialized_tick_array_start_index(
             U1024(self.tick_array_bitmap),
             self.tick_current,
             self.tick_spacing.into(),
             zero_for_one,
         )
+        .unwrap();
+        (is_initialized, start_index)
     }
 
     pub fn set_status(&mut self, status: u8) {
@@ -648,7 +650,7 @@ pub struct LiquidityChangeEvent {
     #[index]
     pub pool_state: Pubkey,
 
-    /// The tick of the pool 
+    /// The tick of the pool
     pub tick: i32,
 
     /// The tick lower of position
