@@ -8,7 +8,6 @@ use anchor_spl::token::{Token, TokenAccount};
 pub struct ModifyPool<'info> {
     /// Address to be set as operation account owner.
     #[account(
-        mut,
         address = crate::admin::id()
     )]
     pub authority: Signer<'info>,

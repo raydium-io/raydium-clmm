@@ -28,7 +28,6 @@ pub struct InitializeReward<'info> {
 
     /// load info from the account to judge reward permission
     #[account(
-        mut,
         seeds = [
             OPERATION_SEED.as_bytes(),
         ],
