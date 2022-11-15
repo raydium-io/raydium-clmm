@@ -641,6 +641,58 @@ pub struct SwapEvent {
     pub tick: i32,
 }
 
+/// Emitted pool liquidity change when increase and decrease liquidity
+#[event]
+pub struct LiquidityChangeEvent {
+    /// The pool for swap
+    #[index]
+    pub pool_state: Pubkey,
+
+    /// The tick of the pool 
+    pub tick: i32,
+
+    /// The tick lower of position
+    pub tick_lower: i32,
+
+    /// The tick lower of position
+    pub tick_upper: i32,
+
+    /// The liquidity of the pool before liquidity change
+    pub liquidity_before: u128,
+
+    /// The liquidity of the pool after liquidity change
+    pub liquidity_after: u128,
+}
+
+/// Emitted when price move in a swap step
+#[event]
+pub struct PriceChangeEvent {
+    /// The pool for swap
+    #[index]
+    pub pool_state: Pubkey,
+
+    /// The tick of the pool before price change
+    pub tick_before: i32,
+
+    /// The tick of the pool after tprice change
+    pub tick_after: i32,
+
+    /// The sqrt(price) of the pool before price change, as a Q64.64
+    pub sqrt_price_x64_before: u128,
+
+    /// The sqrt(price) of the pool after price change, as a Q64.64
+    pub sqrt_price_x64_after: u128,
+
+    /// The liquidity of the pool before price change
+    pub liquidity_before: u128,
+
+    /// The liquidity of the pool after price change
+    pub liquidity_after: u128,
+
+    /// The direction of swap
+    pub zero_for_one: bool,
+}
+
 #[cfg(test)]
 pub mod pool_test {
     use std::cell::RefCell;

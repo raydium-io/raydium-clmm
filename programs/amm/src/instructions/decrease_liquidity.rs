@@ -255,7 +255,7 @@ pub fn burn_liquidity<'b, 'info>(
 ) -> Result<(u64, u64)> {
     require_keys_eq!(tick_array_lower_loader.load()?.pool_id, pool_state.key());
     require_keys_eq!(tick_array_upper_loader.load()?.pool_id, pool_state.key());
-
+    let liquidity_before = pool_state.liquidity;
     // get tick_state
     let mut tick_lower_state = *tick_array_lower_loader.load_mut()?.get_tick_state_mut(
         protocol_position.tick_lower_index,
@@ -300,6 +300,15 @@ pub fn burn_liquidity<'b, 'info>(
             pool_state.flip_tick_array_bit(tick_array_upper.start_tick_index)?;
         }
     }
+
+    emit!(LiquidityChangeEvent {
+        pool_state: pool_state.key(),
+        tick: pool_state.tick_current,
+        tick_lower:protocol_position.tick_lower_index,
+        tick_upper:protocol_position.tick_upper_index,
+        liquidity_before:liquidity_before,
+        liquidity_after:pool_state.liquidity,
+    });
 
     let amount_0 = u64::try_from(-amount_0_int).unwrap();
     let amount_1 = u64::try_from(-amount_1_int).unwrap();

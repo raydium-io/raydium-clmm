@@ -227,8 +227,15 @@ pub fn swap_internal<'b, 'info>(
             state.protocol_fee,
             cache.protocol_fee_rate
         );
+        // Save these three pieces of information for PriceChangeEvent
+        let tick_before = state.tick;
+        let sqrt_price_x64_before = state.sqrt_price_x64;
+        let liquidity_before = state.liquidity;
+
         let mut step = StepComputations::default();
         step.sqrt_price_start_x64 = state.sqrt_price_x64;
+        step.sqrt_price_next_x64 = state.sqrt_price_x64;
+        step.tick_next = state.tick;
 
         let mut next_initialized_tick = if let Some(tick_state) = tick_array_current
             .next_initialized_tick(state.tick, pool_state.tick_spacing, zero_for_one)?
@@ -270,6 +277,7 @@ pub fn swap_internal<'b, 'info>(
             let first_initialized_tick = tick_array_current.first_initialized_tick(zero_for_one)?;
             next_initialized_tick = Box::new(*first_initialized_tick);
         }
+        let last_tick = step.tick_next;
         step.tick_next = next_initialized_tick.tick;
         step.initialized = next_initialized_tick.is_initialized();
 
@@ -278,9 +286,18 @@ pub fn swap_internal<'b, 'info>(
         } else if step.tick_next > tick_math::MAX_TICK {
             step.tick_next = tick_math::MAX_TICK;
         }
-
+        let last_sqrt_price_x64 = step.sqrt_price_next_x64;
+        // In zero_for_one case, because next_initialized_tick <= current_tick, and due to precision issues, a tick can correspond to multiple prices,
+        // so step.sqrt_price_next_x64 may bigger than current_sqrt_price_x64(state.sqrt_price_x64)
         step.sqrt_price_next_x64 = tick_math::get_sqrt_price_at_tick(step.tick_next)?;
 
+        if zero_for_one {
+            assert!(last_tick >= step.tick_next);
+            assert!(last_sqrt_price_x64 >= step.sqrt_price_next_x64);
+        } else {
+            assert!(last_tick < step.tick_next);
+            assert!(last_sqrt_price_x64 < step.sqrt_price_next_x64);
+        }
         let target_price = if (zero_for_one && step.sqrt_price_next_x64 < sqrt_price_limit_x64)
             || (!zero_for_one && step.sqrt_price_next_x64 > sqrt_price_limit_x64)
         {
@@ -421,8 +438,17 @@ pub fn swap_internal<'b, 'info>(
             state.fund_fee,
             cache.fund_fee_rate,
         );
+        emit!(PriceChangeEvent {
+            pool_state: pool_state.key(),
+            tick_before,
+            tick_after:state.tick,
+            sqrt_price_x64_before,
+            sqrt_price_x64_after:state.sqrt_price_x64,
+            liquidity_before,
+            liquidity_after:state.liquidity,
+            zero_for_one,
+        });
     }
-
     // update tick
     if state.tick != pool_state.tick_current {
         pool_state.tick_current = state.tick;
@@ -617,6 +643,10 @@ pub fn exact_internal<'b, 'info>(
             &ctx.token_program,
             amount_0,
         )?;
+        if vault_1.amount <= amount_1 {
+            // freeze pool, disable all instructions
+            ctx.pool_state.load_mut()?.set_status(255);
+        }
         // x -> y，transfer y token from pool vault to user.
         transfer_from_pool_vault_to_user(
             &ctx.pool_state,
@@ -633,7 +663,10 @@ pub fn exact_internal<'b, 'info>(
             &ctx.token_program,
             amount_1,
         )?;
-
+        if vault_0.amount <= amount_0 {
+            // freeze pool, disable all instructions
+            ctx.pool_state.load_mut()?.set_status(255);
+        }
         transfer_from_pool_vault_to_user(
             &ctx.pool_state,
             &vault_0,

@@ -327,8 +327,8 @@ pub fn add_liquidity<'b, 'info>(
     tick_lower_index: i32,
     tick_upper_index: i32,
 ) -> Result<(u64, u64)> {
-    assert!(liquidity > 0);
-
+    assert!(liquidity > 0); 
+    let liquidity_before = pool_state.liquidity;
     require_keys_eq!(context.tick_array_lower.load()?.pool_id, pool_state.key());
     require_keys_eq!(context.tick_array_upper.load()?.pool_id, pool_state.key());
 
@@ -422,7 +422,14 @@ pub fn add_liquidity<'b, 'info>(
         &context.token_program,
         amount_1,
     )?;
-
+    emit!(LiquidityChangeEvent {
+        pool_state: pool_state.key(),
+        tick: pool_state.tick_current,
+        tick_lower:tick_lower_index,
+        tick_upper:tick_upper_index,
+        liquidity_before:liquidity_before,
+        liquidity_after:pool_state.liquidity,
+    });
     Ok((amount_0, amount_1))
 }
 
