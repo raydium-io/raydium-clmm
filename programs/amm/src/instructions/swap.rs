@@ -209,9 +209,10 @@ pub fn swap_internal<'b, 'info>(
     // check tick_array account is owned by the pool
     require_keys_eq!(tick_array_current.pool_id, ctx.pool_state.key());
 
-    let mut current_vaild_tick_array_start_index = pool_state
-        .get_first_initialized_tick_array(zero_for_one)
-        .unwrap();
+    let (mut is_pool_current_tick_array, first_vaild_tick_array_start_index) =
+        pool_state.get_first_initialized_tick_array(zero_for_one);
+
+    let mut current_vaild_tick_array_start_index = first_vaild_tick_array_start_index;
 
     // check tick_array account is correct
     require_keys_eq!(
@@ -248,7 +249,12 @@ pub fn swap_internal<'b, 'info>(
         {
             Box::new(*tick_state)
         } else {
-            Box::new(TickState::default())
+            if !is_pool_current_tick_array {
+                is_pool_current_tick_array = true;
+                Box::new(*tick_array_current.first_initialized_tick(zero_for_one)?)
+            } else {
+                Box::new(TickState::default())
+            }
         };
         #[cfg(feature = "enable-log")]
         msg!(

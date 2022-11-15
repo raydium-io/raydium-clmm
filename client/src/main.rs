@@ -178,9 +178,8 @@ fn load_cur_and_next_five_tick_array(
     pool_state: &PoolState,
     zero_for_one: bool,
 ) -> VecDeque<TickArrayState> {
-    let mut current_vaild_tick_array_start_index = pool_state
-        .get_first_initialized_tick_array(zero_for_one)
-        .unwrap();
+    let (_, mut current_vaild_tick_array_start_index) =
+        pool_state.get_first_initialized_tick_array(zero_for_one);
     let mut tick_array_keys = Vec::new();
     tick_array_keys.push(
         Pubkey::find_program_address(
