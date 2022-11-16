@@ -198,7 +198,7 @@ pub fn swap_internal<'b, 'info>(
     require_keys_eq!(tick_array_current.pool_id, pool_state.key());
 
     let (mut is_pool_current_tick_array, first_vaild_tick_array_start_index) =
-        pool_state.get_first_initialized_tick_array(zero_for_one);
+        pool_state.get_first_initialized_tick_array(zero_for_one)?;
 
     let mut current_vaild_tick_array_start_index = first_vaild_tick_array_start_index;
     // check tick_array account is correct
@@ -257,14 +257,18 @@ pub fn swap_internal<'b, 'info>(
             identity(next_initialized_tick.tick)
         );
         if !next_initialized_tick.is_initialized() {
-            current_vaild_tick_array_start_index =
+            let next_initialized_tickarray_index =
                 tick_array_bit_map::next_initialized_tick_array_start_index(
                     U1024(pool_state.tick_array_bitmap),
                     current_vaild_tick_array_start_index,
                     pool_state.tick_spacing.into(),
                     zero_for_one,
-                )
-                .unwrap();
+                );
+            if next_initialized_tickarray_index.is_none() {
+                return err!(ErrorCode::LiquidityInsufficient);
+            }
+            current_vaild_tick_array_start_index = next_initialized_tickarray_index.unwrap();
+
             tick_array_current = tick_array_states.pop_front().unwrap();
 
             require_keys_eq!(tick_array_current.pool_id, pool_state.key());
@@ -1281,23 +1285,20 @@ mod swap_test {
             let tick_currnet = -28776;
             let liquidity = 624165121219;
             let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_currnet).unwrap();
-            let (amm_config, pool_state, tick_array_states, observation_state) =
-                build_swap_param(
-                    tick_currnet,
-                    60,
-                    sqrt_price_x64,
-                    liquidity,
-                    vec![
-                        TickArrayInfo {
-                            start_tick_index: -32400,
-                            ticks: vec![
-                                build_tick(-32400, 277065331032, -277065331032).take(),
-                                build_tick(-29220, 1330680689, -1330680689).take(),
-                                build_tick(-28860, 6408486554, -6408486554).take(),
-                            ],
-                        },
+            let (amm_config, pool_state, tick_array_states, observation_state) = build_swap_param(
+                tick_currnet,
+                60,
+                sqrt_price_x64,
+                liquidity,
+                vec![TickArrayInfo {
+                    start_tick_index: -32400,
+                    ticks: vec![
+                        build_tick(-32400, 277065331032, -277065331032).take(),
+                        build_tick(-29220, 1330680689, -1330680689).take(),
+                        build_tick(-28860, 6408486554, -6408486554).take(),
                     ],
-                );
+                }],
+            );
 
             // find the first initialzied tick(-28860) and cross it in tickarray
             let (amount_0, amount_1) = swap_internal(
@@ -1328,23 +1329,20 @@ mod swap_test {
             let tick_currnet = -32405;
             let liquidity = 1224165121219;
             let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_currnet).unwrap();
-            let (amm_config, pool_state, tick_array_states, observation_state) =
-                build_swap_param(
-                    tick_currnet,
-                    60,
-                    sqrt_price_x64,
-                    liquidity,
-                    vec![
-                        TickArrayInfo {
-                            start_tick_index: -32400,
-                            ticks: vec![
-                                build_tick(-32400, 277065331032, -277065331032).take(),
-                                build_tick(-29220, 1330680689, -1330680689).take(),
-                                build_tick(-28860, 6408486554, -6408486554).take(),
-                            ],
-                        },
+            let (amm_config, pool_state, tick_array_states, observation_state) = build_swap_param(
+                tick_currnet,
+                60,
+                sqrt_price_x64,
+                liquidity,
+                vec![TickArrayInfo {
+                    start_tick_index: -32400,
+                    ticks: vec![
+                        build_tick(-32400, 277065331032, -277065331032).take(),
+                        build_tick(-29220, 1330680689, -1330680689).take(),
+                        build_tick(-28860, 6408486554, -6408486554).take(),
                     ],
-                );
+                }],
+            );
 
             // find the first initialzied tick(-32400) and cross it in tickarray
             let (amount_0, amount_1) = swap_internal(
@@ -1369,5 +1367,39 @@ mod swap_test {
             assert!(pool_state.borrow().liquidity == (liquidity - 277065331032));
             assert!(amount_1 == 12188240002);
         }
+    }
+
+    #[cfg(test)]
+    mod liquidity_insufficient_test {
+        use super::*;
+        use crate::error::ErrorCode;
+        #[test]
+        fn no_enough_initialized_tickarray_in_pool_test() {
+            let tick_currnet = -28776;
+            let liquidity = 121219;
+            let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_currnet).unwrap();
+            let (amm_config, pool_state, tick_array_states, observation_state) =
+                build_swap_param(tick_currnet, 60, sqrt_price_x64, liquidity, vec![TickArrayInfo {
+                    start_tick_index: -32400,
+                    ticks: vec![
+                        build_tick(-28860, 6408486554, -6408486554).take(),
+                    ],
+                }],);
+
+            swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                12188240002,
+                tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
+                true,
+                true,
+                oracle::block_timestamp_mock(),
+            )
+            .expect_err(ErrorCode::LiquidityInsufficient.to_string().as_str());
+        }
+
+        
     }
 }
