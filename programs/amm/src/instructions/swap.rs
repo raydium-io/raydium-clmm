@@ -210,7 +210,7 @@ pub fn swap_internal<'b, 'info>(
     require_keys_eq!(tick_array_current.pool_id, ctx.pool_state.key());
 
     let (mut is_pool_current_tick_array, first_vaild_tick_array_start_index) =
-        pool_state.get_first_initialized_tick_array(zero_for_one);
+        pool_state.get_first_initialized_tick_array(zero_for_one)?;
 
     let mut current_vaild_tick_array_start_index = first_vaild_tick_array_start_index;
 
@@ -263,14 +263,18 @@ pub fn swap_internal<'b, 'info>(
             identity(next_initialized_tick.tick)
         );
         if !next_initialized_tick.is_initialized() {
-            current_vaild_tick_array_start_index =
+            let next_initialized_tickarray_index =
                 tick_array_bit_map::next_initialized_tick_array_start_index(
                     U1024(pool_state.tick_array_bitmap),
                     current_vaild_tick_array_start_index,
                     pool_state.tick_spacing.into(),
                     zero_for_one,
-                )
-                .unwrap();
+                );
+            if next_initialized_tickarray_index.is_none() {
+                return err!(ErrorCode::LiquidityInsufficient);
+            }
+            current_vaild_tick_array_start_index = next_initialized_tickarray_index.unwrap();
+
             let tick_array_info_next = remaining_accounts_iter.next().unwrap();
             tick_array_current = TickArrayState::load_mut(tick_array_info_next)?;
             require_keys_eq!(tick_array_current.pool_id, ctx.pool_state.key());

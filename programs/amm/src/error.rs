@@ -45,7 +45,9 @@ pub enum ErrorCode {
     InvaildLiquidity,
     #[msg("Both token amount must not be zero while supply liquidity")]
     ForbidBothZeroForSupplyLiquidity,
-
+    #[msg("Liquidity insufficient")]
+    LiquidityInsufficient,
+    
     /// swap errors
     // Non fungible position manager
     #[msg("Transaction too old")]

@@ -99,7 +99,7 @@ pub fn get_out_put_amount_and_remaining_accounts(
     tick_arrays: &mut VecDeque<TickArrayState>,
 ) -> Result<(u64, VecDeque<i32>), &'static str> {
     let (is_pool_current_tick_array, current_vaild_tick_array_start_index) =
-        pool_state.get_first_initialized_tick_array(zero_for_one);
+        pool_state.get_first_initialized_tick_array(zero_for_one).unwrap();
 
     let (amount_calculated, tick_array_start_index_vec) = swap_compute(
         zero_for_one,
