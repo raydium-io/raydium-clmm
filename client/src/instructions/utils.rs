@@ -156,6 +156,7 @@ fn swap_compute(
         }
     }
     let mut tick_match_current_tick_array = is_pool_current_tick_array;
+    let mut current_vaild_tick_array_start_index = current_vaild_tick_array_start_index;
 
     let mut state = SwapState {
         amount_specified_remaining: amount_specified,
@@ -202,7 +203,7 @@ fn swap_compute(
             }
         };
         if !next_initialized_tick.is_initialized() {
-            let current_vaild_tick_array_start_index =
+            current_vaild_tick_array_start_index =
                 tick_array_bit_map::next_initialized_tick_array_start_index(
                     U1024(pool_state.tick_array_bitmap),
                     current_vaild_tick_array_start_index,

@@ -2160,6 +2160,25 @@ fn main() -> Result<()> {
                                     open_time, end_time, emissions_per_second_x64
                                 );
                             }
+                            [112, 52, 167, 75, 32, 201, 211, 137] => {
+                                let ix = raydium_amm_v3::instruction::SetRewardParams::deserialize(
+                                    &mut &ix_data[..],
+                                )
+                                .map_err(|_| {
+                                    anchor_lang::error::ErrorCode::InstructionDidNotDeserialize
+                                })
+                                .unwrap();
+                                let raydium_amm_v3::instruction::SetRewardParams {
+                                    reward_index,
+                                    emissions_per_second_x64,
+                                    open_time,
+                                    end_time,
+                                } = ix;
+                                println!(
+                                    "reward_index:{}, open_time:{}, end_time:{}, emissions_per_second_x64:{}",
+                                    reward_index, open_time, end_time, emissions_per_second_x64
+                                );
+                            }
                             [141, 11, 197, 159, 168, 186, 252, 243] => {
                                 let ix = raydium_amm_v3::instruction::ModifyPool::deserialize(
                                     &mut &ix_data[..],
