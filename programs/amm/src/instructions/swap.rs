@@ -297,16 +297,14 @@ pub fn swap_internal<'b, 'info>(
             step.tick_next = tick_math::MAX_TICK;
         }
         let last_sqrt_price_x64 = step.sqrt_price_next_x64;
-        // In zero_for_one case, because next_initialized_tick <= current_tick, and due to precision issues, a tick can correspond to multiple prices,
-        // so step.sqrt_price_next_x64 may bigger than current_sqrt_price_x64(state.sqrt_price_x64)
         step.sqrt_price_next_x64 = tick_math::get_sqrt_price_at_tick(step.tick_next)?;
 
         if zero_for_one {
-            assert!(last_tick >= step.tick_next);
-            assert!(last_sqrt_price_x64 >= step.sqrt_price_next_x64);
+            require_gte!(last_tick, step.tick_next);
+            require_gt!(last_sqrt_price_x64, step.sqrt_price_next_x64);
         } else {
-            assert!(last_tick < step.tick_next);
-            assert!(last_sqrt_price_x64 < step.sqrt_price_next_x64);
+            require_gt!(step.tick_next, last_tick);
+            require_gt!(step.sqrt_price_next_x64, last_sqrt_price_x64);
         }
         let target_price = if (zero_for_one && step.sqrt_price_next_x64 < sqrt_price_limit_x64)
             || (!zero_for_one && step.sqrt_price_next_x64 > sqrt_price_limit_x64)
@@ -825,12 +823,12 @@ mod swap_test {
 
         #[test]
         fn zero_for_one_base_input_test() {
-            let mut tick_currnet = -32395;
+            let mut tick_current = -32395;
             let mut liquidity = 5124165121219;
             let mut sqrt_price_x64 = 3651942632306380802;
             let (amm_config, pool_state, mut tick_array_states, observation_state) =
                 build_swap_param(
-                    tick_currnet,
+                    tick_current,
                     60,
                     sqrt_price_x64,
                     liquidity,
@@ -869,7 +867,7 @@ mod swap_test {
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
-            assert!(pool_state.borrow().tick_current < tick_currnet);
+            assert!(pool_state.borrow().tick_current < tick_current);
             assert!(
                 pool_state.borrow().tick_current > -32460
                     && pool_state.borrow().tick_current < -32400
@@ -878,7 +876,7 @@ mod swap_test {
             assert!(pool_state.borrow().liquidity == (liquidity + 277065331032));
             assert!(amount_0 == 12188240002);
 
-            tick_currnet = pool_state.borrow().tick_current;
+            tick_current = pool_state.borrow().tick_current;
             sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
             liquidity = pool_state.borrow().liquidity;
 
@@ -899,7 +897,7 @@ mod swap_test {
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
-            assert!(pool_state.borrow().tick_current < tick_currnet);
+            assert!(pool_state.borrow().tick_current < tick_current);
             assert!(
                 pool_state.borrow().tick_current > -32520
                     && pool_state.borrow().tick_current < -32460
@@ -908,7 +906,7 @@ mod swap_test {
             assert!(pool_state.borrow().liquidity == (liquidity - 536061033698));
             assert!(amount_0 == 121882400020);
 
-            tick_currnet = pool_state.borrow().tick_current;
+            tick_current = pool_state.borrow().tick_current;
             sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
             liquidity = pool_state.borrow().liquidity;
 
@@ -926,7 +924,7 @@ mod swap_test {
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
-            assert!(pool_state.borrow().tick_current < tick_currnet);
+            assert!(pool_state.borrow().tick_current < tick_current);
             assert!(
                 pool_state.borrow().tick_current > -32580
                     && pool_state.borrow().tick_current < -32520
@@ -938,12 +936,12 @@ mod swap_test {
 
         #[test]
         fn zero_for_one_base_output_test() {
-            let mut tick_currnet = -32395;
+            let mut tick_current = -32395;
             let mut liquidity = 5124165121219;
             let mut sqrt_price_x64 = 3651942632306380802;
             let (amm_config, pool_state, mut tick_array_states, observation_state) =
                 build_swap_param(
-                    tick_currnet,
+                    tick_current,
                     60,
                     sqrt_price_x64,
                     liquidity,
@@ -982,7 +980,7 @@ mod swap_test {
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
-            assert!(pool_state.borrow().tick_current < tick_currnet);
+            assert!(pool_state.borrow().tick_current < tick_current);
             assert!(
                 pool_state.borrow().tick_current > -32460
                     && pool_state.borrow().tick_current < -32400
@@ -991,7 +989,7 @@ mod swap_test {
             assert!(pool_state.borrow().liquidity == (liquidity + 277065331032));
             assert!(amount_1 == 477470480);
 
-            tick_currnet = pool_state.borrow().tick_current;
+            tick_current = pool_state.borrow().tick_current;
             sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
             liquidity = pool_state.borrow().liquidity;
 
@@ -1012,7 +1010,7 @@ mod swap_test {
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
-            assert!(pool_state.borrow().tick_current < tick_currnet);
+            assert!(pool_state.borrow().tick_current < tick_current);
             assert!(
                 pool_state.borrow().tick_current > -32520
                     && pool_state.borrow().tick_current < -32460
@@ -1021,7 +1019,7 @@ mod swap_test {
             assert!(pool_state.borrow().liquidity == (liquidity - 536061033698));
             assert!(amount_1 == 4751002622);
 
-            tick_currnet = pool_state.borrow().tick_current;
+            tick_current = pool_state.borrow().tick_current;
             sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
             liquidity = pool_state.borrow().liquidity;
 
@@ -1039,7 +1037,7 @@ mod swap_test {
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
-            assert!(pool_state.borrow().tick_current < tick_currnet);
+            assert!(pool_state.borrow().tick_current < tick_current);
             assert!(
                 pool_state.borrow().tick_current > -32580
                     && pool_state.borrow().tick_current < -32520
@@ -1051,12 +1049,12 @@ mod swap_test {
 
         #[test]
         fn one_for_zero_base_input_test() {
-            let mut tick_currnet = -32470;
+            let mut tick_current = -32470;
             let mut liquidity = 5124165121219;
             let mut sqrt_price_x64 = 3638127228312488926;
             let (amm_config, pool_state, mut tick_array_states, observation_state) =
                 build_swap_param(
-                    tick_currnet,
+                    tick_current,
                     60,
                     sqrt_price_x64,
                     liquidity,
@@ -1095,7 +1093,7 @@ mod swap_test {
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
-            assert!(pool_state.borrow().tick_current > tick_currnet);
+            assert!(pool_state.borrow().tick_current > tick_current);
             assert!(
                 pool_state.borrow().tick_current > -32460
                     && pool_state.borrow().tick_current < -32400
@@ -1104,7 +1102,7 @@ mod swap_test {
             assert!(pool_state.borrow().liquidity == (liquidity + 536061033698));
             assert!(amount_1 == 887470480);
 
-            tick_currnet = pool_state.borrow().tick_current;
+            tick_current = pool_state.borrow().tick_current;
             sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
             liquidity = pool_state.borrow().liquidity;
 
@@ -1124,7 +1122,7 @@ mod swap_test {
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
-            assert!(pool_state.borrow().tick_current > tick_currnet);
+            assert!(pool_state.borrow().tick_current > tick_current);
             assert!(
                 pool_state.borrow().tick_current > -32400
                     && pool_state.borrow().tick_current < -29220
@@ -1133,7 +1131,7 @@ mod swap_test {
             assert!(pool_state.borrow().liquidity == (liquidity - 277065331032));
             assert!(amount_1 == 3087470480);
 
-            tick_currnet = pool_state.borrow().tick_current;
+            tick_current = pool_state.borrow().tick_current;
             sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
             liquidity = pool_state.borrow().liquidity;
 
@@ -1152,7 +1150,7 @@ mod swap_test {
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
-            assert!(pool_state.borrow().tick_current > tick_currnet);
+            assert!(pool_state.borrow().tick_current > tick_current);
             assert!(
                 pool_state.borrow().tick_current > -29220
                     && pool_state.borrow().tick_current < -28860
@@ -1164,12 +1162,12 @@ mod swap_test {
 
         #[test]
         fn one_for_zero_base_output_test() {
-            let mut tick_currnet = -32470;
+            let mut tick_current = -32470;
             let mut liquidity = 5124165121219;
             let mut sqrt_price_x64 = 3638127228312488926;
             let (amm_config, pool_state, mut tick_array_states, observation_state) =
                 build_swap_param(
-                    tick_currnet,
+                    tick_current,
                     60,
                     sqrt_price_x64,
                     liquidity,
@@ -1208,7 +1206,7 @@ mod swap_test {
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
-            assert!(pool_state.borrow().tick_current > tick_currnet);
+            assert!(pool_state.borrow().tick_current > tick_current);
             assert!(
                 pool_state.borrow().tick_current > -32460
                     && pool_state.borrow().tick_current < -32400
@@ -1217,7 +1215,7 @@ mod swap_test {
             assert!(pool_state.borrow().liquidity == (liquidity + 536061033698));
             assert!(amount_0 == 22796232052);
 
-            tick_currnet = pool_state.borrow().tick_current;
+            tick_current = pool_state.borrow().tick_current;
             sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
             liquidity = pool_state.borrow().liquidity;
 
@@ -1237,7 +1235,7 @@ mod swap_test {
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
-            assert!(pool_state.borrow().tick_current > tick_currnet);
+            assert!(pool_state.borrow().tick_current > tick_current);
             assert!(
                 pool_state.borrow().tick_current > -32400
                     && pool_state.borrow().tick_current < -29220
@@ -1246,7 +1244,7 @@ mod swap_test {
             assert!(pool_state.borrow().liquidity == (liquidity - 277065331032));
             assert!(amount_0 == 79023558189);
 
-            tick_currnet = pool_state.borrow().tick_current;
+            tick_current = pool_state.borrow().tick_current;
             sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
             liquidity = pool_state.borrow().liquidity;
 
@@ -1265,7 +1263,7 @@ mod swap_test {
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
-            assert!(pool_state.borrow().tick_current > tick_currnet);
+            assert!(pool_state.borrow().tick_current > tick_current);
             assert!(
                 pool_state.borrow().tick_current > -29220
                     && pool_state.borrow().tick_current < -28860
@@ -1282,11 +1280,11 @@ mod swap_test {
 
         #[test]
         fn zero_for_one_current_tick_array_not_initialized_test() {
-            let tick_currnet = -28776;
+            let tick_current = -28776;
             let liquidity = 624165121219;
-            let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_currnet).unwrap();
+            let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_current).unwrap();
             let (amm_config, pool_state, tick_array_states, observation_state) = build_swap_param(
-                tick_currnet,
+                tick_current,
                 60,
                 sqrt_price_x64,
                 liquidity,
@@ -1314,7 +1312,7 @@ mod swap_test {
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
-            assert!(pool_state.borrow().tick_current < tick_currnet);
+            assert!(pool_state.borrow().tick_current < tick_current);
             assert!(
                 pool_state.borrow().tick_current > -29220
                     && pool_state.borrow().tick_current < -28860
@@ -1326,11 +1324,11 @@ mod swap_test {
 
         #[test]
         fn one_for_zero_current_tick_array_not_initialized_test() {
-            let tick_currnet = -32405;
+            let tick_current = -32405;
             let liquidity = 1224165121219;
-            let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_currnet).unwrap();
+            let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_current).unwrap();
             let (amm_config, pool_state, tick_array_states, observation_state) = build_swap_param(
-                tick_currnet,
+                tick_current,
                 60,
                 sqrt_price_x64,
                 liquidity,
@@ -1358,7 +1356,7 @@ mod swap_test {
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
-            assert!(pool_state.borrow().tick_current > tick_currnet);
+            assert!(pool_state.borrow().tick_current > tick_current);
             assert!(
                 pool_state.borrow().tick_current > -32400
                     && pool_state.borrow().tick_current < -29220
@@ -1375,16 +1373,19 @@ mod swap_test {
         use crate::error::ErrorCode;
         #[test]
         fn no_enough_initialized_tickarray_in_pool_test() {
-            let tick_currnet = -28776;
+            let tick_current = -28776;
             let liquidity = 121219;
-            let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_currnet).unwrap();
-            let (amm_config, pool_state, tick_array_states, observation_state) =
-                build_swap_param(tick_currnet, 60, sqrt_price_x64, liquidity, vec![TickArrayInfo {
+            let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_current).unwrap();
+            let (amm_config, pool_state, tick_array_states, observation_state) = build_swap_param(
+                tick_current,
+                60,
+                sqrt_price_x64,
+                liquidity,
+                vec![TickArrayInfo {
                     start_tick_index: -32400,
-                    ticks: vec![
-                        build_tick(-28860, 6408486554, -6408486554).take(),
-                    ],
-                }],);
+                    ticks: vec![build_tick(-28860, 6408486554, -6408486554).take()],
+                }],
+            );
 
             swap_internal(
                 &amm_config,
@@ -1399,7 +1400,95 @@ mod swap_test {
             )
             .expect_err(ErrorCode::LiquidityInsufficient.to_string().as_str());
         }
+    }
 
-        
+    #[test]
+    fn explain_why_zero_for_one_less_or_equal_current_tick() {
+        let tick_current = -28859;
+        let mut liquidity = 121219;
+        let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_current).unwrap();
+        let (amm_config, pool_state, tick_array_states, observation_state) = build_swap_param(
+            tick_current,
+            60,
+            sqrt_price_x64,
+            liquidity,
+            vec![TickArrayInfo {
+                start_tick_index: -32400,
+                ticks: vec![
+                    build_tick(-32400, 277065331032, -277065331032).take(),
+                    build_tick(-29220, 1330680689, -1330680689).take(),
+                    build_tick(-28860, 6408486554, -6408486554).take(),
+                ],
+            }],
+        );
+
+        // not cross tick(-28860), but pool.tick_current = -28860
+        let (amount_0, amount_1) = swap_internal(
+            &amm_config,
+            &mut pool_state.borrow_mut(),
+            &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+            &mut observation_state.borrow_mut(),
+            25,
+            tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
+            true,
+            true,
+            oracle::block_timestamp_mock(),
+        )
+        .unwrap();
+        println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+        assert!(pool_state.borrow().tick_current < tick_current);
+        assert!(pool_state.borrow().tick_current == -28860);
+        assert!(
+            pool_state.borrow().sqrt_price_x64 > tick_math::get_sqrt_price_at_tick(-28860).unwrap()
+        );
+        assert!(pool_state.borrow().liquidity == liquidity);
+        assert!(amount_0 == 25);
+
+        // just cross tick(-28860), pool.tick_current = -28861
+        let (amount_0, amount_1) = swap_internal(
+            &amm_config,
+            &mut pool_state.borrow_mut(),
+            &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+            &mut observation_state.borrow_mut(),
+            1,
+            tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
+            true,
+            true,
+            oracle::block_timestamp_mock(),
+        )
+        .unwrap();
+        println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+        assert!(pool_state.borrow().tick_current < tick_current);
+        assert!(pool_state.borrow().tick_current == -28861);
+        assert!(
+            pool_state.borrow().sqrt_price_x64
+                == tick_math::get_sqrt_price_at_tick(-28860).unwrap()
+        );
+        assert!(pool_state.borrow().liquidity == liquidity + 6408486554);
+        assert!(amount_0 == 1);
+
+        liquidity = pool_state.borrow().liquidity;
+
+        // we swap just a little amount, let pool tick_current also equal -28861
+        // but pool.sqrt_price_x64 > tick_math::get_sqrt_price_at_tick(-28861)
+        let (amount_0, amount_1) = swap_internal(
+            &amm_config,
+            &mut pool_state.borrow_mut(),
+            &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+            &mut observation_state.borrow_mut(),
+            50,
+            tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
+            true,
+            true,
+            oracle::block_timestamp_mock(),
+        )
+        .unwrap();
+        println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+        assert!(pool_state.borrow().tick_current == -28861);
+        assert!(
+            pool_state.borrow().sqrt_price_x64 > tick_math::get_sqrt_price_at_tick(-28861).unwrap()
+        );
+        assert!(pool_state.borrow().liquidity == liquidity);
+        assert!(amount_0 == 50);
     }
 }

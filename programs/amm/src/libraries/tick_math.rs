@@ -205,4 +205,29 @@ mod test {
             println!("max_sqrt_price: {}", max_sqrt_price);
         }
     }
+
+    #[test]
+    fn tick_round_down() {
+        // tick is negative
+        let sqrt_price_x64 = get_sqrt_price_at_tick(-28861).unwrap();
+        let mut tick = get_tick_at_sqrt_price(sqrt_price_x64).unwrap();
+        assert_eq!(tick, -28861);
+        tick = get_tick_at_sqrt_price(sqrt_price_x64 + 1).unwrap();
+        assert_eq!(tick, -28861);
+        tick = get_tick_at_sqrt_price(get_sqrt_price_at_tick(-28860).unwrap() - 1).unwrap();
+        assert_eq!(tick, -28861);
+        tick = get_tick_at_sqrt_price(sqrt_price_x64 - 1).unwrap();
+        assert_eq!(tick, -28862);
+
+        // tick is positive
+        let sqrt_price_x64 = get_sqrt_price_at_tick(28861).unwrap();
+        tick = get_tick_at_sqrt_price(sqrt_price_x64).unwrap();
+        assert_eq!(tick, 28861);
+        tick = get_tick_at_sqrt_price(sqrt_price_x64 + 1).unwrap();
+        assert_eq!(tick, 28861);
+        tick = get_tick_at_sqrt_price(get_sqrt_price_at_tick(28862).unwrap() - 1).unwrap();
+        assert_eq!(tick, 28861);
+        tick = get_tick_at_sqrt_price(sqrt_price_x64 - 1).unwrap();
+        assert_eq!(tick, 28860);
+    }
 }
