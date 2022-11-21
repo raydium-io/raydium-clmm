@@ -1,11 +1,11 @@
 use crate::error::ErrorCode;
-use crate::libraries::U256;
 use crate::libraries::{
     big_num::{U1024, U128},
     check_current_tick_array_is_initialized, fixed_point_64,
     full_math::MulDiv,
     next_initialized_tick_array_start_index,
 };
+use crate::libraries::{tick_math, U256};
 use crate::states::*;
 use crate::states::{MAX_TICK_ARRAY_START_INDEX, MIN_TICK_ARRAY_START_INDEX, TICK_ARRAY_SIZE};
 use anchor_lang::prelude::*;
@@ -234,6 +234,10 @@ impl PoolState {
     }
 
     pub fn pool_check_reset(&mut self, sqrt_price_x64: u128, tick: i32) -> Result<()> {
+        require!(
+            tick >= tick_math::MIN_TICK && tick <= tick_math::MAX_TICK,
+            ErrorCode::InvaildTickIndex
+        );
         if !U1024(self.tick_array_bitmap).is_zero() {
             return err!(ErrorCode::NotApproved);
         }
@@ -429,12 +433,15 @@ impl PoolState {
     }
 
     pub fn flip_tick_array_bit(&mut self, tick_array_start_index: i32) -> Result<()> {
+        require!(
+            tick_array_start_index >= MIN_TICK_ARRAY_START_INDEX
+                && tick_array_start_index <= MAX_TICK_ARRAY_START_INDEX,
+            ErrorCode::InvaildTickIndex
+        );
         require_eq!(
             0,
             tick_array_start_index % (TICK_ARRAY_SIZE * i32::from(self.tick_spacing))
         );
-        assert!(tick_array_start_index >= MIN_TICK_ARRAY_START_INDEX);
-        assert!(tick_array_start_index <= MAX_TICK_ARRAY_START_INDEX);
         let tick_array_offset_in_bitmap =
             tick_array_start_index / (i32::from(self.tick_spacing) * TICK_ARRAY_SIZE) + 512;
         let tick_array_bitmap = U1024(self.tick_array_bitmap);
@@ -450,7 +457,7 @@ impl PoolState {
             U1024(self.tick_array_bitmap),
             self.tick_current,
             self.tick_spacing.into(),
-        );
+        )?;
         if is_initialized {
             return Ok((is_initialized, start_index));
         }

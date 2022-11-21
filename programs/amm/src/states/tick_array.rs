@@ -78,6 +78,11 @@ impl TickArrayState {
         tick_array_start_index: i32,
         tick_spacing: u16,
     ) -> Result<AccountLoader<'info, TickArrayState>> {
+        assert!(
+            tick_array_start_index >= MIN_TICK_ARRAY_START_INDEX
+                && tick_array_start_index <= MAX_TICK_ARRAY_START_INDEX
+        );
+
         let tick_array_state = if tick_array_account_info.owner == &system_program::ID {
             let (expect_pda_address, bump) = Pubkey::find_program_address(
                 &[
@@ -131,6 +136,9 @@ impl TickArrayState {
         tick_spacing: u16,
         pool_key: Pubkey,
     ) -> Result<()> {
+        assert!(
+            start_index >= MIN_TICK_ARRAY_START_INDEX && start_index <= MAX_TICK_ARRAY_START_INDEX
+        );
         require_eq!(0, start_index % (TICK_ARRAY_SIZE * (tick_spacing) as i32));
         self.start_tick_index = start_index;
         self.pool_id = pool_key;
@@ -151,6 +159,10 @@ impl TickArrayState {
         tick_index: i32,
         tick_spacing: i32,
     ) -> Result<&mut TickState> {
+        require!(
+            tick_index >= tick_math::MIN_TICK && tick_index <= tick_math::MAX_TICK,
+            ErrorCode::InvaildTickIndex
+        );
         let offset_in_array = self.get_tick_offset_in_array(tick_index, tick_spacing)?;
         Ok(&mut self.ticks[offset_in_array])
     }
@@ -161,6 +173,10 @@ impl TickArrayState {
         tick_spacing: i32,
         tick_state: TickState,
     ) -> Result<()> {
+        require!(
+            tick_index >= tick_math::MIN_TICK && tick_index <= tick_math::MAX_TICK,
+            ErrorCode::InvaildTickIndex
+        );
         let offset_in_array = self.get_tick_offset_in_array(tick_index, tick_spacing)?;
         self.ticks[offset_in_array] = tick_state;
         Ok(())
@@ -168,6 +184,10 @@ impl TickArrayState {
 
     /// Get tick's offset in current tick array, tick must be include in tick array， otherwise throw an error
     fn get_tick_offset_in_array(self, tick_index: i32, tick_spacing: i32) -> Result<usize> {
+        require!(
+            tick_index >= tick_math::MIN_TICK && tick_index <= tick_math::MAX_TICK,
+            ErrorCode::InvaildTickIndex
+        );
         require_eq!(0, tick_index % tick_spacing);
         let start_tick_index = TickArrayState::get_arrary_start_index(tick_index, tick_spacing);
         require_eq!(
@@ -210,6 +230,10 @@ impl TickArrayState {
         tick_spacing: u16,
         zero_for_one: bool,
     ) -> Result<Option<&mut TickState>> {
+        require!(
+            current_tick_index >= tick_math::MIN_TICK && current_tick_index <= tick_math::MAX_TICK,
+            ErrorCode::InvaildTickIndex
+        );
         let current_tick_array_start_index =
             TickArrayState::get_arrary_start_index(current_tick_index, tick_spacing as i32);
         if current_tick_array_start_index != self.start_tick_index {
@@ -248,6 +272,7 @@ impl TickArrayState {
 
     /// Input an arbitrary tick_index, output the start_index of the tick_array it sits on
     pub fn get_arrary_start_index(tick_index: i32, tick_spacing: i32) -> i32 {
+        assert!(tick_index >= tick_math::MIN_TICK && tick_index <= tick_math::MAX_TICK);
         let mut start = tick_index / (tick_spacing * TICK_ARRAY_SIZE);
         if tick_index < 0 && tick_index % (tick_spacing * TICK_ARRAY_SIZE) != 0 {
             start = start - 1

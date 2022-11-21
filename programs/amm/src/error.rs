@@ -16,7 +16,7 @@ pub enum ErrorCode {
     #[msg("Minting amount should be greater than 0")]
     ZeroMintAmount,
 
-    #[msg("Tick index of lower must be smaller than upper")]
+    #[msg("Tick out of range")]
     InvaildTickIndex,
     #[msg("The lower tick must be below the upper tick")]
     TickInvaildOrder,
