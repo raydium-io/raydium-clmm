@@ -83,7 +83,7 @@ pub fn compute_swap_step(
             sqrt_price_math::get_next_sqrt_price_from_output(
                 sqrt_price_current_x64,
                 liquidity,
-                amount_remaining ,
+                amount_remaining,
                 zero_for_one,
             )
         }
@@ -131,26 +131,82 @@ pub fn compute_swap_step(
     }
 
     // For exact output case, cap the output amount to not exceed the remaining output amount
-    if !is_base_input && swap_step.amount_out > amount_remaining  {
+    if !is_base_input && swap_step.amount_out > amount_remaining {
         swap_step.amount_out = amount_remaining;
     }
 
-    swap_step.fee_amount = if is_base_input && swap_step.sqrt_price_next_x64 != sqrt_price_target_x64 {
-        // we didn't reach the target, so take the remainder of the maximum input as fee
-        // swap dust is granted as fee
-        u64::from(amount_remaining)
-            .checked_sub(swap_step.amount_in)
-            .unwrap()
-    } else {
-        // take pip percentage as fee
-        swap_step
-            .amount_in
-            .mul_div_ceil(
-                fee_rate.into(),
-                (FEE_RATE_DENOMINATOR_VALUE - fee_rate).into(),
-            )
-            .unwrap()
-    };
+    swap_step.fee_amount =
+        if is_base_input && swap_step.sqrt_price_next_x64 != sqrt_price_target_x64 {
+            // we didn't reach the target, so take the remainder of the maximum input as fee
+            // swap dust is granted as fee
+            u64::from(amount_remaining)
+                .checked_sub(swap_step.amount_in)
+                .unwrap()
+        } else {
+            // take pip percentage as fee
+            swap_step
+                .amount_in
+                .mul_div_ceil(
+                    fee_rate.into(),
+                    (FEE_RATE_DENOMINATOR_VALUE - fee_rate).into(),
+                )
+                .unwrap()
+        };
 
     swap_step
+}
+
+#[cfg(test)]
+mod swap_math_test {
+    use crate::libraries::tick_math;
+
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn compute_swap_step_test(
+            sqrt_price_current_x64 in tick_math::MIN_SQRT_PRICE_X64..tick_math::MAX_SQRT_PRICE_X64,
+            sqrt_price_target_x64 in tick_math::MIN_SQRT_PRICE_X64..tick_math::MAX_SQRT_PRICE_X64,
+            liquidity in 1..u32::MAX as u128,
+            amount_remaining in 1..u64::MAX,
+            fee_rate in 1..FEE_RATE_DENOMINATOR_VALUE,
+            is_base_input in proptest::bool::ANY,
+        ) {
+            prop_assume!(sqrt_price_current_x64 != sqrt_price_target_x64);
+
+
+            let swap_step = compute_swap_step(
+                sqrt_price_current_x64,
+                sqrt_price_target_x64,
+                liquidity,
+                amount_remaining,
+                fee_rate,
+                is_base_input,
+            );
+
+            let amount_in = swap_step.amount_in;
+            let amount_out = swap_step.amount_out;
+            let sqrt_price_next_x64 = swap_step.sqrt_price_next_x64;
+            let fee_amount = swap_step.fee_amount;
+
+            assert!(amount_in < amount_remaining);
+
+            let amount_used = if is_base_input {
+                amount_in + fee_amount
+            } else {
+                amount_out
+            };
+
+            if sqrt_price_next_x64 != sqrt_price_target_x64 {
+                assert!(amount_used == amount_remaining);
+            } else {
+                assert!(amount_used <= amount_remaining);
+            }
+            let price_lower = sqrt_price_current_x64.min(sqrt_price_target_x64);
+            let price_upper = sqrt_price_current_x64.max(sqrt_price_target_x64);
+            assert!(sqrt_price_next_x64 >= price_lower);
+            assert!(sqrt_price_next_x64 <= price_upper);
+        }
+    }
 }

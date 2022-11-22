@@ -311,7 +311,7 @@ pub fn get_delta_amounts_signed(
 }
 
 #[cfg(test)]
-mod test {
+mod liquidity_math_test {
     use super::*;
     mod get_amounts_delta_signed {
         use super::*;

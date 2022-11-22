@@ -425,7 +425,7 @@ pub fn swap_internal<'b, 'info>(
             } else {
                 step.tick_next
             };
-        } else if state.sqrt_price_x64 != step.sqrt_price_start_x64 {
+        } else {
             // recompute unless we're on a lower tick boundary (i.e. already transitioned ticks), and haven't moved
             state.tick = tick_math::get_tick_at_sqrt_price(state.sqrt_price_x64)?;
         }

@@ -183,7 +183,7 @@ pub fn get_tick_at_sqrt_price(sqrt_price_x64: u128) -> Result<i32, anchor_lang::
 }
 
 #[cfg(test)]
-mod test {
+mod tick_math_test {
     use super::*;
     mod get_sqrt_price_at_tick_test {
         use super::*;
@@ -203,6 +203,24 @@ mod test {
             );
             let max_sqrt_price = MAX_SQRT_PRICE_X64 as f64 / fixed_point_64::Q64 as f64;
             println!("max_sqrt_price: {}", max_sqrt_price);
+        }
+    }
+
+    mod get_tick_at_sqrt_price_test {
+        use super::*;
+
+        #[test]
+        fn check_get_tick_at_sqrt_price_at_min_or_max_sqrt_price() {
+            assert_eq!(
+                get_tick_at_sqrt_price(MIN_SQRT_PRICE_X64).unwrap(),
+                MIN_TICK,
+            );
+            
+            // we can't reach MAX_SQRT_PRICE_X64
+            assert_eq!(
+                get_tick_at_sqrt_price(MAX_SQRT_PRICE_X64-1).unwrap(),
+                MAX_TICK-1,
+            );
         }
     }
 
@@ -229,5 +247,69 @@ mod test {
         assert_eq!(tick, 28861);
         tick = get_tick_at_sqrt_price(sqrt_price_x64 - 1).unwrap();
         assert_eq!(tick, 28860);
+    }
+
+    mod fuzz_tests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #[test]
+            fn get_sqrt_price_at_tick_test (
+                tick in MIN_TICK..MAX_TICK,
+            ) {
+                let sqrt_price_x64 = get_sqrt_price_at_tick(tick).unwrap();
+
+                assert!(sqrt_price_x64 >= MIN_SQRT_PRICE_X64);
+                assert!(sqrt_price_x64 <= MAX_SQRT_PRICE_X64);
+
+                let minus_tick_price_x64 = get_sqrt_price_at_tick(tick - 1).unwrap();
+                let plus_tick_price_x64 = get_sqrt_price_at_tick(tick + 1).unwrap();
+                assert!(minus_tick_price_x64 < sqrt_price_x64 && sqrt_price_x64 < plus_tick_price_x64);
+            }
+
+            #[test]
+            fn get_tick_at_sqrt_price_test (
+                sqrt_price in MIN_SQRT_PRICE_X64..MAX_SQRT_PRICE_X64
+            ) {
+                let tick = get_tick_at_sqrt_price(sqrt_price).unwrap();
+
+                assert!(tick >= MIN_TICK);
+                assert!(tick <= MAX_TICK);
+
+                assert!(sqrt_price >= get_sqrt_price_at_tick(tick).unwrap() && sqrt_price < get_sqrt_price_at_tick(tick + 1).unwrap())
+            }
+
+            #[test]
+            fn tick_and_sqrt_price_symmetry_test (
+                tick in MIN_TICK..MAX_TICK
+            ) {
+
+                let sqrt_price_x64 = get_sqrt_price_at_tick(tick).unwrap();
+                let resolved_tick = get_tick_at_sqrt_price(sqrt_price_x64).unwrap();
+                assert!(resolved_tick == tick);
+            }
+
+
+            #[test]
+            fn get_sqrt_price_at_tick_is_sequence_test (
+                tick in MIN_TICK-1..MAX_TICK
+            ) {
+
+                let sqrt_price_x64 = get_sqrt_price_at_tick(tick).unwrap();
+                let last_sqrt_price_x64 = get_sqrt_price_at_tick(tick-1).unwrap();
+                assert!(last_sqrt_price_x64 < sqrt_price_x64);
+            }
+
+            #[test]
+            fn get_tick_at_sqrt_price_is_sequence_test (
+                sqrt_price in (MIN_SQRT_PRICE_X64 + 10)..MAX_SQRT_PRICE_X64
+            ) {
+
+                let tick = get_tick_at_sqrt_price(sqrt_price).unwrap();
+                let last_tick = get_tick_at_sqrt_price(sqrt_price - 10).unwrap();
+                assert!(last_tick <= tick);
+            }
+        }
     }
 }
