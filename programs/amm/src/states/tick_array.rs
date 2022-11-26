@@ -78,9 +78,10 @@ impl TickArrayState {
         tick_array_start_index: i32,
         tick_spacing: u16,
     ) -> Result<AccountLoader<'info, TickArrayState>> {
-        assert!(
+        require!(
             tick_array_start_index >= MIN_TICK_ARRAY_START_INDEX
-                && tick_array_start_index <= MAX_TICK_ARRAY_START_INDEX
+                && tick_array_start_index <= MAX_TICK_ARRAY_START_INDEX,
+            ErrorCode::InvaildTickIndex
         );
 
         let tick_array_state = if tick_array_account_info.owner == &system_program::ID {
@@ -136,8 +137,9 @@ impl TickArrayState {
         tick_spacing: u16,
         pool_key: Pubkey,
     ) -> Result<()> {
-        assert!(
-            start_index >= MIN_TICK_ARRAY_START_INDEX && start_index <= MAX_TICK_ARRAY_START_INDEX
+        require!(
+            start_index >= MIN_TICK_ARRAY_START_INDEX && start_index <= MAX_TICK_ARRAY_START_INDEX,
+            ErrorCode::InvaildTickIndex
         );
         require_eq!(0, start_index % (TICK_ARRAY_SIZE * (tick_spacing) as i32));
         self.start_tick_index = start_index;

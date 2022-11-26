@@ -120,11 +120,11 @@ pub fn block_timestamp() -> u32 {
 }
 
 #[cfg(test)]
-pub fn block_timestamp_mock() -> u32 {
+pub fn block_timestamp_mock() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
-        .as_secs() as u32
+        .as_secs()
 }
 
 #[cfg(test)]

@@ -34,6 +34,7 @@ arrayref ={ version = "0.3.6"}
 [dev-dependencies]
 quickcheck = "0.9"
 proptest = "1.0"
+rand = "0.8.5"
 
 [profile.release]
 lto = "fat"

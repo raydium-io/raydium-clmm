@@ -707,7 +707,6 @@ pub struct PriceChangeEvent {
 #[cfg(test)]
 pub mod pool_test {
     use std::cell::RefCell;
-
     use super::*;
 
     pub fn build_pool(
@@ -724,6 +723,9 @@ pub mod pool_test {
         new_pool.token_mint_0 = Pubkey::new_unique();
         new_pool.token_mint_1 = Pubkey::new_unique();
         new_pool.amm_config = Pubkey::new_unique();
+        // let mut random = rand::random<u128>();
+        new_pool.fee_growth_global_0_x64 = rand::random::<u128>();
+        new_pool.fee_growth_global_1_x64 = rand::random::<u128>();
         new_pool.bump = Pubkey::find_program_address(
             &[
                 &POOL_SEED.as_bytes(),

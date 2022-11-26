@@ -327,7 +327,7 @@ pub fn add_liquidity<'b, 'info>(
     tick_lower_index: i32,
     tick_upper_index: i32,
 ) -> Result<(u64, u64)> {
-    assert!(liquidity > 0); 
+    assert!(liquidity > 0);
     let liquidity_before = pool_state.liquidity;
     require_keys_eq!(context.tick_array_lower.load()?.pool_id, pool_state.key());
     require_keys_eq!(context.tick_array_upper.load()?.pool_id, pool_state.key());
@@ -347,13 +347,14 @@ pub fn add_liquidity<'b, 'info>(
     if tick_upper_state.tick == 0 {
         tick_upper_state.tick = tick_upper_index;
     }
-
+    let clock = Clock::get()?;
     let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = modify_position(
         i128::try_from(liquidity).unwrap(),
         pool_state,
         context.protocol_position.as_mut(),
         &mut tick_lower_state,
         &mut tick_upper_state,
+        clock.unix_timestamp as u64,
     )?;
 
     // update tick_state
@@ -425,10 +426,10 @@ pub fn add_liquidity<'b, 'info>(
     emit!(LiquidityChangeEvent {
         pool_state: pool_state.key(),
         tick: pool_state.tick_current,
-        tick_lower:tick_lower_index,
-        tick_upper:tick_upper_index,
-        liquidity_before:liquidity_before,
-        liquidity_after:pool_state.liquidity,
+        tick_lower: tick_lower_index,
+        tick_upper: tick_upper_index,
+        liquidity_before: liquidity_before,
+        liquidity_after: pool_state.liquidity,
     });
     Ok((amount_0, amount_1))
 }
@@ -439,6 +440,7 @@ pub fn modify_position(
     protocol_position_state: &mut ProtocolPositionState,
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,
+    timestamp: u64,
 ) -> Result<(i64, i64, bool, bool)> {
     let (flip_tick_lower, flip_tick_upper) = update_position(
         liquidity_delta,
@@ -446,6 +448,7 @@ pub fn modify_position(
         protocol_position_state,
         tick_lower_state,
         tick_upper_state,
+        timestamp,
     )?;
     let mut amount_0 = 0;
     let mut amount_1 = 0;
@@ -476,9 +479,9 @@ pub fn update_position(
     protocol_position_state: &mut ProtocolPositionState,
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,
+    timestamp: u64,
 ) -> Result<(bool, bool)> {
-    let clock = Clock::get()?;
-    let updated_reward_infos = pool_state.update_reward_infos(clock.unix_timestamp as u64)?;
+    let updated_reward_infos = pool_state.update_reward_infos(timestamp)?;
 
     let mut flipped_lower = false;
     let mut flipped_upper = false;
@@ -636,4 +639,233 @@ fn create_nft_with_metadata<'info>(
         None,
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod modify_position_test {
+    use super::modify_position;
+    use crate::error::ErrorCode;
+    use crate::libraries::tick_math;
+    use crate::states::oracle::block_timestamp_mock;
+    use crate::states::pool_test::build_pool;
+    use crate::states::protocol_position::*;
+    use crate::states::tick_array_test::build_tick;
+
+    #[test]
+    fn liquidity_delta_zero_empty_liquidity_not_allowed_test() {
+        let pool_state_ref = build_pool(1, 10, 1000, 10000);
+        let pool_state = &mut pool_state_ref.borrow_mut();
+        let tick_lower_state = &mut build_tick(1, 10, 10).take();
+        let tick_upper_state = &mut build_tick(2, 10, -10).take();
+
+        let result = modify_position(
+            0,
+            pool_state,
+            &mut ProtocolPositionState::default(),
+            tick_lower_state,
+            tick_upper_state,
+            block_timestamp_mock(),
+        );
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), ErrorCode::InvaildLiquidity.into());
+    }
+
+    #[test]
+    fn init_position_in_range_test() {
+        let liquidity = 10000;
+        let tick_current = 1;
+        let pool_state_ref = build_pool(
+            tick_current,
+            10,
+            tick_math::get_sqrt_price_at_tick(tick_current).unwrap(),
+            liquidity,
+        );
+        let pool_state = &mut pool_state_ref.borrow_mut();
+
+        let tick_lower_index = 0;
+        let tick_upper_index = 2;
+        let tick_lower_state = &mut build_tick(tick_lower_index, 0, 0).take();
+        let tick_upper_state = &mut build_tick(tick_upper_index, 0, 0).take();
+
+        let liquidity_delta = 10000;
+        let protocol_position = &mut ProtocolPositionState::default();
+        let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = modify_position(
+            liquidity_delta,
+            pool_state,
+            protocol_position,
+            tick_lower_state,
+            tick_upper_state,
+            block_timestamp_mock(),
+        )
+        .unwrap();
+        assert!(amount_0_int != 0);
+        assert!(amount_1_int != 0);
+        assert_eq!(flip_tick_lower, true);
+        assert_eq!(flip_tick_upper, true);
+
+        // check pool active liquidity
+        let new_liquidity = pool_state.liquidity;
+        assert_eq!(new_liquidity, liquidity + (liquidity_delta as u128));
+
+        // check tick state
+        assert!(tick_lower_state.is_initialized());
+        assert!(tick_lower_state.liquidity_gross == 10000);
+        assert!(tick_upper_state.liquidity_gross == 10000);
+
+        assert!(tick_lower_state.liquidity_net == 10000);
+        assert!(tick_upper_state.liquidity_net == -10000);
+
+        assert!(tick_lower_state.fee_growth_outside_0_x64 == pool_state.fee_growth_global_0_x64);
+        assert!(tick_lower_state.fee_growth_outside_1_x64 == pool_state.fee_growth_global_1_x64);
+        assert!(tick_upper_state.fee_growth_outside_0_x64 == 0);
+        assert!(tick_upper_state.fee_growth_outside_1_x64 == 0);
+
+        // check protocol position
+        let fee_growth_inside_0_last_x64 = pool_state.fee_growth_global_0_x64
+            - tick_lower_state.fee_growth_outside_0_x64
+            - tick_upper_state.fee_growth_outside_0_x64;
+        let fee_growth_inside_1_last_x64 = pool_state.fee_growth_global_1_x64
+            - tick_lower_state.fee_growth_outside_1_x64
+            - tick_upper_state.fee_growth_outside_1_x64;
+        assert!(protocol_position.fee_growth_inside_0_last_x64 == fee_growth_inside_0_last_x64);
+        assert!(protocol_position.fee_growth_inside_1_last_x64 == fee_growth_inside_1_last_x64);
+        assert!(protocol_position.token_fees_owed_0 == 0);
+        assert!(protocol_position.token_fees_owed_1 == 0);
+        assert!(protocol_position.tick_lower_index == tick_lower_index);
+        assert!(protocol_position.tick_upper_index == tick_upper_index);
+
+        // check protocol position state
+    }
+
+    #[test]
+    fn init_position_in_left_of_current_tick_test() {
+        let liquidity = 10000;
+        let tick_current = 1;
+        let pool_state_ref = build_pool(
+            tick_current,
+            10,
+            tick_math::get_sqrt_price_at_tick(tick_current).unwrap(),
+            liquidity,
+        );
+        let pool_state = &mut pool_state_ref.borrow_mut();
+
+        let tick_lower_index = -1;
+        let tick_upper_index = 0;
+        let tick_lower_state = &mut build_tick(tick_lower_index, 0, 0).take();
+        let tick_upper_state = &mut build_tick(tick_upper_index, 0, 0).take();
+
+        let liquidity_delta = 10000;
+        let protocol_position = &mut ProtocolPositionState::default();
+        let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = modify_position(
+            liquidity_delta,
+            pool_state,
+            protocol_position,
+            tick_lower_state,
+            tick_upper_state,
+            block_timestamp_mock(),
+        )
+        .unwrap();
+        assert!(amount_0_int == 0);
+        assert!(amount_1_int != 0);
+        assert_eq!(flip_tick_lower, true);
+        assert_eq!(flip_tick_upper, true);
+
+        // check pool active liquidity
+        let new_liquidity = pool_state.liquidity;
+        assert_eq!(new_liquidity, liquidity_delta as u128);
+
+        // check tick state
+        assert!(tick_lower_state.is_initialized());
+        assert!(tick_lower_state.liquidity_gross == 10000);
+        assert!(tick_upper_state.liquidity_gross == 10000);
+
+        assert!(tick_lower_state.liquidity_net == 10000);
+        assert!(tick_upper_state.liquidity_net == -10000);
+
+        assert!(tick_lower_state.fee_growth_outside_0_x64 == pool_state.fee_growth_global_0_x64);
+        assert!(tick_lower_state.fee_growth_outside_1_x64 == pool_state.fee_growth_global_1_x64);
+        assert!(tick_upper_state.fee_growth_outside_0_x64 == pool_state.fee_growth_global_0_x64);
+        assert!(tick_upper_state.fee_growth_outside_1_x64 == pool_state.fee_growth_global_1_x64);
+
+        // check protocol position
+        let fee_growth_inside_0_last_x64 = pool_state.fee_growth_global_0_x64
+            - tick_lower_state.fee_growth_outside_0_x64
+            - (pool_state.fee_growth_global_0_x64 - tick_upper_state.fee_growth_outside_0_x64);
+        let fee_growth_inside_1_last_x64 = pool_state.fee_growth_global_1_x64
+            - tick_lower_state.fee_growth_outside_1_x64
+            - (pool_state.fee_growth_global_1_x64 - tick_upper_state.fee_growth_outside_1_x64);
+        assert!(protocol_position.fee_growth_inside_0_last_x64 == fee_growth_inside_0_last_x64);
+        assert!(protocol_position.fee_growth_inside_1_last_x64 == fee_growth_inside_1_last_x64);
+        assert!(protocol_position.token_fees_owed_0 == 0);
+        assert!(protocol_position.token_fees_owed_1 == 0);
+        assert!(protocol_position.tick_lower_index == tick_lower_index);
+        assert!(protocol_position.tick_upper_index == tick_upper_index);
+    }
+
+    #[test]
+    fn init_position_in_right_of_current_tick_test() {
+        let liquidity = 10000;
+        let tick_current = 1;
+        let pool_state_ref = build_pool(
+            tick_current,
+            10,
+            tick_math::get_sqrt_price_at_tick(tick_current).unwrap(),
+            liquidity,
+        );
+        let pool_state = &mut pool_state_ref.borrow_mut();
+
+        let tick_lower_index = 2;
+        let tick_upper_index = 3;
+        let tick_lower_state = &mut build_tick(tick_lower_index, 0, 0).take();
+        let tick_upper_state = &mut build_tick(tick_upper_index, 0, 0).take();
+
+        let liquidity_delta = 10000;
+        let protocol_position = &mut ProtocolPositionState::default();
+        let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = modify_position(
+            liquidity_delta,
+            pool_state,
+            protocol_position,
+            tick_lower_state,
+            tick_upper_state,
+            block_timestamp_mock(),
+        )
+        .unwrap();
+        assert!(amount_0_int != 0);
+        assert!(amount_1_int == 0);
+        assert_eq!(flip_tick_lower, true);
+        assert_eq!(flip_tick_upper, true);
+
+        // check pool active liquidity
+        let new_liquidity = pool_state.liquidity;
+        assert_eq!(new_liquidity, liquidity_delta as u128);
+
+        // check tick state
+        assert!(tick_lower_state.is_initialized());
+        assert!(tick_lower_state.liquidity_gross == 10000);
+        assert!(tick_upper_state.liquidity_gross == 10000);
+
+        assert!(tick_lower_state.liquidity_net == 10000);
+        assert!(tick_upper_state.liquidity_net == -10000);
+
+        assert!(tick_lower_state.fee_growth_outside_0_x64 == 0);
+        assert!(tick_lower_state.fee_growth_outside_1_x64 == 0);
+        assert!(tick_upper_state.fee_growth_outside_0_x64 == 0);
+        assert!(tick_upper_state.fee_growth_outside_1_x64 == 0);
+
+        // check protocol position
+        let fee_growth_inside_0_last_x64 = pool_state.fee_growth_global_0_x64
+            - (pool_state.fee_growth_global_0_x64 - tick_lower_state.fee_growth_outside_0_x64)
+            - tick_upper_state.fee_growth_outside_0_x64;
+        let fee_growth_inside_1_last_x64 = pool_state.fee_growth_global_1_x64
+            - (pool_state.fee_growth_global_1_x64 - tick_lower_state.fee_growth_outside_1_x64)
+            - tick_upper_state.fee_growth_outside_1_x64;
+        assert!(protocol_position.fee_growth_inside_0_last_x64 == fee_growth_inside_0_last_x64);
+        assert!(protocol_position.fee_growth_inside_1_last_x64 == fee_growth_inside_1_last_x64);
+        assert!(protocol_position.token_fees_owed_0 == 0);
+        assert!(protocol_position.token_fees_owed_1 == 0);
+        assert!(protocol_position.tick_lower_index == tick_lower_index);
+        assert!(protocol_position.tick_upper_index == tick_upper_index);
+
+        // check protocol position state
+    }
 }
