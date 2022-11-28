@@ -6,7 +6,6 @@ use anchor_lang::prelude::*;
 pub struct UpdateOperationAccount<'info> {
     /// Address to be set as operation account owner.
     #[account(
-        mut,
         address = crate::admin::id()
     )]
     pub owner: Signer<'info>,

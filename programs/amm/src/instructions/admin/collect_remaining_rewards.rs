@@ -7,7 +7,6 @@ use anchor_spl::token::{self, Token, TokenAccount};
 #[derive(Accounts)]
 pub struct CollectRemainingRewards<'info> {
     /// The founder who init reward info in berfore
-    #[account(mut)]
     pub reward_funder: Signer<'info>,
     /// The funder's reward token account
     #[account(mut)]
