@@ -21,8 +21,8 @@ pub fn compute_swap_step(
     amount_remaining: u64,
     fee_rate: u32,
     is_base_input: bool,
+    zero_for_one: bool,
 ) -> SwapStep {
-    let zero_for_one = sqrt_price_current_x64 >= sqrt_price_target_x64;
     // let exact_in = amount_remaining >= 0;
     let mut swap_step = SwapStep::default();
     if is_base_input {

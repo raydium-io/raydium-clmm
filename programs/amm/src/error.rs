@@ -28,6 +28,8 @@ pub enum ErrorCode {
     TickAndSpacingNotMatch,
     #[msg("Invaild tick array account")]
     InvalidTickArray,
+    #[msg("Invaild tick array boundary")]
+    InvalidTickArrayBoundary,
 
     #[msg("Square root price limit overflow")]
     SqrtPriceLimitOverflow,

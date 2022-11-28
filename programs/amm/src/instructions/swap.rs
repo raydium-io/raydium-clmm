@@ -235,8 +235,6 @@ pub fn swap_internal<'b, 'info>(
 
         let mut step = StepComputations::default();
         step.sqrt_price_start_x64 = state.sqrt_price_x64;
-        step.sqrt_price_next_x64 = state.sqrt_price_x64;
-        step.tick_next = state.tick;
 
         let mut next_initialized_tick = if let Some(tick_state) = tick_array_current
             .next_initialized_tick(state.tick, pool_state.tick_spacing, zero_for_one)?
@@ -287,7 +285,6 @@ pub fn swap_internal<'b, 'info>(
             let first_initialized_tick = tick_array_current.first_initialized_tick(zero_for_one)?;
             next_initialized_tick = Box::new(*first_initialized_tick);
         }
-        let last_tick = step.tick_next;
         step.tick_next = next_initialized_tick.tick;
         step.initialized = next_initialized_tick.is_initialized();
 
@@ -296,16 +293,8 @@ pub fn swap_internal<'b, 'info>(
         } else if step.tick_next > tick_math::MAX_TICK {
             step.tick_next = tick_math::MAX_TICK;
         }
-        let last_sqrt_price_x64 = step.sqrt_price_next_x64;
         step.sqrt_price_next_x64 = tick_math::get_sqrt_price_at_tick(step.tick_next)?;
 
-        if zero_for_one {
-            require_gte!(last_tick, step.tick_next);
-            require_gt!(last_sqrt_price_x64, step.sqrt_price_next_x64);
-        } else {
-            require_gt!(step.tick_next, last_tick);
-            require_gt!(step.sqrt_price_next_x64, last_sqrt_price_x64);
-        }
         let target_price = if (zero_for_one && step.sqrt_price_next_x64 < sqrt_price_limit_x64)
             || (!zero_for_one && step.sqrt_price_next_x64 > sqrt_price_limit_x64)
         {
@@ -313,13 +302,24 @@ pub fn swap_internal<'b, 'info>(
         } else {
             step.sqrt_price_next_x64
         };
+
+        if zero_for_one {
+            require_gte!(state.tick, step.tick_next);
+            require_gt!(step.sqrt_price_start_x64, step.sqrt_price_next_x64);
+            require_gt!(step.sqrt_price_start_x64, target_price);
+        } else {
+            require_gt!(step.tick_next, state.tick);
+            require_gt!(step.sqrt_price_next_x64, step.sqrt_price_start_x64);
+            require_gt!(target_price, step.sqrt_price_start_x64);
+        }
         let swap_step = swap_math::compute_swap_step(
-            state.sqrt_price_x64,
+            step.sqrt_price_start_x64,
             target_price,
             state.liquidity,
             state.amount_specified_remaining,
             amm_config.trade_fee_rate,
             is_base_input,
+            zero_for_one,
         );
         state.sqrt_price_x64 = swap_step.sqrt_price_next_x64;
         step.amount_in = swap_step.amount_in;
@@ -893,7 +893,7 @@ mod swap_test {
                 3049500711113990606,
                 true,
                 true,
-                oracle::block_timestamp_mock() as u32
+                oracle::block_timestamp_mock() as u32,
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
@@ -920,7 +920,7 @@ mod swap_test {
                 3049500711113990606,
                 true,
                 true,
-                oracle::block_timestamp_mock() as u32
+                oracle::block_timestamp_mock() as u32,
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
@@ -976,7 +976,7 @@ mod swap_test {
                 3049500711113990606,
                 true,
                 false,
-                oracle::block_timestamp_mock() as u32
+                oracle::block_timestamp_mock() as u32,
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
@@ -1006,7 +1006,7 @@ mod swap_test {
                 3049500711113990606,
                 true,
                 false,
-                oracle::block_timestamp_mock() as u32
+                oracle::block_timestamp_mock() as u32,
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
@@ -1033,7 +1033,7 @@ mod swap_test {
                 3049500711113990606,
                 true,
                 false,
-                oracle::block_timestamp_mock() as u32
+                oracle::block_timestamp_mock() as u32,
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
@@ -1089,7 +1089,7 @@ mod swap_test {
                 5882283448660210779,
                 false,
                 true,
-                oracle::block_timestamp_mock() as u32
+                oracle::block_timestamp_mock() as u32,
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
@@ -1118,7 +1118,7 @@ mod swap_test {
                 5882283448660210779,
                 false,
                 true,
-                oracle::block_timestamp_mock() as u32
+                oracle::block_timestamp_mock() as u32,
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
@@ -1146,7 +1146,7 @@ mod swap_test {
                 5882283448660210779,
                 false,
                 true,
-                oracle::block_timestamp_mock() as u32
+                oracle::block_timestamp_mock() as u32,
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
@@ -1202,7 +1202,7 @@ mod swap_test {
                 5882283448660210779,
                 false,
                 false,
-                oracle::block_timestamp_mock() as u32
+                oracle::block_timestamp_mock() as u32,
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
@@ -1231,7 +1231,7 @@ mod swap_test {
                 5882283448660210779,
                 false,
                 false,
-                oracle::block_timestamp_mock() as u32
+                oracle::block_timestamp_mock() as u32,
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
@@ -1259,7 +1259,7 @@ mod swap_test {
                 5882283448660210779,
                 false,
                 false,
-                oracle::block_timestamp_mock() as u32
+                oracle::block_timestamp_mock() as u32,
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
@@ -1308,7 +1308,7 @@ mod swap_test {
                 tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
                 true,
                 true,
-                oracle::block_timestamp_mock() as u32
+                oracle::block_timestamp_mock() as u32,
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
@@ -1352,7 +1352,7 @@ mod swap_test {
                 tick_math::get_sqrt_price_at_tick(-28860).unwrap(),
                 false,
                 true,
-                oracle::block_timestamp_mock() as u32
+                oracle::block_timestamp_mock() as u32,
             )
             .unwrap();
             println!("amount_0:{},amount_1:{}", amount_0, amount_1);
@@ -1396,10 +1396,10 @@ mod swap_test {
                 tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
                 true,
                 true,
-                oracle::block_timestamp_mock() as u32
+                oracle::block_timestamp_mock() as u32,
             );
             assert!(result.is_err());
-            assert_eq!(result.unwrap_err(),ErrorCode::LiquidityInsufficient.into());
+            assert_eq!(result.unwrap_err(), ErrorCode::LiquidityInsufficient.into());
         }
     }
 
@@ -1433,7 +1433,7 @@ mod swap_test {
             tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
             true,
             true,
-            oracle::block_timestamp_mock() as u32
+            oracle::block_timestamp_mock() as u32,
         )
         .unwrap();
         println!("amount_0:{},amount_1:{}", amount_0, amount_1);
@@ -1455,7 +1455,7 @@ mod swap_test {
             tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
             true,
             true,
-            oracle::block_timestamp_mock() as u32
+            oracle::block_timestamp_mock() as u32,
         )
         .unwrap();
         println!("amount_0:{},amount_1:{}", amount_0, amount_1);
@@ -1481,7 +1481,7 @@ mod swap_test {
             tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
             true,
             true,
-            oracle::block_timestamp_mock() as u32
+            oracle::block_timestamp_mock() as u32,
         )
         .unwrap();
         println!("amount_0:{},amount_1:{}", amount_0, amount_1);

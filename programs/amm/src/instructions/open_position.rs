@@ -555,7 +555,7 @@ fn get_uri_with_random() -> String {
     let current_timestamp = u64::try_from(Clock::get().unwrap().unix_timestamp).unwrap();
     let current_slot = Clock::get().unwrap().slot;
     // 01 ~ 08
-    let random_num = (current_timestamp + current_slot) % 7 + 1;
+    let random_num = (current_timestamp + current_slot) % 8 + 1;
     // https://cloudflare-ipfs.com/ipfs/Qmefod1DZcmCCyBdPgNQog2fAbjkNWhwXKEA4ias71pXPX/01.json
     let random_str = METADATA_URI.to_string() + "0" + &random_num.to_string() + ".json";
     random_str

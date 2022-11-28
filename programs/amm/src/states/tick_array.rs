@@ -536,9 +536,10 @@ pub fn check_tick_array_start_index(
     let expect_start_index =
         TickArrayState::get_arrary_start_index(tick_index, tick_spacing as i32);
     require_eq!(tick_array_start_index, expect_start_index);
-    assert!(
-        tick_array_start_index >= tick_math::MIN_TICK
-            && tick_array_start_index <= tick_math::MAX_TICK
+    require!(
+        tick_array_start_index >= MIN_TICK_ARRAY_START_INDEX
+            && tick_array_start_index <= MAX_TICK_ARRAY_START_INDEX,
+            ErrorCode::InvalidTickArrayBoundary
     );
     Ok(())
 }
