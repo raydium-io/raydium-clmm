@@ -175,6 +175,7 @@ mod test {
     }
 
     #[test]
+    #[should_panic]
     fn test_update_operation_owner_with_over_flow_array() {
         let mut operation_state = OperationState {
             bump: 0,
@@ -189,11 +190,6 @@ mod test {
         println!("{:?}", keys);
 
         operation_state.update_operation_owner(keys.clone());
-        println!("{:?}", operation_state.operation_owners);
-        assert_eq!(
-            &keys.clone()[..],
-            &operation_state.operation_owners[..keys.len()]
-        );
     }
 
     #[test]

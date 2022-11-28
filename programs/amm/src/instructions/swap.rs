@@ -86,17 +86,6 @@ pub struct SwapAccounts<'b, 'info> {
     pub observation_state: &'b mut AccountLoader<'info, ObservationState>,
 }
 
-pub struct SwapCache {
-    // the protocol fee for the input token
-    pub protocol_fee_rate: u32,
-    // the fund fee for the input token
-    pub fund_fee_rate: u32,
-    // liquidity at the beginning of the swap
-    pub liquidity_start: u128,
-    // the timestamp of the current block
-    pub block_timestamp: u32,
-}
-
 // the top level state of the swap, the results of which are recorded in storage at the end
 #[derive(Debug)]
 pub struct SwapState {
@@ -150,7 +139,6 @@ pub fn swap_internal<'b, 'info>(
     block_timestamp: u32,
 ) -> Result<(u64, u64)> {
     require!(amount_specified != 0, ErrorCode::InvaildSwapAmountSpecified);
-    // let mut pool_state = pool_state.load_mut()?;
     if !pool_state.get_status_by_bit(PoolStatusBitIndex::Swap) {
         return err!(ErrorCode::NotApproved);
     }
@@ -165,14 +153,9 @@ pub fn swap_internal<'b, 'info>(
         ErrorCode::SqrtPriceLimitOverflow
     );
 
-    let cache = &mut SwapCache {
-        liquidity_start: pool_state.liquidity,
-        block_timestamp,
-        protocol_fee_rate: amm_config.protocol_fee_rate,
-        fund_fee_rate: amm_config.fund_fee_rate,
-    };
+    let liquidity_start = pool_state.liquidity;
 
-    let updated_reward_infos = pool_state.update_reward_infos(cache.block_timestamp as u64)?;
+    let updated_reward_infos = pool_state.update_reward_infos(block_timestamp as u64)?;
 
     let mut state = SwapState {
         amount_specified_remaining: amount_specified,
@@ -187,7 +170,7 @@ pub fn swap_internal<'b, 'info>(
         fee_amount: 0,
         protocol_fee: 0,
         fund_fee: 0,
-        liquidity: cache.liquidity_start,
+        liquidity: liquidity_start,
     };
 
     // check observation account is owned by the pool
@@ -197,7 +180,7 @@ pub fn swap_internal<'b, 'info>(
     // check tick_array account is owned by the pool
     require_keys_eq!(tick_array_current.pool_id, pool_state.key());
 
-    let (mut is_pool_current_tick_array, first_vaild_tick_array_start_index) =
+    let (mut is_match_pool_current_tick_array, first_vaild_tick_array_start_index) =
         pool_state.get_first_initialized_tick_array(zero_for_one)?;
 
     let mut current_vaild_tick_array_start_index = first_vaild_tick_array_start_index;
@@ -219,14 +202,14 @@ pub fn swap_internal<'b, 'info>(
     while state.amount_specified_remaining != 0 && state.sqrt_price_x64 != sqrt_price_limit_x64 {
         #[cfg(feature = "enable-log")]
         msg!(
-            "while begin, is_base_input:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{},state_liquidity:{},state.protocol_fee:{},cache.protocol_fee_rate:{}",
+            "while begin, is_base_input:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{},state_liquidity:{},state.protocol_fee:{}, protocol_fee_rate:{}",
             is_base_input,
             state.fee_growth_global_x64,
             state.sqrt_price_x64,
             state.tick,
             state.liquidity,
             state.protocol_fee,
-            cache.protocol_fee_rate
+            amm_config.protocol_fee_rate
         );
         // Save these three pieces of information for PriceChangeEvent
         let tick_before = state.tick;
@@ -241,8 +224,8 @@ pub fn swap_internal<'b, 'info>(
         {
             Box::new(*tick_state)
         } else {
-            if !is_pool_current_tick_array {
-                is_pool_current_tick_array = true;
+            if !is_match_pool_current_tick_array {
+                is_match_pool_current_tick_array = true;
                 Box::new(*tick_array_current.first_initialized_tick(zero_for_one)?)
             } else {
                 Box::new(TickState::default())
@@ -348,9 +331,9 @@ pub fn swap_internal<'b, 'info>(
 
         let step_fee_amount = step.fee_amount;
         // if the protocol fee is on, calculate how much is owed, decrement fee_amount, and increment protocol_fee
-        if cache.protocol_fee_rate > 0 {
+        if amm_config.protocol_fee_rate > 0 {
             let delta = step_fee_amount
-                .checked_mul(u64::from(cache.protocol_fee_rate))
+                .checked_mul(u64::from(amm_config.protocol_fee_rate))
                 .unwrap()
                 .checked_div(u64::from(FEE_RATE_DENOMINATOR_VALUE))
                 .unwrap();
@@ -358,9 +341,9 @@ pub fn swap_internal<'b, 'info>(
             state.protocol_fee = state.protocol_fee.checked_add(delta).unwrap();
         }
         // if the fund fee is on, calculate how much is owed, decrement fee_amount, and increment fund_fee
-        if cache.fund_fee_rate > 0 {
+        if amm_config.fund_fee_rate > 0 {
             let delta = step_fee_amount
-                .checked_mul(u64::from(cache.fund_fee_rate))
+                .checked_mul(u64::from(amm_config.fund_fee_rate))
                 .unwrap()
                 .checked_div(u64::from(FEE_RATE_DENOMINATOR_VALUE))
                 .unwrap();
@@ -432,7 +415,7 @@ pub fn swap_internal<'b, 'info>(
 
         #[cfg(feature = "enable-log")]
         msg!(
-            "end, is_base_input:{},step_amount_in:{}, step_amount_out:{}, step_fee_amount:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{}, state_liquidity:{},state.protocol_fee:{},cache.protocol_fee_rate:{}, state.fund_fee:{}, cache.fund_fee_rate:{}",
+            "end, is_base_input:{},step_amount_in:{}, step_amount_out:{}, step_fee_amount:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{}, state_liquidity:{},state.protocol_fee:{}, protocol_fee_rate:{}, state.fund_fee:{}, fund_fee_rate:{}",
             is_base_input,
             step.amount_in,
             step.amount_out,
@@ -442,9 +425,9 @@ pub fn swap_internal<'b, 'info>(
             state.tick,
             state.liquidity,
             state.protocol_fee,
-            cache.protocol_fee_rate,
+            amm_config.protocol_fee_rate,
             state.fund_fee,
-            cache.fund_fee_rate,
+            amm_config.fund_fee_rate,
         );
         emit!(PriceChangeEvent {
             pool_state: pool_state.key(),
@@ -476,7 +459,7 @@ pub fn swap_internal<'b, 'info>(
     }
     pool_state.sqrt_price_x64 = state.sqrt_price_x64;
 
-    if cache.liquidity_start != state.liquidity {
+    if liquidity_start != state.liquidity {
         pool_state.liquidity = state.liquidity;
     }
 
