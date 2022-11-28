@@ -175,7 +175,7 @@ mod swap_math_test {
         ) {
             prop_assume!(sqrt_price_current_x64 != sqrt_price_target_x64);
 
-
+            let zero_for_one = sqrt_price_current_x64 > sqrt_price_target_x64;
             let swap_step = compute_swap_step(
                 sqrt_price_current_x64,
                 sqrt_price_target_x64,
@@ -183,6 +183,7 @@ mod swap_math_test {
                 amount_remaining,
                 fee_rate,
                 is_base_input,
+                zero_for_one,
             );
 
             let amount_in = swap_step.amount_in;
