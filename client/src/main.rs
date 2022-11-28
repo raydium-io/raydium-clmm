@@ -165,7 +165,7 @@ fn load_cur_and_next_five_tick_array(
     pool_state: &PoolState,
     zero_for_one: bool,
 ) -> VecDeque<TickArrayState> {
-    let mut current_vaild_tick_array_start_index = pool_state
+    let (_, mut current_vaild_tick_array_start_index) = pool_state
         .get_first_initialized_tick_array(zero_for_one)
         .unwrap();
     let mut tick_array_keys = Vec::new();
@@ -1991,6 +1991,53 @@ fn main() -> Result<()> {
                                 "open_time:{}, end_time:{}, emissions_per_second_x64:{}",
                                 open_time, end_time, emissions_per_second_x64
                             );
+                        }
+                        _ => {
+                            println!("Not decode yet");
+                        }
+                    }
+                }
+            }
+            "decode_log_event" => {
+                if v.len() == 2 {
+                    let log_event = v[1];
+                    let borsh_bytes = match anchor_lang::__private::base64::decode(&log_event) {
+                        Ok(borsh_bytes) => borsh_bytes,
+                        _ => {
+                            println!("Could not base64 decode log: {}", log_event);
+                            return Ok(());
+                        }
+                    };
+                    let mut slice: &[u8] = &borsh_bytes[..];
+                    let disc: [u8; 8] = {
+                        let mut disc = [0; 8];
+                        disc.copy_from_slice(&borsh_bytes[..8]);
+                        slice = &slice[8..];
+                        disc
+                    };
+
+                    match disc {
+                        [64, 198, 205, 232, 38, 8, 113, 226] => {
+                            let log =
+                                raydium_amm_v3::states::SwapEvent::deserialize(&mut &slice[..])
+                                    .map_err(|_| {
+                                        anchor_lang::error::ErrorCode::InstructionDidNotDeserialize
+                                    })
+                                    .unwrap();
+                            let raydium_amm_v3::states::SwapEvent {
+                                pool_state,
+                                sender,
+                                token_account_0,
+                                token_account_1,
+                                amount_0,
+                                amount_1,
+                                zero_for_one,
+                                sqrt_price_x64,
+                                liquidity,
+                                tick,
+                            } = log;
+                            let pool_f_price = sqrt_price_x64_to_price(sqrt_price_x64, 9, 6);
+                            println!("pool_state:{}, sender:{}, token_account_0:{}, token_account_1:{}, amount_0:{}, amount_1:{}, zero_for_one:{}, sqrt_price_x64:{}, pool_f_price:{}, liquidity:{}, tick:{}", pool_state, sender, token_account_0, token_account_1, amount_0, amount_1, zero_for_one, sqrt_price_x64, pool_f_price, liquidity, tick);
                         }
                         _ => {
                             println!("Not decode yet");

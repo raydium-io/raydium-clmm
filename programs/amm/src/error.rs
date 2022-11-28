@@ -16,7 +16,7 @@ pub enum ErrorCode {
     #[msg("Minting amount should be greater than 0")]
     ZeroMintAmount,
 
-    #[msg("Tick index of lower must be smaller than upper")]
+    #[msg("Tick out of range")]
     InvaildTickIndex,
     #[msg("The lower tick must be below the upper tick")]
     TickInvaildOrder,
@@ -28,6 +28,8 @@ pub enum ErrorCode {
     TickAndSpacingNotMatch,
     #[msg("Invaild tick array account")]
     InvalidTickArray,
+    #[msg("Invaild tick array boundary")]
+    InvalidTickArrayBoundary,
 
     #[msg("Square root price limit overflow")]
     SqrtPriceLimitOverflow,
@@ -45,6 +47,8 @@ pub enum ErrorCode {
     InvaildLiquidity,
     #[msg("Both token amount must not be zero while supply liquidity")]
     ForbidBothZeroForSupplyLiquidity,
+    #[msg("Liquidity insufficient")]
+    LiquidityInsufficient,
 
     /// swap errors
     // Non fungible position manager

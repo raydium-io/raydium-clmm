@@ -1,6 +1,11 @@
 ///! Helper functions to get most and least significant non-zero bits
 use super::big_num::U1024;
-use crate::states::tick_array::TICK_ARRAY_SIZE;
+use crate::error::ErrorCode;
+use crate::libraries::tick_math;
+use crate::states::tick_array::{
+    MAX_TICK_ARRAY_START_INDEX, MIN_TICK_ARRAY_START_INDEX, TICK_ARRAY_SIZE,
+};
+use anchor_lang::{require, Result};
 
 pub fn most_significant_bit(x: U1024) -> Option<u16> {
     if x.is_zero() {
@@ -22,7 +27,11 @@ pub fn check_current_tick_array_is_initialized(
     bit_map: U1024,
     tick_current: i32,
     tick_spacing: i32,
-) -> (bool, i32) {
+) -> Result<(bool, i32)> {
+    require!(
+        tick_current >= tick_math::MIN_TICK && tick_current <= tick_math::MAX_TICK,
+        ErrorCode::InvaildTickIndex
+    );
     let multiplier = i32::from(tick_spacing) * TICK_ARRAY_SIZE;
     let mut compressed = tick_current / multiplier + 512;
     if tick_current < 0 && tick_current % multiplier != 0 {
@@ -36,11 +45,10 @@ pub fn check_current_tick_array_is_initialized(
     // check the current bit whether initialized
     let initialized = masked != U1024::default();
     if initialized {
-        (true, (compressed - 512) * multiplier)
-    } else {
-        // the current bit is not initialized
-        (false, (compressed - 512) * multiplier)
+        return Ok((true, (compressed - 512) * multiplier));
     }
+    // the current bit is not initialized
+    return Ok((false, (compressed - 512) * multiplier));
 }
 
 pub fn next_initialized_tick_array_start_index(
@@ -49,6 +57,10 @@ pub fn next_initialized_tick_array_start_index(
     tick_spacing: i32,
     zero_for_one: bool,
 ) -> Option<i32> {
+    assert!(
+        tick_array_start_index >= MIN_TICK_ARRAY_START_INDEX
+            && tick_array_start_index <= MAX_TICK_ARRAY_START_INDEX
+    );
     let multiplier = i32::from(tick_spacing) * TICK_ARRAY_SIZE;
     let mut compressed = tick_array_start_index / multiplier + 512;
     if tick_array_start_index < 0 && tick_array_start_index % multiplier != 0 {
@@ -115,7 +127,8 @@ mod test {
         let mut tick_current = -307200;
         let mut start_index = -1;
         for _i in 0..1024 {
-            let ret = check_current_tick_array_is_initialized(bit_map, tick_current, tick_spacing);
+            let ret = check_current_tick_array_is_initialized(bit_map, tick_current, tick_spacing)
+                .unwrap();
             if ret.0 && ret.1 != start_index {
                 start_index = ret.1;
                 println!("{}-{}", tick_current, start_index);
@@ -297,5 +310,28 @@ mod test {
         array_start_index =
             next_initialized_tick_array_start_index(U1024(bit_map), 38400, tick_spacing, false);
         assert_eq!(array_start_index.unwrap(), 306600);
+    }
+
+    #[test]
+    fn next_initialized_tick_array_start_index_boundary_test() {
+        let tick_spacing = 10;
+        let bit_map = U1024::max_value();
+        let mut tick_array_start_index = MAX_TICK_ARRAY_START_INDEX;
+        let array_start_index = next_initialized_tick_array_start_index(
+            bit_map,
+            tick_array_start_index,
+            tick_spacing,
+            false,
+        );
+        assert!(array_start_index.is_none());
+
+        tick_array_start_index = MIN_TICK_ARRAY_START_INDEX;
+        let array_start_index = next_initialized_tick_array_start_index(
+            bit_map,
+            tick_array_start_index,
+            tick_spacing,
+            true,
+        );
+        assert!(array_start_index.is_none());
     }
 }

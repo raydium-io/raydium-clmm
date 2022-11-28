@@ -1,11 +1,11 @@
 use crate::error::ErrorCode;
-use crate::libraries::U256;
 use crate::libraries::{
     big_num::{U1024, U128},
     check_current_tick_array_is_initialized, fixed_point_64,
     full_math::MulDiv,
     next_initialized_tick_array_start_index,
 };
+use crate::libraries::{tick_math, U256};
 use crate::states::*;
 use crate::states::{MAX_TICK_ARRAY_START_INDEX, MIN_TICK_ARRAY_START_INDEX, TICK_ARRAY_SIZE};
 use anchor_lang::prelude::*;
@@ -234,6 +234,10 @@ impl PoolState {
     }
 
     pub fn pool_check_reset(&mut self, sqrt_price_x64: u128, tick: i32) -> Result<()> {
+        require!(
+            tick >= tick_math::MIN_TICK && tick <= tick_math::MAX_TICK,
+            ErrorCode::InvaildTickIndex
+        );
         if !U1024(self.tick_array_bitmap).is_zero() {
             return err!(ErrorCode::NotApproved);
         }
@@ -429,12 +433,15 @@ impl PoolState {
     }
 
     pub fn flip_tick_array_bit(&mut self, tick_array_start_index: i32) -> Result<()> {
+        require!(
+            tick_array_start_index >= MIN_TICK_ARRAY_START_INDEX
+                && tick_array_start_index <= MAX_TICK_ARRAY_START_INDEX,
+            ErrorCode::InvaildTickIndex
+        );
         require_eq!(
             0,
             tick_array_start_index % (TICK_ARRAY_SIZE * i32::from(self.tick_spacing))
         );
-        assert!(tick_array_start_index >= MIN_TICK_ARRAY_START_INDEX);
-        assert!(tick_array_start_index <= MAX_TICK_ARRAY_START_INDEX);
         let tick_array_offset_in_bitmap =
             tick_array_start_index / (i32::from(self.tick_spacing) * TICK_ARRAY_SIZE) + 512;
         let tick_array_bitmap = U1024(self.tick_array_bitmap);
@@ -445,21 +452,25 @@ impl PoolState {
 
     /// Search the first initialized tick array from pool current tick, if current tick array is initialized then direct return,
     /// else find next according to the direction
-    pub fn get_first_initialized_tick_array(&self, zero_for_one: bool) -> Option<i32> {
+    pub fn get_first_initialized_tick_array(&self, zero_for_one: bool) -> Result<(bool, i32)> {
         let (is_initialized, start_index) = check_current_tick_array_is_initialized(
             U1024(self.tick_array_bitmap),
             self.tick_current,
             self.tick_spacing.into(),
-        );
+        )?;
         if is_initialized {
-            return Some(start_index);
+            return Ok((is_initialized, start_index));
         }
-        next_initialized_tick_array_start_index(
+        let start_index = next_initialized_tick_array_start_index(
             U1024(self.tick_array_bitmap),
             self.tick_current,
             self.tick_spacing.into(),
             zero_for_one,
-        )
+        );
+        if start_index.is_none() {
+            return err!(ErrorCode::LiquidityInsufficient);
+        }
+        Ok((is_initialized, start_index.unwrap()))
     }
 
     pub fn set_status(&mut self, status: u8) {
@@ -641,9 +652,93 @@ pub struct SwapEvent {
     pub tick: i32,
 }
 
+/// Emitted pool liquidity change when increase and decrease liquidity
+#[event]
+pub struct LiquidityChangeEvent {
+    /// The pool for swap
+    #[index]
+    pub pool_state: Pubkey,
+
+    /// The tick of the pool
+    pub tick: i32,
+
+    /// The tick lower of position
+    pub tick_lower: i32,
+
+    /// The tick lower of position
+    pub tick_upper: i32,
+
+    /// The liquidity of the pool before liquidity change
+    pub liquidity_before: u128,
+
+    /// The liquidity of the pool after liquidity change
+    pub liquidity_after: u128,
+}
+
+/// Emitted when price move in a swap step
+#[event]
+pub struct PriceChangeEvent {
+    /// The pool for swap
+    #[index]
+    pub pool_state: Pubkey,
+
+    /// The tick of the pool before price change
+    pub tick_before: i32,
+
+    /// The tick of the pool after tprice change
+    pub tick_after: i32,
+
+    /// The sqrt(price) of the pool before price change, as a Q64.64
+    pub sqrt_price_x64_before: u128,
+
+    /// The sqrt(price) of the pool after price change, as a Q64.64
+    pub sqrt_price_x64_after: u128,
+
+    /// The liquidity of the pool before price change
+    pub liquidity_before: u128,
+
+    /// The liquidity of the pool after price change
+    pub liquidity_after: u128,
+
+    /// The direction of swap
+    pub zero_for_one: bool,
+}
+
 #[cfg(test)]
-mod test {
+pub mod pool_test {
+    use std::cell::RefCell;
     use super::*;
+
+    pub fn build_pool(
+        tick_current: i32,
+        tick_spacing: u16,
+        sqrt_price_x64: u128,
+        liquidity: u128,
+    ) -> RefCell<PoolState> {
+        let mut new_pool = PoolState::default();
+        new_pool.tick_current = tick_current;
+        new_pool.tick_spacing = tick_spacing;
+        new_pool.sqrt_price_x64 = sqrt_price_x64;
+        new_pool.liquidity = liquidity;
+        new_pool.token_mint_0 = Pubkey::new_unique();
+        new_pool.token_mint_1 = Pubkey::new_unique();
+        new_pool.amm_config = Pubkey::new_unique();
+        // let mut random = rand::random<u128>();
+        new_pool.fee_growth_global_0_x64 = rand::random::<u128>();
+        new_pool.fee_growth_global_1_x64 = rand::random::<u128>();
+        new_pool.bump = Pubkey::find_program_address(
+            &[
+                &POOL_SEED.as_bytes(),
+                new_pool.amm_config.as_ref(),
+                new_pool.token_mint_0.as_ref(),
+                new_pool.token_mint_1.as_ref(),
+            ],
+            &crate::id(),
+        )
+        .1;
+        RefCell::new(new_pool)
+    }
+
     mod tick_array_bitmap_test {
 
         use super::*;

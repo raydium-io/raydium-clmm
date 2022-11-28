@@ -2,6 +2,8 @@ use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 /// Oracle provides price data useful for a wide variety of system designs
 ///
 use anchor_lang::prelude::*;
+#[cfg(test)]
+use std::time::{SystemTime, UNIX_EPOCH};
 /// Seed to derive account address and signature
 pub const OBSERVATION_SEED: &str = "observation";
 // Number of ObservationState element
@@ -113,8 +115,16 @@ impl ObservationState {
 
 /// Returns the block timestamp truncated to 32 bits, i.e. mod 2**32
 ///
-pub fn _block_timestamp() -> u32 {
+pub fn block_timestamp() -> u32 {
     Clock::get().unwrap().unix_timestamp as u32 // truncation is desired
+}
+
+#[cfg(test)]
+pub fn block_timestamp_mock() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
 
 #[cfg(test)]

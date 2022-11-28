@@ -98,13 +98,14 @@ pub fn get_out_put_amount_and_remaining_accounts(
     pool_state: &PoolState,
     tick_arrays: &mut VecDeque<TickArrayState>,
 ) -> Result<(u64, VecDeque<i32>), &'static str> {
-    let current_vaild_tick_array_start_index = pool_state
+    let (is_pool_current_tick_array, current_vaild_tick_array_start_index) = pool_state
         .get_first_initialized_tick_array(zero_for_one)
         .unwrap();
 
     let (amount_calculated, tick_array_start_index_vec) = swap_compute(
         zero_for_one,
         is_base_input,
+        is_pool_current_tick_array,
         pool_config.trade_fee_rate,
         input_amount,
         current_vaild_tick_array_start_index,
@@ -120,6 +121,7 @@ pub fn get_out_put_amount_and_remaining_accounts(
 fn swap_compute(
     zero_for_one: bool,
     is_base_input: bool,
+    is_pool_current_tick_array: bool,
     fee: u32,
     amount_specified: u64,
     current_vaild_tick_array_start_index: i32,
@@ -154,6 +156,7 @@ fn swap_compute(
             return Result::Err("sqrt_price_limit_x64 must greater than current");
         }
     }
+    let mut tick_match_current_tick_array = is_pool_current_tick_array;
 
     let mut state = SwapState {
         amount_specified_remaining: amount_specified,
@@ -188,7 +191,16 @@ fn swap_compute(
         {
             Box::new(*tick_state)
         } else {
-            Box::new(TickState::default())
+            if !tick_match_current_tick_array {
+                tick_match_current_tick_array = true;
+                Box::new(
+                    *tick_array_current
+                        .first_initialized_tick(zero_for_one)
+                        .unwrap(),
+                )
+            } else {
+                Box::new(TickState::default())
+            }
         };
         if !next_initialized_tick.is_initialized() {
             let current_vaild_tick_array_start_index =
@@ -234,6 +246,7 @@ fn swap_compute(
             state.amount_specified_remaining,
             fee,
             is_base_input,
+            zero_for_one,
         );
         state.sqrt_price_x64 = swap_step.sqrt_price_next_x64;
         step.amount_in = swap_step.amount_in;

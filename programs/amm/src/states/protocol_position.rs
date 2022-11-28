@@ -1,3 +1,4 @@
+use crate::libraries::tick_math;
 use crate::libraries::{big_num::U128, full_math::MulDiv};
 use crate::pool::REWARD_NUM;
 use crate::{
@@ -58,8 +59,16 @@ impl ProtocolPositionState {
         fee_growth_inside_1_x64: u128,
         reward_growths_inside: [u128; REWARD_NUM],
     ) -> Result<()> {
+        require!(
+            tick_lower_index >= tick_math::MIN_TICK && tick_lower_index <= tick_math::MAX_TICK,
+            ErrorCode::TickLowerOverflow
+        );
+        require!(
+            tick_upper_index >= tick_math::MIN_TICK && tick_upper_index <= tick_math::MAX_TICK,
+            ErrorCode::TickUpperOverflow
+        );
         let liquidity_next = if liquidity_delta == 0 {
-            require!(self.liquidity > 0, ErrorCode::InvaildLiquidity); 
+            require!(self.liquidity > 0, ErrorCode::InvaildLiquidity);
             self.liquidity
         } else {
             liquidity_math::add_delta(self.liquidity, liquidity_delta)?
@@ -90,7 +99,10 @@ impl ProtocolPositionState {
             self.token_fees_owed_1 = self.token_fees_owed_1.checked_add(tokens_owed_1).unwrap();
         }
         #[cfg(feature = "enable-log")]
-        msg!("protocol position reward_growths_inside:{:?}", reward_growths_inside);
+        msg!(
+            "protocol position reward_growths_inside:{:?}",
+            reward_growths_inside
+        );
         self.update_reward_growths_inside(reward_growths_inside);
         Ok(())
     }

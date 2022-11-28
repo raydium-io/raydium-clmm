@@ -12,12 +12,6 @@ pub fn transfer_from_user_to_pool_vault<'info>(
     if amount == 0 {
         return Ok(());
     }
-    msg!(
-        "deposit to vault, from_account:{},to_vault:{}, amount: {}",
-        from.key(),
-        to_vault.key(),
-        amount,
-    );
     token::transfer(
         CpiContext::new(
             token_program.to_account_info(),
@@ -41,12 +35,6 @@ pub fn transfer_from_pool_vault_to_user<'info>(
     if amount == 0 {
         return Ok(());
     }
-    msg!(
-        "withdraw from vault, from_vault:{}, to_account:{}, amount: {}",
-        from_vault.key(),
-        to.key(),
-        amount
-    );
     let pool_state = pool_state_loader.load()?;
     let pool_state_seeds = [
         &POOL_SEED.as_bytes(),

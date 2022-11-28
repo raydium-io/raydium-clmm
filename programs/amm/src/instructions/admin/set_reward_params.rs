@@ -9,10 +9,11 @@ use anchor_spl::token::{Token, TokenAccount};
 #[derive(Accounts)]
 pub struct SetRewardParams<'info> {
     /// Address to be set as protocol owner. It pays to create factory state account.
-    #[account(mut)]
     pub authority: Signer<'info>,
 
-    #[account(mut)]
+    #[account(
+        address = pool_state.load()?.amm_config
+    )]
     pub amm_config: Account<'info, AmmConfig>,
 
     #[account(
@@ -23,7 +24,6 @@ pub struct SetRewardParams<'info> {
 
     /// load info from the account to judge reward permission
     #[account(
-        mut,
         seeds = [
             OPERATION_SEED.as_bytes(),
         ],
@@ -42,7 +42,9 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
     assert!((reward_index as usize) < REWARD_NUM);
     let operation_state = ctx.accounts.operation_state.load()?;
     let mut admin_keys = operation_state.operation_owners.to_vec();
-    admin_keys.push(ctx.accounts.amm_config.owner);
+    if ctx.accounts.amm_config.owner != Pubkey::default() {
+        admin_keys.push(ctx.accounts.amm_config.owner);
+    }
     admin_keys.push(crate::admin::id());
     let admin_operator = admin_keys.contains(&ctx.accounts.authority.key())
         && ctx.accounts.authority.key() != Pubkey::default();
@@ -148,17 +150,21 @@ fn normal_update(
         }
         let left_reward_time = reward_info.end_time.checked_sub(current_timestamp).unwrap();
         let extend_period = end_time.checked_sub(reward_info.end_time).unwrap();
-        if left_reward_time > reward_period_limit::INCREASE_EMISSIONES_PERIOD
-            || extend_period < reward_period_limit::MIN_REWARD_PERIOD
+        if extend_period < reward_period_limit::MIN_REWARD_PERIOD
             || extend_period > reward_period_limit::MAX_REWARD_PERIOD
         {
             return err!(ErrorCode::NotApproveUpdateRewardEmissiones);
         }
         if emissions_per_second_x64 > 0 {
-            // emissions_per_second_x64 must not smaller than before
-            let emission_diff_x64 = emissions_per_second_x64
-                .checked_sub(reward_info.emissions_per_second_x64)
-                .unwrap();
+            // emissions_per_second_x64 must not smaller than before with in 72hrs
+            if emissions_per_second_x64 < reward_info.emissions_per_second_x64 {
+                require_gt!(
+                    reward_period_limit::INCREASE_EMISSIONES_PERIOD,
+                    left_reward_time
+                );
+            }
+            let emission_diff_x64 =
+                emissions_per_second_x64.saturating_sub(reward_info.emissions_per_second_x64);
             reward_amount = U256::from(left_reward_time)
                 .mul_div_floor(
                     U256::from(emission_diff_x64),
