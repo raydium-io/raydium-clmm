@@ -22,5 +22,11 @@ pub use swap_router_base_in::*;
 pub mod update_reward_info;
 pub use update_reward_info::*;
 
+pub mod initialize_reward;
+pub use initialize_reward::*;
+
+pub mod set_reward_params;
+pub use set_reward_params::*;
+
 pub mod admin;
 pub use admin::*;
