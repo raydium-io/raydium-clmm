@@ -10,7 +10,7 @@ use states::*;
 use util::access_control::*;
 
 #[cfg(feature = "devnet")]
-declare_id!("DEVeYuwvQnhz1roDpSwqmnWtoKTeYftM7Qt7gFPMF3tj");
+declare_id!("devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH");
 #[cfg(not(feature = "devnet"))]
 declare_id!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 
@@ -140,6 +140,19 @@ pub mod amm_v3 {
         index: i32,
     ) -> Result<()> {
         instructions::modify_pool(ctx, param, val, index)
+    }
+
+    /// Transfer reward owner
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`- The context of accounts
+    ///
+    pub fn transfer_reward_owner<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, TransferRewardOwner<'info>>,
+        new_owner: Pubkey
+    ) -> Result<()> {
+        instructions::transfer_reward_owner(ctx, new_owner)
     }
 
     /// Initialize a reward info for a given pool and reward index

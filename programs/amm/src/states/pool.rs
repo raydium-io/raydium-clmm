@@ -373,7 +373,7 @@ impl PoolState {
                     .reward_total_emissioned
                     .checked_add(
                         U128::from(time_delta)
-                            .mul_div_floor(
+                            .mul_div_ceil(
                                 U128::from(reward_info.emissions_per_second_x64),
                                 U128::from(fixed_point_64::Q64),
                             )

@@ -178,8 +178,9 @@ fn load_cur_and_next_five_tick_array(
     pool_state: &PoolState,
     zero_for_one: bool,
 ) -> VecDeque<TickArrayState> {
-    let (_, mut current_vaild_tick_array_start_index) =
-        pool_state.get_first_initialized_tick_array(zero_for_one).unwrap();
+    let (_, mut current_vaild_tick_array_start_index) = pool_state
+        .get_first_initialized_tick_array(zero_for_one)
+        .unwrap();
     let mut tick_array_keys = Vec::new();
     tick_array_keys.push(
         Pubkey::find_program_address(
@@ -2263,6 +2264,30 @@ fn main() -> Result<()> {
                     for pool in pools {
                         println!("{}", pool.0.to_string());
                     }
+                }
+                "transfer_reward_owner" => {
+                    if v.len() != 3 {
+                        panic!("invalild args")
+                    }
+                    let pool_id = Pubkey::from_str(&v[1]).unwrap();
+                    let new_owner = Pubkey::from_str(&v[2]).unwrap();
+                    let transfer_reward_owner_instrs = transfer_reward_owner(
+                        &pool_config.clone(),
+                        pool_id,
+                        new_owner,
+                    )
+                    .unwrap();
+                    // send
+                    let signers = vec![&payer, &admin];
+                    let recent_hash = rpc_client.get_latest_blockhash()?;
+                    let txn = Transaction::new_signed_with_payer(
+                        &transfer_reward_owner_instrs,
+                        Some(&payer.pubkey()),
+                        &signers,
+                        recent_hash,
+                    );
+                    let signature = send_txn(&rpc_client, &txn, true)?;
+                    println!("{}", signature);
                 }
                 _ => {
                     println!("command not exist");

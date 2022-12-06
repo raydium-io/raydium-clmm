@@ -30,3 +30,7 @@ pub use update_operation_account::*;
 
 pub mod modify_pool;
 pub use modify_pool::*;
+
+pub mod transfer_reward_owner;
+pub use transfer_reward_owner::*;
+
