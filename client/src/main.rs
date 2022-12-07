@@ -2045,6 +2045,30 @@ fn main() -> Result<()> {
                     }
                 }
             }
+            "transfer_reward_owner" => {
+                if v.len() != 3 {
+                    panic!("invalild args")
+                }
+                let pool_id = Pubkey::from_str(&v[1]).unwrap();
+                let new_owner = Pubkey::from_str(&v[2]).unwrap();
+                let transfer_reward_owner_instrs = transfer_reward_owner(
+                    &pool_config.clone(),
+                    pool_id,
+                    new_owner,
+                )
+                .unwrap();
+                // send
+                let signers = vec![&payer, &admin];
+                let recent_hash = rpc_client.get_latest_blockhash()?;
+                let txn = Transaction::new_signed_with_payer(
+                    &transfer_reward_owner_instrs,
+                    Some(&payer.pubkey()),
+                    &signers,
+                    recent_hash,
+                );
+                let signature = send_txn(&rpc_client, &txn, true)?;
+                println!("{}", signature);
+            }
             _ => {
                 println!("command not exist");
             }

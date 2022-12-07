@@ -48,11 +48,14 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
         )?);
         let mut observation_state =
             AccountLoader::<ObservationState>::try_from(remaining_accounts.next().unwrap())?;
-        // check observation account is owned by the pool
-        require_keys_eq!(
-            pool_state_loader.load()?.observation_key,
-            observation_state.key()
-        );
+
+        {
+            let pool_state = pool_state_loader.load()?;
+            // check observation account is owned by the pool
+            require_keys_eq!(pool_state.observation_key, observation_state.key());
+            // check ammConfig account is associate with the pool
+            require_keys_eq!(pool_state.amm_config, amm_config.key());
+        }
 
         let mut tick_array =
             AccountLoader::<TickArrayState>::try_from(remaining_accounts.next().unwrap())?;
