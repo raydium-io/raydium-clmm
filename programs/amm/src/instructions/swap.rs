@@ -173,6 +173,7 @@ pub fn swap_internal<'b, 'info>(
         ErrorCode::InvalidInputPoolVault
     );
 
+    require_keys_eq!(ctx.amm_config.key(), pool_state.amm_config);
     let amm_config = ctx.amm_config.deref();
 
     let cache = &mut SwapCache {
