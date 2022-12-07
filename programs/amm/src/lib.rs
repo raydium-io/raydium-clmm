@@ -127,6 +127,20 @@ pub mod amm_v3 {
         instructions::reset_sqrt_price(ctx, sqrt_price_x64)
     }
 
+    /// Transfer reward owner
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`- The context of accounts
+    /// * `new_owner`- new owner pubkey
+    ///
+    pub fn transfer_reward_owner<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, TransferRewardOwner<'info>>,
+        new_owner: Pubkey,
+    ) -> Result<()> {
+        instructions::transfer_reward_owner(ctx, new_owner)
+    }
+
     /// Initialize a reward info for a given pool and reward index
     ///
     /// # Arguments
