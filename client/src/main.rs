@@ -24,10 +24,10 @@ use solana_sdk::{
     signature::{Keypair, Signer},
     transaction::Transaction,
 };
-use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
+use std::{collections::HashMap, time::Duration};
 use std::{collections::VecDeque, convert::identity, mem::size_of};
 use std::{thread, time};
 
@@ -2271,12 +2271,8 @@ fn main() -> Result<()> {
                     }
                     let pool_id = Pubkey::from_str(&v[1]).unwrap();
                     let new_owner = Pubkey::from_str(&v[2]).unwrap();
-                    let transfer_reward_owner_instrs = transfer_reward_owner(
-                        &pool_config.clone(),
-                        pool_id,
-                        new_owner,
-                    )
-                    .unwrap();
+                    let transfer_reward_owner_instrs =
+                        transfer_reward_owner(&pool_config.clone(), pool_id, new_owner).unwrap();
                     // send
                     let signers = vec![&payer, &admin];
                     let recent_hash = rpc_client.get_latest_blockhash()?;
@@ -2288,6 +2284,30 @@ fn main() -> Result<()> {
                     );
                     let signature = send_txn(&rpc_client, &txn, true)?;
                     println!("{}", signature);
+                }
+                "update_reward_info" => {
+                    if v.len() != 3 {
+                        panic!("invalild args")
+                    }
+                    let pool_id = Pubkey::from_str(&v[1]).unwrap();
+                    let count = Some(v[2].parse::<u32>().unwrap()).unwrap();
+                    let time_duration = Duration::from_secs(3);
+                    for i in 0..count {
+                        let update_rewrd_info_instrs =
+                            update_rewrd_info(&pool_config.clone(), pool_id).unwrap();
+                        // send
+                        let signers = vec![&payer];
+                        let recent_hash = rpc_client.get_latest_blockhash()?;
+                        let txn = Transaction::new_signed_with_payer(
+                            &update_rewrd_info_instrs,
+                            Some(&payer.pubkey()),
+                            &signers,
+                            recent_hash,
+                        );
+                        let signature = send_txn(&rpc_client, &txn, false)?;
+                        println!("i:{},{}", i, signature);
+                        std::thread::sleep(time_duration)
+                    }
                 }
                 _ => {
                     println!("command not exist");

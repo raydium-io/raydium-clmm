@@ -672,3 +672,23 @@ pub fn transfer_reward_owner(
         .instructions()?;
     Ok(instructions)
 }
+
+pub fn update_rewrd_info(
+    config: &ClientConfig,
+    pool_account_key: Pubkey,
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
+    let program = client.program(config.raydium_v3_program);
+
+    let instructions = program
+        .request()
+        .accounts(raydium_accounts::UpdateRewardInfos {
+            pool_state: pool_account_key,
+        })
+        .args(raydium_instruction::UpdateRewardInfos)
+        .instructions()?;
+    Ok(instructions)
+}
