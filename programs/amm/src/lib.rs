@@ -19,7 +19,7 @@ pub mod admin {
     #[cfg(feature = "devnet")]
     declare_id!("adMCyoCgfkg7bQiJ9aBJ59H3BXLY3r5LNLfPpQfMzBe");
     #[cfg(not(feature = "devnet"))]
-    declare_id!("HggGrUeg4ReGvpPMLJMFKV69NTXL1r4wQ9Pk9Ljutwyv");
+    declare_id!("NCV2Uo3hfW5LSZXAJe19y6SpC5K98PuQwShCSZgTki3");
 }
 
 #[program]
