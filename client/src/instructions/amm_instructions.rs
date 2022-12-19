@@ -177,38 +177,6 @@ pub fn create_pool_instr(
     Ok(instructions)
 }
 
-pub fn admin_reset_sqrt_price_instr(
-    config: &ClientConfig,
-    pool_account_key: Pubkey,
-    token_vault_0: Pubkey,
-    token_vault_1: Pubkey,
-    observation_key: Pubkey,
-    user_token_account_0: Pubkey,
-    user_token_account_1: Pubkey,
-    sqrt_price_x64: u128,
-) -> Result<Vec<Instruction>> {
-    let admin = read_keypair_file(&config.admin_path)?;
-    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
-    // Client.
-    let client = Client::new(url, Rc::new(admin));
-    let program = client.program(config.raydium_v3_program);
-    let instructions = program
-        .request()
-        .accounts(raydium_accounts::ResetSqrtPrice {
-            owner: program.payer(),
-            pool_state: pool_account_key,
-            token_vault_0,
-            token_vault_1,
-            observation_state: observation_key,
-            recipient_token_account_0: user_token_account_0,
-            recipient_token_account_1: user_token_account_1,
-            token_program: spl_token::id(),
-        })
-        .args(raydium_instruction::ResetSqrtPrice { sqrt_price_x64 })
-        .instructions()?;
-    Ok(instructions)
-}
-
 pub fn open_position_instr(
     config: &ClientConfig,
     pool_account_key: Pubkey,

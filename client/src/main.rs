@@ -868,51 +868,6 @@ fn main() -> Result<()> {
                     }
                 }
             }
-            "admin_reset_sqrt_price" => {
-                if v.len() == 4 {
-                    let program = anchor_client.program(pool_config.raydium_v3_program);
-                    println!("{}", pool_config.pool_id_account.unwrap());
-                    let pool_account: raydium_amm_v3::states::PoolState =
-                        program.account(pool_config.pool_id_account.unwrap())?;
-                    let price = v[1].parse::<f64>().unwrap();
-                    let receive_token_0 = Pubkey::from_str(&v[2]).unwrap();
-                    let receive_token_1 = Pubkey::from_str(&v[3]).unwrap();
-                    let sqrt_price_x64 = price_to_sqrt_price_x64(
-                        price,
-                        pool_account.mint_decimals_0,
-                        pool_account.mint_decimals_1,
-                    );
-                    let tick = tick_math::get_tick_at_sqrt_price(sqrt_price_x64).unwrap();
-                    println!(
-                        "tick:{}, price:{}, sqrt_price_x64:{}",
-                        tick, price, sqrt_price_x64
-                    );
-                    let admin_reset_sqrt_price_instr = admin_reset_sqrt_price_instr(
-                        &pool_config.clone(),
-                        pool_config.pool_id_account.unwrap(),
-                        pool_account.token_vault_0,
-                        pool_account.token_vault_1,
-                        pool_account.observation_key,
-                        receive_token_0,
-                        receive_token_1,
-                        sqrt_price_x64,
-                    )
-                    .unwrap();
-                    // send
-                    let signers = vec![&payer, &admin];
-                    let recent_hash = rpc_client.get_latest_blockhash()?;
-                    let txn = Transaction::new_signed_with_payer(
-                        &admin_reset_sqrt_price_instr,
-                        Some(&payer.pubkey()),
-                        &signers,
-                        recent_hash,
-                    );
-                    let signature = send_txn(&rpc_client, &txn, true)?;
-                    println!("{}", signature);
-                } else {
-                    println!("invalid command: [admin_reset_sqrt_price price receive_token_0 receive_token_1]");
-                }
-            }
             "init_reward" => {
                 if v.len() == 5 {
                     let open_time = v[1].parse::<u64>().unwrap();

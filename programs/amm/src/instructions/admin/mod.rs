@@ -7,9 +7,6 @@ pub use update_amm_config::*;
 pub mod collect_protocol_fee;
 pub use collect_protocol_fee::*;
 
-pub mod reset_sqrt_price;
-pub use reset_sqrt_price::*;
-
 pub mod collect_remaining_rewards;
 pub use collect_remaining_rewards::*;
 

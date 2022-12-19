@@ -19,7 +19,7 @@ pub mod admin {
     #[cfg(feature = "devnet")]
     declare_id!("adMCyoCgfkg7bQiJ9aBJ59H3BXLY3r5LNLfPpQfMzBe");
     #[cfg(not(feature = "devnet"))]
-    declare_id!("HggGrUeg4ReGvpPMLJMFKV69NTXL1r4wQ9Pk9Ljutwyv");
+    declare_id!("GThUX1Atko4tqhN2NaiTazWSeFWMuiUvfFnyJyUghFMJ");
 }
 
 #[program]
@@ -114,17 +114,6 @@ pub mod amm_v3 {
         keys: Vec<Pubkey>,
     ) -> Result<()> {
         instructions::update_operation_account(ctx, param, keys)
-    }
-
-    /// Reset a pool sqrt price, only can be reset if the pool hasn't be used.
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx`- The context of accounts
-    /// * `sqrt_price_x64` - the reset sqrt price of the pool as a Q64.64
-    ///
-    pub fn reset_sqrt_price(ctx: Context<ResetSqrtPrice>, sqrt_price_x64: u128) -> Result<()> {
-        instructions::reset_sqrt_price(ctx, sqrt_price_x64)
     }
 
     /// Transfer reward owner
