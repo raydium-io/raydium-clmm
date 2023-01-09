@@ -87,6 +87,7 @@ pub fn create_ata_token_account_instr(
                 &program.payer(),
                 owner,
                 mint,
+                &spl_token::ID,
             ),
         )
         .instructions()?;

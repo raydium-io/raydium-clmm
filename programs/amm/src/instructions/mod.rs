@@ -28,5 +28,8 @@ pub use initialize_reward::*;
 pub mod set_reward_params;
 pub use set_reward_params::*;
 
+pub mod collect_remaining_rewards;
+pub use collect_remaining_rewards::*;
+
 pub mod admin;
 pub use admin::*;

@@ -94,8 +94,7 @@ pub fn initialize_reward(
 ) -> Result<()> {
     let operation_state = ctx.accounts.operation_state.load()?;
     require!(
-        ctx.accounts.reward_funder.key() == ctx.accounts.amm_config.owner
-            || ctx.accounts.reward_funder.key() == crate::admin::id()
+        ctx.accounts.reward_funder.key() == crate::admin::id()
             || ctx.accounts.reward_funder.key() == ctx.accounts.pool_state.load()?.owner
             || operation_state.validate_operation_owner(ctx.accounts.reward_funder.key()),
         ErrorCode::NotApproved
@@ -125,7 +124,6 @@ pub fn initialize_reward(
         &ctx.accounts.reward_token_mint.key(),
         &ctx.accounts.reward_token_vault.key(),
         &ctx.accounts.reward_funder.key(),
-        &ctx.accounts.amm_config.owner,
         &operation_state,
     )?;
 

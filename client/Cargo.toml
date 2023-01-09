@@ -5,13 +5,13 @@ rust-version = "1.56"
 edition = "2021"
 
 [dependencies]
-anchor-client = "0.25.0"
-anchor-lang = "0.25.0"
+anchor-client = "0.26.0"
+anchor-lang = "0.26.0"
 raydium-amm-v3 = {path = "../programs/amm", features = ["no-entrypoint"]}
-solana-sdk = "1.10.29"
-solana-client = "1.10.29"
-solana-account-decoder = "1.10.29"
-spl-token = { version = "~3.3.0", features=["no-entrypoint"] }
+solana-sdk = "1.13.5"
+solana-client = "1.13.5"
+solana-account-decoder = "1.13.5"
+spl-token = { version = "3.5.0", features=["no-entrypoint"] }
 spl-associated-token-account = "1.0.3"
 mpl-token-metadata = { version = "1.2.7", features = ["no-entrypoint"] }
 clap = { version = "3.0.0-rc.0", features = ["derive"] }
