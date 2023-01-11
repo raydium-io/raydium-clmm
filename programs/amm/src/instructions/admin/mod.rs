@@ -7,9 +7,6 @@ pub use update_amm_config::*;
 pub mod collect_protocol_fee;
 pub use collect_protocol_fee::*;
 
-pub mod collect_remaining_rewards;
-pub use collect_remaining_rewards::*;
-
 pub mod collect_fund_fee;
 pub use collect_fund_fee::*;
 

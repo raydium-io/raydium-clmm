@@ -1,14 +1,14 @@
 use crate::decrease_liquidity::check_unclaimed_fees_and_vault;
+use crate::error::ErrorCode;
 use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
+
 #[derive(Accounts)]
 pub struct CollectProtocolFee<'info> {
     /// Only admin or config owner can collect fee now
-    #[account(
-        constraint = ((owner.key() == amm_config.owner && amm_config.owner != Pubkey::default()) || owner.key() == crate::admin::id())
-    )]
+    #[account(constraint = (owner.key() == amm_config.owner || owner.key() == crate::admin::id()) @ ErrorCode::NotApproved)]
     pub owner: Signer<'info>,
 
     /// Pool state stores accumulated protocol fee amount

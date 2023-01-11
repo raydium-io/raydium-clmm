@@ -269,7 +269,6 @@ impl PoolState {
         token_mint: &Pubkey,
         token_vault: &Pubkey,
         authority: &Pubkey,
-        amm_config_owner: &Pubkey,
         operation_state: &OperationState,
     ) -> Result<()> {
         let reward_infos = self.reward_infos;
@@ -310,8 +309,7 @@ impl PoolState {
         } else if lowest_index == REWARD_NUM - 1 {
             // the last reward token must be controled by the admin
             require!(
-                *authority == *amm_config_owner
-                    || *authority == crate::admin::id()
+                *authority == crate::admin::id()
                     || operation_state.validate_operation_owner(*authority),
                 ErrorCode::NotApproved
             );
@@ -706,8 +704,8 @@ pub struct PriceChangeEvent {
 
 #[cfg(test)]
 pub mod pool_test {
-    use std::cell::RefCell;
     use super::*;
+    use std::cell::RefCell;
 
     pub fn build_pool(
         tick_current: i32,
@@ -1038,7 +1036,6 @@ pub mod pool_test {
                     1666069200,
                     10,
                     &Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
-                    &Pubkey::default(),
                     &Pubkey::default(),
                     &Pubkey::default(),
                     &operation_state,

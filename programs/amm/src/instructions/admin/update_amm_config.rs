@@ -5,6 +5,7 @@ use anchor_lang::prelude::*;
 #[derive(Accounts)]
 pub struct UpdateAmmConfig<'info> {
     /// The amm config owner or admin
+    #[account(address = crate::admin::id() @ ErrorCode::NotApproved)]
     pub owner: Signer<'info>,
 
     /// Amm config account to be changed
@@ -13,12 +14,6 @@ pub struct UpdateAmmConfig<'info> {
 }
 
 pub fn update_amm_config(ctx: Context<UpdateAmmConfig>, param: u8, value: u32) -> Result<()> {
-    require!(
-        (ctx.accounts.owner.key() == ctx.accounts.amm_config.owner
-            && ctx.accounts.amm_config.owner != Pubkey::default())
-            || ctx.accounts.owner.key() == crate::admin::id(),
-        ErrorCode::NotApproved
-    );
     let amm_config = &mut ctx.accounts.amm_config;
     let match_param = Some(param);
     match match_param {

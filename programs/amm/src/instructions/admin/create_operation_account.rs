@@ -1,12 +1,12 @@
+use crate::error::ErrorCode;
 use crate::states::*;
 use anchor_lang::prelude::*;
-
 #[derive(Accounts)]
 pub struct CreateOperationAccount<'info> {
     /// Address to be set as operation account owner.
     #[account(
         mut,
-        address = crate::admin::id()
+        address = crate::admin::id() @ ErrorCode::NotApproved
     )]
     pub owner: Signer<'info>,
 
