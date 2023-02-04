@@ -422,8 +422,8 @@ pub fn check_unclaimed_fees_and_vault(
         .checked_sub(pool_state.total_fees_claimed_token_1)
         .unwrap();
 
-    if unclaimed_fee_token_0 >= token_vault_0.amount
-        || unclaimed_fee_token_1 >= token_vault_1.amount
+    if (unclaimed_fee_token_0 >= token_vault_0.amount && token_vault_0.amount != 0)
+        || (unclaimed_fee_token_1 >= token_vault_1.amount && token_vault_1.amount != 0)
     {
         pool_state.set_status_by_bit(PoolStatusBitIndex::CollectFee, PoolStatusBitFlag::Disable);
     }

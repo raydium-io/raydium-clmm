@@ -87,6 +87,17 @@ pub mod amm_v3 {
         instructions::create_pool(ctx, sqrt_price_x64)
     }
 
+    /// Update pool status for given vaule
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`- The context of accounts
+    /// * `status` - The vaule of status
+    ///
+    pub fn update_pool_status(ctx: Context<UpdatePoolStatus>, status: u8) -> Result<()> {
+        instructions::update_pool_status(ctx, status)
+    }
+
     /// Creates an operation account for the program
     ///
     /// # Arguments
