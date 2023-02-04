@@ -1970,7 +1970,6 @@ fn main() -> Result<()> {
                         slice = &slice[8..];
                         disc
                     };
-
                     match disc {
                         [64, 198, 205, 232, 38, 8, 113, 226] => {
                             let log =
@@ -1994,6 +1993,25 @@ fn main() -> Result<()> {
                             let pool_f_price = sqrt_price_x64_to_price(sqrt_price_x64, 9, 6);
                             println!("pool_state:{}, sender:{}, token_account_0:{}, token_account_1:{}, amount_0:{}, amount_1:{}, zero_for_one:{}, sqrt_price_x64:{}, pool_f_price:{}, liquidity:{}, tick:{}", pool_state, sender, token_account_0, token_account_1, amount_0, amount_1, zero_for_one, sqrt_price_x64, pool_f_price, liquidity, tick);
                         }
+                        [58, 222, 86, 58, 68, 50, 85, 56] => {
+                            let log = raydium_amm_v3::states::DecreaseLiquidityEvent::deserialize(
+                                &mut &slice[..],
+                            )
+                            .map_err(|_| {
+                                anchor_lang::error::ErrorCode::InstructionDidNotDeserialize
+                            })
+                            .unwrap();
+                            let raydium_amm_v3::states::DecreaseLiquidityEvent {
+                                position_nft_mint,
+                                liquidity,
+                                decrease_amount_0,
+                                decrease_amount_1,
+                                fee_amount_0,
+                                fee_amount_1,
+                                reward_amounts,
+                            } = log;
+                            println!("position_nft_mint:{}, liquidity:{}, decrease_amount_0:{}, decrease_amount_1:{}, fee_amount_0:{}, fee_amount_1:{}, reward_amounts:{:?}", position_nft_mint, liquidity, decrease_amount_0, decrease_amount_1,fee_amount_0,fee_amount_1,reward_amounts);
+                        }
                         _ => {
                             println!("Not decode yet");
                         }
@@ -2006,12 +2024,8 @@ fn main() -> Result<()> {
                 }
                 let pool_id = Pubkey::from_str(&v[1]).unwrap();
                 let new_owner = Pubkey::from_str(&v[2]).unwrap();
-                let transfer_reward_owner_instrs = transfer_reward_owner(
-                    &pool_config.clone(),
-                    pool_id,
-                    new_owner,
-                )
-                .unwrap();
+                let transfer_reward_owner_instrs =
+                    transfer_reward_owner(&pool_config.clone(), pool_id, new_owner).unwrap();
                 // send
                 let signers = vec![&payer, &admin];
                 let recent_hash = rpc_client.get_latest_blockhash()?;
