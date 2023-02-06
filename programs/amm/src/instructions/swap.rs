@@ -332,21 +332,22 @@ pub fn swap_internal<'b, 'info>(
         let step_fee_amount = step.fee_amount;
         // if the protocol fee is on, calculate how much is owed, decrement fee_amount, and increment protocol_fee
         if amm_config.protocol_fee_rate > 0 {
-            let delta = step_fee_amount
-                .checked_mul(u64::from(amm_config.protocol_fee_rate))
+            let delta = U128::from(step_fee_amount)
+                .checked_mul(amm_config.protocol_fee_rate.into())
                 .unwrap()
-                .checked_div(u64::from(FEE_RATE_DENOMINATOR_VALUE))
-                .unwrap();
+                .checked_div(FEE_RATE_DENOMINATOR_VALUE.into())
+                .unwrap()
+                .as_u64();
             step.fee_amount = step.fee_amount.checked_sub(delta).unwrap();
             state.protocol_fee = state.protocol_fee.checked_add(delta).unwrap();
         }
         // if the fund fee is on, calculate how much is owed, decrement fee_amount, and increment fund_fee
         if amm_config.fund_fee_rate > 0 {
-            let delta = step_fee_amount
-                .checked_mul(u64::from(amm_config.fund_fee_rate))
+            let delta = U128::from(step_fee_amount)
+                .checked_mul(amm_config.fund_fee_rate.into())
                 .unwrap()
-                .checked_div(u64::from(FEE_RATE_DENOMINATOR_VALUE))
-                .unwrap();
+                .checked_div(FEE_RATE_DENOMINATOR_VALUE.into())
+                .unwrap().as_u64();
             step.fee_amount = step.fee_amount.checked_sub(delta).unwrap();
             state.fund_fee = state.fund_fee.checked_add(delta).unwrap();
         }
