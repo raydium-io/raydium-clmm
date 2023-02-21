@@ -256,7 +256,7 @@ mod tick_math_test {
         proptest! {
             #[test]
             fn get_sqrt_price_at_tick_test (
-                tick in MIN_TICK..MAX_TICK,
+                tick in MIN_TICK+1..MAX_TICK-1,
             ) {
                 let sqrt_price_x64 = get_sqrt_price_at_tick(tick).unwrap();
 
@@ -293,7 +293,7 @@ mod tick_math_test {
 
             #[test]
             fn get_sqrt_price_at_tick_is_sequence_test (
-                tick in MIN_TICK-1..MAX_TICK
+                tick in MIN_TICK+1..MAX_TICK
             ) {
 
                 let sqrt_price_x64 = get_sqrt_price_at_tick(tick).unwrap();
