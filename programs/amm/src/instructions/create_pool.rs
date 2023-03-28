@@ -77,7 +77,7 @@ pub struct CreatePool<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()> {
+pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u64) -> Result<()> {
     let mut pool_state = ctx.accounts.pool_state.load_init()?;
     let observation_state_loader = initialize_observation_account(
         ctx.accounts.observation_state.to_account_info(),
@@ -96,6 +96,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128) -> Result<()>
     pool_state.initialize(
         bump,
         sqrt_price_x64,
+        open_time,
         tick,
         ctx.accounts.pool_creator.key(),
         ctx.accounts.token_vault_0.key(),

@@ -131,8 +131,11 @@ pub struct PoolState {
     pub fund_fees_token_0: u64,
     pub fund_fees_token_1: u64,
 
+    // The timestamp allowed for swap in the pool.
+    pub open_time: u64,
+
     // Unused bytes for future upgrades.
-    pub padding1: [u64; 26],
+    pub padding1: [u64; 25],
     pub padding2: [u64; 32],
 }
 
@@ -179,6 +182,7 @@ impl PoolState {
         &mut self,
         bump: u8,
         sqrt_price_x64: u128,
+        open_time: u64,
         tick: i32,
         pool_creator: Pubkey,
         token_vault_0: Pubkey,
@@ -221,7 +225,8 @@ impl PoolState {
         self.total_fees_claimed_token_1 = 0;
         self.fund_fees_token_0 = 0;
         self.fund_fees_token_1 = 0;
-        self.padding1 = [0; 26];
+        self.open_time = open_time;
+        self.padding1 = [0; 25];
         self.padding2 = [0; 32];
 
         let mut observation_state = observation_state_loader.load_mut()?;
