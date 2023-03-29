@@ -413,7 +413,7 @@ pub fn swap_internal<'b, 'info>(
         } else if state.sqrt_price_x64 != step.sqrt_price_start_x64 {
             // recompute unless we're on a lower tick boundary (i.e. already transitioned ticks), and haven't moved
             // if only a small amount of quantity is traded, the input may be consumed by fees, resulting in no price change. If state.sqrt_price_x64, i.e., the latest price in the pool, is used to recalculate the tick, some errors may occur.
-            // for example, if zero_for_one, and the price falls exactly on an initialized tick t after the first trade, then at this point, pool.sqrtPriceX64 = get_sqrt_price_at_tick(t), while pool.tick = t-1. if the input quantity of the 
+            // for example, if zero_for_one, and the price falls exactly on an initialized tick t after the first trade, then at this point, pool.sqrtPriceX64 = get_sqrt_price_at_tick(t), while pool.tick = t-1. if the input quantity of the
             // second trade is very small and the pool price does not change after the transaction, if the tick is recalculated, pool.tick will be equal to t, which is incorrect.
             state.tick = tick_math::get_tick_at_sqrt_price(state.sqrt_price_x64)?;
         }
@@ -552,6 +552,8 @@ pub fn exact_internal<'b, 'info>(
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
 ) -> Result<u64> {
+    let block_timestamp = solana_program::clock::Clock::get()?.unix_timestamp as u64;
+
     let amount_0;
     let amount_1;
     let zero_for_one;
@@ -564,6 +566,8 @@ pub fn exact_internal<'b, 'info>(
         swap_price_before = ctx.pool_state.load()?.sqrt_price_x64;
         let pool_state = &mut ctx.pool_state.load_mut()?;
         zero_for_one = ctx.input_vault.mint == pool_state.token_mint_0;
+
+        require_gt!(block_timestamp, pool_state.open_time);
 
         require!(
             if zero_for_one {
@@ -1451,8 +1455,7 @@ mod swap_test {
         assert!(pool_state.borrow().tick_current < tick_current);
         assert!(pool_state.borrow().tick_current == -28861);
         assert!(
-            pool_state.borrow().sqrt_price_x64
-                > tick_math::get_sqrt_price_at_tick(-28861).unwrap()
+            pool_state.borrow().sqrt_price_x64 > tick_math::get_sqrt_price_at_tick(-28861).unwrap()
         );
         assert!(pool_state.borrow().liquidity == liquidity + 6408486554);
         assert!(amount_0 == 3);
