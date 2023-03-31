@@ -13,7 +13,7 @@ use solana_account_decoder::{
 use solana_client::{
     rpc_client::RpcClient,
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
-    rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
+    rpc_filter::{Memcmp, RpcFilterType},
     rpc_request::TokenAccountsFilter,
 };
 use solana_sdk::{
@@ -671,11 +671,12 @@ fn main() -> Result<()> {
                 }
             }
             "create_pool" | "cpool" => {
-                if v.len() == 5 {
+                if v.len() == 6 {
                     let config_index = v[1].parse::<u16>().unwrap();
                     let mut price = v[2].parse::<f64>().unwrap();
                     let mut mint0 = Pubkey::from_str(&v[3]).unwrap();
                     let mut mint1 = Pubkey::from_str(&v[4]).unwrap();
+                    let open_time = v[5].parse::<u64>().unwrap();
                     if mint0 > mint1 {
                         std::mem::swap(&mut mint0, &mut mint1);
                         price = 1.0 / price;
@@ -718,6 +719,7 @@ fn main() -> Result<()> {
                         mint0,
                         mint1,
                         sqrt_price_x64,
+                        open_time,
                     )?;
                     create_observation_instr.extend(create_pool_instr);
 
@@ -742,13 +744,10 @@ fn main() -> Result<()> {
                     &pool_config.raydium_v3_program,
                     RpcProgramAccountsConfig {
                         filters: Some(vec![
-                            RpcFilterType::Memcmp(Memcmp {
-                                offset: 8 + 1 + size_of::<Pubkey>(),
-                                bytes: MemcmpEncodedBytes::Bytes(
-                                    pool_config.pool_id_account.unwrap().to_bytes().to_vec(),
-                                ),
-                                encoding: None,
-                            }),
+                            RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+                                8 + 1 + size_of::<Pubkey>(),
+                                &pool_config.pool_id_account.unwrap().to_bytes(),
+                            )),
                             RpcFilterType::DataSize(
                                 raydium_amm_v3::states::PersonalPositionState::LEN as u64,
                             ),
@@ -797,13 +796,10 @@ fn main() -> Result<()> {
                     &pool_config.raydium_v3_program,
                     RpcProgramAccountsConfig {
                         filters: Some(vec![
-                            RpcFilterType::Memcmp(Memcmp {
-                                offset: 8 + 1,
-                                bytes: MemcmpEncodedBytes::Bytes(
-                                    pool_config.pool_id_account.unwrap().to_bytes().to_vec(),
-                                ),
-                                encoding: None,
-                            }),
+                            RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+                                8 + 1,
+                                &pool_config.pool_id_account.unwrap().to_bytes(),
+                            )),
                             RpcFilterType::DataSize(
                                 raydium_amm_v3::states::ProtocolPositionState::LEN as u64,
                             ),
@@ -835,13 +831,10 @@ fn main() -> Result<()> {
                     &pool_config.raydium_v3_program,
                     RpcProgramAccountsConfig {
                         filters: Some(vec![
-                            RpcFilterType::Memcmp(Memcmp {
-                                offset: 8,
-                                bytes: MemcmpEncodedBytes::Bytes(
-                                    pool_config.pool_id_account.unwrap().to_bytes().to_vec(),
-                                ),
-                                encoding: None,
-                            }),
+                            RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+                                8,
+                                &pool_config.pool_id_account.unwrap().to_bytes(),
+                            )),
                             RpcFilterType::DataSize(
                                 raydium_amm_v3::states::TickArrayState::LEN as u64,
                             ),

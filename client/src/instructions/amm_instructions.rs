@@ -126,6 +126,7 @@ pub fn create_pool_instr(
     token_mint_0: Pubkey,
     token_mint_1: Pubkey,
     sqrt_price_x64: u128,
+    open_time: u64,
 ) -> Result<Vec<Instruction>> {
     let payer = read_keypair_file(&config.payer_path)?;
     let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
@@ -172,7 +173,10 @@ pub fn create_pool_instr(
             system_program: system_program::id(),
             rent: sysvar::rent::id(),
         })
-        .args(raydium_instruction::CreatePool { sqrt_price_x64 })
+        .args(raydium_instruction::CreatePool {
+            sqrt_price_x64,
+            open_time,
+        })
         .instructions()?;
     Ok(instructions)
 }
