@@ -176,27 +176,38 @@ pub fn swap_internal<'b, 'info>(
     // check observation account is owned by the pool
     require_keys_eq!(observation_state.pool_id, pool_state.key());
 
-    let mut tick_array_current = tick_array_states.pop_front().unwrap();
-    // check tick_array account is owned by the pool
-    require_keys_eq!(tick_array_current.pool_id, pool_state.key());
-
     let (mut is_match_pool_current_tick_array, first_vaild_tick_array_start_index) =
         pool_state.get_first_initialized_tick_array(zero_for_one)?;
-
     let mut current_vaild_tick_array_start_index = first_vaild_tick_array_start_index;
-    // check tick_array account is correct
+
+    let expected_first_tick_array_address = Pubkey::find_program_address(
+        &[
+            TICK_ARRAY_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+            &current_vaild_tick_array_start_index.to_be_bytes(),
+        ],
+        &crate::id(),
+    )
+    .0;
+
+    let mut tick_array_current = tick_array_states.pop_front().unwrap();
+    for _ in 0..tick_array_states.len() {
+        // check tick_array account is owned by the pool
+        require_keys_eq!(tick_array_current.pool_id, pool_state.key());
+        if tick_array_current.key() == expected_first_tick_array_address {
+            break;
+        }
+        tick_array_current = tick_array_states
+            .pop_front()
+            .ok_or(ErrorCode::NotEnoughTickArrayAccount)?;
+    }
+    // check first tick array account is correct
     require_keys_eq!(
         tick_array_current.key(),
-        Pubkey::find_program_address(
-            &[
-                TICK_ARRAY_SEED.as_bytes(),
-                pool_state.key().as_ref(),
-                &current_vaild_tick_array_start_index.to_be_bytes(),
-            ],
-            &crate::id()
-        )
-        .0
+        expected_first_tick_array_address,
+        ErrorCode::InvalidFirstTickArrayAccount
     );
+
     // continue swapping as long as we haven't used the entire input/output and haven't
     // reached the price limit
     while state.amount_specified_remaining != 0 && state.sqrt_price_x64 != sqrt_price_limit_x64 {
@@ -250,7 +261,9 @@ pub fn swap_internal<'b, 'info>(
             }
             current_vaild_tick_array_start_index = next_initialized_tickarray_index.unwrap();
 
-            tick_array_current = tick_array_states.pop_front().unwrap();
+            tick_array_current = tick_array_states
+                .pop_front()
+                .ok_or(ErrorCode::NotEnoughTickArrayAccount)?;
 
             require_keys_eq!(tick_array_current.pool_id, pool_state.key());
             require_keys_eq!(

@@ -66,6 +66,10 @@ pub enum ErrorCode {
     InvalidInputPoolVault,
     #[msg("Swap input or output amount is too small")]
     TooSmallInputOrOutputAmount,
+    #[msg("Not enought tick array account")]
+    NotEnoughTickArrayAccount,
+    #[msg("Invaild first tick array account")]
+    InvalidFirstTickArrayAccount,
 
     /// reward errors
     #[msg("Invalid reward index")]
