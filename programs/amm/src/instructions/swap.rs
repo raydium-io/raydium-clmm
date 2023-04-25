@@ -305,8 +305,8 @@ pub fn swap_internal<'b, 'info>(
             require_gt!(step.sqrt_price_start_x64, target_price);
         } else {
             require_gt!(step.tick_next, state.tick);
-            require_gt!(step.sqrt_price_next_x64, step.sqrt_price_start_x64);
-            require_gt!(target_price, step.sqrt_price_start_x64);
+            require_gte!(step.sqrt_price_next_x64, step.sqrt_price_start_x64);
+            require_gte!(target_price, step.sqrt_price_start_x64);
         }
         let swap_step = swap_math::compute_swap_step(
             step.sqrt_price_start_x64,
@@ -1512,17 +1512,23 @@ mod swap_test {
                 60,
                 sqrt_price_x64,
                 liquidity,
-                vec![TickArrayInfo {
-                    start_tick_index: -32400,
-                    ticks: vec![
-                        build_tick(-32400, 277065331032, -277065331032).take(),
-                        build_tick(-29220, 1330680689, -1330680689).take(),
-                        build_tick(-28860, 6408486554, -6408486554).take(),
-                    ],
-                }],
+                vec![
+                    TickArrayInfo {
+                        start_tick_index: -32400,
+                        ticks: vec![
+                            build_tick(-32400, 277065331032, -277065331032).take(),
+                            build_tick(-29220, 1330680689, -1330680689).take(),
+                            build_tick(-28860, 6408486554, -6408486554).take(),
+                        ],
+                    },
+                    TickArrayInfo {
+                        start_tick_index: -28800,
+                        ticks: vec![build_tick(-28800, 3726362727, -3726362727).take()],
+                    },
+                ],
             );
 
-            // zero for one, just cross tick(-28860),  pool.tick_current = -28861
+            // zero for one, just cross tick(-28860),  pool.tick_current = -28861 and pool.sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(-28860)
             let (amount_0, amount_1) = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
@@ -1565,6 +1571,33 @@ mod swap_test {
             assert!(pool_state.borrow().tick_current == tick_current);
             assert!(pool_state.borrow().tick_current == -28861);
             assert!(pool_state.borrow().sqrt_price_x64 == sqrt_price_x64);
+
+            tick_current = pool_state.borrow().tick_current;
+            sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
+
+            // reverse swap direction, one_for_zero
+            // Actually, the loop for this swap was executed twice because the previous swap happened to have `pool.tick_current` exactly on the boundary that is divisible by `tick_spacing`. 
+            // In the first iteration of this swap's loop, it found the initial tick (-28860), but at this point, both the initial and final prices were equal to the price at tick -28860. 
+            // This did not meet the conditions for swapping so both swap_amount_input and swap_amount_output were 0. The actual output was calculated in the second iteration of the loop.
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                10,
+                tick_math::get_sqrt_price_at_tick(-28800).unwrap(),
+                false,
+                true,
+                oracle::block_timestamp_mock() as u32,
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+            assert!(pool_state.borrow().tick_current > tick_current);
+            assert!(pool_state.borrow().sqrt_price_x64 > sqrt_price_x64);
+            assert!(
+                pool_state.borrow().tick_current > -28860
+                    && pool_state.borrow().tick_current <= -28800
+            );
         }
     }
 }
