@@ -301,8 +301,8 @@ pub fn swap_internal<'b, 'info>(
 
         if zero_for_one {
             require_gte!(state.tick, step.tick_next);
-            require_gt!(step.sqrt_price_start_x64, step.sqrt_price_next_x64);
-            require_gt!(step.sqrt_price_start_x64, target_price);
+            require_gte!(step.sqrt_price_start_x64, step.sqrt_price_next_x64);
+            require_gte!(step.sqrt_price_start_x64, target_price);
         } else {
             require_gt!(step.tick_next, state.tick);
             require_gte!(step.sqrt_price_next_x64, step.sqrt_price_start_x64);
