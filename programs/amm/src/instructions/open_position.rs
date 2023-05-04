@@ -7,7 +7,7 @@ use anchor_lang::solana_program;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token;
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use mpl_token_metadata::{instruction::create_metadata_accounts_v2, state::Creator};
+use mpl_token_metadata::{instruction::create_metadata_accounts_v3, state::Creator};
 use spl_token::instruction::AuthorityType;
 use std::cell::RefMut;
 #[cfg(feature = "enable-log")]
@@ -592,7 +592,7 @@ fn create_nft_with_metadata<'info>(
         ),
         1,
     )?;
-    let create_metadata_ix = create_metadata_accounts_v2(
+    let create_metadata_ix = create_metadata_accounts_v3(
         metadata_program.key(),
         metadata_account.key(),
         position_nft_mint.key(),
@@ -612,6 +612,7 @@ fn create_nft_with_metadata<'info>(
         false,
         None,
         None,
+        None
     );
     solana_program::program::invoke_signed(
         &create_metadata_ix,
