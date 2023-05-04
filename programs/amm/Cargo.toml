@@ -26,7 +26,7 @@ anchor-lang = {version = "0.26.0", features = ["init-if-needed"] }
 anchor-spl = "0.26.0"
 solana-program = "1.13.5"
 uint = "0.9.1"
-mpl-token-metadata = { version = "1.4.3", features = ["no-entrypoint"] }
+mpl-token-metadata = { version = "1.8.5", features = ["no-entrypoint"] }
 spl-token = { version = "3.5.0", features = ["no-entrypoint"] }
 bytemuck = { version = "1.4.0" }
 arrayref ={ version = "0.3.6"}
