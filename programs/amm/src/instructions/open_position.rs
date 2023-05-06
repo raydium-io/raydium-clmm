@@ -550,16 +550,8 @@ pub fn update_position(
 }
 
 const METADATA_URI: &str =
-    "https://cloudflare-ipfs.com/ipfs/QmbzJafuKY3B4t25eq9zdKZMgXiMeW4jHLzf6KE6ZmHWn1/";
-fn get_uri_with_random() -> String {
-    let current_timestamp = u64::try_from(Clock::get().unwrap().unix_timestamp).unwrap();
-    let current_slot = Clock::get().unwrap().slot;
-    // 01 ~ 08
-    let random_num = (current_timestamp + current_slot) % 8 + 1;
-    // https://cloudflare-ipfs.com/ipfs/QmbzJafuKY3B4t25eq9zdKZMgXiMeW4jHLzf6KE6ZmHWn1/01.json
-    let random_str = METADATA_URI.to_string() + "0" + &random_num.to_string() + ".json";
-    random_str
-}
+    "https://cloudflare-ipfs.com/ipfs/QmbzJafuKY3B4t25eq9zdKZMgXiMeW4jHLzf6KE6ZmHWn1/02.json";
+
 fn create_nft_with_metadata<'info>(
     payer: &AccountInfo<'info>,
     pool_state_loader: &AccountLoader<'info, PoolState>,
@@ -601,7 +593,7 @@ fn create_nft_with_metadata<'info>(
         pool_state_loader.key(),
         String::from("Raydium Concentrated Liquidity"),
         String::from("RCL"),
-        get_uri_with_random(),
+        METADATA_URI.to_string(),
         Some(vec![Creator {
             address: pool_state_loader.key(),
             verified: true,
