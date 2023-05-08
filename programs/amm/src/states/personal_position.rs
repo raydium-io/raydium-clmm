@@ -39,8 +39,6 @@ pub struct PersonalPositionState {
     pub reward_infos: [PositionRewardInfo; REWARD_NUM],
     // Unused bytes for future upgrades.
     pub padding: [u64; 8],
-    // pub range_order_type: u8,
-    // pub range_order_open_time: u64,
 }
 
 impl PersonalPositionState {

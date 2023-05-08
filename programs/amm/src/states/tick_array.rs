@@ -315,11 +315,6 @@ pub struct TickState {
     pub reward_growths_outside_x64: [u128; REWARD_NUM],
     // Unused bytes for future upgrades.
     pub padding: [u32; 13],
-    // pub cross_up_liquidity_delta: u128,
-    // pub cross_down_liquidity_delta: u128,
-    // pub range_order_cross_up_time: u64,
-    // pub range_order_cross_down_time: u64,
-    // pub padding: u32,
 }
 
 impl TickState {
