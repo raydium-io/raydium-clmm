@@ -564,13 +564,7 @@ fn create_nft_with_metadata<'info>(
     rent: AccountInfo<'info>,
 ) -> Result<()> {
     let pool_state = pool_state_loader.load()?;
-    let seeds = [
-        &POOL_SEED.as_bytes(),
-        pool_state.amm_config.as_ref(),
-        pool_state.token_mint_0.as_ref(),
-        pool_state.token_mint_1.as_ref(),
-        &[pool_state.bump] as &[u8],
-    ];
+    let seeds = pool_state.seeds();
     // Mint the NFT
     token::mint_to(
         CpiContext::new_with_signer(
@@ -580,7 +574,7 @@ fn create_nft_with_metadata<'info>(
                 to: position_nft_account.clone(),
                 authority: pool_state_loader.to_account_info(),
             },
-            &[&seeds[..]],
+            &[&seeds],
         ),
         1,
     )?;
@@ -604,7 +598,7 @@ fn create_nft_with_metadata<'info>(
         false,
         None,
         None,
-        None
+        None,
     );
     solana_program::program::invoke_signed(
         &create_metadata_ix,
@@ -616,7 +610,7 @@ fn create_nft_with_metadata<'info>(
             system_program.clone(),
             rent.clone(),
         ],
-        &[&seeds[..]],
+        &[&seeds],
     )?;
     // Disable minting
     token::set_authority(
@@ -626,7 +620,7 @@ fn create_nft_with_metadata<'info>(
                 current_authority: pool_state_loader.to_account_info(),
                 account_or_mint: position_nft_mint.clone(),
             },
-            &[&seeds[..]],
+            &[&seeds],
         ),
         AuthorityType::MintTokens,
         None,

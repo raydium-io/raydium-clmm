@@ -57,7 +57,7 @@ pub enum PoolStatusBitFlag {
 #[derive(Default, Debug)]
 pub struct PoolState {
     /// Bump to identify PDA
-    pub bump: u8,
+    pub bump: [u8; 1],
     // Which config the pool belongs
     pub amm_config: Pubkey,
     // Pool creator
@@ -164,18 +164,18 @@ impl PoolState {
         + 8 * 16
         + 512;
 
+    pub fn seeds(&self) -> [&[u8]; 5] {
+        [
+            &POOL_SEED.as_bytes(),
+            self.amm_config.as_ref(),
+            self.token_mint_0.as_ref(),
+            self.token_mint_1.as_ref(),
+            self.bump.as_ref(),
+        ]
+    }
+
     pub fn key(&self) -> Pubkey {
-        Pubkey::create_program_address(
-            &[
-                &POOL_SEED.as_bytes(),
-                self.amm_config.as_ref(),
-                self.token_mint_0.as_ref(),
-                self.token_mint_1.as_ref(),
-                &[self.bump],
-            ],
-            &crate::id(),
-        )
-        .unwrap()
+        Pubkey::create_program_address(&self.seeds(), &crate::id()).unwrap()
     }
 
     pub fn initialize(
@@ -192,7 +192,7 @@ impl PoolState {
         token_mint_1: &Account<Mint>,
         observation_state_loader: &AccountLoader<ObservationState>,
     ) -> Result<()> {
-        self.bump = bump;
+        self.bump = [bump];
         self.amm_config = amm_config.key();
         self.owner = pool_creator.key();
         self.token_mint_0 = token_mint_0.key();
@@ -729,7 +729,7 @@ pub mod pool_test {
         // let mut random = rand::random<u128>();
         new_pool.fee_growth_global_0_x64 = rand::random::<u128>();
         new_pool.fee_growth_global_1_x64 = rand::random::<u128>();
-        new_pool.bump = Pubkey::find_program_address(
+        new_pool.bump = [Pubkey::find_program_address(
             &[
                 &POOL_SEED.as_bytes(),
                 new_pool.amm_config.as_ref(),
@@ -738,7 +738,7 @@ pub mod pool_test {
             ],
             &crate::id(),
         )
-        .1;
+        .1];
         RefCell::new(new_pool)
     }
 

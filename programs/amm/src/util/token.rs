@@ -35,14 +35,6 @@ pub fn transfer_from_pool_vault_to_user<'info>(
     if amount == 0 {
         return Ok(());
     }
-    let pool_state = pool_state_loader.load()?;
-    let pool_state_seeds = [
-        &POOL_SEED.as_bytes(),
-        &pool_state.amm_config.as_ref(),
-        &pool_state.token_mint_0.to_bytes() as &[u8],
-        &pool_state.token_mint_1.to_bytes() as &[u8],
-        &[pool_state.bump],
-    ];
     token::transfer(
         CpiContext::new_with_signer(
             token_program.to_account_info(),
@@ -51,7 +43,7 @@ pub fn transfer_from_pool_vault_to_user<'info>(
                 to: to.to_account_info(),
                 authority: pool_state_loader.to_account_info(),
             },
-            &[&pool_state_seeds[..]],
+            &[&pool_state_loader.load()?.seeds()],
         ),
         amount,
     )
