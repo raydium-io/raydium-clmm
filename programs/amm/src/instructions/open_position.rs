@@ -5,10 +5,10 @@ use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program;
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token;
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use anchor_spl::token::{self, Token};
+use anchor_spl::token_2022::{self, spl_token_2022::instruction::AuthorityType};
+use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
 use mpl_token_metadata::{instruction::create_metadata_accounts_v3, state::Creator};
-use spl_token::instruction::AuthorityType;
 use std::cell::RefMut;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
@@ -19,16 +19,22 @@ pub struct AddLiquidityParam<'b, 'info> {
     pub payer: &'b Signer<'info>,
 
     /// The token account spending token_0 to mint the position
-    pub token_account_0: &'b mut Box<Account<'info, TokenAccount>>,
+    pub token_account_0: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The token account spending token_1 to mint the position
-    pub token_account_1: &'b mut Box<Account<'info, TokenAccount>>,
+    pub token_account_1: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_0
-    pub token_vault_0: &'b mut Box<Account<'info, TokenAccount>>,
+    pub token_vault_0: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_1
-    pub token_vault_1: &'b mut Box<Account<'info, TokenAccount>>,
+    pub token_vault_1: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// token_vault_0 mint
+    pub vault_0_mint: &'b InterfaceAccount<'info, Mint>,
+
+    /// token_vault_1 mint
+    pub vault_1_mint: &'b InterfaceAccount<'info, Mint>,
 
     /// The bitmap storing initialization state of the lower tick
     pub tick_array_lower: &'b AccountLoader<'info, TickArrayState>,
@@ -41,6 +47,9 @@ pub struct AddLiquidityParam<'b, 'info> {
 
     /// The SPL program to perform token transfers
     pub token_program: Program<'info, Token>,
+
+    /// The SPL program to perform token transfers
+    pub token_program_2022: Program<'info, Token2022>,
 }
 
 #[derive(Accounts)]
@@ -58,18 +67,20 @@ pub struct OpenPosition<'info> {
         init,
         mint::decimals = 0,
         mint::authority = pool_state.key(),
-        payer = payer
+        payer = payer,
+        mint::token_program = token_program,
     )]
-    pub position_nft_mint: Box<Account<'info, Mint>>,
+    pub position_nft_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// Token account where position NFT will be minted
     #[account(
         init,
         associated_token::mint = position_nft_mint,
         associated_token::authority = position_nft_owner,
-        payer = payer
+        payer = payer,
+        token::token_program = token_program,
     )]
-    pub position_nft_account: Box<Account<'info, TokenAccount>>,
+    pub position_nft_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// To store metaplex metadata
     /// CHECK: Safety check performed inside function body
@@ -134,28 +145,40 @@ pub struct OpenPosition<'info> {
         mut,
         token::mint = token_vault_0.mint
     )]
-    pub token_account_0: Box<Account<'info, TokenAccount>>,
+    pub token_account_0: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The token_1 account deposit token to the pool
     #[account(
         mut,
         token::mint = token_vault_1.mint
     )]
-    pub token_account_1: Box<Account<'info, TokenAccount>>,
+    pub token_account_1: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_0
     #[account(
         mut,
         constraint = token_vault_0.key() == pool_state.load()?.token_vault_0
     )]
-    pub token_vault_0: Box<Account<'info, TokenAccount>>,
+    pub token_vault_0: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_1
     #[account(
         mut,
         constraint = token_vault_1.key() == pool_state.load()?.token_vault_1
     )]
-    pub token_vault_1: Box<Account<'info, TokenAccount>>,
+    pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// The mint of token vault 0
+    #[account(
+        address = token_vault_0.mint
+    )]
+    pub vault_0_mint: InterfaceAccount<'info, Mint>,
+
+    /// The mint of token vault 1
+    #[account(
+        address = token_vault_1.mint
+    )]
+    pub vault_1_mint: InterfaceAccount<'info, Mint>,
 
     /// Sysvar for token mint and ATA creation
     pub rent: Sysvar<'info, Rent>,
@@ -165,7 +188,6 @@ pub struct OpenPosition<'info> {
 
     /// Program to create mint account and mint tokens
     pub token_program: Program<'info, Token>,
-
     /// Program to create an ATA for receiving position NFT
     pub associated_token_program: Program<'info, AssociatedToken>,
 
@@ -173,6 +195,9 @@ pub struct OpenPosition<'info> {
     /// CHECK: Metadata program address constraint applied
     #[account(address = mpl_token_metadata::ID)]
     pub metadata_program: UncheckedAccount<'info>,
+
+    /// Program to create mint account and mint tokens
+    pub token_program_2022: Program<'info, Token2022>,
 }
 
 pub fn open_position<'a, 'b, 'c, 'info>(
@@ -253,10 +278,13 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             token_account_1: &mut ctx.accounts.token_account_1,
             token_vault_0: &mut ctx.accounts.token_vault_0,
             token_vault_1: &mut ctx.accounts.token_vault_1,
+            vault_0_mint: &ctx.accounts.vault_0_mint,
+            vault_1_mint: &ctx.accounts.vault_1_mint,
             tick_array_lower: &tick_array_lower_loader,
             tick_array_upper: &tick_array_upper_loader,
             protocol_position: &mut ctx.accounts.protocol_position,
             token_program: ctx.accounts.token_program.clone(),
+            token_program_2022: ctx.accounts.token_program_2022.clone(),
         };
 
         let mut amount_0: u64 = 0;
@@ -412,7 +440,9 @@ pub fn add_liquidity<'b, 'info>(
         &context.payer,
         &context.token_account_0,
         &context.token_vault_0,
+        &context.vault_0_mint,
         &context.token_program,
+        &context.token_program_2022,
         amount_0,
     )?;
 
@@ -420,7 +450,9 @@ pub fn add_liquidity<'b, 'info>(
         &context.payer,
         &context.token_account_1,
         &context.token_vault_1,
+        &context.vault_1_mint,
         &context.token_program,
+        &context.token_program_2022,
         amount_1,
     )?;
     emit!(LiquidityChangeEvent {
@@ -613,10 +645,10 @@ fn create_nft_with_metadata<'info>(
         &[&seeds],
     )?;
     // Disable minting
-    token::set_authority(
+    token_2022::set_authority(
         CpiContext::new_with_signer(
             token_program.clone(),
-            token::SetAuthority {
+            token_2022::SetAuthority {
                 current_authority: pool_state_loader.to_account_info(),
                 account_or_mint: position_nft_mint.clone(),
             },

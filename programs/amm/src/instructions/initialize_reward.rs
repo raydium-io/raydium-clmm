@@ -3,7 +3,8 @@ use crate::libraries::{fixed_point_64, full_math::MulDiv, U256};
 use crate::states::*;
 use crate::util::transfer_from_user_to_pool_vault;
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Mint, Token, TokenAccount};
+use anchor_spl::token::{self, Token};
+use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
 
 #[derive(Accounts)]
 pub struct InitializeReward<'info> {
@@ -16,7 +17,7 @@ pub struct InitializeReward<'info> {
         mut,
         token::mint = reward_token_mint
     )]
-    pub funder_token_account: Box<Account<'info, TokenAccount>>,
+    pub funder_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// For check the reward_funder authority
     #[account(address = pool_state.load()?.amm_config)]
@@ -36,7 +37,7 @@ pub struct InitializeReward<'info> {
     pub operation_state: AccountLoader<'info, OperationState>,
 
     /// Reward mint
-    pub reward_token_mint: Box<Account<'info, Mint>>,
+    pub reward_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// A pda, reward vault
     #[account(
@@ -51,12 +52,14 @@ pub struct InitializeReward<'info> {
         token::mint = reward_token_mint,
         token::authority = pool_state
     )]
-    pub reward_token_vault: Box<Account<'info, TokenAccount>>,
+    pub reward_token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(address = token::ID)]
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
+    /// Token program 2022
+    pub token_program_2022: Program<'info, Token2022>,
 }
 
 #[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Debug, PartialEq)]
@@ -131,7 +134,9 @@ pub fn initialize_reward(
         &ctx.accounts.reward_funder,
         &ctx.accounts.funder_token_account,
         &ctx.accounts.reward_token_vault,
+        &ctx.accounts.reward_token_mint,
         &ctx.accounts.token_program,
+        &&ctx.accounts.token_program_2022,
         reward_amount,
     )?;
 

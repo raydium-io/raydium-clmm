@@ -2,7 +2,10 @@ use super::{exact_internal, SwapAccounts};
 use crate::error::ErrorCode;
 use crate::states::*;
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::{
+    token::Token,
+    token_interface::{Mint, Token2022, TokenAccount},
+};
 
 #[derive(Accounts)]
 pub struct SwapRouterBaseIn<'info> {
@@ -11,10 +14,16 @@ pub struct SwapRouterBaseIn<'info> {
 
     /// The token account that pays input tokens for the swap
     #[account(mut)]
-    pub input_token_account: Account<'info, TokenAccount>,
+    pub input_token_account: InterfaceAccount<'info, TokenAccount>,
+
+    /// The mint of input token
+    #[account(mut)]
+    pub input_token_mint: InterfaceAccount<'info, Mint>,
 
     /// SPL program for token transfers
     pub token_program: Program<'info, Token>,
+    /// SPL program 2022 for token transfers
+    pub token_program_2022: Program<'info, Token2022>,
 }
 
 pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
@@ -24,6 +33,7 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
 ) -> Result<()> {
     let mut amount_in_internal = amount_in;
     let mut input_token_account = Box::new(ctx.accounts.input_token_account.clone());
+    let mut input_token_mint = Box::new(ctx.accounts.input_token_mint.clone());
     let mut accounts: &[AccountInfo] = ctx.remaining_accounts;
     while !accounts.is_empty() {
         let mut remaining_accounts = accounts.iter();
@@ -37,13 +47,16 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
         let amm_config = Box::new(Account::<AmmConfig>::try_from(account_info)?);
         let mut pool_state_loader =
             AccountLoader::<PoolState>::try_from(remaining_accounts.next().unwrap())?;
-        let output_token_account = Box::new(Account::<TokenAccount>::try_from(
+        let output_token_account = Box::new(InterfaceAccount::<TokenAccount>::try_from(
             &remaining_accounts.next().unwrap(),
         )?);
-        let input_vault = Box::new(Account::<TokenAccount>::try_from(
+        let input_vault = Box::new(InterfaceAccount::<TokenAccount>::try_from(
             remaining_accounts.next().unwrap(),
         )?);
-        let output_vault = Box::new(Account::<TokenAccount>::try_from(
+        let output_vault = Box::new(InterfaceAccount::<TokenAccount>::try_from(
+            remaining_accounts.next().unwrap(),
+        )?);
+        let output_token_mint = Box::new(InterfaceAccount::<Mint>::try_from(
             remaining_accounts.next().unwrap(),
         )?);
         let mut observation_state =
@@ -70,9 +83,12 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
                 output_token_account: output_token_account.clone(),
                 input_vault: input_vault.clone(),
                 output_vault: output_vault.clone(),
+                input_vault_mint: input_token_mint.clone(),
+                output_vault_mint: output_token_mint.clone(),
                 tick_array_state: &mut tick_array,
                 observation_state: &mut observation_state,
                 token_program: ctx.accounts.token_program.clone(),
+                token_program_2022: ctx.accounts.token_program_2022.clone(),
             },
             accounts,
             amount_in_internal,
@@ -81,6 +97,7 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
         )?;
         // output token is the new swap input token
         input_token_account = output_token_account;
+        input_token_mint = output_token_mint;
     }
     require!(
         amount_in_internal >= amount_out_minimum,

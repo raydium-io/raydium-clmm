@@ -1,8 +1,7 @@
 use crate::libraries::tick_math;
 use crate::states::*;
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Mint, Token, TokenAccount};
-
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 #[derive(Accounts)]
 pub struct CreatePool<'info> {
     /// Address paying to create the pool. Can be anyone
@@ -29,12 +28,16 @@ pub struct CreatePool<'info> {
 
     /// Token_0 mint, the key must grater then token_1 mint.
     #[account(
-        constraint = token_mint_0.key() < token_mint_1.key()
+        constraint = token_mint_0.key() < token_mint_1.key(),
+        mint::token_program = token_program_0
     )]
-    pub token_mint_0: Box<Account<'info, Mint>>,
+    pub token_mint_0: Box<InterfaceAccount<'info, Mint>>,
 
     /// Token_1 mint
-    pub token_mint_1: Box<Account<'info, Mint>>,
+    #[account(
+        mint::token_program = token_program_1
+    )]
+    pub token_mint_1: Box<InterfaceAccount<'info, Mint>>,
 
     /// Token_0 vault for the pool
     #[account(
@@ -47,9 +50,10 @@ pub struct CreatePool<'info> {
         bump,
         payer = pool_creator,
         token::mint = token_mint_0,
-        token::authority = pool_state
+        token::authority = pool_state,
+        token::token_program = token_program_0,
     )]
-    pub token_vault_0: Box<Account<'info, TokenAccount>>,
+    pub token_vault_0: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// Token_1 vault for the pool
     #[account(
@@ -62,15 +66,18 @@ pub struct CreatePool<'info> {
         bump,
         payer = pool_creator,
         token::mint = token_mint_1,
-        token::authority = pool_state
+        token::authority = pool_state,
+        token::token_program = token_program_1,
     )]
-    pub token_vault_1: Box<Account<'info, TokenAccount>>,
+    pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// CHECK: Initialize an account to store oracle observations, the account must be created off-chain, constract will initialzied it
     pub observation_state: UncheckedAccount<'info>,
 
-    /// Spl token program
-    pub token_program: Program<'info, Token>,
+    /// Spl token program or token program 2022
+    pub token_program_0: Interface<'info, TokenInterface>,
+    /// Spl token program or token program 2022
+    pub token_program_1: Interface<'info, TokenInterface>,
     /// To create a new program account
     pub system_program: Program<'info, System>,
     /// Sysvar for program account

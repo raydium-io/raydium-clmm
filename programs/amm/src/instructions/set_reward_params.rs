@@ -4,7 +4,8 @@ use crate::states::pool::{reward_period_limit, PoolState, REWARD_NUM};
 use crate::states::*;
 use crate::util::transfer_from_user_to_pool_vault;
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::token::Token;
+use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
 
 #[derive(Accounts)]
 pub struct SetRewardParams<'info> {
@@ -30,6 +31,11 @@ pub struct SetRewardParams<'info> {
         bump,
     )]
     pub operation_state: AccountLoader<'info, OperationState>,
+
+    /// Token program
+    pub token_program: Program<'info, Token>,
+    /// Token program 2022
+    pub token_program_2022: Program<'info, Token2022>,
 }
 
 pub fn set_reward_params<'a, 'b, 'c, 'info>(
@@ -89,10 +95,11 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
         let mut remaining_accounts = ctx.remaining_accounts.iter();
 
         let reward_token_vault =
-            Account::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
+            InterfaceAccount::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
         let authority_token_account =
-            Account::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
-        let token_program = Program::<Token>::try_from(remaining_accounts.next().unwrap())?;
+            InterfaceAccount::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
+        let reward_vault_mint =
+            InterfaceAccount::<Mint>::try_from(&remaining_accounts.next().unwrap())?;
 
         require_keys_eq!(reward_token_vault.mint, authority_token_account.mint);
         require_keys_eq!(reward_token_vault.key(), reward_info.token_vault);
@@ -101,7 +108,9 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
             &ctx.accounts.authority,
             &authority_token_account,
             &reward_token_vault,
-            &token_program,
+            &reward_vault_mint,
+            &ctx.accounts.token_program,
+            &&ctx.accounts.token_program_2022,
             reward_amount,
         )?;
     }

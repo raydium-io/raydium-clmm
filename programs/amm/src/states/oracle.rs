@@ -10,7 +10,7 @@ pub const OBSERVATION_SEED: &str = "observation";
 pub const OBSERVATION_NUM: usize = 1000;
 
 /// The element of observations in ObservationState
-#[zero_copy]
+#[zero_copy(unsafe)]
 #[repr(packed)]
 #[derive(Default, Debug)]
 pub struct Observation {
@@ -27,7 +27,7 @@ impl Observation {
     pub const LEN: usize = 4 + 16 + 16 + 16;
 }
 
-#[account(zero_copy)]
+#[account(zero_copy(unsafe))]
 #[repr(packed)]
 pub struct ObservationState {
     /// Whether the ObservationState is initialized

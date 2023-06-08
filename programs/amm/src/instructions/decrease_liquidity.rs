@@ -4,7 +4,9 @@ use crate::error::ErrorCode;
 use crate::states::*;
 use crate::util::transfer_from_pool_vault_to_user;
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::token::Token;
+use anchor_spl::token_interface::Mint;
+use anchor_spl::token_interface::{Token2022, TokenAccount};
 use std::cell::RefMut;
 
 #[derive(Accounts)]
@@ -14,9 +16,10 @@ pub struct DecreaseLiquidity<'info> {
 
     /// The token account for the tokenized position
     #[account(
-        constraint = nft_account.mint == personal_position.nft_mint
+        constraint = nft_account.mint == personal_position.nft_mint,
+        token::token_program = token_program,
     )]
-    pub nft_account: Box<Account<'info, TokenAccount>>,
+    pub nft_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// Decrease liquidity for this position
     #[account(mut, constraint = personal_position.pool_id == pool_state.key())]
@@ -43,14 +46,26 @@ pub struct DecreaseLiquidity<'info> {
         mut,
         constraint = token_vault_0.key() == pool_state.load()?.token_vault_0
     )]
-    pub token_vault_0: Box<Account<'info, TokenAccount>>,
+    pub token_vault_0: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// Token_1 vault
     #[account(
         mut,
         constraint = token_vault_1.key() == pool_state.load()?.token_vault_1
     )]
-    pub token_vault_1: Box<Account<'info, TokenAccount>>,
+    pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// The mint of token vault 0
+    #[account(
+        address = token_vault_0.mint
+    )]
+    pub vault_0_mint: InterfaceAccount<'info, Mint>,
+
+    /// The mint of token vault 1
+    #[account(
+        address = token_vault_1.mint
+    )]
+    pub vault_1_mint: InterfaceAccount<'info, Mint>,
 
     /// Stores init state for the lower tick
     #[account(mut, constraint = tick_array_lower.load()?.pool_id == pool_state.key())]
@@ -65,17 +80,19 @@ pub struct DecreaseLiquidity<'info> {
         mut,
         token::mint = token_vault_0.mint
     )]
-    pub recipient_token_account_0: Box<Account<'info, TokenAccount>>,
+    pub recipient_token_account_0: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The destination token account for receive amount_1
     #[account(
         mut,
         token::mint = token_vault_1.mint
     )]
-    pub recipient_token_account_1: Box<Account<'info, TokenAccount>>,
+    pub recipient_token_account_1: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// SPL program to transfer out tokens
     pub token_program: Program<'info, Token>,
+    /// Token program 2022
+    pub token_program_2022: Program<'info, Token2022>,
 }
 
 pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
@@ -110,7 +127,9 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_0,
         &ctx.accounts.recipient_token_account_0,
+        &ctx.accounts.vault_0_mint,
         &ctx.accounts.token_program,
+        &ctx.accounts.token_program_2022,
         decrease_amount_0 + latest_fees_owed_0,
     )?;
 
@@ -118,7 +137,9 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_1,
         &ctx.accounts.recipient_token_account_1,
+        &ctx.accounts.vault_1_mint,
         &ctx.accounts.token_program,
+        &ctx.accounts.token_program_2022,
         decrease_amount_1 + latest_fees_owed_1,
     )?;
 
@@ -133,6 +154,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         &ctx.accounts.pool_state,
         ctx.remaining_accounts,
         ctx.accounts.token_program.clone(),
+        ctx.accounts.token_program_2022.clone(),
         personal_position,
     )?;
 
@@ -320,6 +342,7 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
     pool_state_loader: &AccountLoader<'info, PoolState>,
     remaining_accounts: &[AccountInfo<'info>],
     token_program: Program<'info, Token>,
+    token_program_2022: Program<'info, Token2022>,
     personal_position_state: &mut PersonalPositionState,
 ) -> Result<[u64; REWARD_NUM]> {
     let mut reward_amounts: [u64; REWARD_NUM] = [0, 0, 0];
@@ -335,9 +358,11 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
     let mut remaining_accounts = remaining_accounts.iter();
     for i in 0..remaining_accounts_len / 2 {
         let reward_token_vault =
-            Account::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
+            InterfaceAccount::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
         let recipient_token_account =
-            Account::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
+            InterfaceAccount::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
+        let reward_vault_mint =
+            InterfaceAccount::<Mint>::try_from(&remaining_accounts.next().unwrap())?;
         require_keys_eq!(reward_token_vault.mint, recipient_token_account.mint);
         require_keys_eq!(
             reward_token_vault.key(),
@@ -375,7 +400,9 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
                 &pool_state_loader,
                 &reward_token_vault,
                 &recipient_token_account,
+                &reward_vault_mint,
                 &token_program,
+                &token_program_2022,
                 transfer_amount,
             )?;
         }
@@ -405,8 +432,8 @@ fn check_required_accounts_length(
 
 pub fn check_unclaimed_fees_and_vault(
     pool_state_loader: &AccountLoader<PoolState>,
-    token_vault_0: &mut Account<TokenAccount>,
-    token_vault_1: &mut Account<TokenAccount>,
+    token_vault_0: &mut InterfaceAccount<TokenAccount>,
+    token_vault_1: &mut InterfaceAccount<TokenAccount>,
 ) -> Result<()> {
     token_vault_0.reload()?;
     token_vault_1.reload()?;
