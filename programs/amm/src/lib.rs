@@ -329,7 +329,12 @@ pub mod amm_v3 {
         amount_0_min: u64,
         amount_1_min: u64,
     ) -> Result<()> {
-        instructions::decrease_liquidity(ctx, liquidity, amount_0_min, amount_1_min)
+        instructions::decrease_liquidity(
+            ctx,
+            liquidity,
+            amount_0_min,
+            amount_1_min,
+        )
     }
 
     /// Swaps one token for as much as possible of another token across a single pool

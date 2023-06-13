@@ -1,5 +1,6 @@
-use crate::libraries::tick_math;
+use crate::error::ErrorCode;
 use crate::states::*;
+use crate::{libraries::tick_math, util};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 #[derive(Accounts)]
@@ -85,6 +86,11 @@ pub struct CreatePool<'info> {
 }
 
 pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u64) -> Result<()> {
+    if util::is_supported_mint(&ctx.accounts.token_mint_0).unwrap()
+        || util::is_supported_mint(&ctx.accounts.token_mint_1).unwrap()
+    {
+        return err!(ErrorCode::NotSupportMint);
+    }
     let mut pool_state = ctx.accounts.pool_state.load_init()?;
     let observation_state_loader = initialize_observation_account(
         ctx.accounts.observation_state.to_account_info(),

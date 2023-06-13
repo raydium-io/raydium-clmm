@@ -1,7 +1,7 @@
 use crate::error::ErrorCode;
 use crate::libraries::{fixed_point_64, full_math::MulDiv, U256};
-use crate::states::*;
 use crate::util::transfer_from_user_to_pool_vault;
+use crate::{states::*, util};
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token};
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
@@ -95,6 +95,9 @@ pub fn initialize_reward(
     ctx: Context<InitializeReward>,
     param: InitializeRewardParam,
 ) -> Result<()> {
+    if util::is_supported_mint(&ctx.accounts.reward_token_mint).unwrap() {
+        return err!(ErrorCode::NotSupportMint);
+    }
     let operation_state = ctx.accounts.operation_state.load()?;
     require!(
         ctx.accounts.reward_funder.key() == crate::admin::id()
@@ -116,8 +119,15 @@ pub fn initialize_reward(
         )
         .unwrap()
         .as_u64();
-
-    require_gte!(ctx.accounts.funder_token_account.amount, reward_amount);
+    let reward_amount_with_transfer_fee = reward_amount
+        .checked_add(
+            util::get_transfer_inverse_fee(&ctx.accounts.reward_token_mint, reward_amount).unwrap(),
+        )
+        .unwrap();
+    require_gte!(
+        ctx.accounts.funder_token_account.amount,
+        reward_amount_with_transfer_fee
+    );
 
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;
     pool_state.initialize_reward(
@@ -137,7 +147,7 @@ pub fn initialize_reward(
         &ctx.accounts.reward_token_mint,
         &ctx.accounts.token_program,
         &&ctx.accounts.token_program_2022,
-        reward_amount,
+        reward_amount_with_transfer_fee,
     )?;
 
     Ok(())

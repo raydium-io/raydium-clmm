@@ -157,6 +157,10 @@ pub struct DecreaseLiquidityEvent {
     pub fee_amount_1: u64,
     /// The amount of rewards
     pub reward_amounts: [u64; REWARD_NUM],
+    /// The amount of token_0 transfer fee
+    pub transfer_fee_0: u64,
+    /// The amount of token_1 transfer fee
+    pub transfer_fee_1: u64,
 }
 
 /// Emitted when tokens are collected for a position

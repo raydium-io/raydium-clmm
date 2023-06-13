@@ -5,8 +5,8 @@ use crate::libraries::{
     full_math::MulDiv,
     liquidity_math, swap_math, tick_array_bit_map, tick_math,
 };
-use crate::states::*;
 use crate::util::*;
+use crate::{states::*, util};
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
@@ -601,6 +601,11 @@ pub fn exact_internal<'b, 'info>(
     let input_balance_before = ctx.input_vault.amount;
     let output_balance_before = ctx.output_vault.amount;
 
+    let mut transfer_fee = 0;
+    if is_base_input {
+        transfer_fee = util::get_transfer_fee(&ctx.input_vault_mint, amount_specified).unwrap();
+    }
+
     {
         swap_price_before = ctx.pool_state.load()?.sqrt_price_x64;
         let pool_state = &mut ctx.pool_state.load_mut()?;
@@ -630,7 +635,7 @@ pub fn exact_internal<'b, 'info>(
             pool_state,
             tick_array_states,
             &mut ctx.observation_state.load_mut()?,
-            amount_specified,
+            amount_specified - transfer_fee,
             if sqrt_price_limit_x64 == 0 {
                 if zero_for_one {
                     tick_math::MIN_SQRT_PRICE_X64 + 1
@@ -679,6 +684,9 @@ pub fn exact_internal<'b, 'info>(
         };
 
     if zero_for_one {
+        if !is_base_input{
+            transfer_fee = util::get_transfer_inverse_fee(&ctx.input_vault_mint, amount_0).unwrap();
+        }
         //  x -> y, deposit x token from user to pool vault.
         transfer_from_user_to_pool_vault(
             &ctx.signer,
@@ -687,7 +695,7 @@ pub fn exact_internal<'b, 'info>(
             &vault_0_mint,
             &ctx.token_program,
             &ctx.token_program_2022,
-            amount_0,
+            amount_0+transfer_fee,
         )?;
         if vault_1.amount <= amount_1 {
             // freeze pool, disable all instructions
@@ -704,6 +712,9 @@ pub fn exact_internal<'b, 'info>(
             amount_1,
         )?;
     } else {
+        if !is_base_input{
+            transfer_fee = util::get_transfer_inverse_fee(&ctx.input_vault_mint, amount_1).unwrap();
+        }
         transfer_from_user_to_pool_vault(
             &ctx.signer,
             &token_account_1,
@@ -711,7 +722,7 @@ pub fn exact_internal<'b, 'info>(
             &vault_1_mint,
             &ctx.token_program,
             &ctx.token_program_2022,
-            amount_1,
+            amount_1+transfer_fee,
         )?;
         if vault_0.amount <= amount_0 {
             // freeze pool, disable all instructions
@@ -769,7 +780,7 @@ pub fn swap<'a, 'b, 'c, 'info>(
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
 ) -> Result<()> {
-    let amount = exact_internal(
+    let amount_result = exact_internal(
         &mut SwapAccounts {
             signer: ctx.accounts.payer.clone(),
             amm_config: &ctx.accounts.amm_config,
@@ -792,12 +803,12 @@ pub fn swap<'a, 'b, 'c, 'info>(
     )?;
     if is_base_input {
         require!(
-            amount >= other_amount_threshold,
+            amount_result >= other_amount_threshold,
             ErrorCode::TooLittleOutputReceived
         );
     } else {
         require!(
-            amount <= other_amount_threshold,
+            amount_result <= other_amount_threshold,
             ErrorCode::TooMuchInputPaid
         );
     }

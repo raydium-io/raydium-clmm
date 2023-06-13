@@ -1,6 +1,7 @@
 use crate::error::ErrorCode;
 use crate::libraries::liquidity_math;
 use crate::states::*;
+use crate::util;
 use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program;
@@ -422,17 +423,21 @@ pub fn add_liquidity<'b, 'info>(
 
     let amount_0 = u64::try_from(amount_0_int).unwrap();
     let amount_1 = u64::try_from(amount_1_int).unwrap();
-
+    let amount_0_transfer_fee = util::get_transfer_inverse_fee(context.vault_0_mint, amount_0).unwrap();
+    let amount_1_transfer_fee = util::get_transfer_inverse_fee(context.vault_1_mint, amount_1).unwrap();
     #[cfg(feature = "enable-log")]
     msg!(
-        "amount_0:{},amount_1:{},amount_0_max:{},amount_1_max:{}",
+        "amount_0:{},amount_1:{},amount_0_max:{},amount_1_max:{},amount_0_transfer_fee:{},amount_1_transfer_fee:{}",
         amount_0,
         amount_1,
         amount_0_max,
-        amount_1_max
+        amount_1_max,
+        amount_0_transfer_fee,
+        amount_1_transfer_fee
     );
     require!(
-        amount_0 <= amount_0_max && amount_1 <= amount_1_max,
+        amount_0 + amount_0_transfer_fee <= amount_0_max
+            && amount_1 + amount_1_transfer_fee <= amount_1_max,
         ErrorCode::PriceSlippageCheck
     );
 

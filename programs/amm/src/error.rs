@@ -94,4 +94,7 @@ pub enum ErrorCode {
     NotApproveUpdateRewardEmissiones,
     #[msg("uninitialized reward info")]
     UnInitializedRewardInfo,
+
+    #[msg("Not support token_2022 mint extension")]
+    NotSupportMint,
 }

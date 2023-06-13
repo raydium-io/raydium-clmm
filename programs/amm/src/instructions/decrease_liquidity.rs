@@ -2,6 +2,7 @@ use super::calculate_latest_token_fees;
 use super::modify_position;
 use crate::error::ErrorCode;
 use crate::states::*;
+use crate::util;
 use crate::util::transfer_from_pool_vault_to_user;
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
@@ -120,9 +121,23 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
             &ctx.accounts.tick_array_lower,
             &ctx.accounts.tick_array_upper,
             liquidity,
-            amount_0_min,
-            amount_1_min,
         )?;
+
+    let transfer_amount_0 = decrease_amount_0 + latest_fees_owed_0;
+    let transfer_amount_1 = decrease_amount_1 + latest_fees_owed_1;
+
+    let transfer_fee_0 =
+        util::get_transfer_inverse_fee(&ctx.accounts.vault_0_mint, transfer_amount_0).unwrap();
+    let transfer_fee_1 =
+        util::get_transfer_inverse_fee(&ctx.accounts.vault_1_mint, transfer_amount_1).unwrap();
+    if liquidity > 0 {
+        require!(
+            transfer_amount_0 - transfer_fee_0 >= amount_0_min
+                && transfer_amount_1 - transfer_fee_1 >= amount_1_min,
+            ErrorCode::PriceSlippageCheck
+        );
+    }
+
     transfer_from_pool_vault_to_user(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_0,
@@ -160,12 +175,14 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
 
     #[cfg(feature = "enable-log")]
     msg!(
-        "decrease_amount_0:{}, fees_owed_0:{}, decrease_amount_1:{}, fees_owed_1:{}, reward_amounts:{:?}",
+        "decrease_amount_0:{}, fees_owed_0:{}, decrease_amount_1:{}, fees_owed_1:{}, reward_amounts:{:?},transfer_fee_0:{},transfer_fee_1:{}",
         decrease_amount_0,
         latest_fees_owed_0,
         decrease_amount_1,
         latest_fees_owed_1,
-        reward_amounts
+        reward_amounts,
+        transfer_fee_0,
+        transfer_fee_1
     );
     emit!(DecreaseLiquidityEvent {
         position_nft_mint: personal_position.nft_mint,
@@ -174,7 +191,9 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         decrease_amount_1: decrease_amount_1,
         fee_amount_0: latest_fees_owed_0,
         fee_amount_1: latest_fees_owed_1,
-        reward_amounts
+        reward_amounts,
+        transfer_fee_0: transfer_fee_0,
+        transfer_fee_1: transfer_fee_1,
     });
 
     Ok(())
@@ -187,8 +206,6 @@ pub fn decrease_liquidity_and_update_position<'a, 'b, 'c, 'info>(
     tick_array_lower: &AccountLoader<'info, TickArrayState>,
     tick_array_upper: &AccountLoader<'info, TickArrayState>,
     liquidity: u128,
-    amount_0_min: u64,
-    amount_1_min: u64,
 ) -> Result<(u64, u64, u64, u64)> {
     let mut pool_state = pool_state_loader.load_mut()?;
     let mut decrease_amount_0 = 0;
@@ -201,12 +218,6 @@ pub fn decrease_liquidity_and_update_position<'a, 'b, 'c, 'info>(
             protocol_position,
             liquidity,
         )?;
-        if liquidity > 0 {
-            require!(
-                decrease_amount_0 >= amount_0_min && decrease_amount_1 >= amount_1_min,
-                ErrorCode::PriceSlippageCheck
-            );
-        }
 
         personal_position.token_fees_owed_0 = calculate_latest_token_fees(
             personal_position.token_fees_owed_0,
