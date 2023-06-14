@@ -164,7 +164,7 @@ pub fn get_transfer_fee(mint_account: &InterfaceAccount<Mint>, pre_fee_amount: u
 
     let fee = if let Ok(transfer_fee_config) = mint.get_extension::<TransferFeeConfig>() {
         transfer_fee_config
-            .calculate_inverse_epoch_fee(Clock::get()?.epoch, pre_fee_amount)
+            .calculate_epoch_fee(Clock::get()?.epoch, pre_fee_amount)
             .unwrap()
     } else {
         0

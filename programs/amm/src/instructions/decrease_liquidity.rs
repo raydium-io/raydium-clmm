@@ -127,13 +127,18 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     let transfer_amount_1 = decrease_amount_1 + latest_fees_owed_1;
 
     let transfer_fee_0 =
-        util::get_transfer_inverse_fee(&ctx.accounts.vault_0_mint, transfer_amount_0).unwrap();
+        util::get_transfer_fee(&ctx.accounts.vault_0_mint, transfer_amount_0).unwrap();
     let transfer_fee_1 =
-        util::get_transfer_inverse_fee(&ctx.accounts.vault_1_mint, transfer_amount_1).unwrap();
+        util::get_transfer_fee(&ctx.accounts.vault_1_mint, transfer_amount_1).unwrap();
     if liquidity > 0 {
-        require!(
-            transfer_amount_0 - transfer_fee_0 >= amount_0_min
-                && transfer_amount_1 - transfer_fee_1 >= amount_1_min,
+        require_gte!(
+            transfer_amount_0 - transfer_fee_0,
+            amount_0_min,
+            ErrorCode::PriceSlippageCheck
+        );
+        require_gte!(
+            transfer_amount_1 - transfer_fee_1,
+            amount_1_min,
             ErrorCode::PriceSlippageCheck
         );
     }
@@ -145,7 +150,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         &ctx.accounts.vault_0_mint,
         &ctx.accounts.token_program,
         &ctx.accounts.token_program_2022,
-        decrease_amount_0 + latest_fees_owed_0,
+        transfer_amount_0,
     )?;
 
     transfer_from_pool_vault_to_user(
@@ -155,7 +160,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         &ctx.accounts.vault_1_mint,
         &ctx.accounts.token_program,
         &ctx.accounts.token_program_2022,
-        decrease_amount_1 + latest_fees_owed_1,
+        transfer_amount_1,
     )?;
 
     check_unclaimed_fees_and_vault(

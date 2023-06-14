@@ -99,8 +99,9 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
         input_token_account = output_token_account;
         input_token_mint = output_token_mint;
     }
-    require!(
-        amount_in_internal >= amount_out_minimum,
+    require_gte!(
+        amount_in_internal,
+        amount_out_minimum,
         ErrorCode::TooLittleOutputReceived
     );
 

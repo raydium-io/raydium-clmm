@@ -18,10 +18,10 @@ pub fn add_delta(x: u128, y: i128) -> Result<u128> {
     let z: u128;
     if y < 0 {
         z = x - u128::try_from(-y).unwrap();
-        require!(z < x, ErrorCode::LiquiditySubValueErr);
+        require_gt!(x, z, ErrorCode::LiquiditySubValueErr);
     } else {
         z = x + u128::try_from(y).unwrap();
-        require!(z >= x, ErrorCode::LiquidityAddValueErr);
+        require_gte!(z, x, ErrorCode::LiquidityAddValueErr);
     }
 
     Ok(z)

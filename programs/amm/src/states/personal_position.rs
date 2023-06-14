@@ -121,6 +121,12 @@ pub struct CreatePersonalPositionEvent {
 
     /// The amount of token_1 was deposit for the liquidity
     pub deposit_amount_1: u64,
+
+    /// The token transfer fee for deposit_amount_0
+    pub deposit_amount_0_transfer_fee: u64,
+
+    /// The token transfer fee for deposit_amount_1
+    pub deposit_amount_1_transfer_fee: u64,
 }
 
 /// Emitted when liquidity is increased.
@@ -138,6 +144,12 @@ pub struct IncreaseLiquidityEvent {
 
     /// The amount of token_1 that was paid for the increase in liquidity
     pub amount_1: u64,
+
+    /// The token transfer fee for amount_0
+    pub amount_0_transfer_fee: u64,
+
+    /// The token transfer fee for amount_1
+    pub amount_1_transfer_fee: u64,
 }
 
 /// Emitted when liquidity is decreased.

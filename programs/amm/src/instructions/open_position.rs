@@ -290,9 +290,16 @@ pub fn open_position<'a, 'b, 'c, 'info>(
 
         let mut amount_0: u64 = 0;
         let mut amount_1: u64 = 0;
+        let mut amount_0_transfer_fee: u64 = 0;
+        let mut amount_1_transfer_fee: u64 = 0;
 
         if liquidity > 0 {
-            (amount_0, amount_1) = add_liquidity(
+            (
+                amount_0,
+                amount_1,
+                amount_0_transfer_fee,
+                amount_1_transfer_fee,
+            ) = add_liquidity(
                 &mut add_liquidity_context,
                 pool_state,
                 liquidity,
@@ -329,6 +336,8 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             liquidity: liquidity,
             deposit_amount_0: amount_0,
             deposit_amount_1: amount_1,
+            deposit_amount_0_transfer_fee: amount_0_transfer_fee,
+            deposit_amount_1_transfer_fee: amount_1_transfer_fee
         });
     }
 
@@ -355,7 +364,7 @@ pub fn add_liquidity<'b, 'info>(
     amount_1_max: u64,
     tick_lower_index: i32,
     tick_upper_index: i32,
-) -> Result<(u64, u64)> {
+) -> Result<(u64, u64, u64, u64)> {
     assert!(liquidity > 0);
     let liquidity_before = pool_state.liquidity;
     require_keys_eq!(context.tick_array_lower.load()?.pool_id, pool_state.key());
@@ -423,8 +432,10 @@ pub fn add_liquidity<'b, 'info>(
 
     let amount_0 = u64::try_from(amount_0_int).unwrap();
     let amount_1 = u64::try_from(amount_1_int).unwrap();
-    let amount_0_transfer_fee = util::get_transfer_inverse_fee(context.vault_0_mint, amount_0).unwrap();
-    let amount_1_transfer_fee = util::get_transfer_inverse_fee(context.vault_1_mint, amount_1).unwrap();
+    let amount_0_transfer_fee =
+        util::get_transfer_inverse_fee(context.vault_0_mint, amount_0).unwrap();
+    let amount_1_transfer_fee =
+        util::get_transfer_inverse_fee(context.vault_1_mint, amount_1).unwrap();
     #[cfg(feature = "enable-log")]
     msg!(
         "amount_0:{},amount_1:{},amount_0_max:{},amount_1_max:{},amount_0_transfer_fee:{},amount_1_transfer_fee:{}",
@@ -435,9 +446,14 @@ pub fn add_liquidity<'b, 'info>(
         amount_0_transfer_fee,
         amount_1_transfer_fee
     );
-    require!(
-        amount_0 + amount_0_transfer_fee <= amount_0_max
-            && amount_1 + amount_1_transfer_fee <= amount_1_max,
+    require_gte!(
+        amount_0_max,
+        amount_0 + amount_0_transfer_fee,
+        ErrorCode::PriceSlippageCheck
+    );
+    require_gte!(
+        amount_1_max,
+        amount_1 + amount_1_transfer_fee,
         ErrorCode::PriceSlippageCheck
     );
 
@@ -448,7 +464,7 @@ pub fn add_liquidity<'b, 'info>(
         &context.vault_0_mint,
         &context.token_program,
         &context.token_program_2022,
-        amount_0,
+        amount_0 + amount_0_transfer_fee,
     )?;
 
     transfer_from_user_to_pool_vault(
@@ -458,7 +474,7 @@ pub fn add_liquidity<'b, 'info>(
         &context.vault_1_mint,
         &context.token_program,
         &context.token_program_2022,
-        amount_1,
+        amount_1 + amount_1_transfer_fee,
     )?;
     emit!(LiquidityChangeEvent {
         pool_state: pool_state.key(),
@@ -468,7 +484,12 @@ pub fn add_liquidity<'b, 'info>(
         liquidity_before: liquidity_before,
         liquidity_after: pool_state.liquidity,
     });
-    Ok((amount_0, amount_1))
+    Ok((
+        amount_0,
+        amount_1,
+        amount_0_transfer_fee,
+        amount_1_transfer_fee,
+    ))
 }
 
 pub fn modify_position(

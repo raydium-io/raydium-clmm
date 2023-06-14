@@ -684,7 +684,7 @@ pub fn exact_internal<'b, 'info>(
         };
 
     if zero_for_one {
-        if !is_base_input{
+        if !is_base_input {
             transfer_fee = util::get_transfer_inverse_fee(&ctx.input_vault_mint, amount_0).unwrap();
         }
         //  x -> y, deposit x token from user to pool vault.
@@ -695,7 +695,7 @@ pub fn exact_internal<'b, 'info>(
             &vault_0_mint,
             &ctx.token_program,
             &ctx.token_program_2022,
-            amount_0+transfer_fee,
+            amount_0 + transfer_fee,
         )?;
         if vault_1.amount <= amount_1 {
             // freeze pool, disable all instructions
@@ -712,7 +712,7 @@ pub fn exact_internal<'b, 'info>(
             amount_1,
         )?;
     } else {
-        if !is_base_input{
+        if !is_base_input {
             transfer_fee = util::get_transfer_inverse_fee(&ctx.input_vault_mint, amount_1).unwrap();
         }
         transfer_from_user_to_pool_vault(
@@ -722,7 +722,7 @@ pub fn exact_internal<'b, 'info>(
             &vault_1_mint,
             &ctx.token_program,
             &ctx.token_program_2022,
-            amount_1+transfer_fee,
+            amount_1 + transfer_fee,
         )?;
         if vault_0.amount <= amount_0 {
             // freeze pool, disable all instructions
@@ -802,13 +802,15 @@ pub fn swap<'a, 'b, 'c, 'info>(
         is_base_input,
     )?;
     if is_base_input {
-        require!(
-            amount_result >= other_amount_threshold,
+        require_gte!(
+            amount_result,
+            other_amount_threshold,
             ErrorCode::TooLittleOutputReceived
         );
     } else {
-        require!(
-            amount_result <= other_amount_threshold,
+        require_gte!(
+            other_amount_threshold,
+            amount_result,
             ErrorCode::TooMuchInputPaid
         );
     }

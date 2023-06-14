@@ -4,7 +4,7 @@ use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::states::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
-use anchor_spl::token_interface::{Token2022, TokenAccount, Mint};
+use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
 #[derive(Accounts)]
 pub struct IncreaseLiquidity<'info> {
     /// Pays to mint the position
@@ -117,7 +117,7 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         token_program: ctx.accounts.token_program.clone(),
         token_program_2022: ctx.accounts.token_program_2022.clone(),
     };
-    let (amount_0, amount_1) = add_liquidity(
+    let (amount_0, amount_1, amount_0_transfer_fee, amount_1_transfer_fee) = add_liquidity(
         &mut add_liquidity_context,
         &mut pool_state,
         liquidity,
@@ -155,7 +155,9 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         position_nft_mint: personal_position.nft_mint,
         liquidity,
         amount_0,
-        amount_1
+        amount_1,
+        amount_0_transfer_fee,
+        amount_1_transfer_fee
     });
 
     Ok(())

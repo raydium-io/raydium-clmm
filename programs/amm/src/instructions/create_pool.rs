@@ -86,8 +86,8 @@ pub struct CreatePool<'info> {
 }
 
 pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u64) -> Result<()> {
-    if util::is_supported_mint(&ctx.accounts.token_mint_0).unwrap()
-        || util::is_supported_mint(&ctx.accounts.token_mint_1).unwrap()
+    if !(util::is_supported_mint(&ctx.accounts.token_mint_0).unwrap()
+        && util::is_supported_mint(&ctx.accounts.token_mint_1).unwrap())
     {
         return err!(ErrorCode::NotSupportMint);
     }
