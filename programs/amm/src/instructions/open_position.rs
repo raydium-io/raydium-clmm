@@ -461,9 +461,9 @@ pub fn add_liquidity<'b, 'info>(
         &context.payer,
         &context.token_account_0,
         &context.token_vault_0,
-        &context.vault_0_mint,
+        Some(&context.vault_0_mint),
         &context.token_program,
-        &context.token_program_2022,
+        Some(&context.token_program_2022),
         amount_0 + amount_0_transfer_fee,
     )?;
 
@@ -471,9 +471,9 @@ pub fn add_liquidity<'b, 'info>(
         &context.payer,
         &context.token_account_1,
         &context.token_vault_1,
-        &context.vault_1_mint,
+        Some(&context.vault_1_mint),
         &context.token_program,
-        &context.token_program_2022,
+        Some(&context.token_program_2022),
         amount_1 + amount_1_transfer_fee,
     )?;
     emit!(LiquidityChangeEvent {

@@ -108,9 +108,9 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
             &ctx.accounts.authority,
             &authority_token_account,
             &reward_token_vault,
-            &reward_vault_mint,
+            Some(&reward_vault_mint),
             &ctx.accounts.token_program,
-            &&ctx.accounts.token_program_2022,
+            Some(&ctx.accounts.token_program_2022),
             reward_amount,
         )?;
     }

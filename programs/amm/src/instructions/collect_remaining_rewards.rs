@@ -45,9 +45,9 @@ pub fn collect_remaining_rewards(
         &ctx.accounts.pool_state,
         &ctx.accounts.reward_token_vault,
         &ctx.accounts.funder_token_account,
-        &&ctx.accounts.reward_vault_mint,
+        Some(&ctx.accounts.reward_vault_mint),
         &ctx.accounts.token_program,
-        &ctx.accounts.token_program_2022,
+        Some(&ctx.accounts.token_program_2022),
         amount_remaining,
     )?;
 

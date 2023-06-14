@@ -1,6 +1,6 @@
-use super::{exact_internal, SwapAccounts};
 use crate::error::ErrorCode;
 use crate::states::*;
+use crate::swap_v2::{exact_internal, SwapSingleV2};
 use anchor_lang::prelude::*;
 use anchor_spl::{
     token::Token,
@@ -45,7 +45,7 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
             continue;
         }
         let amm_config = Box::new(Account::<AmmConfig>::try_from(account_info)?);
-        let mut pool_state_loader =
+        let pool_state_loader =
             AccountLoader::<PoolState>::try_from(remaining_accounts.next().unwrap())?;
         let output_token_account = Box::new(InterfaceAccount::<TokenAccount>::try_from(
             &remaining_accounts.next().unwrap(),
@@ -59,7 +59,7 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
         let output_token_mint = Box::new(InterfaceAccount::<Mint>::try_from(
             remaining_accounts.next().unwrap(),
         )?);
-        let mut observation_state =
+        let observation_state =
             AccountLoader::<ObservationState>::try_from(remaining_accounts.next().unwrap())?;
 
         {
@@ -70,23 +70,20 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
             require_keys_eq!(pool_state.amm_config, amm_config.key());
         }
 
-        let mut tick_array =
-            AccountLoader::<TickArrayState>::try_from(remaining_accounts.next().unwrap())?;
         // solana_program::log::sol_log_compute_units();
         accounts = remaining_accounts.as_slice();
         amount_in_internal = exact_internal(
-            &mut SwapAccounts {
-                signer: ctx.accounts.payer.clone(),
-                amm_config: &amm_config,
+            &mut SwapSingleV2 {
+                payer: ctx.accounts.payer.clone(),
+                amm_config,
                 input_token_account: input_token_account.clone(),
-                pool_state: &mut pool_state_loader,
+                pool_state: pool_state_loader,
                 output_token_account: output_token_account.clone(),
                 input_vault: input_vault.clone(),
                 output_vault: output_vault.clone(),
                 input_vault_mint: input_token_mint.clone(),
                 output_vault_mint: output_token_mint.clone(),
-                tick_array_state: &mut tick_array,
-                observation_state: &mut observation_state,
+                observation_state,
                 token_program: ctx.accounts.token_program.clone(),
                 token_program_2022: ctx.accounts.token_program_2022.clone(),
             },

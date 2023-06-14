@@ -147,9 +147,9 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_0,
         &ctx.accounts.recipient_token_account_0,
-        &ctx.accounts.vault_0_mint,
+        Some(&ctx.accounts.vault_0_mint),
         &ctx.accounts.token_program,
-        &ctx.accounts.token_program_2022,
+        Some(&ctx.accounts.token_program_2022),
         transfer_amount_0,
     )?;
 
@@ -157,9 +157,9 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_1,
         &ctx.accounts.recipient_token_account_1,
-        &ctx.accounts.vault_1_mint,
+        Some(&ctx.accounts.vault_1_mint),
         &ctx.accounts.token_program,
-        &ctx.accounts.token_program_2022,
+        Some(&ctx.accounts.token_program_2022),
         transfer_amount_1,
     )?;
 
@@ -416,9 +416,9 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
                 &pool_state_loader,
                 &reward_token_vault,
                 &recipient_token_account,
-                &reward_vault_mint,
+                Some(&reward_vault_mint),
                 &token_program,
-                &token_program_2022,
+                Some(&token_program_2022),
                 transfer_amount,
             )?;
         }

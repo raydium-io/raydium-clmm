@@ -144,9 +144,9 @@ pub fn initialize_reward(
         &ctx.accounts.reward_funder,
         &ctx.accounts.funder_token_account,
         &ctx.accounts.reward_token_vault,
-        &ctx.accounts.reward_token_mint,
+        Some(&ctx.accounts.reward_token_mint),
         &ctx.accounts.token_program,
-        &&ctx.accounts.token_program_2022,
+        Some(&ctx.accounts.token_program_2022),
         reward_amount_with_transfer_fee,
     )?;
 

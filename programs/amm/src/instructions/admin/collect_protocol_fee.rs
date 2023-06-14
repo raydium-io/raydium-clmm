@@ -91,9 +91,9 @@ pub fn collect_protocol_fee(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_0,
         &ctx.accounts.recipient_token_account_0,
-        &ctx.accounts.vault_0_mint,
+        Some(&ctx.accounts.vault_0_mint),
         &ctx.accounts.token_program,
-        &ctx.accounts.token_program_2022,
+        Some(&ctx.accounts.token_program_2022),
         amount_0,
     )?;
 
@@ -101,9 +101,9 @@ pub fn collect_protocol_fee(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_1,
         &ctx.accounts.recipient_token_account_1,
-        &ctx.accounts.vault_1_mint,
+        Some( &ctx.accounts.vault_1_mint),
         &ctx.accounts.token_program,
-        &ctx.accounts.token_program_2022,
+        Some( &ctx.accounts.token_program_2022),
         amount_1,
     )?;
 
