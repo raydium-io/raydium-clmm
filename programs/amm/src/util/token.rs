@@ -96,13 +96,14 @@ pub fn transfer_from_pool_vault_to_user<'info>(
             )
         }
         _ => token::transfer(
-            CpiContext::new(
+            CpiContext::new_with_signer(
                 token_program_info,
                 token::Transfer {
                     from: from_vault.to_account_info(),
                     to: to.to_account_info(),
                     authority: pool_state_loader.to_account_info(),
                 },
+                &[&pool_state_loader.load()?.seeds()],
             ),
             amount,
         ),
@@ -205,7 +206,7 @@ pub fn get_transfer_fee(mint_account: &InterfaceAccount<Mint>, pre_fee_amount: u
 pub fn is_supported_mint(mint_account: &InterfaceAccount<Mint>) -> Result<bool> {
     let mint_info = mint_account.to_account_info();
     if *mint_info.owner == Token::id() {
-        return Ok(false);
+        return Ok(true);
     }
     let mint_data = mint_info.try_borrow_data()?;
     let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
@@ -214,7 +215,7 @@ pub fn is_supported_mint(mint_account: &InterfaceAccount<Mint>) -> Result<bool> 
         return Ok(false);
     }
     let maybe_permanent_delegate = get_permanent_delegate(&mint);
-    if maybe_permanent_delegate != None {
+    if maybe_permanent_delegate.is_some() {
         return Ok(false);
     }
 

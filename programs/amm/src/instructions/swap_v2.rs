@@ -7,8 +7,6 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
 use std::collections::VecDeque;
-#[cfg(feature = "enable-log")]
-use std::convert::identity;
 #[derive(Accounts)]
 pub struct SwapSingleV2<'info> {
     /// The user performing the swap
