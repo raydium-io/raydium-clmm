@@ -103,6 +103,9 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     amount_1_min: u64,
 ) -> Result<()> {
     assert!(liquidity <= ctx.accounts.personal_position.liquidity);
+    let liquidity_before;
+    let pool_sqrt_price_x64;
+    let pool_tick_current;
     {
         let pool_state = ctx.accounts.pool_state.load()?;
         if !pool_state.get_status_by_bit(PoolStatusBitIndex::DecreaseLiquidity)
@@ -111,6 +114,9 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         {
             return err!(ErrorCode::NotApproved);
         }
+        liquidity_before = pool_state.liquidity;
+        pool_sqrt_price_x64 = pool_state.sqrt_price_x64;
+        pool_tick_current = pool_state.tick_current;
     }
 
     let (decrease_amount_0, latest_fees_owed_0, decrease_amount_1, latest_fees_owed_1) =
@@ -127,6 +133,17 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         util::get_transfer_fee(&ctx.accounts.vault_0_mint, decrease_amount_0).unwrap();
     let transfer_fee_1 =
         util::get_transfer_fee(&ctx.accounts.vault_1_mint, decrease_amount_1).unwrap();
+    emit!(LiquidityCalculateEvent {
+        pool_liquidity: liquidity_before,
+        pool_sqrt_price_x64: pool_sqrt_price_x64,
+        pool_tick: pool_tick_current,
+        calc_amount_0: decrease_amount_0,
+        calc_amount_1: decrease_amount_1,
+        trade_fee_owed_0: latest_fees_owed_0,
+        trade_fee_owed_1: latest_fees_owed_1,
+        transfer_fee_0,
+        transfer_fee_1,
+    });
     if liquidity > 0 {
         require_gte!(
             decrease_amount_0 - transfer_fee_0,
@@ -176,18 +193,6 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         ctx.accounts.token_program_2022.clone(),
         personal_position,
     )?;
-
-    #[cfg(feature = "enable-log")]
-    msg!(
-        "decrease_amount_0:{}, fees_owed_0:{}, decrease_amount_1:{}, fees_owed_1:{}, reward_amounts:{:?},transfer_fee_0:{},transfer_fee_1:{}",
-        decrease_amount_0,
-        latest_fees_owed_0,
-        decrease_amount_1,
-        latest_fees_owed_1,
-        reward_amounts,
-        transfer_fee_0,
-        transfer_fee_1
-    );
     emit!(DecreaseLiquidityEvent {
         position_nft_mint: personal_position.nft_mint,
         liquidity,

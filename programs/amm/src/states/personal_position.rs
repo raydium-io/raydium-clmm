@@ -175,6 +175,29 @@ pub struct DecreaseLiquidityEvent {
     pub transfer_fee_1: u64,
 }
 
+/// Emitted when liquidity decreased or increase.
+#[event]
+pub struct LiquidityCalculateEvent {
+    /// The pool liquidity before decrease or increase
+    pub pool_liquidity: u128,
+    /// The pool price when decrease or increase in liquidity
+    pub pool_sqrt_price_x64: u128,
+    /// The pool tick when decrease or increase in liquidity
+    pub pool_tick: i32,
+    /// The amount of token_0 that was calculated for the decrease or increase in liquidity
+    pub calc_amount_0: u64,
+    /// The amount of token_1 that was calculated for the decrease or increase in liquidity
+    pub calc_amount_1: u64,
+    // The amount of token_0 fee
+    pub trade_fee_owed_0: u64,
+    /// The amount of token_1 fee
+    pub trade_fee_owed_1: u64,
+    /// The amount of token_0 transfer fee without trade_fee_amount_0
+    pub transfer_fee_0: u64,
+    /// The amount of token_1 transfer fee without trade_fee_amount_0
+    pub transfer_fee_1: u64,
+}
+
 /// Emitted when tokens are collected for a position
 #[event]
 pub struct CollectPersonalFeeEvent {

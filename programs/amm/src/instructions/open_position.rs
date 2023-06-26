@@ -436,16 +436,17 @@ pub fn add_liquidity<'b, 'info>(
         util::get_transfer_inverse_fee(context.vault_0_mint, amount_0).unwrap();
     let amount_1_transfer_fee =
         util::get_transfer_inverse_fee(context.vault_1_mint, amount_1).unwrap();
-    #[cfg(feature = "enable-log")]
-    msg!(
-        "amount_0:{},amount_1:{},amount_0_max:{},amount_1_max:{},amount_0_transfer_fee:{},amount_1_transfer_fee:{}",
-        amount_0,
-        amount_1,
-        amount_0_max,
-        amount_1_max,
-        amount_0_transfer_fee,
-        amount_1_transfer_fee
-    );
+    emit!(LiquidityCalculateEvent {
+        pool_liquidity: liquidity_before,
+        pool_sqrt_price_x64: pool_state.sqrt_price_x64,
+        pool_tick: pool_state.tick_current,
+        calc_amount_0: amount_0,
+        calc_amount_1: amount_1,
+        trade_fee_owed_0: 0,
+        trade_fee_owed_1: 0,
+        transfer_fee_0: amount_0_transfer_fee,
+        transfer_fee_1: amount_1_transfer_fee,
+    });
     require_gte!(
         amount_0_max,
         amount_0 + amount_0_transfer_fee,
