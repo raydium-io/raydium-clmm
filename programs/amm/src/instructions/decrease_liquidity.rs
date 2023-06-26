@@ -123,25 +123,24 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
             liquidity,
         )?;
 
-    let transfer_amount_0 = decrease_amount_0 + latest_fees_owed_0;
-    let transfer_amount_1 = decrease_amount_1 + latest_fees_owed_1;
-
     let transfer_fee_0 =
-        util::get_transfer_fee(&ctx.accounts.vault_0_mint, transfer_amount_0).unwrap();
+        util::get_transfer_fee(&ctx.accounts.vault_0_mint, decrease_amount_0).unwrap();
     let transfer_fee_1 =
-        util::get_transfer_fee(&ctx.accounts.vault_1_mint, transfer_amount_1).unwrap();
+        util::get_transfer_fee(&ctx.accounts.vault_1_mint, decrease_amount_1).unwrap();
     if liquidity > 0 {
         require_gte!(
-            transfer_amount_0 - transfer_fee_0,
+            decrease_amount_0 - transfer_fee_0,
             amount_0_min,
             ErrorCode::PriceSlippageCheck
         );
         require_gte!(
-            transfer_amount_1 - transfer_fee_1,
+            decrease_amount_1 - transfer_fee_1,
             amount_1_min,
             ErrorCode::PriceSlippageCheck
         );
     }
+    let transfer_amount_0 = decrease_amount_0 + latest_fees_owed_0;
+    let transfer_amount_1 = decrease_amount_1 + latest_fees_owed_1;
 
     transfer_from_pool_vault_to_user(
         &ctx.accounts.pool_state,

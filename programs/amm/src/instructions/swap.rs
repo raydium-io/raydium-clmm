@@ -30,19 +30,31 @@ pub struct SwapSingle<'info> {
     pub pool_state: AccountLoader<'info, PoolState>,
 
     /// The user token account for input token
-    #[account(mut)]
+    #[account(
+        mut,
+        token::token_program = token_program,
+    )]
     pub input_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The user token account for output token
-    #[account(mut)]
+    #[account(
+        mut,
+        token::token_program = token_program,
+    )]
     pub output_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The vault token account for input token
-    #[account(mut)]
+    #[account(
+        mut,
+        token::token_program = token_program,
+    )]
     pub input_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The vault token account for output token
-    #[account(mut)]
+    #[account(
+        mut,
+        token::token_program = token_program,
+    )]
     pub output_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The program account for the most recent oracle observation
