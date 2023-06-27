@@ -10,6 +10,7 @@ use anchor_spl::{
                 confidential_transfer::ConfidentialTransferMint, non_transferable::NonTransferable,
                 permanent_delegate::get_permanent_delegate, transfer_fee::TransferFeeConfig,
                 BaseStateWithExtensions, StateWithExtensions,
+                default_account_state::DefaultAccountState,
             },
         },
     },
@@ -212,6 +213,9 @@ pub fn is_supported_mint(mint_account: &InterfaceAccount<Mint>) -> Result<bool> 
     let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
 
     if mint.get_extension::<NonTransferable>().is_ok() {
+        return Ok(false);
+    }
+    if mint.get_extension::<DefaultAccountState>().is_ok() {
         return Ok(false);
     }
     let maybe_permanent_delegate = get_permanent_delegate(&mint);

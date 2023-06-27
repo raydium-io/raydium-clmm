@@ -88,7 +88,7 @@ pub struct IncreaseLiquidity<'info> {
     /// Program to create mint account and mint tokens
     pub token_program: Program<'info, Token>,
     /// Token program 2022
-    pub token_program_2022: Program<'info, Token2022>,
+    pub token_program_2022: Program<'info, Token2022>,   
 }
 
 pub fn increase_liquidity<'a, 'b, 'c, 'info>(

@@ -57,6 +57,11 @@ pub struct SwapSingleV2<'info> {
         address = output_vault.mint
     )]
     pub output_vault_mint: Box<InterfaceAccount<'info, Mint>>,
+
+    // remaining accounts
+    // tick_array_account_1
+    // tick_array_account_2
+    // tick_array_account_...
 }
 
 /// Performs a single exact input/output swap
