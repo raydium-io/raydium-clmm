@@ -7,10 +7,10 @@ use anchor_spl::{
         spl_token_2022::{
             self,
             extension::{
-                confidential_transfer::ConfidentialTransferMint, non_transferable::NonTransferable,
+                confidential_transfer::ConfidentialTransferMint,
+                default_account_state::DefaultAccountState, non_transferable::NonTransferable,
                 permanent_delegate::get_permanent_delegate, transfer_fee::TransferFeeConfig,
                 BaseStateWithExtensions, StateWithExtensions,
-                default_account_state::DefaultAccountState,
             },
         },
     },
@@ -30,16 +30,17 @@ pub fn transfer_from_user_to_pool_vault<'info>(
         return Ok(());
     }
     let mut token_program_info = token_program.to_account_info();
+    let from_token_info = from.to_account_info();
     match (mint, token_program_2022) {
         (Some(mint), Some(token_program_2022)) => {
-            if from.owner == token_program_2022.key() {
+            if from_token_info.owner == token_program_2022.key {
                 token_program_info = token_program_2022.to_account_info()
             }
             token_2022::transfer_checked(
                 CpiContext::new(
                     token_program_info,
                     token_2022::TransferChecked {
-                        from: from.to_account_info(),
+                        from: from_token_info,
                         to: to_vault.to_account_info(),
                         authority: signer.to_account_info(),
                         mint: mint.to_account_info(),
@@ -53,7 +54,7 @@ pub fn transfer_from_user_to_pool_vault<'info>(
             CpiContext::new(
                 token_program_info,
                 token::Transfer {
-                    from: from.to_account_info(),
+                    from: from_token_info,
                     to: to_vault.to_account_info(),
                     authority: signer.to_account_info(),
                 },
@@ -76,16 +77,17 @@ pub fn transfer_from_pool_vault_to_user<'info>(
         return Ok(());
     }
     let mut token_program_info = token_program.to_account_info();
+    let from_vault_info = from_vault.to_account_info();
     match (mint, token_program_2022) {
         (Some(mint), Some(token_program_2022)) => {
-            if from_vault.owner == token_program_2022.key() {
+            if from_vault_info.owner == token_program_2022.key {
                 token_program_info = token_program_2022.to_account_info()
             }
             token_2022::transfer_checked(
                 CpiContext::new_with_signer(
                     token_program_info,
                     token_2022::TransferChecked {
-                        from: from_vault.to_account_info(),
+                        from: from_vault_info,
                         to: to.to_account_info(),
                         authority: pool_state_loader.to_account_info(),
                         mint: mint.to_account_info(),
@@ -100,7 +102,7 @@ pub fn transfer_from_pool_vault_to_user<'info>(
             CpiContext::new_with_signer(
                 token_program_info,
                 token::Transfer {
-                    from: from_vault.to_account_info(),
+                    from: from_vault_info,
                     to: to.to_account_info(),
                     authority: pool_state_loader.to_account_info(),
                 },
@@ -120,14 +122,15 @@ pub fn close_spl_account<'a, 'b, 'c, 'info>(
     signers_seeds: &[&[&[u8]]],
 ) -> Result<()> {
     let mut token_program_info = token_program.to_account_info();
-    if close_account.owner == token_program_2022.key() {
+    let close_account_info = close_account.to_account_info();
+    if close_account_info.owner == token_program_2022.key {
         token_program_info = token_program_2022.to_account_info()
     }
 
     token_2022::close_account(CpiContext::new_with_signer(
         token_program_info,
         token_2022::CloseAccount {
-            account: close_account.to_account_info(),
+            account: close_account_info,
             destination: destination.to_account_info(),
             authority: owner.to_account_info(),
         },
@@ -145,7 +148,7 @@ pub fn burn<'a, 'b, 'c, 'info>(
     amount: u64,
 ) -> Result<()> {
     let mint_info = mint.to_account_info();
-    let mut token_program_info = token_program.to_account_info();
+    let mut token_program_info: AccountInfo<'_> = token_program.to_account_info();
     if mint_info.owner == token_program_2022.key {
         token_program_info = token_program_2022.to_account_info()
     }
