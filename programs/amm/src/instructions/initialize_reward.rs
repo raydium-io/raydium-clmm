@@ -3,7 +3,7 @@ use crate::libraries::{fixed_point_64, full_math::MulDiv, U256};
 use crate::util::transfer_from_user_to_pool_vault;
 use crate::{states::*, util};
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{Mint, TokenInterface, TokenAccount};
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
 #[derive(Accounts)]
 pub struct InitializeReward<'info> {
@@ -92,7 +92,7 @@ pub fn initialize_reward(
     ctx: Context<InitializeReward>,
     param: InitializeRewardParam,
 ) -> Result<()> {
-    if util::is_supported_mint(&ctx.accounts.reward_token_mint).unwrap() {
+    if !util::is_supported_mint(&ctx.accounts.reward_token_mint).unwrap() {
         return err!(ErrorCode::NotSupportMint);
     }
     let operation_state = ctx.accounts.operation_state.load()?;
