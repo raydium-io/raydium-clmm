@@ -3,8 +3,7 @@ use crate::libraries::{fixed_point_64, full_math::MulDiv, U256};
 use crate::util::transfer_from_user_to_pool_vault;
 use crate::{states::*, util};
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token};
-use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
+use anchor_spl::token_interface::{Mint, TokenInterface, TokenAccount};
 
 #[derive(Accounts)]
 pub struct InitializeReward<'info> {
@@ -50,16 +49,14 @@ pub struct InitializeReward<'info> {
         bump,
         payer = reward_funder,
         token::mint = reward_token_mint,
-        token::authority = pool_state
+        token::authority = pool_state,
+        token::token_program = reward_token_program,
     )]
     pub reward_token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    #[account(address = token::ID)]
-    pub token_program: Program<'info, Token>,
+    pub reward_token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
-    /// Token program 2022
-    pub token_program_2022: Program<'info, Token2022>,
 }
 
 #[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Debug, PartialEq)]
@@ -145,8 +142,8 @@ pub fn initialize_reward(
         &ctx.accounts.funder_token_account,
         &ctx.accounts.reward_token_vault,
         Some(&ctx.accounts.reward_token_mint),
-        &ctx.accounts.token_program,
-        Some(&ctx.accounts.token_program_2022),
+        &ctx.accounts.reward_token_program.to_account_info(),
+        Some(&ctx.accounts.reward_token_program.to_account_info()),
         reward_amount_with_transfer_fee,
     )?;
 

@@ -22,8 +22,8 @@ pub fn transfer_from_user_to_pool_vault<'info>(
     from: &InterfaceAccount<'info, TokenAccount>,
     to_vault: &InterfaceAccount<'info, TokenAccount>,
     mint: Option<&InterfaceAccount<'info, Mint>>,
-    token_program: &Program<'info, Token>,
-    token_program_2022: Option<&Program<'info, Token2022>>,
+    token_program: &AccountInfo<'info>,
+    token_program_2022: Option<&AccountInfo<'info>>,
     amount: u64,
 ) -> Result<()> {
     if amount == 0 {
@@ -69,8 +69,8 @@ pub fn transfer_from_pool_vault_to_user<'info>(
     from_vault: &InterfaceAccount<'info, TokenAccount>,
     to: &InterfaceAccount<'info, TokenAccount>,
     mint: Option<&InterfaceAccount<'info, Mint>>,
-    token_program: &Program<'info, Token>,
-    token_program_2022: Option<&Program<'info, Token2022>>,
+    token_program: &AccountInfo<'info>,
+    token_program_2022: Option<&AccountInfo<'info>>,
     amount: u64,
 ) -> Result<()> {
     if amount == 0 {
