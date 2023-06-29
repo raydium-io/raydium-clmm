@@ -358,6 +358,8 @@ pub fn burn_liquidity<'b, 'info>(
     Ok((amount_0, amount_1))
 }
 
+const GROUP_REWARD_ACCOUNT_NUM: usize = 3;
+
 pub fn collect_rewards<'a, 'b, 'c, 'info>(
     pool_state_loader: &AccountLoader<'info, PoolState>,
     remaining_accounts: &[AccountInfo<'info>],
@@ -376,7 +378,7 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
 
     let remaining_accounts_len = remaining_accounts.len();
     let mut remaining_accounts = remaining_accounts.iter();
-    for i in 0..remaining_accounts_len / 2 {
+    for i in 0..remaining_accounts_len / GROUP_REWARD_ACCOUNT_NUM {
         let reward_token_vault =
             InterfaceAccount::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
         let recipient_token_account =
@@ -444,7 +446,7 @@ fn check_required_accounts_length(
         }
     }
     let remaining_accounts_len = remaining_accounts.len();
-    if remaining_accounts_len != valid_reward_count * 2 {
+    if remaining_accounts_len != valid_reward_count * GROUP_REWARD_ACCOUNT_NUM {
         return err!(ErrorCode::InvalidRewardInputAccountNumber);
     }
     Ok(())
