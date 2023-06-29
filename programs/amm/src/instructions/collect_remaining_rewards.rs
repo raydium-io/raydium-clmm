@@ -78,7 +78,12 @@ fn get_remaining_reward_amount(
 
     let amount_remaining = reward_token_vault
         .amount
-        .checked_sub(reward_info.reward_total_emissioned)
+        .checked_sub(
+            reward_info
+                .reward_total_emissioned
+                .checked_sub(reward_info.reward_claimed)
+                .unwrap(),
+        )
         .unwrap();
 
     Ok(amount_remaining)
