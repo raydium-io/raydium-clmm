@@ -389,14 +389,15 @@ impl PoolState {
                     .unwrap();
                 #[cfg(feature = "enable-log")]
                 msg!(
-                    "reward_index:{},latest_update_timestamp:{},reward_info.reward_last_update_time:{},time_delta:{},reward_emission_per_second_x64:{},reward_growth_delta:{},reward_info.reward_growth_global_x64:{}",
+                    "reward_index:{},latest_update_timestamp:{},reward_info.reward_last_update_time:{},time_delta:{},reward_emission_per_second_x64:{},reward_growth_delta:{},reward_info.reward_growth_global_x64:{}, reward_info.reward_claim:{}",
                     i,
                     latest_update_timestamp,
                     identity(reward_info.last_update_time),
                     time_delta,
                     identity(reward_info.emissions_per_second_x64),
                     reward_growth_delta,
-                    identity(reward_info.reward_growth_global_x64)
+                    identity(reward_info.reward_growth_global_x64),
+                    reward_info.reward_claimed
                 );
             }
             reward_info.last_update_time = latest_update_timestamp;
