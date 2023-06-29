@@ -397,7 +397,7 @@ impl PoolState {
                     identity(reward_info.emissions_per_second_x64),
                     reward_growth_delta,
                     identity(reward_info.reward_growth_global_x64),
-                    reward_info.reward_claimed
+                    identity(reward_info.reward_claimed)
                 );
             }
             reward_info.last_update_time = latest_update_timestamp;
