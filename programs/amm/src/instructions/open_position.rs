@@ -1,5 +1,6 @@
 use crate::error::ErrorCode;
 use crate::libraries::liquidity_math;
+use crate::libraries::tick_math;
 use crate::states::*;
 use crate::util;
 use crate::util::*;
@@ -31,12 +32,6 @@ pub struct AddLiquidityParam<'b, 'info> {
     /// The address that holds pool tokens for token_1
     pub token_vault_1: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
 
-    /// token_vault_0 mint
-    pub vault_0_mint: &'b InterfaceAccount<'info, Mint>,
-
-    /// token_vault_1 mint
-    pub vault_1_mint: &'b InterfaceAccount<'info, Mint>,
-
     /// The bitmap storing initialization state of the lower tick
     pub tick_array_lower: &'b AccountLoader<'info, TickArrayState>,
 
@@ -50,7 +45,13 @@ pub struct AddLiquidityParam<'b, 'info> {
     pub token_program: Program<'info, Token>,
 
     /// The SPL program to perform token transfers
-    pub token_program_2022: Program<'info, Token2022>,
+    pub token_program_2022: Option<Program<'info, Token2022>>,
+
+    /// token_vault_0 mint
+    pub vault_0_mint: Option<InterfaceAccount<'info, Mint>>,
+
+    /// token_vault_1 mint
+    pub vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
 }
 
 #[derive(Accounts)]
@@ -169,17 +170,138 @@ pub struct OpenPosition<'info> {
     )]
     pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    /// The mint of token vault 0
-    #[account(
-        address = token_vault_0.mint
-    )]
-    pub vault_0_mint: InterfaceAccount<'info, Mint>,
+    /// Sysvar for token mint and ATA creation
+    pub rent: Sysvar<'info, Rent>,
 
-    /// The mint of token vault 1
+    /// Program to create the position manager state account
+    pub system_program: Program<'info, System>,
+
+    /// Program to create mint account and mint tokens
+    pub token_program: Program<'info, Token>,
+    /// Program to create an ATA for receiving position NFT
+    pub associated_token_program: Program<'info, AssociatedToken>,
+
+    /// Program to create NFT metadata
+    /// CHECK: Metadata program address constraint applied
+    #[account(address = mpl_token_metadata::ID)]
+    pub metadata_program: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(tick_lower_index: i32, tick_upper_index: i32,tick_array_lower_start_index:i32,tick_array_upper_start_index:i32)]
+pub struct OpenPositionV2<'info> {
+    /// Pays to mint the position
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    /// CHECK: Receives the position NFT
+    pub position_nft_owner: UncheckedAccount<'info>,
+
+    /// Unique token mint address
     #[account(
-        address = token_vault_1.mint
+        init,
+        mint::decimals = 0,
+        mint::authority = pool_state.key(),
+        payer = payer,
+        mint::token_program = token_program,
     )]
-    pub vault_1_mint: InterfaceAccount<'info, Mint>,
+    pub position_nft_mint: Box<InterfaceAccount<'info, Mint>>,
+
+    /// Token account where position NFT will be minted
+    #[account(
+        init,
+        associated_token::mint = position_nft_mint,
+        associated_token::authority = position_nft_owner,
+        payer = payer,
+        token::token_program = token_program,
+    )]
+    pub position_nft_account: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// To store metaplex metadata
+    /// CHECK: Safety check performed inside function body
+    #[account(mut)]
+    pub metadata_account: UncheckedAccount<'info>,
+
+    /// Add liquidity for this pool
+    #[account(mut)]
+    pub pool_state: AccountLoader<'info, PoolState>,
+
+    /// Store the information of market marking in range
+    #[account(
+        init_if_needed,
+        seeds = [
+            POSITION_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+            &tick_lower_index.to_be_bytes(),
+            &tick_upper_index.to_be_bytes(),
+        ],
+        bump,
+        payer = payer,
+        space = ProtocolPositionState::LEN
+    )]
+    pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
+
+    /// CHECK: Account to mark the lower tick as initialized
+    #[account(
+        mut,
+        seeds = [
+            TICK_ARRAY_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+            &tick_array_lower_start_index.to_be_bytes(),
+        ],
+        bump,
+    )]
+    pub tick_array_lower: UncheckedAccount<'info>,
+
+    /// CHECK:Account to store data for the position's upper tick
+    #[account(
+        mut,
+        seeds = [
+            TICK_ARRAY_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+            &tick_array_upper_start_index.to_be_bytes(),
+        ],
+        bump,
+    )]
+    pub tick_array_upper: UncheckedAccount<'info>,
+
+    /// personal position state
+    #[account(
+        init,
+        seeds = [POSITION_SEED.as_bytes(), position_nft_mint.key().as_ref()],
+        bump,
+        payer = payer,
+        space = PersonalPositionState::LEN
+    )]
+    pub personal_position: Box<Account<'info, PersonalPositionState>>,
+
+    /// The token_0 account deposit token to the pool
+    #[account(
+        mut,
+        token::mint = token_vault_0.mint
+    )]
+    pub token_account_0: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// The token_1 account deposit token to the pool
+    #[account(
+        mut,
+        token::mint = token_vault_1.mint
+    )]
+    pub token_account_1: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// The address that holds pool tokens for token_0
+    #[account(
+        mut,
+        constraint = token_vault_0.key() == pool_state.load()?.token_vault_0
+    )]
+    pub token_vault_0: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// The address that holds pool tokens for token_1
+    #[account(
+        mut,
+        constraint = token_vault_1.key() == pool_state.load()?.token_vault_1
+    )]
+    pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// Sysvar for token mint and ATA creation
     pub rent: Sysvar<'info, Rent>,
@@ -198,11 +320,23 @@ pub struct OpenPosition<'info> {
     pub metadata_program: UncheckedAccount<'info>,
 
     /// Program to create mint account and mint tokens
-    pub token_program_2022: Program<'info, Token2022>,
+    pub token_program_2022: Option<Program<'info, Token2022>>,
+
+    /// The mint of token vault 0
+    #[account(
+        address = token_vault_0.mint
+    )]
+    pub vault_0_mint: Option<InterfaceAccount<'info, Mint>>,
+
+    /// The mint of token vault 1
+    #[account(
+        address = token_vault_1.mint
+    )]
+    pub vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
 }
 
 pub fn open_position<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, OpenPosition<'info>>,
+    ctx: Context<'a, 'b, 'c, 'info, OpenPositionV2<'info>>,
     liquidity: u128,
     amount_0_max: u64,
     amount_1_max: u64,
@@ -210,6 +344,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
+    base_flag: bool,
 ) -> Result<()> {
     {
         let pool_state = &mut ctx.accounts.pool_state.load_mut()?;
@@ -279,8 +414,8 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             token_account_1: &mut ctx.accounts.token_account_1,
             token_vault_0: &mut ctx.accounts.token_vault_0,
             token_vault_1: &mut ctx.accounts.token_vault_1,
-            vault_0_mint: &ctx.accounts.vault_0_mint,
-            vault_1_mint: &ctx.accounts.vault_1_mint,
+            vault_0_mint: ctx.accounts.vault_0_mint.clone(),
+            vault_1_mint: ctx.accounts.vault_1_mint.clone(),
             tick_array_lower: &tick_array_lower_loader,
             tick_array_upper: &tick_array_upper_loader,
             protocol_position: &mut ctx.accounts.protocol_position,
@@ -307,6 +442,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
                 amount_1_max,
                 tick_lower_index,
                 tick_upper_index,
+                base_flag,
             )?;
         }
 
@@ -359,12 +495,30 @@ pub fn open_position<'a, 'b, 'c, 'info>(
 pub fn add_liquidity<'b, 'info>(
     context: &mut AddLiquidityParam<'b, 'info>,
     pool_state: &mut RefMut<PoolState>,
-    liquidity: u128,
+    mut liquidity: u128,
     amount_0_max: u64,
     amount_1_max: u64,
     tick_lower_index: i32,
     tick_upper_index: i32,
+    base_flag: bool,
 ) -> Result<(u64, u64, u64, u64)> {
+    if liquidity == 0 {
+        if base_flag {
+            liquidity = liquidity_math::get_liquidity_from_single_amount_0(
+                pool_state.sqrt_price_x64,
+                tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
+                tick_math::get_sqrt_price_at_tick(tick_upper_index)?,
+                amount_0_max,
+            );
+        } else {
+            liquidity = liquidity_math::get_liquidity_from_single_amount_1(
+                pool_state.sqrt_price_x64,
+                tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
+                tick_math::get_sqrt_price_at_tick(tick_upper_index)?,
+                amount_1_max,
+            );
+        }
+    }
     assert!(liquidity > 0);
     let liquidity_before = pool_state.liquidity;
     require_keys_eq!(context.tick_array_lower.load()?.pool_id, pool_state.key());
@@ -432,10 +586,16 @@ pub fn add_liquidity<'b, 'info>(
 
     let amount_0 = u64::try_from(amount_0_int).unwrap();
     let amount_1 = u64::try_from(amount_1_int).unwrap();
-    let amount_0_transfer_fee =
-        util::get_transfer_inverse_fee(context.vault_0_mint, amount_0).unwrap();
-    let amount_1_transfer_fee =
-        util::get_transfer_inverse_fee(context.vault_1_mint, amount_1).unwrap();
+    let mut amount_0_transfer_fee = 0;
+    let mut amount_1_transfer_fee = 0;
+    if context.vault_0_mint.is_some() {
+        amount_0_transfer_fee =
+            util::get_transfer_inverse_fee(context.vault_0_mint.clone().unwrap(), amount_0).unwrap();
+    };
+    if context.vault_1_mint.is_some() {
+        amount_1_transfer_fee =
+            util::get_transfer_inverse_fee(context.vault_1_mint.clone().unwrap(), amount_1).unwrap();
+    }
     emit!(LiquidityCalculateEvent {
         pool_liquidity: liquidity_before,
         pool_sqrt_price_x64: pool_state.sqrt_price_x64,
@@ -457,14 +617,17 @@ pub fn add_liquidity<'b, 'info>(
         amount_1 + amount_1_transfer_fee,
         ErrorCode::PriceSlippageCheck
     );
-
+    let mut token_2022_program_opt: Option<AccountInfo> = None;
+    if context.token_program_2022.is_some() {
+        token_2022_program_opt = Some(context.token_program_2022.clone().unwrap().to_account_info());
+    }
     transfer_from_user_to_pool_vault(
         &context.payer,
         &context.token_account_0,
         &context.token_vault_0,
-        Some(&context.vault_0_mint),
+        context.vault_0_mint.clone(),
         &context.token_program,
-        Some(&context.token_program_2022),
+        token_2022_program_opt.clone(),
         amount_0 + amount_0_transfer_fee,
     )?;
 
@@ -472,9 +635,9 @@ pub fn add_liquidity<'b, 'info>(
         &context.payer,
         &context.token_account_1,
         &context.token_vault_1,
-        Some(&context.vault_1_mint),
+        context.vault_1_mint.clone(),
         &context.token_program,
-        Some(&context.token_program_2022),
+        token_2022_program_opt.clone(),
         amount_1 + amount_1_transfer_fee,
     )?;
     emit!(LiquidityChangeEvent {

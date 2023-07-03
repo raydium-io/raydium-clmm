@@ -29,14 +29,14 @@ pub struct CollectProtocolFee<'info> {
         mut,
         constraint = token_vault_0.key() == pool_state.load()?.token_vault_0
     )]
-    pub token_vault_0:  Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_vault_0: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_1
     #[account(
         mut,
         constraint = token_vault_1.key() == pool_state.load()?.token_vault_1
     )]
-    pub token_vault_1:  Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The mint of token vault 0
     #[account(
@@ -48,15 +48,15 @@ pub struct CollectProtocolFee<'info> {
     #[account(
         address = token_vault_1.mint
     )]
-    pub vault_1_mint:  Box<InterfaceAccount<'info, Mint>>,
+    pub vault_1_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// The address that receives the collected token_0 protocol fees
     #[account(mut)]
-    pub recipient_token_account_0:  Box<InterfaceAccount<'info, TokenAccount>>,
+    pub recipient_token_account_0: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The address that receives the collected token_1 protocol fees
     #[account(mut)]
-    pub recipient_token_account_1:  Box<InterfaceAccount<'info, TokenAccount>>,
+    pub recipient_token_account_1: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The SPL program to perform token transfers
     pub token_program: Program<'info, Token>,
@@ -91,9 +91,9 @@ pub fn collect_protocol_fee(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_0,
         &ctx.accounts.recipient_token_account_0,
-        Some(&ctx.accounts.vault_0_mint),
+        Some(*ctx.accounts.vault_0_mint.clone()),
         &ctx.accounts.token_program,
-        Some(&ctx.accounts.token_program_2022),
+        Some(ctx.accounts.token_program_2022.to_account_info()),
         amount_0,
     )?;
 
@@ -101,9 +101,9 @@ pub fn collect_protocol_fee(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_1,
         &ctx.accounts.recipient_token_account_1,
-        Some( &ctx.accounts.vault_1_mint),
+        Some(*ctx.accounts.vault_1_mint.clone()),
         &ctx.accounts.token_program,
-        Some( &ctx.accounts.token_program_2022),
+        Some(ctx.accounts.token_program_2022.to_account_info()),
         amount_1,
     )?;
 

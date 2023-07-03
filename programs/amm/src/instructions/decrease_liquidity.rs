@@ -56,17 +56,77 @@ pub struct DecreaseLiquidity<'info> {
     )]
     pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    /// The mint of token vault 0
-    #[account(
-        address = token_vault_0.mint
-    )]
-    pub vault_0_mint: InterfaceAccount<'info, Mint>,
+    /// Stores init state for the lower tick
+    #[account(mut, constraint = tick_array_lower.load()?.pool_id == pool_state.key())]
+    pub tick_array_lower: AccountLoader<'info, TickArrayState>,
 
-    /// The mint of token vault 1
+    /// Stores init state for the upper tick
+    #[account(mut, constraint = tick_array_upper.load()?.pool_id == pool_state.key())]
+    pub tick_array_upper: AccountLoader<'info, TickArrayState>,
+
+    /// The destination token account for receive amount_0
     #[account(
-        address = token_vault_1.mint
+        mut,
+        token::mint = token_vault_0.mint
     )]
-    pub vault_1_mint: InterfaceAccount<'info, Mint>,
+    pub recipient_token_account_0: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// The destination token account for receive amount_1
+    #[account(
+        mut,
+        token::mint = token_vault_1.mint
+    )]
+    pub recipient_token_account_1: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// SPL program to transfer out tokens
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct DecreaseLiquidityV2<'info> {
+    /// The position owner or delegated authority
+    pub nft_owner: Signer<'info>,
+
+    /// The token account for the tokenized position
+    #[account(
+        constraint = nft_account.mint == personal_position.nft_mint,
+        token::token_program = token_program,
+    )]
+    pub nft_account: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// Decrease liquidity for this position
+    #[account(mut, constraint = personal_position.pool_id == pool_state.key())]
+    pub personal_position: Box<Account<'info, PersonalPositionState>>,
+
+    #[account(mut)]
+    pub pool_state: AccountLoader<'info, PoolState>,
+
+    #[account(
+        mut,
+        seeds = [
+            POSITION_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+            &personal_position.tick_lower_index.to_be_bytes(),
+            &personal_position.tick_upper_index.to_be_bytes(),
+        ],
+        bump,
+        constraint = protocol_position.pool_id == pool_state.key(),
+    )]
+    pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
+
+    /// Token_0 vault
+    #[account(
+        mut,
+        constraint = token_vault_0.key() == pool_state.load()?.token_vault_0
+    )]
+    pub token_vault_0: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// Token_1 vault
+    #[account(
+        mut,
+        constraint = token_vault_1.key() == pool_state.load()?.token_vault_1
+    )]
+    pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// Stores init state for the lower tick
     #[account(mut, constraint = tick_array_lower.load()?.pool_id == pool_state.key())]
@@ -93,11 +153,22 @@ pub struct DecreaseLiquidity<'info> {
     /// SPL program to transfer out tokens
     pub token_program: Program<'info, Token>,
     /// Token program 2022
-    pub token_program_2022: Program<'info, Token2022>,
+    pub token_program_2022: Option<Program<'info, Token2022>>,
+    /// The mint of token vault 0
+    #[account(
+        address = token_vault_0.mint
+    )]
+    pub vault_0_mint: Option<InterfaceAccount<'info, Mint>>,
+
+    /// The mint of token vault 1
+    #[account(
+        address = token_vault_1.mint
+    )]
+    pub vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
 }
 
 pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, DecreaseLiquidity<'info>>,
+    ctx: Context<'a, 'b, 'c, 'info, DecreaseLiquidityV2<'info>>,
     liquidity: u128,
     amount_0_min: u64,
     amount_1_min: u64,
@@ -129,10 +200,16 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
             liquidity,
         )?;
 
-    let transfer_fee_0 =
-        util::get_transfer_fee(&ctx.accounts.vault_0_mint, decrease_amount_0).unwrap();
-    let transfer_fee_1 =
-        util::get_transfer_fee(&ctx.accounts.vault_1_mint, decrease_amount_1).unwrap();
+    let mut transfer_fee_0 = 0;
+    let mut transfer_fee_1 = 0;
+    if ctx.accounts.vault_0_mint.is_some() {
+        transfer_fee_0 =
+            util::get_transfer_fee(ctx.accounts.vault_0_mint.clone().unwrap(), decrease_amount_0).unwrap();
+    }
+    if ctx.accounts.vault_1_mint.is_some() {
+        transfer_fee_1 =
+            util::get_transfer_fee(ctx.accounts.vault_1_mint.clone().unwrap(), decrease_amount_1).unwrap();
+    }
     emit!(LiquidityCalculateEvent {
         pool_liquidity: liquidity_before,
         pool_sqrt_price_x64: pool_sqrt_price_x64,
@@ -159,13 +236,18 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     let transfer_amount_0 = decrease_amount_0 + latest_fees_owed_0;
     let transfer_amount_1 = decrease_amount_1 + latest_fees_owed_1;
 
+    let mut token_2022_program_opt: Option<AccountInfo> = None;
+    if ctx.accounts.token_program_2022.is_some() {
+        token_2022_program_opt = Some(ctx.accounts.token_program_2022.clone().unwrap().to_account_info());
+    }
+
     transfer_from_pool_vault_to_user(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_0,
         &ctx.accounts.recipient_token_account_0,
-        Some(&ctx.accounts.vault_0_mint),
+        ctx.accounts.vault_0_mint.clone(),
         &ctx.accounts.token_program,
-        Some(&ctx.accounts.token_program_2022),
+        token_2022_program_opt.clone(),
         transfer_amount_0,
     )?;
 
@@ -173,9 +255,9 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_1,
         &ctx.accounts.recipient_token_account_1,
-        Some(&ctx.accounts.vault_1_mint),
+        ctx.accounts.vault_1_mint.clone(),
         &ctx.accounts.token_program,
-        Some(&ctx.accounts.token_program_2022),
+        token_2022_program_opt.clone(),
         transfer_amount_1,
     )?;
 
@@ -190,8 +272,13 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         &ctx.accounts.pool_state,
         ctx.remaining_accounts,
         ctx.accounts.token_program.clone(),
-        ctx.accounts.token_program_2022.clone(),
+        token_2022_program_opt.clone(),
         personal_position,
+        if token_2022_program_opt.is_none() {
+            false
+        } else {
+            true
+        },
     )?;
     emit!(DecreaseLiquidityEvent {
         position_nft_mint: personal_position.nft_mint,
@@ -358,14 +445,13 @@ pub fn burn_liquidity<'b, 'info>(
     Ok((amount_0, amount_1))
 }
 
-const GROUP_REWARD_ACCOUNT_NUM: usize = 3;
-
 pub fn collect_rewards<'a, 'b, 'c, 'info>(
     pool_state_loader: &AccountLoader<'info, PoolState>,
     remaining_accounts: &[AccountInfo<'info>],
     token_program: Program<'info, Token>,
-    token_program_2022: Program<'info, Token2022>,
+    token_program_2022: Option<AccountInfo<'info>>,
     personal_position_state: &mut PersonalPositionState,
+    need_reward_mint: bool,
 ) -> Result<[u64; REWARD_NUM]> {
     let mut reward_amounts: [u64; REWARD_NUM] = [0, 0, 0];
     if !pool_state_loader
@@ -374,17 +460,30 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
     {
         return Ok(reward_amounts);
     }
-    check_required_accounts_length(pool_state_loader, remaining_accounts)?;
+    let mut reward_group_account_num = 3;
+    if !need_reward_mint {
+        reward_group_account_num = reward_group_account_num - 1
+    }
+    check_required_accounts_length(
+        pool_state_loader,
+        remaining_accounts,
+        reward_group_account_num,
+    )?;
 
     let remaining_accounts_len = remaining_accounts.len();
     let mut remaining_accounts = remaining_accounts.iter();
-    for i in 0..remaining_accounts_len / GROUP_REWARD_ACCOUNT_NUM {
+    for i in 0..remaining_accounts_len / reward_group_account_num {
         let reward_token_vault =
             InterfaceAccount::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
         let recipient_token_account =
             InterfaceAccount::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
-        let reward_vault_mint =
-            InterfaceAccount::<Mint>::try_from(&remaining_accounts.next().unwrap())?;
+
+        let mut reward_vault_mint: Option<InterfaceAccount<Mint>> = None;
+        if need_reward_mint {
+            reward_vault_mint = Some(InterfaceAccount::<Mint>::try_from(
+                &remaining_accounts.next().unwrap(),
+            )?);
+        }
         require_keys_eq!(reward_token_vault.mint, recipient_token_account.mint);
         require_keys_eq!(
             reward_token_vault.key(),
@@ -422,9 +521,9 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
                 &pool_state_loader,
                 &reward_token_vault,
                 &recipient_token_account,
-                Some(&reward_vault_mint),
+                reward_vault_mint,
                 &token_program,
-                Some(&token_program_2022),
+                token_program_2022.clone(),
                 transfer_amount,
             )?;
         }
@@ -437,6 +536,7 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
 fn check_required_accounts_length(
     pool_state_loader: &AccountLoader<PoolState>,
     remaining_accounts: &[AccountInfo],
+    reward_group_account_num: usize,
 ) -> Result<()> {
     let pool_state = pool_state_loader.load()?;
     let mut valid_reward_count = 0;
@@ -446,7 +546,7 @@ fn check_required_accounts_length(
         }
     }
     let remaining_accounts_len = remaining_accounts.len();
-    if remaining_accounts_len != valid_reward_count * GROUP_REWARD_ACCOUNT_NUM {
+    if remaining_accounts_len != valid_reward_count * reward_group_account_num {
         return err!(ErrorCode::InvalidRewardInputAccountNumber);
     }
     Ok(())

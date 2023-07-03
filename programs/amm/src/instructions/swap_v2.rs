@@ -57,7 +57,6 @@ pub struct SwapSingleV2<'info> {
         address = output_vault.mint
     )]
     pub output_vault_mint: Box<InterfaceAccount<'info, Mint>>,
-
     // remaining accounts
     // tick_array_account_1
     // tick_array_account_2
@@ -85,7 +84,7 @@ pub fn exact_internal<'info>(
 
     let mut transfer_fee = 0;
     if is_base_input {
-        transfer_fee = util::get_transfer_fee(&ctx.input_vault_mint, amount_specified).unwrap();
+        transfer_fee = util::get_transfer_fee(*ctx.input_vault_mint.clone(), amount_specified).unwrap();
     }
 
     {
@@ -166,16 +165,16 @@ pub fn exact_internal<'info>(
 
     if zero_for_one {
         if !is_base_input {
-            transfer_fee = util::get_transfer_inverse_fee(&ctx.input_vault_mint, amount_0).unwrap();
+            transfer_fee = util::get_transfer_inverse_fee(*ctx.input_vault_mint.clone(), amount_0).unwrap();
         }
         //  x -> y, deposit x token from user to pool vault.
         transfer_from_user_to_pool_vault(
             &ctx.payer,
             &token_account_0,
             &vault_0,
-            Some(&vault_0_mint),
+            Some(*vault_0_mint),
             &ctx.token_program,
-            Some(&ctx.token_program_2022),
+            Some(ctx.token_program_2022.to_account_info()),
             amount_0 + transfer_fee,
         )?;
         if vault_1.amount <= amount_1 {
@@ -187,22 +186,22 @@ pub fn exact_internal<'info>(
             &ctx.pool_state,
             &vault_1,
             &token_account_1,
-            Some(&vault_1_mint),
+            Some(*vault_1_mint),
             &ctx.token_program,
-            Some(&ctx.token_program_2022),
+            Some(ctx.token_program_2022.to_account_info()),
             amount_1,
         )?;
     } else {
         if !is_base_input {
-            transfer_fee = util::get_transfer_inverse_fee(&ctx.input_vault_mint, amount_1).unwrap();
+            transfer_fee = util::get_transfer_inverse_fee(*ctx.input_vault_mint.clone(), amount_1).unwrap();
         }
         transfer_from_user_to_pool_vault(
             &ctx.payer,
             &token_account_1,
             &vault_1,
-            Some(&vault_1_mint),
+            Some(*vault_1_mint),
             &ctx.token_program,
-            Some(&ctx.token_program_2022),
+            Some(ctx.token_program_2022.to_account_info()),
             amount_1 + transfer_fee,
         )?;
         if vault_0.amount <= amount_0 {
@@ -213,9 +212,9 @@ pub fn exact_internal<'info>(
             &ctx.pool_state,
             &vault_0,
             &token_account_0,
-            Some(&vault_0_mint),
+            Some(*vault_0_mint),
             &ctx.token_program,
-            Some(&ctx.token_program_2022),
+            Some(ctx.token_program_2022.to_account_info()),
             amount_0,
         )?;
     }

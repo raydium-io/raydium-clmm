@@ -21,9 +21,9 @@ pub fn transfer_from_user_to_pool_vault<'info>(
     signer: &Signer<'info>,
     from: &InterfaceAccount<'info, TokenAccount>,
     to_vault: &InterfaceAccount<'info, TokenAccount>,
-    mint: Option<&InterfaceAccount<'info, Mint>>,
+    mint: Option<InterfaceAccount<'info, Mint>>,
     token_program: &AccountInfo<'info>,
-    token_program_2022: Option<&AccountInfo<'info>>,
+    token_program_2022: Option<AccountInfo<'info>>,
     amount: u64,
 ) -> Result<()> {
     if amount == 0 {
@@ -68,9 +68,9 @@ pub fn transfer_from_pool_vault_to_user<'info>(
     pool_state_loader: &AccountLoader<'info, PoolState>,
     from_vault: &InterfaceAccount<'info, TokenAccount>,
     to: &InterfaceAccount<'info, TokenAccount>,
-    mint: Option<&InterfaceAccount<'info, Mint>>,
+    mint: Option<InterfaceAccount<'info, Mint>>,
     token_program: &AccountInfo<'info>,
-    token_program_2022: Option<&AccountInfo<'info>>,
+    token_program_2022: Option<AccountInfo<'info>>,
     amount: u64,
 ) -> Result<()> {
     if amount == 0 {
@@ -168,7 +168,7 @@ pub fn burn<'a, 'b, 'c, 'info>(
 
 /// Calculate the fee for output amount
 pub fn get_transfer_inverse_fee(
-    mint_account: &InterfaceAccount<Mint>,
+    mint_account: InterfaceAccount<Mint>,
     post_fee_amount: u64,
 ) -> Result<u64> {
     let mint_info = mint_account.to_account_info();
@@ -189,7 +189,7 @@ pub fn get_transfer_inverse_fee(
 }
 
 /// Calculate the fee for input amount
-pub fn get_transfer_fee(mint_account: &InterfaceAccount<Mint>, pre_fee_amount: u64) -> Result<u64> {
+pub fn get_transfer_fee(mint_account: InterfaceAccount<Mint>, pre_fee_amount: u64) -> Result<u64> {
     let mint_info = mint_account.to_account_info();
     if *mint_info.owner == Token::id() {
         return Ok(0);

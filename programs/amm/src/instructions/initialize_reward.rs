@@ -118,7 +118,8 @@ pub fn initialize_reward(
         .as_u64();
     let reward_amount_with_transfer_fee = reward_amount
         .checked_add(
-            util::get_transfer_inverse_fee(&ctx.accounts.reward_token_mint, reward_amount).unwrap(),
+            util::get_transfer_inverse_fee(*ctx.accounts.reward_token_mint.clone(), reward_amount)
+                .unwrap(),
         )
         .unwrap();
     require_gte!(
@@ -141,9 +142,9 @@ pub fn initialize_reward(
         &ctx.accounts.reward_funder,
         &ctx.accounts.funder_token_account,
         &ctx.accounts.reward_token_vault,
-        Some(&ctx.accounts.reward_token_mint),
+        Some(*ctx.accounts.reward_token_mint.clone()),
         &ctx.accounts.reward_token_program.to_account_info(),
-        Some(&ctx.accounts.reward_token_program.to_account_info()),
+        Some(ctx.accounts.reward_token_program.to_account_info()),
         reward_amount_with_transfer_fee,
     )?;
 
