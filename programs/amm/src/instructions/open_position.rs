@@ -320,23 +320,26 @@ pub struct OpenPositionV2<'info> {
     pub metadata_program: UncheckedAccount<'info>,
 
     /// Program to create mint account and mint tokens
-    pub token_program_2022: Option<Program<'info, Token2022>>,
+    pub token_program_2022: Program<'info, Token2022>,
 
     /// The mint of token vault 0
     #[account(
         address = token_vault_0.mint
     )]
-    pub vault_0_mint: Option<InterfaceAccount<'info, Mint>>,
+    pub vault_0_mint: InterfaceAccount<'info, Mint>,
 
     /// The mint of token vault 1
     #[account(
         address = token_vault_1.mint
     )]
-    pub vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
+    pub vault_1_mint: InterfaceAccount<'info, Mint>,
 }
 
 pub fn open_position<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, OpenPositionV2<'info>>,
+    ctx: Context<'a, 'b, 'c, 'info, OpenPosition<'info>>,
+    token_program_2022: Option<Program<'info, Token2022>>,
+    vault_0_mint: Option<InterfaceAccount<'info, Mint>>,
+    vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
     liquidity: u128,
     amount_0_max: u64,
     amount_1_max: u64,
@@ -344,7 +347,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
-    base_flag: bool,
+    base_flag: Option<bool>,
 ) -> Result<()> {
     {
         let pool_state = &mut ctx.accounts.pool_state.load_mut()?;
@@ -414,13 +417,13 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             token_account_1: &mut ctx.accounts.token_account_1,
             token_vault_0: &mut ctx.accounts.token_vault_0,
             token_vault_1: &mut ctx.accounts.token_vault_1,
-            vault_0_mint: ctx.accounts.vault_0_mint.clone(),
-            vault_1_mint: ctx.accounts.vault_1_mint.clone(),
+            vault_0_mint,
+            vault_1_mint,
             tick_array_lower: &tick_array_lower_loader,
             tick_array_upper: &tick_array_upper_loader,
             protocol_position: &mut ctx.accounts.protocol_position,
             token_program: ctx.accounts.token_program.clone(),
-            token_program_2022: ctx.accounts.token_program_2022.clone(),
+            token_program_2022,
         };
 
         let mut amount_0: u64 = 0;
@@ -500,10 +503,10 @@ pub fn add_liquidity<'b, 'info>(
     amount_1_max: u64,
     tick_lower_index: i32,
     tick_upper_index: i32,
-    base_flag: bool,
+    base_flag: Option<bool>,
 ) -> Result<(u64, u64, u64, u64)> {
     if liquidity == 0 {
-        if base_flag {
+        if base_flag.unwrap() {
             liquidity = liquidity_math::get_liquidity_from_single_amount_0(
                 pool_state.sqrt_price_x64,
                 tick_math::get_sqrt_price_at_tick(tick_lower_index)?,

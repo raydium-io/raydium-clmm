@@ -24,6 +24,12 @@ pub struct SwapRouterBaseIn<'info> {
     pub token_program: Program<'info, Token>,
     /// SPL program 2022 for token transfers
     pub token_program_2022: Program<'info, Token2022>,
+
+    /// CHECK:
+    // #[account(
+    //     address = spl_memo::id()
+    // )]
+    pub memo_program: UncheckedAccount<'info>,
 }
 
 pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
@@ -86,6 +92,7 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
                 observation_state,
                 token_program: ctx.accounts.token_program.clone(),
                 token_program_2022: ctx.accounts.token_program_2022.clone(),
+                memo_program: ctx.accounts.memo_program.clone(),
             },
             accounts,
             amount_in_internal,

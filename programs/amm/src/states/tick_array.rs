@@ -464,7 +464,7 @@ pub fn get_reward_growths_inside(
     tick_upper: &TickState,
     tick_current_index: i32,
     reward_infos: &[RewardInfo; REWARD_NUM],
-) -> ([u128; REWARD_NUM]) {
+) -> [u128; REWARD_NUM] {
     let mut reward_growths_inside = [0; REWARD_NUM];
 
     for i in 0..REWARD_NUM {

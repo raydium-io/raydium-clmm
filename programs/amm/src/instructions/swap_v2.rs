@@ -46,6 +46,12 @@ pub struct SwapSingleV2<'info> {
     /// SPL program 2022 for token transfers
     pub token_program_2022: Program<'info, Token2022>,
 
+    /// CHECK:
+    // #[account(
+    //     address = spl_memo::id()
+    // )]
+    pub memo_program: UncheckedAccount<'info>,
+
     /// The mint of token vault 0
     #[account(
         address = input_vault.mint

@@ -153,22 +153,34 @@ pub struct DecreaseLiquidityV2<'info> {
     /// SPL program to transfer out tokens
     pub token_program: Program<'info, Token>,
     /// Token program 2022
-    pub token_program_2022: Option<Program<'info, Token2022>>,
+    pub token_program_2022: Program<'info, Token2022>,
+
+    /// memo program
+    /// CHECK:
+    // #[account(
+    //     address = spl_memo::id()
+    // )]
+    pub memo_program: UncheckedAccount<'info>,
+
     /// The mint of token vault 0
     #[account(
         address = token_vault_0.mint
     )]
-    pub vault_0_mint: Option<InterfaceAccount<'info, Mint>>,
+    pub vault_0_mint: InterfaceAccount<'info, Mint>,
 
     /// The mint of token vault 1
     #[account(
         address = token_vault_1.mint
     )]
-    pub vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
+    pub vault_1_mint: InterfaceAccount<'info, Mint>,
 }
 
 pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, DecreaseLiquidityV2<'info>>,
+    ctx: Context<'a, 'b, 'c, 'info, DecreaseLiquidity<'info>>,
+    token_program_2022: Option<Program<'info, Token2022>>,
+    _memo_program: Option<UncheckedAccount<'info>>,
+    vault_0_mint: Option<InterfaceAccount<'info, Mint>>,
+    vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
     liquidity: u128,
     amount_0_min: u64,
     amount_1_min: u64,
@@ -202,13 +214,13 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
 
     let mut transfer_fee_0 = 0;
     let mut transfer_fee_1 = 0;
-    if ctx.accounts.vault_0_mint.is_some() {
+    if vault_0_mint.is_some() {
         transfer_fee_0 =
-            util::get_transfer_fee(ctx.accounts.vault_0_mint.clone().unwrap(), decrease_amount_0).unwrap();
+            util::get_transfer_fee(vault_0_mint.clone().unwrap(), decrease_amount_0).unwrap();
     }
-    if ctx.accounts.vault_1_mint.is_some() {
+    if vault_1_mint.is_some() {
         transfer_fee_1 =
-            util::get_transfer_fee(ctx.accounts.vault_1_mint.clone().unwrap(), decrease_amount_1).unwrap();
+            util::get_transfer_fee(vault_1_mint.clone().unwrap(), decrease_amount_1).unwrap();
     }
     emit!(LiquidityCalculateEvent {
         pool_liquidity: liquidity_before,
@@ -237,15 +249,15 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     let transfer_amount_1 = decrease_amount_1 + latest_fees_owed_1;
 
     let mut token_2022_program_opt: Option<AccountInfo> = None;
-    if ctx.accounts.token_program_2022.is_some() {
-        token_2022_program_opt = Some(ctx.accounts.token_program_2022.clone().unwrap().to_account_info());
+    if token_program_2022.is_some() {
+        token_2022_program_opt = Some(token_program_2022.clone().unwrap().to_account_info());
     }
 
     transfer_from_pool_vault_to_user(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_0,
         &ctx.accounts.recipient_token_account_0,
-        ctx.accounts.vault_0_mint.clone(),
+        vault_0_mint.clone(),
         &ctx.accounts.token_program,
         token_2022_program_opt.clone(),
         transfer_amount_0,
@@ -255,7 +267,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_1,
         &ctx.accounts.recipient_token_account_1,
-        ctx.accounts.vault_1_mint.clone(),
+        vault_1_mint.clone(),
         &ctx.accounts.token_program,
         token_2022_program_opt.clone(),
         transfer_amount_1,

@@ -28,6 +28,13 @@ pub struct CollectRemainingRewards<'info> {
     pub token_program: Program<'info, Token>,
     /// Token program 2022
     pub token_program_2022: Program<'info, Token2022>,
+
+    /// memo program
+    /// CHECK:
+    // #[account(
+    //     address = spl_memo::id()
+    // )]
+    pub memo_program: UncheckedAccount<'info>,
 }
 
 pub fn collect_remaining_rewards(

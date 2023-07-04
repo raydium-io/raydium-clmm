@@ -149,26 +149,30 @@ pub struct IncreaseLiquidityV2<'info> {
     pub token_program: Program<'info, Token>,
 
     /// Token program 2022
-    pub token_program_2022: Option<Program<'info, Token2022>>,
+    pub token_program_2022: Program<'info, Token2022>,
+
     /// The mint of token vault 0
     #[account(
             address = token_vault_0.mint
-        )]
-    pub vault_0_mint: Option<InterfaceAccount<'info, Mint>>,
+    )]
+    pub vault_0_mint: InterfaceAccount<'info, Mint>,
 
     /// The mint of token vault 1
     #[account(
             address = token_vault_1.mint
-        )]
-    pub vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
+    )]
+    pub vault_1_mint: InterfaceAccount<'info, Mint>,
 }
 
 pub fn increase_liquidity<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, IncreaseLiquidityV2<'info>>,
+    ctx: Context<'a, 'b, 'c, 'info, IncreaseLiquidity<'info>>,
+    token_program_2022: Option<Program<'info, Token2022>>,
+    vault_0_mint: Option<InterfaceAccount<'info, Mint>>,
+    vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
     liquidity: u128,
     amount_0_max: u64,
     amount_1_max: u64,
-    base_flag: bool,
+    base_flag: Option<bool>,
 ) -> Result<()> {
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;
     if !pool_state.get_status_by_bit(PoolStatusBitIndex::OpenPositionOrIncreaseLiquidity) {
@@ -182,13 +186,13 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         token_account_1: &mut ctx.accounts.token_account_1,
         token_vault_0: &mut ctx.accounts.token_vault_0,
         token_vault_1: &mut ctx.accounts.token_vault_1,
-        vault_0_mint: ctx.accounts.vault_0_mint.clone(),
-        vault_1_mint: ctx.accounts.vault_1_mint.clone(),
+        vault_0_mint,
+        vault_1_mint,
         tick_array_lower: &ctx.accounts.tick_array_lower,
         tick_array_upper: &ctx.accounts.tick_array_upper,
         protocol_position: &mut ctx.accounts.protocol_position,
         token_program: ctx.accounts.token_program.clone(),
-        token_program_2022: ctx.accounts.token_program_2022.clone(),
+        token_program_2022,
     };
     let (amount_0, amount_1, amount_0_transfer_fee, amount_1_transfer_fee) = add_liquidity(
         &mut add_liquidity_context,

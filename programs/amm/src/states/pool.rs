@@ -342,7 +342,7 @@ impl PoolState {
     pub fn update_reward_infos(
         &mut self,
         curr_timestamp: u64,
-    ) -> Result<([RewardInfo; REWARD_NUM])> {
+    ) -> Result<[RewardInfo; REWARD_NUM]> {
         #[cfg(feature = "enable-log")]
         msg!("current block timestamp:{}", curr_timestamp);
 
