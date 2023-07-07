@@ -1,6 +1,6 @@
 use crate::error::ErrorCode;
 use crate::states::*;
-use crate::swap_v2::{exact_internal, SwapSingleV2};
+use crate::swap_v2::{exact_internal_v2, SwapSingleV2};
 use anchor_lang::prelude::*;
 use anchor_spl::{
     token::Token,
@@ -78,7 +78,7 @@ pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
 
         // solana_program::log::sol_log_compute_units();
         accounts = remaining_accounts.as_slice();
-        amount_in_internal = exact_internal(
+        amount_in_internal = exact_internal_v2(
             &mut SwapSingleV2 {
                 payer: ctx.accounts.payer.clone(),
                 amm_config,
