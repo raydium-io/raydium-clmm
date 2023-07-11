@@ -356,7 +356,8 @@ pub mod amm_v3 {
             tick_array_lower_start_index,
             tick_array_upper_start_index,
             base_flag,
-        )
+        )?;
+        open_position.exit( ctx.program_id)
     }
 
     /// Close a position, the nft mint and nft account
@@ -451,7 +452,8 @@ pub mod amm_v3 {
             amount_0_max,
             amount_1_max,
             base_flag,
-        )
+        )?;
+        increase_liquidity.exit( ctx.program_id)
     }
 
     /// Decreases liquidity with a exist position
@@ -528,7 +530,8 @@ pub mod amm_v3 {
             liquidity,
             amount_0_min,
             amount_1_min,
-        )
+        )?;
+        decrease_liquidity.exit( ctx.program_id)
     }
 
     /// Swaps one token for as much as possible of another token across a single pool
