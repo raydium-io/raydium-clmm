@@ -270,11 +270,33 @@ pub mod amm_v3 {
         amount_0_max: u64,
         amount_1_max: u64,
     ) -> Result<()> {
+        let open_position_param = &mut OpenPositionParam {
+            payer: &mut ctx.accounts.payer,
+            position_nft_owner: &ctx.accounts.position_nft_owner,
+            position_nft_mint: &mut ctx.accounts.position_nft_mint,
+            position_nft_account: &mut ctx.accounts.position_nft_account,
+            metadata_account: &mut ctx.accounts.metadata_account,
+            pool_state: &mut ctx.accounts.pool_state,
+            protocol_position: &mut ctx.accounts.protocol_position,
+            tick_array_lower: &mut ctx.accounts.tick_array_lower,
+            tick_array_upper: &mut ctx.accounts.tick_array_upper,
+            personal_position: &mut ctx.accounts.personal_position,
+            token_account_0: &mut ctx.accounts.token_account_0,
+            token_account_1: &mut ctx.accounts.token_account_1,
+            token_vault_0: &mut ctx.accounts.token_vault_0,
+            token_vault_1: &mut ctx.accounts.token_vault_1,
+            rent: ctx.accounts.rent.clone(),
+            system_program: ctx.accounts.system_program.clone(),
+            token_program: ctx.accounts.token_program.clone(),
+            associated_token_program: ctx.accounts.associated_token_program.clone(),
+            metadata_program: ctx.accounts.metadata_program.clone(),
+            token_program_2022: None,
+            vault_0_mint: None,
+            vault_1_mint: None,
+        };
         instructions::open_position(
-            ctx,
-            None,
-            None,
-            None,
+            open_position_param,
+            &ctx.bumps,
             liquidity,
             amount_0_max,
             amount_1_max,
@@ -314,40 +336,33 @@ pub mod amm_v3 {
         if liquidity == 0 {
             assert!(base_flag.is_some());
         }
-
-        let open_position = &mut OpenPosition {
-            payer: ctx.accounts.payer.clone(),
-            position_nft_owner: ctx.accounts.position_nft_owner.clone(),
-            position_nft_mint: ctx.accounts.position_nft_mint.clone(),
-            position_nft_account: ctx.accounts.position_nft_account.clone(),
-            metadata_account: ctx.accounts.metadata_account.clone(),
-            pool_state: ctx.accounts.pool_state.clone(),
-            protocol_position: ctx.accounts.protocol_position.clone(),
-            tick_array_lower: ctx.accounts.tick_array_lower.clone(),
-            tick_array_upper: ctx.accounts.tick_array_upper.clone(),
-            personal_position: ctx.accounts.personal_position.clone(),
-            token_account_0: ctx.accounts.token_account_0.clone(),
-            token_account_1: ctx.accounts.token_account_1.clone(),
-            token_vault_0: ctx.accounts.token_vault_0.clone(),
-            token_vault_1: ctx.accounts.token_vault_1.clone(),
+        let open_position_param = &mut OpenPositionParam {
+            payer: &mut ctx.accounts.payer,
+            position_nft_owner: &ctx.accounts.position_nft_owner,
+            position_nft_mint: &mut ctx.accounts.position_nft_mint,
+            position_nft_account: &mut ctx.accounts.position_nft_account,
+            metadata_account: &mut ctx.accounts.metadata_account,
+            pool_state: &mut ctx.accounts.pool_state,
+            protocol_position: &mut ctx.accounts.protocol_position,
+            tick_array_lower: &mut ctx.accounts.tick_array_lower,
+            tick_array_upper: &mut ctx.accounts.tick_array_upper,
+            personal_position: &mut ctx.accounts.personal_position,
+            token_account_0: &mut ctx.accounts.token_account_0,
+            token_account_1: &mut ctx.accounts.token_account_1,
+            token_vault_0: &mut ctx.accounts.token_vault_0,
+            token_vault_1: &mut ctx.accounts.token_vault_1,
             rent: ctx.accounts.rent.clone(),
             system_program: ctx.accounts.system_program.clone(),
             token_program: ctx.accounts.token_program.clone(),
             associated_token_program: ctx.accounts.associated_token_program.clone(),
             metadata_program: ctx.accounts.metadata_program.clone(),
+            token_program_2022: Some(ctx.accounts.token_program_2022.clone()),
+            vault_0_mint: Some(ctx.accounts.vault_0_mint.clone()),
+            vault_1_mint: Some(ctx.accounts.vault_1_mint.clone()),
         };
-        let new_ctx = Context::new(
-            ctx.program_id,
-            open_position,
-            ctx.remaining_accounts,
-            ctx.bumps,
-        );
-
         instructions::open_position(
-            new_ctx,
-            Some(ctx.accounts.token_program_2022.clone()),
-            Some(ctx.accounts.vault_0_mint.clone()),
-            Some(ctx.accounts.vault_1_mint.clone()),
+            open_position_param,
+            &ctx.bumps,
             liquidity,
             amount_0_max,
             amount_1_max,
@@ -356,8 +371,7 @@ pub mod amm_v3 {
             tick_array_lower_start_index,
             tick_array_upper_start_index,
             base_flag,
-        )?;
-        open_position.exit( ctx.program_id)
+        )
     }
 
     /// Close a position, the nft mint and nft account
@@ -389,11 +403,25 @@ pub mod amm_v3 {
         amount_1_max: u64,
     ) -> Result<()> {
         assert!(liquidity != 0);
+        let increase_liquidity_param = &mut IncreaseLiquidityParam {
+            nft_owner: &ctx.accounts.nft_owner,
+            nft_account: &mut ctx.accounts.nft_account,
+            pool_state: &mut ctx.accounts.pool_state,
+            protocol_position: &mut ctx.accounts.protocol_position,
+            personal_position: &mut ctx.accounts.personal_position,
+            tick_array_lower: &mut ctx.accounts.tick_array_lower,
+            tick_array_upper: &mut ctx.accounts.tick_array_upper,
+            token_account_0: &mut ctx.accounts.token_account_0,
+            token_account_1: &mut ctx.accounts.token_account_1,
+            token_vault_0: &mut ctx.accounts.token_vault_0,
+            token_vault_1: &mut ctx.accounts.token_vault_1,
+            token_program: ctx.accounts.token_program.clone(),
+            token_program_2022: None,
+            vault_0_mint: None,
+            vault_1_mint: None,
+        };
         instructions::increase_liquidity(
-            ctx,
-            None,
-            None,
-            None,
+            increase_liquidity_param,
             liquidity,
             amount_0_max,
             amount_1_max,
@@ -422,38 +450,30 @@ pub mod amm_v3 {
         if liquidity == 0 {
             assert!(base_flag.is_some());
         }
-        let increase_liquidity = &mut IncreaseLiquidity {
-            nft_owner: ctx.accounts.nft_owner.clone(),
-            nft_account: ctx.accounts.nft_account.clone(),
-            pool_state: ctx.accounts.pool_state.clone(),
-            protocol_position: ctx.accounts.protocol_position.clone(),
-            personal_position: ctx.accounts.personal_position.clone(),
-            tick_array_lower: ctx.accounts.tick_array_lower.clone(),
-            tick_array_upper: ctx.accounts.tick_array_upper.clone(),
-            token_account_0: ctx.accounts.token_account_0.clone(),
-            token_account_1: ctx.accounts.token_account_1.clone(),
-            token_vault_0: ctx.accounts.token_vault_0.clone(),
-            token_vault_1: ctx.accounts.token_vault_1.clone(),
+        let increase_liquidity_param = &mut IncreaseLiquidityParam {
+            nft_owner: &ctx.accounts.nft_owner,
+            nft_account: &mut ctx.accounts.nft_account,
+            pool_state: &mut ctx.accounts.pool_state,
+            protocol_position: &mut ctx.accounts.protocol_position,
+            personal_position: &mut ctx.accounts.personal_position,
+            tick_array_lower: &mut ctx.accounts.tick_array_lower,
+            tick_array_upper: &mut ctx.accounts.tick_array_upper,
+            token_account_0: &mut ctx.accounts.token_account_0,
+            token_account_1: &mut ctx.accounts.token_account_1,
+            token_vault_0: &mut ctx.accounts.token_vault_0,
+            token_vault_1: &mut ctx.accounts.token_vault_1,
             token_program: ctx.accounts.token_program.clone(),
+            token_program_2022: Some(ctx.accounts.token_program_2022.clone()),
+            vault_0_mint: Some(ctx.accounts.vault_0_mint.clone()),
+            vault_1_mint: Some(ctx.accounts.vault_1_mint.clone()),
         };
-
-        let new_ctx = Context::new(
-            ctx.program_id,
-            increase_liquidity,
-            ctx.remaining_accounts,
-            ctx.bumps,
-        );
         instructions::increase_liquidity(
-            new_ctx,
-            Some(ctx.accounts.token_program_2022.clone()),
-            Some(ctx.accounts.vault_0_mint.clone()),
-            Some(ctx.accounts.vault_1_mint.clone()),
+            increase_liquidity_param,
             liquidity,
             amount_0_max,
             amount_1_max,
             base_flag,
-        )?;
-        increase_liquidity.exit( ctx.program_id)
+        )
     }
 
     /// Decreases liquidity with a exist position
@@ -472,12 +492,28 @@ pub mod amm_v3 {
         amount_0_min: u64,
         amount_1_min: u64,
     ) -> Result<()> {
+        let decrease_liquidity_param = &mut DecreaseLiquidityParam {
+            nft_owner: &ctx.accounts.nft_owner,
+            nft_account: &ctx.accounts.nft_account,
+            personal_position: &mut ctx.accounts.personal_position,
+            pool_state: &mut ctx.accounts.pool_state,
+            protocol_position: &mut ctx.accounts.protocol_position,
+            token_vault_0: &mut ctx.accounts.token_vault_0,
+            token_vault_1: &mut ctx.accounts.token_vault_1,
+            tick_array_lower: &mut ctx.accounts.tick_array_lower,
+            tick_array_upper: &mut ctx.accounts.tick_array_upper,
+            recipient_token_account_0: &mut ctx.accounts.recipient_token_account_0,
+            recipient_token_account_1: &mut ctx.accounts.recipient_token_account_1,
+            token_program: ctx.accounts.token_program.clone(),
+            token_program_2022: None,
+            memo_program: None,
+            vault_0_mint: None,
+            vault_1_mint: None,
+        };
+
         instructions::decrease_liquidity(
-            ctx,
-            None,
-            None,
-            None,
-            None,
+            decrease_liquidity_param,
+            ctx.remaining_accounts,
             liquidity,
             amount_0_min,
             amount_1_min,
@@ -500,38 +536,32 @@ pub mod amm_v3 {
         amount_0_min: u64,
         amount_1_min: u64,
     ) -> Result<()> {
-        let decrease_liquidity = &mut DecreaseLiquidity {
-            nft_owner: ctx.accounts.nft_owner.clone(),
-            nft_account: ctx.accounts.nft_account.clone(),
-            personal_position: ctx.accounts.personal_position.clone(),
-            pool_state: ctx.accounts.pool_state.clone(),
-            protocol_position: ctx.accounts.protocol_position.clone(),
-            token_vault_0: ctx.accounts.token_vault_0.clone(),
-            token_vault_1: ctx.accounts.token_vault_1.clone(),
-            tick_array_lower: ctx.accounts.tick_array_lower.clone(),
-            tick_array_upper: ctx.accounts.tick_array_upper.clone(),
-            recipient_token_account_0: ctx.accounts.recipient_token_account_0.clone(),
-            recipient_token_account_1: ctx.accounts.recipient_token_account_1.clone(),
+        let decrease_liquidity_param = &mut DecreaseLiquidityParam {
+            nft_owner: &ctx.accounts.nft_owner,
+            nft_account: &ctx.accounts.nft_account,
+            personal_position: &mut ctx.accounts.personal_position,
+            pool_state: &mut ctx.accounts.pool_state,
+            protocol_position: &mut ctx.accounts.protocol_position,
+            token_vault_0: &mut ctx.accounts.token_vault_0,
+            token_vault_1: &mut ctx.accounts.token_vault_1,
+            tick_array_lower: &mut ctx.accounts.tick_array_lower,
+            tick_array_upper: &mut ctx.accounts.tick_array_upper,
+            recipient_token_account_0: &mut ctx.accounts.recipient_token_account_0,
+            recipient_token_account_1: &mut ctx.accounts.recipient_token_account_1,
             token_program: ctx.accounts.token_program.clone(),
+            token_program_2022: Some(ctx.accounts.token_program_2022.clone()),
+            memo_program: Some(ctx.accounts.memo_program.clone()),
+            vault_0_mint: Some(ctx.accounts.vault_0_mint.clone()),
+            vault_1_mint: Some(ctx.accounts.vault_1_mint.clone()),
         };
 
-        let new_ctx = Context::new(
-            ctx.program_id,
-            decrease_liquidity,
-            ctx.remaining_accounts,
-            ctx.bumps,
-        );
         instructions::decrease_liquidity(
-            new_ctx,
-            Some(ctx.accounts.token_program_2022.clone()),
-            Some(ctx.accounts.memo_program.clone()),
-            Some(ctx.accounts.vault_0_mint.clone()),
-            Some(ctx.accounts.vault_1_mint.clone()),
+            decrease_liquidity_param,
+            ctx.remaining_accounts,
             liquidity,
             amount_0_min,
             amount_1_min,
-        )?;
-        decrease_liquidity.exit( ctx.program_id)
+        )
     }
 
     /// Swaps one token for as much as possible of another token across a single pool

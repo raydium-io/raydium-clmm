@@ -175,22 +175,70 @@ pub struct DecreaseLiquidityV2<'info> {
     pub vault_1_mint: InterfaceAccount<'info, Mint>,
 }
 
+pub struct DecreaseLiquidityParam<'b, 'info> {
+    /// The position owner or delegated authority
+    pub nft_owner: &'b Signer<'info>,
+
+    /// The token account for the tokenized position
+    pub nft_account: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// Decrease liquidity for this position
+    pub personal_position: &'b mut Box<Account<'info, PersonalPositionState>>,
+
+    pub pool_state: &'b mut AccountLoader<'info, PoolState>,
+
+    pub protocol_position: &'b mut Box<Account<'info, ProtocolPositionState>>,
+
+    /// Token_0 vault
+    pub token_vault_0: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// Token_1 vault
+    pub token_vault_1: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// Stores init state for the lower tick
+    pub tick_array_lower: &'b mut AccountLoader<'info, TickArrayState>,
+
+    /// Stores init state for the upper tick
+    pub tick_array_upper: &'b mut AccountLoader<'info, TickArrayState>,
+
+    /// The destination token account for receive amount_0
+    pub recipient_token_account_0: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// The destination token account for receive amount_1
+    pub recipient_token_account_1: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// SPL program to transfer out tokens
+    pub token_program: Program<'info, Token>,
+    /// Token program 2022
+    pub token_program_2022: Option<Program<'info, Token2022>>,
+
+    /// memo program
+    /// CHECK:
+    // #[account(
+    //     address = spl_memo::id()
+    // )]
+    pub memo_program: Option<UncheckedAccount<'info>>,
+
+    /// The mint of token vault 0
+    pub vault_0_mint: Option<InterfaceAccount<'info, Mint>>,
+
+    /// The mint of token vault 1
+    pub vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
+}
+
 pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, DecreaseLiquidity<'info>>,
-    token_program_2022: Option<Program<'info, Token2022>>,
-    _memo_program: Option<UncheckedAccount<'info>>,
-    vault_0_mint: Option<InterfaceAccount<'info, Mint>>,
-    vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
+    accounts: &mut DecreaseLiquidityParam<'b, 'info>,
+    remaining_accounts: &[AccountInfo<'info>],
     liquidity: u128,
     amount_0_min: u64,
     amount_1_min: u64,
 ) -> Result<()> {
-    assert!(liquidity <= ctx.accounts.personal_position.liquidity);
+    assert!(liquidity <= accounts.personal_position.liquidity);
     let liquidity_before;
     let pool_sqrt_price_x64;
     let pool_tick_current;
     {
-        let pool_state = ctx.accounts.pool_state.load()?;
+        let pool_state = accounts.pool_state.load()?;
         if !pool_state.get_status_by_bit(PoolStatusBitIndex::DecreaseLiquidity)
             && !pool_state.get_status_by_bit(PoolStatusBitIndex::CollectFee)
             && !pool_state.get_status_by_bit(PoolStatusBitIndex::CollectReward)
@@ -204,23 +252,25 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
 
     let (decrease_amount_0, latest_fees_owed_0, decrease_amount_1, latest_fees_owed_1) =
         decrease_liquidity_and_update_position(
-            &ctx.accounts.pool_state,
-            &mut ctx.accounts.protocol_position,
-            &mut ctx.accounts.personal_position,
-            &ctx.accounts.tick_array_lower,
-            &ctx.accounts.tick_array_upper,
+            &accounts.pool_state,
+            &mut accounts.protocol_position,
+            &mut accounts.personal_position,
+            &accounts.tick_array_lower,
+            &accounts.tick_array_upper,
             liquidity,
         )?;
 
     let mut transfer_fee_0 = 0;
     let mut transfer_fee_1 = 0;
-    if vault_0_mint.is_some() {
+    if accounts.vault_0_mint.is_some() {
         transfer_fee_0 =
-            util::get_transfer_fee(vault_0_mint.clone().unwrap(), decrease_amount_0).unwrap();
+            util::get_transfer_fee(accounts.vault_0_mint.clone().unwrap(), decrease_amount_0)
+                .unwrap();
     }
-    if vault_1_mint.is_some() {
+    if accounts.vault_1_mint.is_some() {
         transfer_fee_1 =
-            util::get_transfer_fee(vault_1_mint.clone().unwrap(), decrease_amount_1).unwrap();
+            util::get_transfer_fee(accounts.vault_1_mint.clone().unwrap(), decrease_amount_1)
+                .unwrap();
     }
     emit!(LiquidityCalculateEvent {
         pool_liquidity: liquidity_before,
@@ -249,41 +299,47 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     let transfer_amount_1 = decrease_amount_1 + latest_fees_owed_1;
 
     let mut token_2022_program_opt: Option<AccountInfo> = None;
-    if token_program_2022.is_some() {
-        token_2022_program_opt = Some(token_program_2022.clone().unwrap().to_account_info());
+    if accounts.token_program_2022.is_some() {
+        token_2022_program_opt = Some(
+            accounts
+                .token_program_2022
+                .clone()
+                .unwrap()
+                .to_account_info(),
+        );
     }
 
     transfer_from_pool_vault_to_user(
-        &ctx.accounts.pool_state,
-        &ctx.accounts.token_vault_0,
-        &ctx.accounts.recipient_token_account_0,
-        vault_0_mint.clone(),
-        &ctx.accounts.token_program,
+        &accounts.pool_state,
+        &accounts.token_vault_0,
+        &accounts.recipient_token_account_0,
+        accounts.vault_0_mint.clone(),
+        &accounts.token_program,
         token_2022_program_opt.clone(),
         transfer_amount_0,
     )?;
 
     transfer_from_pool_vault_to_user(
-        &ctx.accounts.pool_state,
-        &ctx.accounts.token_vault_1,
-        &ctx.accounts.recipient_token_account_1,
-        vault_1_mint.clone(),
-        &ctx.accounts.token_program,
+        &accounts.pool_state,
+        &accounts.token_vault_1,
+        &accounts.recipient_token_account_1,
+        accounts.vault_1_mint.clone(),
+        &accounts.token_program,
         token_2022_program_opt.clone(),
         transfer_amount_1,
     )?;
 
     check_unclaimed_fees_and_vault(
-        &ctx.accounts.pool_state,
-        &mut ctx.accounts.token_vault_0,
-        &mut ctx.accounts.token_vault_1,
+        &accounts.pool_state,
+        &mut accounts.token_vault_0,
+        &mut accounts.token_vault_1,
     )?;
 
-    let personal_position = &mut ctx.accounts.personal_position;
+    let personal_position = &mut accounts.personal_position;
     let reward_amounts = collect_rewards(
-        &ctx.accounts.pool_state,
-        ctx.remaining_accounts,
-        ctx.accounts.token_program.clone(),
+        &accounts.pool_state,
+        remaining_accounts,
+        accounts.token_program.clone(),
         token_2022_program_opt.clone(),
         personal_position,
         if token_2022_program_opt.is_none() {
