@@ -2,8 +2,8 @@ use crate::error::ErrorCode;
 use crate::states::*;
 use crate::util::{burn, close_spl_account};
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token};
-use anchor_spl::token_interface::{Token2022, Mint,TokenAccount};
+use anchor_spl::token::Token;
+use anchor_spl::token_interface::{Mint,TokenAccount};
 
 #[derive(Accounts)]
 pub struct ClosePosition<'info> {
@@ -47,8 +47,8 @@ pub struct ClosePosition<'info> {
     pub system_program: Program<'info, System>,
     /// Program to create mint account and mint tokens
     pub token_program: Program<'info, Token>,
-    /// Reserved for upgrade
-    pub token_program_2022: Program<'info, Token2022>,
+    // /// Reserved for upgrade
+    // pub token_program_2022: Program<'info, Token2022>,
 }
 
 pub fn close_position<'a, 'b, 'c, 'info>(
@@ -83,7 +83,7 @@ pub fn close_position<'a, 'b, 'c, 'info>(
             &ctx.accounts.position_nft_mint,
             &ctx.accounts.position_nft_account,
             &ctx.accounts.token_program,
-            &ctx.accounts.token_program_2022,
+            // &ctx.accounts.token_program_2022,
             &[],
             1,
         )?;
@@ -94,7 +94,7 @@ pub fn close_position<'a, 'b, 'c, 'info>(
         &ctx.accounts.nft_owner,
         &ctx.accounts.position_nft_account,
         &ctx.accounts.token_program,
-        &ctx.accounts.token_program_2022,
+        // &ctx.accounts.token_program_2022,
         &[],
     )?;
 

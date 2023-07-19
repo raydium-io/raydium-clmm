@@ -14,7 +14,7 @@ use anchor_spl::{
             },
         },
     },
-    token_interface::{Mint, Token2022, TokenAccount},
+    token_interface::{Mint, TokenAccount},
 };
 
 pub fn transfer_from_user_to_pool_vault<'info>(
@@ -118,14 +118,14 @@ pub fn close_spl_account<'a, 'b, 'c, 'info>(
     destination: &AccountInfo<'info>,
     close_account: &InterfaceAccount<'info, TokenAccount>,
     token_program: &Program<'info, Token>,
-    token_program_2022: &Program<'info, Token2022>,
+    // token_program_2022: &Program<'info, Token2022>,
     signers_seeds: &[&[&[u8]]],
 ) -> Result<()> {
-    let mut token_program_info = token_program.to_account_info();
+    let token_program_info = token_program.to_account_info();
     let close_account_info = close_account.to_account_info();
-    if close_account_info.owner == token_program_2022.key {
-        token_program_info = token_program_2022.to_account_info()
-    }
+    // if close_account_info.owner == token_program_2022.key {
+    //     token_program_info = token_program_2022.to_account_info()
+    // }
 
     token_2022::close_account(CpiContext::new_with_signer(
         token_program_info,
@@ -143,15 +143,15 @@ pub fn burn<'a, 'b, 'c, 'info>(
     mint: &InterfaceAccount<'info, Mint>,
     burn_account: &InterfaceAccount<'info, TokenAccount>,
     token_program: &Program<'info, Token>,
-    token_program_2022: &Program<'info, Token2022>,
+    // token_program_2022: &Program<'info, Token2022>,
     signers_seeds: &[&[&[u8]]],
     amount: u64,
 ) -> Result<()> {
     let mint_info = mint.to_account_info();
-    let mut token_program_info: AccountInfo<'_> = token_program.to_account_info();
-    if mint_info.owner == token_program_2022.key {
-        token_program_info = token_program_2022.to_account_info()
-    }
+    let token_program_info: AccountInfo<'_> = token_program.to_account_info();
+    // if mint_info.owner == token_program_2022.key {
+    //     token_program_info = token_program_2022.to_account_info()
+    // }
     token_2022::burn(
         CpiContext::new_with_signer(
             token_program_info,
@@ -187,7 +187,7 @@ pub fn get_transfer_inverse_fee(
         } else {
             transfer_fee_config
                 .calculate_inverse_epoch_fee(epoch, post_fee_amount)
-                .unwrap()   
+                .unwrap()
         }
     } else {
         0
