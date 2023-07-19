@@ -94,6 +94,7 @@ impl PositionRewardInfo {
 
 /// Emitted when create a new position
 #[event]
+#[cfg_attr(feature = "client", derive(Debug))]
 pub struct CreatePersonalPositionEvent {
     /// The pool for which liquidity was added
     #[index]
@@ -131,6 +132,7 @@ pub struct CreatePersonalPositionEvent {
 
 /// Emitted when liquidity is increased.
 #[event]
+#[cfg_attr(feature = "client", derive(Debug))]
 pub struct IncreaseLiquidityEvent {
     /// The ID of the token for which liquidity was increased
     #[index]
@@ -154,6 +156,7 @@ pub struct IncreaseLiquidityEvent {
 
 /// Emitted when liquidity is decreased.
 #[event]
+#[cfg_attr(feature = "client", derive(Debug))]
 pub struct DecreaseLiquidityEvent {
     /// The ID of the token for which liquidity was decreased
     pub position_nft_mint: Pubkey,
@@ -177,6 +180,7 @@ pub struct DecreaseLiquidityEvent {
 
 /// Emitted when liquidity decreased or increase.
 #[event]
+#[cfg_attr(feature = "client", derive(Debug))]
 pub struct LiquidityCalculateEvent {
     /// The pool liquidity before decrease or increase
     pub pool_liquidity: u128,
@@ -200,6 +204,7 @@ pub struct LiquidityCalculateEvent {
 
 /// Emitted when tokens are collected for a position
 #[event]
+#[cfg_attr(feature = "client", derive(Debug))]
 pub struct CollectPersonalFeeEvent {
     /// The ID of the token for which underlying tokens were collected
     #[index]
@@ -220,6 +225,7 @@ pub struct CollectPersonalFeeEvent {
 
 /// Emitted when Reward are updated for a pool
 #[event]
+#[cfg_attr(feature = "client", derive(Debug))]
 pub struct UpdateRewardInfosEvent {
     /// Reward info
     pub reward_growth_global_x64: [u128; REWARD_NUM],

@@ -237,9 +237,9 @@ pub fn swap_internal<'b, 'info>(
             amm_config.protocol_fee_rate
         );
         // Save these three pieces of information for PriceChangeEvent
-        let tick_before = state.tick;
-        let sqrt_price_x64_before = state.sqrt_price_x64;
-        let liquidity_before = state.liquidity;
+        // let tick_before = state.tick;
+        // let sqrt_price_x64_before = state.sqrt_price_x64;
+        // let liquidity_before = state.liquidity;
 
         let mut step = StepComputations::default();
         step.sqrt_price_start_x64 = state.sqrt_price_x64;
@@ -461,16 +461,16 @@ pub fn swap_internal<'b, 'info>(
             state.fund_fee,
             amm_config.fund_fee_rate,
         );
-        emit!(PriceChangeEvent {
-            pool_state: pool_state.key(),
-            tick_before,
-            tick_after: state.tick,
-            sqrt_price_x64_before,
-            sqrt_price_x64_after: state.sqrt_price_x64,
-            liquidity_before,
-            liquidity_after: state.liquidity,
-            zero_for_one,
-        });
+        // emit!(PriceChangeEvent {
+        //     pool_state: pool_state.key(),
+        //     tick_before,
+        //     tick_after: state.tick,
+        //     sqrt_price_x64_before,
+        //     sqrt_price_x64_after: state.sqrt_price_x64,
+        //     liquidity_before,
+        //     liquidity_after: state.liquidity,
+        //     zero_for_one,
+        // });
     }
     // update tick
     if state.tick != pool_state.tick_current {

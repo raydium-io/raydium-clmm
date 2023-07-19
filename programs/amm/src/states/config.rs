@@ -46,6 +46,7 @@ impl AmmConfig {
 
 /// Emitted when create a config
 #[event]
+#[cfg_attr(feature = "client", derive(Debug))]
 pub struct CreateConfigEvent {
     pub index: u16,
     #[index]
@@ -59,6 +60,7 @@ pub struct CreateConfigEvent {
 
 /// Emitted when update a config
 #[event]
+#[cfg_attr(feature = "client", derive(Debug))]
 pub struct UpdaterConfigEvent {
     pub owner: Pubkey,
     pub protocol_fee_rate: u32,

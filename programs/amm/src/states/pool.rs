@@ -339,10 +339,7 @@ impl PoolState {
 
     // Calculates the next global reward growth variables based on the given timestamp.
     // The provided timestamp must be greater than or equal to the last updated timestamp.
-    pub fn update_reward_infos(
-        &mut self,
-        curr_timestamp: u64,
-    ) -> Result<[RewardInfo; REWARD_NUM]> {
+    pub fn update_reward_infos(&mut self, curr_timestamp: u64) -> Result<[RewardInfo; REWARD_NUM]> {
         #[cfg(feature = "enable-log")]
         msg!("current block timestamp:{}", curr_timestamp);
 
@@ -569,6 +566,7 @@ impl RewardInfo {
 /// Emitted when a pool is created and initialized with a starting price
 ///
 #[event]
+#[cfg_attr(feature = "client", derive(Debug))]
 pub struct PoolCreatedEvent {
     /// The first token of the pool by address sort order
     #[index]
@@ -598,6 +596,7 @@ pub struct PoolCreatedEvent {
 
 /// Emitted when the collected protocol fees are withdrawn by the factory owner
 #[event]
+#[cfg_attr(feature = "client", derive(Debug))]
 pub struct CollectProtocolFeeEvent {
     /// The pool whose protocol fee is collected
     #[index]
@@ -618,6 +617,7 @@ pub struct CollectProtocolFeeEvent {
 
 /// Emitted by when a swap is performed for a pool
 #[event]
+#[cfg_attr(feature = "client", derive(Debug))]
 pub struct SwapEvent {
     /// The pool for which token_0 and token_1 were swapped
     #[index]
@@ -658,6 +658,7 @@ pub struct SwapEvent {
 
 /// Emitted pool liquidity change when increase and decrease liquidity
 #[event]
+#[cfg_attr(feature = "client", derive(Debug))]
 pub struct LiquidityChangeEvent {
     /// The pool for swap
     #[index]
@@ -681,6 +682,7 @@ pub struct LiquidityChangeEvent {
 
 /// Emitted when price move in a swap step
 #[event]
+#[cfg_attr(feature = "client", derive(Debug))]
 pub struct PriceChangeEvent {
     /// The pool for swap
     #[index]
