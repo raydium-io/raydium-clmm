@@ -2,7 +2,8 @@ use crate::error::ErrorCode;
 use crate::states::*;
 use crate::util::{burn, close_spl_account};
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use anchor_spl::token::Token;
+use anchor_spl::token_interface::{Mint,TokenAccount};
 
 #[derive(Accounts)]
 pub struct ClosePosition<'info> {
@@ -13,18 +14,20 @@ pub struct ClosePosition<'info> {
     /// Unique token mint address
     #[account(
       mut,
-      address = personal_position.nft_mint
+      address = personal_position.nft_mint,
+      mint::token_program = token_program,
     )]
-    pub position_nft_mint: Box<Account<'info, Mint>>,
+    pub position_nft_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// Token account where position NFT will be minted
     #[account(
         mut,
         associated_token::mint = position_nft_mint,
         associated_token::authority = nft_owner,
-        constraint = position_nft_account.amount == 1
+        constraint = position_nft_account.amount == 1,
+        token::token_program = token_program,
     )]
-    pub position_nft_account: Box<Account<'info, TokenAccount>>,
+    pub position_nft_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// To store metaplex metadata
     /// CHECK: Safety check performed inside function body
@@ -44,6 +47,8 @@ pub struct ClosePosition<'info> {
     pub system_program: Program<'info, System>,
     /// Program to create mint account and mint tokens
     pub token_program: Program<'info, Token>,
+    // /// Reserved for upgrade
+    // pub token_program_2022: Program<'info, Token2022>,
 }
 
 pub fn close_position<'a, 'b, 'c, 'info>(
@@ -78,6 +83,7 @@ pub fn close_position<'a, 'b, 'c, 'info>(
             &ctx.accounts.position_nft_mint,
             &ctx.accounts.position_nft_account,
             &ctx.accounts.token_program,
+            // &ctx.accounts.token_program_2022,
             &[],
             1,
         )?;
@@ -85,9 +91,10 @@ pub fn close_position<'a, 'b, 'c, 'info>(
 
     close_spl_account(
         &ctx.accounts.nft_owner,
-        &ctx.accounts.nft_owner.to_account_info(),
-        &ctx.accounts.position_nft_account.to_account_info(),
+        &ctx.accounts.nft_owner,
+        &ctx.accounts.position_nft_account,
         &ctx.accounts.token_program,
+        // &ctx.accounts.token_program_2022,
         &[],
     )?;
 

@@ -8,7 +8,8 @@ use crate::libraries::{
 use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::token::Token;
+use anchor_spl::token_interface::TokenAccount;
 use std::cell::RefMut;
 use std::collections::VecDeque;
 #[cfg(feature = "enable-log")]
@@ -29,20 +30,32 @@ pub struct SwapSingle<'info> {
     pub pool_state: AccountLoader<'info, PoolState>,
 
     /// The user token account for input token
-    #[account(mut)]
-    pub input_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        token::token_program = token_program,
+    )]
+    pub input_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The user token account for output token
-    #[account(mut)]
-    pub output_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        token::token_program = token_program,
+    )]
+    pub output_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The vault token account for input token
-    #[account(mut)]
-    pub input_vault: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        token::token_program = token_program,
+    )]
+    pub input_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The vault token account for output token
-    #[account(mut)]
-    pub output_vault: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        token::token_program = token_program,
+    )]
+    pub output_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The program account for the most recent oracle observation
     #[account(mut, address = pool_state.load()?.observation_key)]
@@ -60,19 +73,20 @@ pub struct SwapAccounts<'b, 'info> {
     pub signer: Signer<'info>,
 
     /// The user token account for input token
-    pub input_token_account: Box<Account<'info, TokenAccount>>,
+    pub input_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The user token account for output token
-    pub output_token_account: Box<Account<'info, TokenAccount>>,
+    pub output_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The vault token account for input token
-    pub input_vault: Box<Account<'info, TokenAccount>>,
+    pub input_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The vault token account for output token
-    pub output_vault: Box<Account<'info, TokenAccount>>,
+    pub output_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// SPL program for token transfers
     pub token_program: Program<'info, Token>,
+
     /// The factory state to read protocol fees
     pub amm_config: &'b Box<Account<'info, AmmConfig>>,
 
@@ -653,7 +667,9 @@ pub fn exact_internal<'b, 'info>(
             &ctx.signer,
             &token_account_0,
             &vault_0,
+            None,
             &ctx.token_program,
+            None,
             amount_0,
         )?;
         if vault_1.amount <= amount_1 {
@@ -665,7 +681,9 @@ pub fn exact_internal<'b, 'info>(
             &ctx.pool_state,
             &vault_1,
             &token_account_1,
+            None,
             &ctx.token_program,
+            None,
             amount_1,
         )?;
     } else {
@@ -673,7 +691,9 @@ pub fn exact_internal<'b, 'info>(
             &ctx.signer,
             &token_account_1,
             &vault_1,
+            None,
             &ctx.token_program,
+            None,
             amount_1,
         )?;
         if vault_0.amount <= amount_0 {
@@ -684,7 +704,9 @@ pub fn exact_internal<'b, 'info>(
             &ctx.pool_state,
             &vault_0,
             &token_account_0,
+            None,
             &ctx.token_program,
+            None,
             amount_0,
         )?;
     }
@@ -1576,8 +1598,8 @@ mod swap_test {
             sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
 
             // reverse swap direction, one_for_zero
-            // Actually, the loop for this swap was executed twice because the previous swap happened to have `pool.tick_current` exactly on the boundary that is divisible by `tick_spacing`. 
-            // In the first iteration of this swap's loop, it found the initial tick (-28860), but at this point, both the initial and final prices were equal to the price at tick -28860. 
+            // Actually, the loop for this swap was executed twice because the previous swap happened to have `pool.tick_current` exactly on the boundary that is divisible by `tick_spacing`.
+            // In the first iteration of this swap's loop, it found the initial tick (-28860), but at this point, both the initial and final prices were equal to the price at tick -28860.
             // This did not meet the conditions for swapping so both swap_amount_input and swap_amount_output were 0. The actual output was calculated in the second iteration of the loop.
             let (amount_0, amount_1) = swap_internal(
                 &amm_config,

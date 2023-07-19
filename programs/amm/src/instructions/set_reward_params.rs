@@ -4,7 +4,8 @@ use crate::states::pool::{reward_period_limit, PoolState, REWARD_NUM};
 use crate::states::*;
 use crate::util::transfer_from_user_to_pool_vault;
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::token::Token;
+use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
 
 #[derive(Accounts)]
 pub struct SetRewardParams<'info> {
@@ -30,6 +31,11 @@ pub struct SetRewardParams<'info> {
         bump,
     )]
     pub operation_state: AccountLoader<'info, OperationState>,
+
+    /// Token program
+    pub token_program: Program<'info, Token>,
+    /// Token program 2022
+    pub token_program_2022: Program<'info, Token2022>,
 }
 
 pub fn set_reward_params<'a, 'b, 'c, 'info>(
@@ -40,12 +46,15 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
     end_time: u64,
 ) -> Result<()> {
     assert!((reward_index as usize) < REWARD_NUM);
+    require_gt!(end_time, open_time);
+    require_gt!(emissions_per_second_x64, 0);
     let operation_state = ctx.accounts.operation_state.load()?;
     let admin_keys = operation_state.operation_owners.to_vec();
     let admin_operator = admin_keys.contains(&ctx.accounts.authority.key())
         && ctx.accounts.authority.key() != Pubkey::default();
 
     let current_timestamp = u64::try_from(Clock::get()?.unix_timestamp).unwrap();
+    require_gt!(open_time, current_timestamp);
 
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;
 
@@ -60,9 +69,6 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
         return err!(ErrorCode::UnInitializedRewardInfo);
     }
 
-    if current_timestamp <= reward_info.open_time {
-        return err!(ErrorCode::NotApproved);
-    }
     let reward_amount = if admin_operator {
         admin_update(
             &mut reward_info,
@@ -73,6 +79,9 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
         )
         .unwrap()
     } else {
+        if current_timestamp <= reward_info.open_time {
+            return err!(ErrorCode::NotApproved);
+        }
         normal_update(
             &mut reward_info,
             current_timestamp,
@@ -89,10 +98,11 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
         let mut remaining_accounts = ctx.remaining_accounts.iter();
 
         let reward_token_vault =
-            Account::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
+            InterfaceAccount::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
         let authority_token_account =
-            Account::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
-        let token_program = Program::<Token>::try_from(remaining_accounts.next().unwrap())?;
+            InterfaceAccount::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
+        let reward_vault_mint =
+            InterfaceAccount::<Mint>::try_from(&remaining_accounts.next().unwrap())?;
 
         require_keys_eq!(reward_token_vault.mint, authority_token_account.mint);
         require_keys_eq!(reward_token_vault.key(), reward_info.token_vault);
@@ -101,7 +111,9 @@ pub fn set_reward_params<'a, 'b, 'c, 'info>(
             &ctx.accounts.authority,
             &authority_token_account,
             &reward_token_vault,
-            &token_program,
+            Some(reward_vault_mint),
+            &ctx.accounts.token_program,
+            Some(ctx.accounts.token_program_2022.to_account_info()),
             reward_amount,
         )?;
     }
@@ -116,11 +128,9 @@ fn normal_update(
     open_time: u64,
     end_time: u64,
 ) -> Result<u64> {
-    let mut reward_amount: u64 = 0;
+    let mut reward_amount: u64;
     if reward_info.last_update_time == reward_info.end_time {
         // reward emission has finished
-        require_gt!(open_time, current_timestamp);
-        require_gt!(emissions_per_second_x64, 0);
         let time_delta = end_time.checked_sub(open_time).unwrap();
         if time_delta < reward_period_limit::MIN_REWARD_PERIOD
             || time_delta > reward_period_limit::MAX_REWARD_PERIOD
@@ -141,9 +151,6 @@ fn normal_update(
         reward_info.emissions_per_second_x64 = emissions_per_second_x64;
     } else {
         // reward emission does not finish
-        if emissions_per_second_x64 == 0 {
-            return Err(ErrorCode::InvalidRewardInitParam.into());
-        }
         let left_reward_time = reward_info.end_time.checked_sub(current_timestamp).unwrap();
         let extend_period = end_time.checked_sub(reward_info.end_time).unwrap();
         if extend_period < reward_period_limit::MIN_REWARD_PERIOD
@@ -151,25 +158,24 @@ fn normal_update(
         {
             return err!(ErrorCode::NotApproveUpdateRewardEmissiones);
         }
-        if emissions_per_second_x64 > 0 {
-            // emissions_per_second_x64 must not smaller than before with in 72hrs
-            if emissions_per_second_x64 < reward_info.emissions_per_second_x64 {
-                require_gt!(
-                    reward_period_limit::INCREASE_EMISSIONES_PERIOD,
-                    left_reward_time
-                );
-            }
-            let emission_diff_x64 =
-                emissions_per_second_x64.saturating_sub(reward_info.emissions_per_second_x64);
-            reward_amount = U256::from(left_reward_time)
-                .mul_div_floor(
-                    U256::from(emission_diff_x64),
-                    U256::from(fixed_point_64::Q64),
-                )
-                .unwrap()
-                .as_u64();
-            reward_info.emissions_per_second_x64 = emissions_per_second_x64;
+
+        // emissions_per_second_x64 must not smaller than before with in 72hrs
+        if emissions_per_second_x64 < reward_info.emissions_per_second_x64 {
+            require_gt!(
+                reward_period_limit::INCREASE_EMISSIONES_PERIOD,
+                left_reward_time
+            );
         }
+        let emission_diff_x64 =
+            emissions_per_second_x64.saturating_sub(reward_info.emissions_per_second_x64);
+        reward_amount = U256::from(left_reward_time)
+            .mul_div_floor(
+                U256::from(emission_diff_x64),
+                U256::from(fixed_point_64::Q64),
+            )
+            .unwrap()
+            .as_u64();
+        reward_info.emissions_per_second_x64 = emissions_per_second_x64;
 
         if extend_period > 0 {
             let reward_amount_diff = U256::from(extend_period)
@@ -194,11 +200,11 @@ fn admin_update(
     open_time: u64,
     end_time: u64,
 ) -> Result<u64> {
-    let mut reward_amount: u64 = 0;
-    if reward_info.last_update_time == reward_info.end_time {
+    let mut reward_amount: u64;
+    if reward_info.last_update_time == reward_info.end_time
+        || reward_info.open_time > current_timestamp
+    {
         // reward emission has finished
-        require_gt!(open_time, current_timestamp);
-        require_gt!(emissions_per_second_x64, 0);
         let time_delta = end_time.checked_sub(open_time).unwrap();
         if time_delta == 0 {
             return Err(ErrorCode::InvalidRewardPeriod.into());
@@ -217,36 +223,30 @@ fn admin_update(
         reward_info.emissions_per_second_x64 = emissions_per_second_x64;
     } else {
         // reward emission does not finish
-        if emissions_per_second_x64 == 0 {
-            return Err(ErrorCode::InvalidRewardInitParam.into());
-        }
         let left_reward_time = reward_info.end_time.checked_sub(current_timestamp).unwrap();
         let extend_period = end_time.saturating_sub(reward_info.end_time);
-        if emissions_per_second_x64 > 0 {
-            // emissions_per_second_x64 can be update for admin during anytime
-            let emission_diff_x64 =
-                emissions_per_second_x64.saturating_sub(reward_info.emissions_per_second_x64);
-            reward_amount = U256::from(left_reward_time)
-                .mul_div_floor(
-                    U256::from(emission_diff_x64),
-                    U256::from(fixed_point_64::Q64),
-                )
-                .unwrap()
-                .as_u64();
-            reward_info.emissions_per_second_x64 = emissions_per_second_x64;
-        }
 
-        if extend_period > 0 {
-            let reward_amount_diff = U256::from(extend_period)
-                .mul_div_floor(
-                    U256::from(reward_info.emissions_per_second_x64),
-                    U256::from(fixed_point_64::Q64),
-                )
-                .unwrap()
-                .as_u64();
-            reward_amount = reward_amount.checked_add(reward_amount_diff).unwrap();
-            reward_info.end_time = end_time;
-        }
+        // emissions_per_second_x64 can be update for admin during anytime
+        let emission_diff_x64 =
+            emissions_per_second_x64.saturating_sub(reward_info.emissions_per_second_x64);
+        reward_amount = U256::from(left_reward_time)
+            .mul_div_floor(
+                U256::from(emission_diff_x64),
+                U256::from(fixed_point_64::Q64),
+            )
+            .unwrap()
+            .as_u64();
+        reward_info.emissions_per_second_x64 = emissions_per_second_x64;
+
+        let reward_amount_diff = U256::from(extend_period)
+            .mul_div_floor(
+                U256::from(reward_info.emissions_per_second_x64),
+                U256::from(fixed_point_64::Q64),
+            )
+            .unwrap()
+            .as_u64();
+        reward_amount = reward_amount.checked_add(reward_amount_diff).unwrap();
+        reward_info.end_time = end_time;
     }
 
     Ok(reward_amount)

@@ -3,7 +3,10 @@ use crate::error::ErrorCode;
 use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::token::Token;
+use anchor_spl::token_interface::Mint;
+use anchor_spl::token_interface::Token2022;
+use anchor_spl::token_interface::TokenAccount;
 
 #[derive(Accounts)]
 pub struct CollectProtocolFee<'info> {
@@ -26,25 +29,40 @@ pub struct CollectProtocolFee<'info> {
         mut,
         constraint = token_vault_0.key() == pool_state.load()?.token_vault_0
     )]
-    pub token_vault_0: Account<'info, TokenAccount>,
+    pub token_vault_0: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_1
     #[account(
         mut,
         constraint = token_vault_1.key() == pool_state.load()?.token_vault_1
     )]
-    pub token_vault_1: Account<'info, TokenAccount>,
+    pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// The mint of token vault 0
+    #[account(
+        address = token_vault_0.mint
+    )]
+    pub vault_0_mint: Box<InterfaceAccount<'info, Mint>>,
+
+    /// The mint of token vault 1
+    #[account(
+        address = token_vault_1.mint
+    )]
+    pub vault_1_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// The address that receives the collected token_0 protocol fees
     #[account(mut)]
-    pub recipient_token_account_0: Account<'info, TokenAccount>,
+    pub recipient_token_account_0: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The address that receives the collected token_1 protocol fees
     #[account(mut)]
-    pub recipient_token_account_1: Account<'info, TokenAccount>,
+    pub recipient_token_account_1: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// The SPL program to perform token transfers
     pub token_program: Program<'info, Token>,
+
+    /// The SPL program 2022 to perform token transfers
+    pub token_program_2022: Program<'info, Token2022>,
 }
 
 pub fn collect_protocol_fee(
@@ -73,7 +91,9 @@ pub fn collect_protocol_fee(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_0,
         &ctx.accounts.recipient_token_account_0,
+        Some(*ctx.accounts.vault_0_mint.clone()),
         &ctx.accounts.token_program,
+        Some(ctx.accounts.token_program_2022.to_account_info()),
         amount_0,
     )?;
 
@@ -81,7 +101,9 @@ pub fn collect_protocol_fee(
         &ctx.accounts.pool_state,
         &ctx.accounts.token_vault_1,
         &ctx.accounts.recipient_token_account_1,
+        Some(*ctx.accounts.vault_1_mint.clone()),
         &ctx.accounts.token_program,
+        Some(ctx.accounts.token_program_2022.to_account_info()),
         amount_1,
     )?;
 

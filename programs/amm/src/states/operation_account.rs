@@ -6,7 +6,7 @@ pub const OPERATION_SIZE_USIZE: usize = 10;
 pub const WHITE_MINT_SIZE_USIZE: usize = 100;
 
 /// Holds the current owner of the factory
-#[account(zero_copy)]
+#[account(zero_copy(unsafe))]
 #[repr(packed)]
 #[derive(Debug)]
 pub struct OperationState {

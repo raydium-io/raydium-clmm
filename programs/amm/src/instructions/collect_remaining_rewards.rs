@@ -2,7 +2,10 @@ use crate::error::ErrorCode;
 use crate::states::*;
 use crate::util::transfer_from_pool_vault_to_user;
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount};
+use anchor_spl::{
+    token::{self, Token},
+    token_interface::{Mint, Token2022, TokenAccount},
+};
 
 #[derive(Accounts)]
 pub struct CollectRemainingRewards<'info> {
@@ -10,14 +13,28 @@ pub struct CollectRemainingRewards<'info> {
     pub reward_funder: Signer<'info>,
     /// The funder's reward token account
     #[account(mut)]
-    pub funder_token_account: Box<Account<'info, TokenAccount>>,
+    pub funder_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
     /// Set reward for this pool
     #[account(mut)]
     pub pool_state: AccountLoader<'info, PoolState>,
     /// Reward vault transfer remaining token to founder token account
-    pub reward_token_vault: Box<Account<'info, TokenAccount>>,
+    pub reward_token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    /// The mint of reward token vault
+    #[account(
+        address = reward_token_vault.mint
+    )]
+    pub reward_vault_mint: InterfaceAccount<'info, Mint>,
     #[account(address = token::ID)]
     pub token_program: Program<'info, Token>,
+    /// Token program 2022
+    pub token_program_2022: Program<'info, Token2022>,
+
+    /// memo program
+    /// CHECK:
+    // #[account(
+    //     address = spl_memo::id()
+    // )]
+    pub memo_program: UncheckedAccount<'info>,
 }
 
 pub fn collect_remaining_rewards(
@@ -35,7 +52,9 @@ pub fn collect_remaining_rewards(
         &ctx.accounts.pool_state,
         &ctx.accounts.reward_token_vault,
         &ctx.accounts.funder_token_account,
+        Some(ctx.accounts.reward_vault_mint.clone()),
         &ctx.accounts.token_program,
+        Some(ctx.accounts.token_program_2022.to_account_info()),
         amount_remaining,
     )?;
 
@@ -44,7 +63,7 @@ pub fn collect_remaining_rewards(
 
 fn get_remaining_reward_amount(
     pool_state_loader: &AccountLoader<PoolState>,
-    reward_token_vault: &Account<TokenAccount>,
+    reward_token_vault: &InterfaceAccount<TokenAccount>,
     reward_funder: &Pubkey,
     reward_index: u8,
 ) -> Result<u64> {

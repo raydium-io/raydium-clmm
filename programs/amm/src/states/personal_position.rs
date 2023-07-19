@@ -39,8 +39,6 @@ pub struct PersonalPositionState {
     pub reward_infos: [PositionRewardInfo; REWARD_NUM],
     // Unused bytes for future upgrades.
     pub padding: [u64; 8],
-    // pub range_order_type: u8,
-    // pub range_order_open_time: u64,
 }
 
 impl PersonalPositionState {
@@ -123,6 +121,12 @@ pub struct CreatePersonalPositionEvent {
 
     /// The amount of token_1 was deposit for the liquidity
     pub deposit_amount_1: u64,
+
+    /// The token transfer fee for deposit_amount_0
+    pub deposit_amount_0_transfer_fee: u64,
+
+    /// The token transfer fee for deposit_amount_1
+    pub deposit_amount_1_transfer_fee: u64,
 }
 
 /// Emitted when liquidity is increased.
@@ -140,6 +144,12 @@ pub struct IncreaseLiquidityEvent {
 
     /// The amount of token_1 that was paid for the increase in liquidity
     pub amount_1: u64,
+
+    /// The token transfer fee for amount_0
+    pub amount_0_transfer_fee: u64,
+
+    /// The token transfer fee for amount_1
+    pub amount_1_transfer_fee: u64,
 }
 
 /// Emitted when liquidity is decreased.
@@ -159,6 +169,33 @@ pub struct DecreaseLiquidityEvent {
     pub fee_amount_1: u64,
     /// The amount of rewards
     pub reward_amounts: [u64; REWARD_NUM],
+    /// The amount of token_0 transfer fee
+    pub transfer_fee_0: u64,
+    /// The amount of token_1 transfer fee
+    pub transfer_fee_1: u64,
+}
+
+/// Emitted when liquidity decreased or increase.
+#[event]
+pub struct LiquidityCalculateEvent {
+    /// The pool liquidity before decrease or increase
+    pub pool_liquidity: u128,
+    /// The pool price when decrease or increase in liquidity
+    pub pool_sqrt_price_x64: u128,
+    /// The pool tick when decrease or increase in liquidity
+    pub pool_tick: i32,
+    /// The amount of token_0 that was calculated for the decrease or increase in liquidity
+    pub calc_amount_0: u64,
+    /// The amount of token_1 that was calculated for the decrease or increase in liquidity
+    pub calc_amount_1: u64,
+    // The amount of token_0 fee
+    pub trade_fee_owed_0: u64,
+    /// The amount of token_1 fee
+    pub trade_fee_owed_1: u64,
+    /// The amount of token_0 transfer fee without trade_fee_amount_0
+    pub transfer_fee_0: u64,
+    /// The amount of token_1 transfer fee without trade_fee_amount_0
+    pub transfer_fee_1: u64,
 }
 
 /// Emitted when tokens are collected for a position

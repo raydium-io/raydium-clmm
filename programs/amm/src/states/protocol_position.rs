@@ -68,7 +68,7 @@ impl ProtocolPositionState {
             ErrorCode::TickUpperOverflow
         );
         let liquidity_next = if liquidity_delta == 0 {
-            require!(self.liquidity > 0, ErrorCode::InvaildLiquidity);
+            require_gt!(self.liquidity, 0, ErrorCode::InvaildLiquidity);
             self.liquidity
         } else {
             liquidity_math::add_delta(self.liquidity, liquidity_delta)?
