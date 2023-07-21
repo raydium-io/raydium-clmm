@@ -2,14 +2,15 @@ use super::calculate_latest_token_fees;
 use super::modify_position;
 use crate::error::ErrorCode;
 use crate::states::*;
-use crate::util;
-use crate::util::transfer_from_pool_vault_to_user;
+use crate::util::{self, invoke_memo_instruction, transfer_from_pool_vault_to_user};
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::Mint;
 use anchor_spl::token_interface::{Token2022, TokenAccount};
 use std::cell::RefMut;
 
+/// Memo msg for decrease liquidity
+pub const DECREASE_MEMO_MSG: &'static [u8] = b"raydium_decrease";
 #[derive(Accounts)]
 pub struct DecreaseLiquidity<'info> {
     /// The position owner or delegated authority
@@ -166,9 +167,9 @@ pub struct DecreaseLiquidityV2<'info> {
 
     /// memo program
     /// CHECK:
-    // #[account(
-    //     address = spl_memo::id()
-    // )]
+    #[account(
+        address = spl_memo::id()
+    )]
     pub memo_program: UncheckedAccount<'info>,
 
     /// The mint of token vault 0
@@ -251,6 +252,10 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     amount_0_min: u64,
     amount_1_min: u64,
 ) -> Result<()> {
+    if accounts.memo_program.is_some() {
+        let memp_program = accounts.memo_program.as_ref().unwrap().to_account_info();
+        invoke_memo_instruction(DECREASE_MEMO_MSG, memp_program)?;
+    }
     assert!(liquidity <= accounts.personal_position.liquidity);
     let liquidity_before;
     let pool_sqrt_price_x64;
