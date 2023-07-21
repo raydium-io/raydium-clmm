@@ -415,6 +415,7 @@ pub fn open_position<'a, 'b, 'c, 'info>(
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
+    with_matedata: bool,
     base_flag: Option<bool>,
 ) -> Result<()> {
     {
@@ -446,21 +447,20 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             pool_state.tick_spacing,
         )?;
 
-        let tick_array_upper_loader =
-            if tick_array_lower_start_index == tick_array_upper_start_index {
-                AccountLoader::<TickArrayState>::try_from(
-                    &accounts.tick_array_upper.to_account_info(),
-                )?
-            } else {
-                TickArrayState::get_or_create_tick_array(
-                    accounts.payer.to_account_info(),
-                    accounts.tick_array_upper.to_account_info(),
-                    accounts.system_program.to_account_info(),
-                    &accounts.pool_state,
-                    tick_array_upper_start_index,
-                    pool_state.tick_spacing,
-                )?
-            };
+        let tick_array_upper_loader = if tick_array_lower_start_index
+            == tick_array_upper_start_index
+        {
+            AccountLoader::<TickArrayState>::try_from(&accounts.tick_array_upper.to_account_info())?
+        } else {
+            TickArrayState::get_or_create_tick_array(
+                accounts.payer.to_account_info(),
+                accounts.tick_array_upper.to_account_info(),
+                accounts.system_program.to_account_info(),
+                &accounts.pool_state,
+                tick_array_upper_start_index,
+                pool_state.tick_spacing,
+            )?
+        };
 
         // check if protocol position is initilized
         if accounts.protocol_position.pool_id == Pubkey::default() {
@@ -558,7 +558,9 @@ pub fn open_position<'a, 'b, 'c, 'info>(
         accounts.token_program.to_account_info(),
         accounts.system_program.to_account_info(),
         accounts.rent.to_account_info(),
+        with_matedata,
     )?;
+
     Ok(())
 }
 
@@ -863,6 +865,7 @@ fn create_nft_with_metadata<'info>(
     token_program: AccountInfo<'info>,
     system_program: AccountInfo<'info>,
     rent: AccountInfo<'info>,
+    with_matedata: bool,
 ) -> Result<()> {
     let pool_state = pool_state_loader.load()?;
     let seeds = pool_state.seeds();
@@ -879,40 +882,42 @@ fn create_nft_with_metadata<'info>(
         ),
         1,
     )?;
-    let create_metadata_ix = create_metadata_accounts_v3(
-        metadata_program.key(),
-        metadata_account.key(),
-        position_nft_mint.key(),
-        pool_state_loader.key(),
-        payer.key(),
-        pool_state_loader.key(),
-        String::from("Raydium Concentrated Liquidity"),
-        String::from("RCL"),
-        METADATA_URI.to_string(),
-        Some(vec![Creator {
-            address: pool_state_loader.key(),
-            verified: true,
-            share: 100,
-        }]),
-        0,
-        true,
-        false,
-        None,
-        None,
-        None,
-    );
-    solana_program::program::invoke_signed(
-        &create_metadata_ix,
-        &[
-            metadata_account.clone(),
-            position_nft_mint.clone(),
-            payer.to_account_info().clone(),
-            pool_state_loader.to_account_info(),
-            system_program.clone(),
-            rent.clone(),
-        ],
-        &[&seeds],
-    )?;
+    if with_matedata {
+        let create_metadata_ix = create_metadata_accounts_v3(
+            metadata_program.key(),
+            metadata_account.key(),
+            position_nft_mint.key(),
+            pool_state_loader.key(),
+            payer.key(),
+            pool_state_loader.key(),
+            String::from("Raydium Concentrated Liquidity"),
+            String::from("RCL"),
+            METADATA_URI.to_string(),
+            Some(vec![Creator {
+                address: pool_state_loader.key(),
+                verified: true,
+                share: 100,
+            }]),
+            0,
+            true,
+            false,
+            None,
+            None,
+            None,
+        );
+        solana_program::program::invoke_signed(
+            &create_metadata_ix,
+            &[
+                metadata_account.clone(),
+                position_nft_mint.clone(),
+                payer.to_account_info().clone(),
+                pool_state_loader.to_account_info(),
+                system_program.clone(),
+                rent.clone(),
+            ],
+            &[&seeds],
+        )?;
+    }
     // Disable minting
     token_2022::set_authority(
         CpiContext::new_with_signer(

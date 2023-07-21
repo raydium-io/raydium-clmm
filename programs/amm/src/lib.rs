@@ -304,6 +304,7 @@ pub mod amm_v3 {
             tick_upper_index,
             tick_array_lower_start_index,
             tick_array_upper_start_index,
+            true,
             None,
         )
     }
@@ -331,6 +332,7 @@ pub mod amm_v3 {
         liquidity: u128,
         amount_0_max: u64,
         amount_1_max: u64,
+        with_matedata: bool,
         base_flag: Option<bool>,
     ) -> Result<()> {
         if liquidity == 0 {
@@ -370,6 +372,7 @@ pub mod amm_v3 {
             tick_upper_index,
             tick_array_lower_start_index,
             tick_array_upper_start_index,
+            with_matedata,
             base_flag,
         )
     }
