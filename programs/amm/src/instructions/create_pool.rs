@@ -76,8 +76,14 @@ pub struct CreatePool<'info> {
     pub observation_state: UncheckedAccount<'info>,
 
     /// Spl token program or token program 2022
+    #[account(
+        address = anchor_spl::token::ID
+    )]
     pub token_program_0: Interface<'info, TokenInterface>,
     /// Spl token program or token program 2022
+    #[account(
+        address = anchor_spl::token::ID
+    )]
     pub token_program_1: Interface<'info, TokenInterface>,
     /// To create a new program account
     pub system_program: Program<'info, System>,
