@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::error::ErrorCode;
 use crate::libraries::tick_math;
 use crate::swap::swap_internal;
@@ -6,7 +8,6 @@ use crate::{states::*, util};
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
-use std::collections::VecDeque;
 #[derive(Accounts)]
 pub struct SwapSingleV2<'info> {
     /// The user performing the swap
@@ -90,7 +91,8 @@ pub fn exact_internal_v2<'info>(
 
     let mut transfer_fee = 0;
     if is_base_input {
-        transfer_fee = util::get_transfer_fee(*ctx.input_vault_mint.clone(), amount_specified).unwrap();
+        transfer_fee =
+            util::get_transfer_fee(*ctx.input_vault_mint.clone(), amount_specified).unwrap();
     }
 
     {
@@ -111,8 +113,16 @@ pub fn exact_internal_v2<'info>(
             ErrorCode::InvalidInputPoolVault
         );
 
+        let mut remaining_accounts_iter = remaining_accounts.into_iter();
+
+        let tickarray_bitmap_extension =
+            if pool_state.is_overflow_default_tickarray_bitmap(vec![pool_state.tick_current]) {
+                Some(remaining_accounts_iter.next().unwrap())
+            } else {
+                None
+            };
         let tick_array_states = &mut VecDeque::new();
-        for tick_array_info in remaining_accounts {
+        for tick_array_info in remaining_accounts_iter {
             tick_array_states.push_back(TickArrayState::load_mut(tick_array_info)?);
         }
 
@@ -121,6 +131,7 @@ pub fn exact_internal_v2<'info>(
             pool_state,
             tick_array_states,
             &mut ctx.observation_state.load_mut()?,
+            tickarray_bitmap_extension,
             amount_specified - transfer_fee,
             if sqrt_price_limit_x64 == 0 {
                 if zero_for_one {
@@ -171,7 +182,8 @@ pub fn exact_internal_v2<'info>(
 
     if zero_for_one {
         if !is_base_input {
-            transfer_fee = util::get_transfer_inverse_fee(*ctx.input_vault_mint.clone(), amount_0).unwrap();
+            transfer_fee =
+                util::get_transfer_inverse_fee(*ctx.input_vault_mint.clone(), amount_0).unwrap();
         }
         //  x -> y, deposit x token from user to pool vault.
         transfer_from_user_to_pool_vault(
@@ -199,7 +211,8 @@ pub fn exact_internal_v2<'info>(
         )?;
     } else {
         if !is_base_input {
-            transfer_fee = util::get_transfer_inverse_fee(*ctx.input_vault_mint.clone(), amount_1).unwrap();
+            transfer_fee =
+                util::get_transfer_inverse_fee(*ctx.input_vault_mint.clone(), amount_1).unwrap();
         }
         transfer_from_user_to_pool_vault(
             &ctx.payer,

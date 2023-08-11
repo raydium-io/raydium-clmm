@@ -296,6 +296,7 @@ pub mod amm_v3 {
         };
         instructions::open_position(
             open_position_param,
+            ctx.remaining_accounts,
             &ctx.bumps,
             liquidity,
             amount_0_max,
@@ -364,6 +365,7 @@ pub mod amm_v3 {
         };
         instructions::open_position(
             open_position_param,
+            ctx.remaining_accounts,
             &ctx.bumps,
             liquidity,
             amount_0_max,
@@ -425,6 +427,7 @@ pub mod amm_v3 {
         };
         instructions::increase_liquidity(
             increase_liquidity_param,
+            ctx.remaining_accounts,
             liquidity,
             amount_0_max,
             amount_1_max,
@@ -472,6 +475,7 @@ pub mod amm_v3 {
         };
         instructions::increase_liquidity(
             increase_liquidity_param,
+            ctx.remaining_accounts,
             liquidity,
             amount_0_max,
             amount_1_max,

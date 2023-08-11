@@ -1,13 +1,11 @@
 use crate::error::ErrorCode;
 use crate::libraries::{
-    big_num::{U1024, U128},
+    big_num::{U1024, U128, U256},
     check_current_tick_array_is_initialized, fixed_point_64,
     full_math::MulDiv,
-    next_initialized_tick_array_start_index,
+    tick_array_bit_map, tick_math,
 };
-use crate::libraries::{tick_math, U256};
 use crate::states::*;
-use crate::states::{MAX_TICK_ARRAY_START_INDEX, MIN_TICK_ARRAY_START_INDEX, TICK_ARRAY_SIZE};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::Mint;
 #[cfg(feature = "enable-log")]
@@ -18,6 +16,7 @@ use std::ops::{BitAnd, BitOr, BitXor};
 pub const POOL_SEED: &str = "pool";
 pub const POOL_VAULT_SEED: &str = "pool_vault";
 pub const POOL_REWARD_VAULT_SEED: &str = "pool_reward_vault";
+pub const POOL_TICK_ARRAY_BITMAP_SEED: &str = "pool_tick_array_bitmap_extension";
 // Number of rewards Token
 pub const REWARD_NUM: usize = 3;
 pub const OBSERVATION_UPDATE_DURATION_DEFAULT: u16 = 15;
@@ -433,45 +432,138 @@ impl PoolState {
         Ok(())
     }
 
-    pub fn flip_tick_array_bit(&mut self, tick_array_start_index: i32) -> Result<()> {
+    pub fn get_tick_array_offset(&self, tick_array_start_index: i32) -> Result<usize> {
         require!(
-            tick_array_start_index >= MIN_TICK_ARRAY_START_INDEX
-                && tick_array_start_index <= MAX_TICK_ARRAY_START_INDEX,
+            TickArrayState::check_is_valid_start_index(tick_array_start_index, self.tick_spacing),
             ErrorCode::InvaildTickIndex
         );
-        require_eq!(
-            0,
-            tick_array_start_index % (TICK_ARRAY_SIZE * i32::from(self.tick_spacing))
-        );
-        let tick_array_offset_in_bitmap =
-            tick_array_start_index / (i32::from(self.tick_spacing) * TICK_ARRAY_SIZE) + 512;
+        let tick_array_offset_in_bitmap = tick_array_start_index
+            / TickArrayState::tick_count(self.tick_spacing)
+            + tick_array_bit_map::TICK_ARRAY_BITMAP_SIZE;
+        Ok(tick_array_offset_in_bitmap as usize)
+    }
+
+    fn flip_tick_array_bit_internal(&mut self, tick_array_start_index: i32) -> Result<()> {
+        let tick_array_offset_in_bitmap = self.get_tick_array_offset(tick_array_start_index)?;
+
         let tick_array_bitmap = U1024(self.tick_array_bitmap);
         let mask = U1024::one() << tick_array_offset_in_bitmap.try_into().unwrap();
         self.tick_array_bitmap = tick_array_bitmap.bitxor(mask).0;
         Ok(())
     }
 
-    /// Search the first initialized tick array from pool current tick, if current tick array is initialized then direct return,
-    /// else find next according to the direction
-    pub fn get_first_initialized_tick_array(&self, zero_for_one: bool) -> Result<(bool, i32)> {
+    /// According to the current tick in the pool, check if its corresponding tick array is initialized.
+    fn get_current_tick_array_start_index(&self) -> Result<(bool, i32)> {
         let (is_initialized, start_index) = check_current_tick_array_is_initialized(
             U1024(self.tick_array_bitmap),
             self.tick_current,
             self.tick_spacing.into(),
         )?;
+
+        return Ok((is_initialized, start_index));
+    }
+
+    pub fn flip_tick_array_bit(
+        &mut self,
+        tickarray_bitmap_extension: &Option<&AccountInfo>,
+        tick_array_start_index: i32,
+    ) -> Result<()> {
+        if self.is_overflow_default_tickarray_bitmap(vec![tick_array_start_index]) {
+            AccountLoader::<TickArrayBitmapExtension>::try_from(
+                tickarray_bitmap_extension.unwrap(),
+            )?
+            .load_mut()?
+            .flip_tick_array_bit(tick_array_start_index, self.tick_spacing)
+        } else {
+            self.flip_tick_array_bit_internal(tick_array_start_index)
+        }
+    }
+
+    pub fn get_first_initialized_tick_array(
+        &self,
+        tickarray_bitmap_extension: &Option<&AccountInfo>,
+        zero_for_one: bool,
+    ) -> Result<(bool, i32)> {
+        let (is_initialized, start_index) =
+            if self.is_overflow_default_tickarray_bitmap(vec![self.tick_current]) {
+                AccountLoader::<TickArrayBitmapExtension>::try_from(
+                    tickarray_bitmap_extension.unwrap(),
+                )?
+                .load()?
+                .get_current_tick_array_start_index(
+                    TickArrayState::get_arrary_start_index(self.tick_current, self.tick_spacing),
+                    self.tick_spacing,
+                )?
+            } else {
+                self.get_current_tick_array_start_index()?
+            };
         if is_initialized {
-            return Ok((is_initialized, start_index));
+            return Ok((true, start_index));
         }
-        let start_index = next_initialized_tick_array_start_index(
-            U1024(self.tick_array_bitmap),
-            self.tick_current,
-            self.tick_spacing.into(),
+        let next_start_index = self.next_initialized_tick_array_start_index(
+            tickarray_bitmap_extension,
+            TickArrayState::get_arrary_start_index(self.tick_current, self.tick_spacing),
             zero_for_one,
-        );
-        if start_index.is_none() {
-            return err!(ErrorCode::LiquidityInsufficient);
+        )?;
+        return Ok((false, next_start_index.unwrap()));
+    }
+
+    pub fn next_initialized_tick_array_start_index(
+        &self,
+        tickarray_bitmap_extension: &Option<&AccountInfo>,
+        mut last_tick_array_start_index: i32,
+        zero_for_one: bool,
+    ) -> Result<Option<i32>> {
+        let (positive_tick_boundary, negative_tick_boundary) = self.tick_range();
+        last_tick_array_start_index =
+            TickArrayState::get_arrary_start_index(last_tick_array_start_index, self.tick_spacing);
+
+        loop {
+            let next_initialized_tickarray_index =
+                tick_array_bit_map::next_initialized_tick_array_start_index(
+                    U1024(self.tick_array_bitmap),
+                    last_tick_array_start_index,
+                    self.tick_spacing,
+                    zero_for_one,
+                );
+            if next_initialized_tickarray_index.is_some() {
+                return Ok(next_initialized_tickarray_index);
+            }
+
+            // If the initialized tickarray cannot be found in the original tickarry bitmap, then the tick index being searched will be positioned at the last tickarray.
+            if last_tick_array_start_index <= positive_tick_boundary
+                && last_tick_array_start_index >= negative_tick_boundary
+            {
+                last_tick_array_start_index = if zero_for_one {
+                    negative_tick_boundary
+                } else {
+                    positive_tick_boundary - TickArrayState::tick_count(self.tick_spacing)
+                };
+            }
+            if tickarray_bitmap_extension.is_none() {
+                return err!(ErrorCode::MissingTickArrayBitmapExtensionAccount);
+            }
+
+            let (is_found, last_tick_array_start_index) =
+                AccountLoader::<TickArrayBitmapExtension>::try_from(
+                    tickarray_bitmap_extension.unwrap(),
+                )?
+                .load()?
+                .next_initialized_tick_array_start_index(
+                    last_tick_array_start_index,
+                    self.tick_spacing,
+                    zero_for_one,
+                )?;
+            if is_found {
+                return Ok(Some(last_tick_array_start_index));
+            }
+
+            if last_tick_array_start_index < tick_math::MIN_TICK
+                || last_tick_array_start_index > tick_math::MAX_TICK
+            {
+                return Ok(None);
+            }
         }
-        Ok((is_initialized, start_index.unwrap()))
     }
 
     pub fn set_status(&mut self, status: u8) {
@@ -492,6 +584,33 @@ impl PoolState {
     pub fn get_status_by_bit(&self, bit: PoolStatusBitIndex) -> bool {
         let status = u8::from(1) << (bit as u8);
         self.status.bitand(status) == 0
+    }
+
+    pub fn is_overflow_default_tickarray_bitmap(&self, tick_array_start_indexs: Vec<i32>) -> bool {
+        let (max_tick_boundary, min_tick_boundary) = self.tick_range();
+        for tick_index in tick_array_start_indexs {
+            let tick_array_start_index =
+                TickArrayState::get_arrary_start_index(tick_index, self.tick_spacing);
+            if tick_array_start_index >= max_tick_boundary
+                || tick_array_start_index < min_tick_boundary
+            {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn tick_range(&self) -> (i32, i32) {
+        let mut max_tick_boundary =
+            tick_array_bit_map::max_tick_in_tickarray_bitmap(self.tick_spacing);
+        let mut min_tick_boundary = -max_tick_boundary;
+        if max_tick_boundary > tick_math::MAX_TICK {
+            max_tick_boundary = tick_math::MAX_TICK
+        }
+        if min_tick_boundary < tick_math::MIN_TICK {
+            min_tick_boundary = tick_math::MIN_TICK
+        }
+        (max_tick_boundary, min_tick_boundary)
     }
 }
 
@@ -748,219 +867,85 @@ pub mod pool_test {
     mod tick_array_bitmap_test {
 
         use super::*;
-        use std::convert::identity;
 
         #[test]
         fn get_arrary_start_index_negative() {
             let mut pool_state = PoolState::default();
             pool_state.tick_spacing = 10;
-            pool_state.flip_tick_array_bit(-600).unwrap();
-            assert_eq!(
-                identity(pool_state.tick_array_bitmap),
-                [
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    9223372036854775808,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
-                ]
+            pool_state.flip_tick_array_bit(&None, -600).unwrap();
+            assert!(U1024(pool_state.tick_array_bitmap).bit(511) == true);
+
+            pool_state.flip_tick_array_bit(&None, -1200).unwrap();
+            assert!(U1024(pool_state.tick_array_bitmap).bit(510) == true);
+
+            pool_state.flip_tick_array_bit(&None, -1800).unwrap();
+            assert!(U1024(pool_state.tick_array_bitmap).bit(509) == true);
+
+            pool_state.flip_tick_array_bit(&None, -38400).unwrap();
+            assert!(
+                U1024(pool_state.tick_array_bitmap)
+                    .bit(pool_state.get_tick_array_offset(-38400).unwrap())
+                    == true
             );
-            pool_state.flip_tick_array_bit(-1200).unwrap();
-            assert_eq!(
-                identity(pool_state.tick_array_bitmap),
-                [
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    13835058055282163712,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
-                ]
+            println!("{}", pool_state.get_tick_array_offset(0).unwrap());
+            println!("{}", pool_state.get_tick_array_offset(-600).unwrap());
+            println!("{}", pool_state.get_tick_array_offset(-38400).unwrap());
+            pool_state.flip_tick_array_bit(&None, -39000).unwrap();
+            assert!(
+                U1024(pool_state.tick_array_bitmap)
+                    .bit(pool_state.get_tick_array_offset(-39000).unwrap())
+                    == true
             );
-            pool_state.flip_tick_array_bit(-1800).unwrap();
-            assert_eq!(
-                identity(pool_state.tick_array_bitmap),
-                [
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    16140901064495857664,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
-                ]
+            println!("{}", pool_state.get_tick_array_offset(-39000).unwrap());
+            pool_state.flip_tick_array_bit(&None, -307200).unwrap();
+            assert!(
+                U1024(pool_state.tick_array_bitmap)
+                    .bit(pool_state.get_tick_array_offset(-307200).unwrap())
+                    == true
             );
-            pool_state.flip_tick_array_bit(-38400).unwrap();
-            assert_eq!(
-                identity(pool_state.tick_array_bitmap),
-                [
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    16140901064495857665,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
-                ]
-            );
-            pool_state.flip_tick_array_bit(-39000).unwrap();
-            assert_eq!(
-                identity(pool_state.tick_array_bitmap),
-                [
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    9223372036854775808,
-                    16140901064495857665,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
-                ]
-            );
-            pool_state.flip_tick_array_bit(-307200).unwrap();
-            assert_eq!(
-                identity(pool_state.tick_array_bitmap),
-                [
-                    1,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    9223372036854775808,
-                    16140901064495857665,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
-                ]
-            );
-            pool_state.flip_tick_array_bit(-307200).unwrap();
-            assert_eq!(
-                identity(pool_state.tick_array_bitmap),
-                [
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    9223372036854775808,
-                    16140901064495857665,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0
-                ]
-            )
         }
 
         #[test]
         fn get_arrary_start_index_positive() {
             let mut pool_state = PoolState::default();
             pool_state.tick_spacing = 10;
-            pool_state.flip_tick_array_bit(0).unwrap();
-            assert_eq!(
-                identity(pool_state.tick_array_bitmap),
-                [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
+            pool_state.flip_tick_array_bit(&None, 0).unwrap();
+            assert!(pool_state.get_tick_array_offset(0).unwrap() == 512);
+            assert!(
+                U1024(pool_state.tick_array_bitmap)
+                    .bit(pool_state.get_tick_array_offset(0).unwrap())
+                    == true
             );
-            pool_state.flip_tick_array_bit(600).unwrap();
-            assert_eq!(
-                identity(pool_state.tick_array_bitmap),
-                [0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0]
+
+            pool_state.flip_tick_array_bit(&None, 600).unwrap();
+            assert!(pool_state.get_tick_array_offset(600).unwrap() == 513);
+            assert!(
+                U1024(pool_state.tick_array_bitmap)
+                    .bit(pool_state.get_tick_array_offset(600).unwrap())
+                    == true
             );
-            pool_state.flip_tick_array_bit(1200).unwrap();
-            assert_eq!(
-                identity(pool_state.tick_array_bitmap),
-                [0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 0]
+
+            pool_state.flip_tick_array_bit(&None, 1200).unwrap();
+            assert!(
+                U1024(pool_state.tick_array_bitmap)
+                    .bit(pool_state.get_tick_array_offset(1200).unwrap())
+                    == true
             );
-            pool_state.flip_tick_array_bit(38400).unwrap();
-            assert_eq!(
-                identity(pool_state.tick_array_bitmap),
-                [0, 0, 0, 0, 0, 0, 0, 0, 7, 1, 0, 0, 0, 0, 0, 0]
+
+            pool_state.flip_tick_array_bit(&None, 38400).unwrap();
+            assert!(
+                U1024(pool_state.tick_array_bitmap)
+                    .bit(pool_state.get_tick_array_offset(38400).unwrap())
+                    == true
             );
-            pool_state.flip_tick_array_bit(306600).unwrap();
-            assert_eq!(
-                identity(pool_state.tick_array_bitmap),
-                [
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    7,
-                    1,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    9223372036854775808
-                ]
+
+            pool_state.flip_tick_array_bit(&None, 306600).unwrap();
+            assert!(pool_state.get_tick_array_offset(306600).unwrap() == 1023);
+            assert!(
+                U1024(pool_state.tick_array_bitmap)
+                    .bit(pool_state.get_tick_array_offset(306600).unwrap())
+                    == true
             );
-            pool_state.flip_tick_array_bit(306600).unwrap();
-            assert_eq!(
-                identity(pool_state.tick_array_bitmap),
-                [0, 0, 0, 0, 0, 0, 0, 0, 7, 1, 0, 0, 0, 0, 0, 0]
-            )
         }
     }
 
@@ -1078,6 +1063,137 @@ pub mod pool_test {
                 identity(updated_reward_infos[0].last_update_time),
                 1666069200
             );
+        }
+    }
+
+    mod use_tickarray_bitmap_extension_test {
+
+        use super::*;
+
+        use crate::tick_array_bitmap_extension_test::{
+            build_tick_array_bitmap_extension_info, BuildExtensionAccountInfo,
+        };
+
+        pub fn pool_flip_tick_array_bit_helper(
+            pool_state: &mut PoolState,
+            tickarray_bitmap_extension: &Option<&AccountInfo>,
+            init_tick_array_start_indexs: Vec<i32>,
+        ) {
+            for start_index in init_tick_array_start_indexs {
+                pool_state
+                    .flip_tick_array_bit(tickarray_bitmap_extension, start_index)
+                    .unwrap();
+            }
+        }
+
+        #[test]
+        fn get_first_initialized_tick_array_test() {
+            let mut pool_state = PoolState::default();
+            pool_state.tick_spacing = 1;
+            let tick_spacing = pool_state.tick_spacing as i32;
+            pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 511 - 1;
+
+            let param: &mut BuildExtensionAccountInfo = &mut BuildExtensionAccountInfo::default();
+            let tick_array_bitmap_extension_info: AccountInfo<'_> =
+                build_tick_array_bitmap_extension_info(param);
+
+            pool_flip_tick_array_bit_helper(
+                &mut pool_state,
+                &Some(&tick_array_bitmap_extension_info),
+                vec![
+                    -tick_spacing * TICK_ARRAY_SIZE * 513, // tick in extension
+                    tick_spacing * TICK_ARRAY_SIZE * 511,
+                    tick_spacing * TICK_ARRAY_SIZE * 512, // tick in extension
+                ],
+            );
+
+            let (is_first_initilzied, start_index) = pool_state
+                .get_first_initialized_tick_array(&Some(&tick_array_bitmap_extension_info), true)
+                .unwrap();
+            assert!(is_first_initilzied == false);
+            assert!(start_index == -tick_spacing * TICK_ARRAY_SIZE * 513);
+
+            let (is_first_initilzied, start_index) = pool_state
+                .get_first_initialized_tick_array(&Some(&tick_array_bitmap_extension_info), false)
+                .unwrap();
+            assert!(is_first_initilzied == false);
+            assert!(start_index == tick_spacing * TICK_ARRAY_SIZE * 511);
+
+            pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 511;
+            let (is_first_initilzied, start_index) = pool_state
+                .get_first_initialized_tick_array(&Some(&tick_array_bitmap_extension_info), true)
+                .unwrap();
+            assert!(is_first_initilzied == true);
+            assert!(start_index == tick_spacing * TICK_ARRAY_SIZE * 511);
+
+            pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 512;
+            let (is_first_initilzied, start_index) = pool_state
+                .get_first_initialized_tick_array(&Some(&tick_array_bitmap_extension_info), true)
+                .unwrap();
+            assert!(is_first_initilzied == true);
+            assert!(start_index == tick_spacing * TICK_ARRAY_SIZE * 512);
+        }
+
+        #[test]
+        fn next_initialized_tick_array_start_index_test() {
+            let mut pool_state = PoolState::default();
+            pool_state.tick_spacing = 1;
+            let tick_spacing = pool_state.tick_spacing as i32;
+            pool_state.tick_current = 0;
+
+            let param: &mut BuildExtensionAccountInfo = &mut BuildExtensionAccountInfo::default();
+            let tick_array_bitmap_extension_info: AccountInfo<'_> =
+                build_tick_array_bitmap_extension_info(param);
+
+            pool_flip_tick_array_bit_helper(
+                &mut pool_state,
+                &Some(&tick_array_bitmap_extension_info),
+                vec![
+                    -tick_spacing * TICK_ARRAY_SIZE * 1000, // tick in extension
+                    -tick_spacing * TICK_ARRAY_SIZE * 513,  // tick in extension
+                    tick_spacing * TICK_ARRAY_SIZE * 511,
+                    tick_spacing * TICK_ARRAY_SIZE * 512, // tick in extension
+                ],
+            );
+
+            let start_index = pool_state
+                .next_initialized_tick_array_start_index(
+                    &Some(&tick_array_bitmap_extension_info),
+                    pool_state.tick_current,
+                    true,
+                )
+                .unwrap();
+            assert!(start_index.unwrap() == -tick_spacing * TICK_ARRAY_SIZE * 513);
+
+            pool_state.tick_current = -tick_spacing * TICK_ARRAY_SIZE * 513;
+            let start_index = pool_state
+                .next_initialized_tick_array_start_index(
+                    &Some(&tick_array_bitmap_extension_info),
+                    pool_state.tick_current,
+                    true,
+                )
+                .unwrap();
+            assert!(start_index.unwrap() == -tick_spacing * TICK_ARRAY_SIZE * 1000);
+
+            pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 513;
+            let start_index = pool_state
+                .next_initialized_tick_array_start_index(
+                    &Some(&tick_array_bitmap_extension_info),
+                    pool_state.tick_current,
+                    true,
+                )
+                .unwrap();
+            assert!(start_index.unwrap() == tick_spacing * TICK_ARRAY_SIZE * 512);
+
+            pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 512;
+            let start_index = pool_state
+                .next_initialized_tick_array_start_index(
+                    &Some(&tick_array_bitmap_extension_info),
+                    pool_state.tick_current,
+                    true,
+                )
+                .unwrap();
+            assert!(start_index.unwrap() == tick_spacing * TICK_ARRAY_SIZE * 511);
         }
     }
 }
