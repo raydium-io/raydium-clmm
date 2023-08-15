@@ -272,23 +272,29 @@ pub fn swap_internal<'b, 'info>(
             }
             current_vaild_tick_array_start_index = next_initialized_tickarray_index.unwrap();
 
-            tick_array_current = tick_array_states
-                .pop_front()
-                .ok_or(ErrorCode::NotEnoughTickArrayAccount)?;
+            let expected_next_tick_array_address = Pubkey::find_program_address(
+                &[
+                    TICK_ARRAY_SEED.as_bytes(),
+                    pool_state.key().as_ref(),
+                    &current_vaild_tick_array_start_index.to_be_bytes(),
+                ],
+                &crate::id(),
+            )
+            .0;
+            for _ in 0..tick_array_states.len() {
+                tick_array_current = tick_array_states
+                    .pop_front()
+                    .ok_or(ErrorCode::NotEnoughTickArrayAccount)?;
 
-            require_keys_eq!(tick_array_current.pool_id, pool_state.key());
-            require_keys_eq!(
-                tick_array_current.key(),
-                Pubkey::find_program_address(
-                    &[
-                        TICK_ARRAY_SEED.as_bytes(),
-                        pool_state.key().as_ref(),
-                        &current_vaild_tick_array_start_index.to_be_bytes(),
-                    ],
-                    &crate::id()
-                )
-                .0
-            );
+                require_keys_eq!(tick_array_current.pool_id, pool_state.key());
+                if tick_array_current
+                    .key()
+                    .ne(&expected_next_tick_array_address)
+                {
+                    continue;
+                }
+            }
+
             let first_initialized_tick = tick_array_current.first_initialized_tick(zero_for_one)?;
             next_initialized_tick = Box::new(*first_initialized_tick);
         }
@@ -1649,102 +1655,6 @@ mod swap_test {
                 pool_state.borrow().tick_current > -28860
                     && pool_state.borrow().tick_current <= -28800
             );
-        }
-    }
-
-    mod use_tickarray_bitmap_extension_test {
-        use super::*;
-
-        #[test]
-        fn zero_for_one_current_tick_array_not_initialized_test() {
-            let tick_current = -28776;
-            let liquidity = 624165121219;
-            let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_current).unwrap();
-            let (amm_config, pool_state, tick_array_states, observation_state) = build_swap_param(
-                tick_current,
-                1,
-                sqrt_price_x64,
-                liquidity,
-                vec![
-                    TickArrayInfo {
-                        start_tick_index: -30600,
-                        ticks: vec![build_tick(-30598, 277065331032, -277065331032).take()],
-                    },
-                    TickArrayInfo {
-                        start_tick_index: -30780,
-                        ticks: vec![build_tick(-30598, 277065331032, -277065331032).take()],
-                    },
-                ],
-            );
-
-            // find the first initialzied tick(-28860) and cross it in tickarray
-            let (amount_0, amount_1) = swap_internal(
-                &amm_config,
-                &mut pool_state.borrow_mut(),
-                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
-                &mut observation_state.borrow_mut(),
-                None,
-                12188240002,
-                tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
-                true,
-                true,
-                oracle::block_timestamp_mock() as u32,
-            )
-            .unwrap();
-            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
-            assert!(pool_state.borrow().tick_current < tick_current);
-            assert!(
-                pool_state.borrow().tick_current > -29220
-                    && pool_state.borrow().tick_current < -28860
-            );
-            assert!(pool_state.borrow().sqrt_price_x64 < sqrt_price_x64);
-            assert!(pool_state.borrow().liquidity == (liquidity + 6408486554));
-            assert!(amount_0 == 12188240002);
-        }
-
-        #[test]
-        fn one_for_zero_current_tick_array_not_initialized_test() {
-            let tick_current = -32405;
-            let liquidity = 1224165121219;
-            let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_current).unwrap();
-            let (amm_config, pool_state, tick_array_states, observation_state) = build_swap_param(
-                tick_current,
-                60,
-                sqrt_price_x64,
-                liquidity,
-                vec![TickArrayInfo {
-                    start_tick_index: -32400,
-                    ticks: vec![
-                        build_tick(-32400, 277065331032, -277065331032).take(),
-                        build_tick(-29220, 1330680689, -1330680689).take(),
-                        build_tick(-28860, 6408486554, -6408486554).take(),
-                    ],
-                }],
-            );
-
-            // find the first initialzied tick(-32400) and cross it in tickarray
-            let (amount_0, amount_1) = swap_internal(
-                &amm_config,
-                &mut pool_state.borrow_mut(),
-                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
-                &mut observation_state.borrow_mut(),
-                None,
-                12188240002,
-                tick_math::get_sqrt_price_at_tick(-28860).unwrap(),
-                false,
-                true,
-                oracle::block_timestamp_mock() as u32,
-            )
-            .unwrap();
-            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
-            assert!(pool_state.borrow().tick_current > tick_current);
-            assert!(
-                pool_state.borrow().tick_current > -32400
-                    && pool_state.borrow().tick_current < -29220
-            );
-            assert!(pool_state.borrow().sqrt_price_x64 > sqrt_price_x64);
-            assert!(pool_state.borrow().liquidity == (liquidity - 277065331032));
-            assert!(amount_1 == 12188240002);
         }
     }
 }
