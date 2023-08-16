@@ -1,9 +1,9 @@
 use crate::error::ErrorCode;
-use crate::libraries::tick_array_bit_map;
 use crate::libraries::{
     big_num::U512,
     tick_array_bit_map::{
-        max_tick_in_tickarray_bitmap, tick_array_offset_in_bitmap, TickArryBitmap,
+        get_bitmap_tick_boundary, max_tick_in_tickarray_bitmap, TickArryBitmap,
+        TICK_ARRAY_BITMAP_SIZE,
     },
     tick_math,
 };
@@ -93,7 +93,7 @@ impl TickArrayBitmapExtension {
         let (_, tickarray_bitmap) = self.get_bitmap(tick_array_start_index, tick_spacing)?;
 
         let tick_array_offset_in_bitmap =
-            tick_array_offset_in_bitmap(tick_array_start_index, tick_spacing);
+            Self::tick_array_offset_in_bitmap(tick_array_start_index, tick_spacing);
 
         if U512(tickarray_bitmap).bit(tick_array_offset_in_bitmap as usize) {
             return Ok((true, tick_array_start_index));
@@ -109,7 +109,7 @@ impl TickArrayBitmapExtension {
     ) -> Result<()> {
         let (offset, tick_array_bitmap) = self.get_bitmap(tick_array_start_index, tick_spacing)?;
         let tick_array_offset_in_bitmap =
-            tick_array_offset_in_bitmap(tick_array_start_index, tick_spacing);
+            Self::tick_array_offset_in_bitmap(tick_array_start_index, tick_spacing);
         let tick_array_bitmap = U512(tick_array_bitmap);
         let mask = U512::one() << tick_array_offset_in_bitmap;
         if tick_array_start_index < 0 {
@@ -134,14 +134,77 @@ impl TickArrayBitmapExtension {
         };
         let (_, tickarray_bitmap) = self.get_bitmap(next_tick_array_start_index, tick_spacing)?;
 
-        Ok(
-            tick_array_bit_map::next_initialized_tick_array_start_index_from_bitmap(
-                tickarray_bitmap,
-                next_tick_array_start_index,
-                tick_spacing,
-                zero_for_one,
-            ),
-        )
+        Ok(Self::next_initialized_tick_array_start_index_from_bitmap(
+            tickarray_bitmap,
+            next_tick_array_start_index,
+            tick_spacing,
+            zero_for_one,
+        ))
+    }
+
+    pub fn next_initialized_tick_array_start_index_from_bitmap(
+        tickarray_bitmap: TickArryBitmap,
+        next_tick_array_start_index: i32,
+        tick_spacing: u16,
+        zero_for_one: bool,
+    ) -> (bool, i32) {
+        let (bitmap_min_tick_boundary, bitmap_max_tick_boundary) =
+            get_bitmap_tick_boundary(next_tick_array_start_index, tick_spacing);
+
+        let tick_array_offset_in_bitmap =
+            Self::tick_array_offset_in_bitmap(next_tick_array_start_index, tick_spacing);
+        if zero_for_one {
+            // tick from upper to lower
+            // find from highter bits to lower bits
+            let offset_bit_map = U512(tickarray_bitmap)
+                << (TICK_ARRAY_BITMAP_SIZE - 1 - tick_array_offset_in_bitmap);
+
+            let next_bit = if offset_bit_map.is_zero() {
+                None
+            } else {
+                Some(u16::try_from(offset_bit_map.leading_zeros()).unwrap())
+            };
+
+            if next_bit.is_some() {
+                let next_array_start_index = next_tick_array_start_index
+                    - i32::from(next_bit.unwrap()) * TickArrayState::tick_count(tick_spacing);
+                return (true, next_array_start_index);
+            } else {
+                // not found til to the end
+                return (false, bitmap_min_tick_boundary);
+            }
+        } else {
+            // tick from lower to upper
+            // find from lower bits to highter bits
+            let offset_bit_map = U512(tickarray_bitmap) >> tick_array_offset_in_bitmap;
+
+            let next_bit = if offset_bit_map.is_zero() {
+                None
+            } else {
+                Some(u16::try_from(offset_bit_map.trailing_zeros()).unwrap())
+            };
+            if next_bit.is_some() {
+                let next_array_start_index = next_tick_array_start_index
+                    + i32::from(next_bit.unwrap()) * TickArrayState::tick_count(tick_spacing);
+                return (true, next_array_start_index);
+            } else {
+                // not found til to the end
+                return (
+                    false,
+                    bitmap_max_tick_boundary - TickArrayState::tick_count(tick_spacing),
+                );
+            }
+        }
+    }
+
+    pub fn tick_array_offset_in_bitmap(tick_array_start_index: i32, tick_spacing: u16) -> i32 {
+        let mut tick_array_offset_in_bitmap = tick_array_start_index.abs()
+            % max_tick_in_tickarray_bitmap(tick_spacing)
+            / TickArrayState::tick_count(tick_spacing);
+        if tick_array_start_index < 0 {
+            tick_array_offset_in_bitmap = TICK_ARRAY_BITMAP_SIZE - tick_array_offset_in_bitmap;
+        }
+        tick_array_offset_in_bitmap
     }
 }
 
