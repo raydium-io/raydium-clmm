@@ -346,15 +346,6 @@ pub struct OpenPositionV2<'info> {
         address = token_vault_1.mint
     )]
     pub vault_1_mint: InterfaceAccount<'info, Mint>,
-
-    #[account(
-        seeds = [
-            POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
-            pool_state.key().as_ref(),
-        ],
-        bump
-    )]
-    pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
     // remaining account
     // #[account(
     //     seeds = [
@@ -528,6 +519,10 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             token_program: accounts.token_program.clone(),
             token_program_2022: accounts.token_program_2022.clone(),
             tick_array_bitmap_extension: if use_tickarray_bitmap_extension {
+                require_keys_eq!(
+                    remaining_accounts[0].key(),
+                    TickArrayBitmapExtension::key(accounts.pool_state.key())
+                );
                 Some(&remaining_accounts[0])
             } else {
                 None

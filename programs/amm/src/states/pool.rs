@@ -452,17 +452,6 @@ impl PoolState {
         Ok(())
     }
 
-    /// According to the current tick in the pool, check if its corresponding tick array is initialized.
-    fn get_current_tick_array_start_index(&self) -> Result<(bool, i32)> {
-        let (is_initialized, start_index) = check_current_tick_array_is_initialized(
-            U1024(self.tick_array_bitmap),
-            self.tick_current,
-            self.tick_spacing.into(),
-        )?;
-
-        return Ok((is_initialized, start_index));
-    }
-
     pub fn flip_tick_array_bit(
         &mut self,
         tickarray_bitmap_extension: &Option<&AccountInfo>,
@@ -481,22 +470,25 @@ impl PoolState {
 
     pub fn get_first_initialized_tick_array(
         &self,
-        tickarray_bitmap_extension: &Option<&AccountInfo>,
+        tickarray_bitmap_extension: &Option<TickArrayBitmapExtension>,
         zero_for_one: bool,
     ) -> Result<(bool, i32)> {
-        let (is_initialized, start_index) =
-            if self.is_overflow_default_tickarray_bitmap(vec![self.tick_current]) {
-                AccountLoader::<TickArrayBitmapExtension>::try_from(
-                    tickarray_bitmap_extension.unwrap(),
-                )?
-                .load()?
-                .get_current_tick_array_start_index(
+        let (is_initialized, start_index) = if self
+            .is_overflow_default_tickarray_bitmap(vec![self.tick_current])
+        {
+            tickarray_bitmap_extension
+                .unwrap()
+                .check_tick_array_is_initialized(
                     TickArrayState::get_arrary_start_index(self.tick_current, self.tick_spacing),
                     self.tick_spacing,
                 )?
-            } else {
-                self.get_current_tick_array_start_index()?
-            };
+        } else {
+            check_current_tick_array_is_initialized(
+                U1024(self.tick_array_bitmap),
+                self.tick_current,
+                self.tick_spacing.into(),
+            )?
+        };
         if is_initialized {
             return Ok((true, start_index));
         }
@@ -510,7 +502,7 @@ impl PoolState {
 
     pub fn next_initialized_tick_array_start_index(
         &self,
-        tickarray_bitmap_extension: &Option<&AccountInfo>,
+        tickarray_bitmap_extension: &Option<TickArrayBitmapExtension>,
         mut last_tick_array_start_index: i32,
         zero_for_one: bool,
     ) -> Result<Option<i32>> {
@@ -534,15 +526,13 @@ impl PoolState {
                 return err!(ErrorCode::MissingTickArrayBitmapExtensionAccount);
             }
 
-            let (is_found, start_index) = AccountLoader::<TickArrayBitmapExtension>::try_from(
-                tickarray_bitmap_extension.unwrap(),
-            )?
-            .load()?
-            .next_initialized_tick_array_start_index(
-                last_tick_array_start_index,
-                self.tick_spacing,
-                zero_for_one,
-            )?;
+            let (is_found, start_index) = tickarray_bitmap_extension
+                .unwrap()
+                .next_initialized_tick_array_from_one_bitmap(
+                    last_tick_array_start_index,
+                    self.tick_spacing,
+                    zero_for_one,
+                )?;
             if is_found {
                 return Ok(Some(start_index));
             }
@@ -1058,6 +1048,8 @@ pub mod pool_test {
 
     mod use_tickarray_bitmap_extension_test {
 
+        use std::ops::Deref;
+
         use super::*;
 
         use crate::tick_array_bitmap_extension_test::{
@@ -1097,28 +1089,38 @@ pub mod pool_test {
                 ],
             );
 
+            let tick_array_bitmap_extension = Some(
+                *AccountLoader::<TickArrayBitmapExtension>::try_from(
+                    &tick_array_bitmap_extension_info,
+                )
+                .unwrap()
+                .load()
+                .unwrap()
+                .deref(),
+            );
+
             let (is_first_initilzied, start_index) = pool_state
-                .get_first_initialized_tick_array(&Some(&tick_array_bitmap_extension_info), true)
+                .get_first_initialized_tick_array(&tick_array_bitmap_extension, true)
                 .unwrap();
             assert!(is_first_initilzied == false);
             assert!(start_index == -tick_spacing * TICK_ARRAY_SIZE * 513);
 
             let (is_first_initilzied, start_index) = pool_state
-                .get_first_initialized_tick_array(&Some(&tick_array_bitmap_extension_info), false)
+                .get_first_initialized_tick_array(&tick_array_bitmap_extension, false)
                 .unwrap();
             assert!(is_first_initilzied == false);
             assert!(start_index == tick_spacing * TICK_ARRAY_SIZE * 511);
 
             pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 511;
             let (is_first_initilzied, start_index) = pool_state
-                .get_first_initialized_tick_array(&Some(&tick_array_bitmap_extension_info), true)
+                .get_first_initialized_tick_array(&tick_array_bitmap_extension, true)
                 .unwrap();
             assert!(is_first_initilzied == true);
             assert!(start_index == tick_spacing * TICK_ARRAY_SIZE * 511);
 
             pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 512;
             let (is_first_initilzied, start_index) = pool_state
-                .get_first_initialized_tick_array(&Some(&tick_array_bitmap_extension_info), true)
+                .get_first_initialized_tick_array(&tick_array_bitmap_extension, true)
                 .unwrap();
             assert!(is_first_initilzied == true);
             assert!(start_index == tick_spacing * TICK_ARRAY_SIZE * 512);
@@ -1149,9 +1151,19 @@ pub mod pool_test {
                     ],
                 );
 
+                let tick_array_bitmap_extension = Some(
+                    *AccountLoader::<TickArrayBitmapExtension>::try_from(
+                        &tick_array_bitmap_extension_info,
+                    )
+                    .unwrap()
+                    .load()
+                    .unwrap()
+                    .deref(),
+                );
+
                 let start_index = pool_state
                     .next_initialized_tick_array_start_index(
-                        &Some(&tick_array_bitmap_extension_info),
+                        &tick_array_bitmap_extension,
                         pool_state.tick_current,
                         true,
                     )
@@ -1161,7 +1173,7 @@ pub mod pool_test {
                 pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 510;
                 let start_index = pool_state
                     .next_initialized_tick_array_start_index(
-                        &Some(&tick_array_bitmap_extension_info),
+                        &tick_array_bitmap_extension,
                         pool_state.tick_current,
                         true,
                     )
@@ -1171,7 +1183,7 @@ pub mod pool_test {
                 pool_state.tick_current = -tick_spacing * TICK_ARRAY_SIZE * 513;
                 let start_index = pool_state
                     .next_initialized_tick_array_start_index(
-                        &Some(&tick_array_bitmap_extension_info),
+                        &tick_array_bitmap_extension,
                         pool_state.tick_current,
                         true,
                     )
@@ -1201,9 +1213,19 @@ pub mod pool_test {
                     ],
                 );
 
+                let tick_array_bitmap_extension = Some(
+                    *AccountLoader::<TickArrayBitmapExtension>::try_from(
+                        &tick_array_bitmap_extension_info,
+                    )
+                    .unwrap()
+                    .load()
+                    .unwrap()
+                    .deref(),
+                );
+
                 let start_index = pool_state
                     .next_initialized_tick_array_start_index(
-                        &Some(&tick_array_bitmap_extension_info),
+                        &tick_array_bitmap_extension,
                         pool_state.tick_current,
                         false,
                     )
@@ -1213,7 +1235,7 @@ pub mod pool_test {
                 pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 510;
                 let start_index = pool_state
                     .next_initialized_tick_array_start_index(
-                        &Some(&tick_array_bitmap_extension_info),
+                        &tick_array_bitmap_extension,
                         pool_state.tick_current,
                         false,
                     )
@@ -1223,7 +1245,7 @@ pub mod pool_test {
                 pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 511;
                 let start_index = pool_state
                     .next_initialized_tick_array_start_index(
-                        &Some(&tick_array_bitmap_extension_info),
+                        &tick_array_bitmap_extension,
                         pool_state.tick_current,
                         false,
                     )
@@ -1253,9 +1275,19 @@ pub mod pool_test {
                     ],
                 );
 
+                let tick_array_bitmap_extension = Some(
+                    *AccountLoader::<TickArrayBitmapExtension>::try_from(
+                        &tick_array_bitmap_extension_info,
+                    )
+                    .unwrap()
+                    .load()
+                    .unwrap()
+                    .deref(),
+                );
+
                 let start_index = pool_state
                     .next_initialized_tick_array_start_index(
-                        &Some(&tick_array_bitmap_extension_info),
+                        &tick_array_bitmap_extension,
                         pool_state.tick_current,
                         false,
                     )
@@ -1285,9 +1317,19 @@ pub mod pool_test {
                     ],
                 );
 
+                let tick_array_bitmap_extension = Some(
+                    *AccountLoader::<TickArrayBitmapExtension>::try_from(
+                        &tick_array_bitmap_extension_info,
+                    )
+                    .unwrap()
+                    .load()
+                    .unwrap()
+                    .deref(),
+                );
+
                 let start_index = pool_state
                     .next_initialized_tick_array_start_index(
-                        &Some(&tick_array_bitmap_extension_info),
+                        &tick_array_bitmap_extension,
                         pool_state.tick_current,
                         true,
                     )
@@ -1312,9 +1354,19 @@ pub mod pool_test {
                     vec![],
                 );
 
+                let tick_array_bitmap_extension = Some(
+                    *AccountLoader::<TickArrayBitmapExtension>::try_from(
+                        &tick_array_bitmap_extension_info,
+                    )
+                    .unwrap()
+                    .load()
+                    .unwrap()
+                    .deref(),
+                );
+
                 let start_index = pool_state
                     .next_initialized_tick_array_start_index(
-                        &Some(&tick_array_bitmap_extension_info),
+                        &tick_array_bitmap_extension,
                         pool_state.tick_current,
                         true,
                     )
@@ -1323,7 +1375,7 @@ pub mod pool_test {
 
                 let start_index = pool_state
                     .next_initialized_tick_array_start_index(
-                        &Some(&tick_array_bitmap_extension_info),
+                        &tick_array_bitmap_extension,
                         pool_state.tick_current,
                         false,
                     )

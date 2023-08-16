@@ -11,7 +11,7 @@ use std::cell::RefMut;
 use std::collections::VecDeque;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
-use std::ops::Neg;
+use std::ops::{Deref, Neg};
 
 #[derive(Accounts)]
 pub struct SwapSingle<'info> {
@@ -143,7 +143,7 @@ pub fn swap_internal<'b, 'info>(
     pool_state: &mut RefMut<PoolState>,
     tick_array_states: &mut VecDeque<RefMut<TickArrayState>>,
     observation_state: &mut RefMut<ObservationState>,
-    tickarray_bitmap_extension: Option<&AccountInfo>,
+    tickarray_bitmap_extension: &Option<TickArrayBitmapExtension>,
     amount_specified: u64,
     sqrt_price_limit_x64: u128,
     zero_for_one: bool,
@@ -614,12 +614,28 @@ pub fn exact_internal<'b, 'info>(
 
         let tickarray_bitmap_extension =
             if pool_state.is_overflow_default_tickarray_bitmap(vec![pool_state.tick_current]) {
-                Some(remaining_accounts_iter.next().unwrap())
+                let account_info = remaining_accounts_iter.next().unwrap();
+                require_keys_eq!(
+                    account_info.key(),
+                    TickArrayBitmapExtension::key(pool_state.key())
+                );
+                Some(
+                    *(AccountLoader::<TickArrayBitmapExtension>::try_from(account_info)?
+                        .load()?
+                        .deref()),
+                )
             } else {
                 None
             };
+
         let tick_array_states = &mut VecDeque::new();
         for tick_array_info in remaining_accounts_iter {
+            if tick_array_info
+                .key()
+                .eq(&TickArrayBitmapExtension::key(pool_state.key()))
+            {
+                continue;
+            }
             tick_array_states.push_back(TickArrayState::load_mut(tick_array_info)?);
         }
 
@@ -628,7 +644,7 @@ pub fn exact_internal<'b, 'info>(
             pool_state,
             tick_array_states,
             &mut ctx.observation_state.load_mut()?,
-            tickarray_bitmap_extension,
+            &tickarray_bitmap_extension,
             amount_specified,
             if sqrt_price_limit_x64 == 0 {
                 if zero_for_one {
@@ -898,7 +914,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 12188240002,
                 3049500711113990606,
                 true,
@@ -929,7 +945,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 121882400020,
                 3049500711113990606,
                 true,
@@ -957,7 +973,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 60941200010,
                 3049500711113990606,
                 true,
@@ -1014,7 +1030,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 477470480,
                 3049500711113990606,
                 true,
@@ -1045,7 +1061,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 4751002622,
                 3049500711113990606,
                 true,
@@ -1073,7 +1089,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 2358130642,
                 3049500711113990606,
                 true,
@@ -1130,7 +1146,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 887470480,
                 5882283448660210779,
                 false,
@@ -1160,7 +1176,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 3087470480,
                 5882283448660210779,
                 false,
@@ -1189,7 +1205,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 200941200010,
                 5882283448660210779,
                 false,
@@ -1246,7 +1262,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 22796232052,
                 5882283448660210779,
                 false,
@@ -1276,7 +1292,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 79023558189,
                 5882283448660210779,
                 false,
@@ -1305,7 +1321,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 4315086194758,
                 5882283448660210779,
                 false,
@@ -1355,7 +1371,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 12188240002,
                 tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
                 true,
@@ -1400,7 +1416,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 12188240002,
                 tick_math::get_sqrt_price_at_tick(-28860).unwrap(),
                 false,
@@ -1445,7 +1461,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 12188240002,
                 tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
                 true,
@@ -1486,7 +1502,7 @@ mod swap_test {
             &mut pool_state.borrow_mut(),
             &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
             &mut observation_state.borrow_mut(),
-            None,
+            &None,
             25,
             tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
             true,
@@ -1509,7 +1525,7 @@ mod swap_test {
             &mut pool_state.borrow_mut(),
             &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
             &mut observation_state.borrow_mut(),
-            None,
+            &None,
             3,
             tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
             true,
@@ -1535,7 +1551,7 @@ mod swap_test {
             &mut pool_state.borrow_mut(),
             &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
             &mut observation_state.borrow_mut(),
-            None,
+            &None,
             50,
             tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
             true,
@@ -1588,7 +1604,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 27,
                 tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
                 true,
@@ -1615,7 +1631,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 1,
                 tick_math::get_sqrt_price_at_tick(-32400).unwrap(),
                 true,
@@ -1640,7 +1656,7 @@ mod swap_test {
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
                 &mut observation_state.borrow_mut(),
-                None,
+                &None,
                 10,
                 tick_math::get_sqrt_price_at_tick(-28800).unwrap(),
                 false,

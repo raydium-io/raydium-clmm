@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::ops::Deref;
 
 use crate::error::ErrorCode;
 use crate::libraries::tick_math;
@@ -117,12 +118,28 @@ pub fn exact_internal_v2<'info>(
 
         let tickarray_bitmap_extension =
             if pool_state.is_overflow_default_tickarray_bitmap(vec![pool_state.tick_current]) {
-                Some(remaining_accounts_iter.next().unwrap())
+                let account_info = remaining_accounts_iter.next().unwrap();
+                require_keys_eq!(
+                    account_info.key(),
+                    TickArrayBitmapExtension::key(pool_state.key())
+                );
+                Some(
+                    *(AccountLoader::<TickArrayBitmapExtension>::try_from(account_info)?
+                        .load()?
+                        .deref()),
+                )
             } else {
                 None
             };
+
         let tick_array_states = &mut VecDeque::new();
         for tick_array_info in remaining_accounts_iter {
+            if tick_array_info
+                .key()
+                .eq(&TickArrayBitmapExtension::key(pool_state.key()))
+            {
+                continue;
+            }
             tick_array_states.push_back(TickArrayState::load_mut(tick_array_info)?);
         }
 
@@ -131,7 +148,7 @@ pub fn exact_internal_v2<'info>(
             pool_state,
             tick_array_states,
             &mut ctx.observation_state.load_mut()?,
-            tickarray_bitmap_extension,
+            &tickarray_bitmap_extension,
             amount_specified - transfer_fee,
             if sqrt_price_limit_x64 == 0 {
                 if zero_for_one {
