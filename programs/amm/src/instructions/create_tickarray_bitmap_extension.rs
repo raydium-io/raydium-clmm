@@ -13,7 +13,7 @@ pub struct CreateTickArrayBitmapExtension<'info> {
 
     /// Initialize an account to store if a tick array is initialized.
     #[account(
-        init_if_needed,
+        init,
         seeds = [
             POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
             pool_state.key().as_ref(),
@@ -31,7 +31,9 @@ pub struct CreateTickArrayBitmapExtension<'info> {
 }
 
 pub fn create_tick_array_bitmap_extension(
-    _ctx: Context<CreateTickArrayBitmapExtension>,
+    ctx: Context<CreateTickArrayBitmapExtension>,
 ) -> Result<()> {
+    let mut tick_array_bitmap_extension = ctx.accounts.tick_array_bitmap.load_init()?;
+    tick_array_bitmap_extension.initialize(ctx.accounts.pool_state.key());
     Ok(())
 }

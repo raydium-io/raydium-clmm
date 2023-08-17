@@ -1300,7 +1300,7 @@ pub mod pool_test {
                 let mut pool_state = PoolState::default();
                 pool_state.tick_spacing = 1;
                 let tick_spacing = pool_state.tick_spacing as i32;
-                pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 515;
+                pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 999;
 
                 let param: &mut BuildExtensionAccountInfo =
                     &mut BuildExtensionAccountInfo::default();
