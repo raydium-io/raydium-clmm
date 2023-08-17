@@ -7,10 +7,8 @@ use anchor_spl::{
         spl_token_2022::{
             self,
             extension::{
-                confidential_transfer::ConfidentialTransferMint,
-                default_account_state::DefaultAccountState, non_transferable::NonTransferable,
-                permanent_delegate::get_permanent_delegate, transfer_fee::TransferFeeConfig,
-                transfer_fee::MAX_FEE_BASIS_POINTS, BaseStateWithExtensions, StateWithExtensions,
+                transfer_fee::{TransferFeeConfig, MAX_FEE_BASIS_POINTS},
+                BaseStateWithExtensions, ExtensionType, StateWithExtensions,
             },
         },
     },
@@ -221,21 +219,11 @@ pub fn is_supported_mint(mint_account: &InterfaceAccount<Mint>) -> Result<bool> 
     }
     let mint_data = mint_info.try_borrow_data()?;
     let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
-
-    if mint.get_extension::<NonTransferable>().is_ok() {
-        return Ok(false);
+    let extensions = mint.get_extension_types()?;
+    if extensions.len() == 0
+        || extensions.len() == 1 && extensions[0] == ExtensionType::TransferFeeConfig
+    {
+        return Ok(true);
     }
-    if mint.get_extension::<DefaultAccountState>().is_ok() {
-        return Ok(false);
-    }
-    let maybe_permanent_delegate = get_permanent_delegate(&mint);
-    if maybe_permanent_delegate.is_some() {
-        return Ok(false);
-    }
-
-    if mint.get_extension::<ConfidentialTransferMint>().is_ok() {
-        return Ok(false);
-    }
-
-    Ok(true)
+    Ok(false)
 }
