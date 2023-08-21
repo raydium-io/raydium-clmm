@@ -610,33 +610,22 @@ pub fn exact_internal<'b, 'info>(
             ErrorCode::InvalidInputPoolVault
         );
 
-        let mut remaining_accounts_iter = remaining_accounts.into_iter();
-
-        let tickarray_bitmap_extension =
-            if pool_state.is_overflow_default_tickarray_bitmap(vec![pool_state.tick_current]) {
-                let account_info = remaining_accounts_iter.next().unwrap();
-                require_keys_eq!(
-                    account_info.key(),
-                    TickArrayBitmapExtension::key(pool_state.key())
-                );
-                Some(
-                    *(AccountLoader::<TickArrayBitmapExtension>::try_from(account_info)?
-                        .load()?
-                        .deref()),
-                )
-            } else {
-                None
-            };
-
+        let mut tickarray_bitmap_extension = None;
         let tick_array_states = &mut VecDeque::new();
-        for tick_array_info in remaining_accounts_iter {
-            if tick_array_info
+
+        for account_info in remaining_accounts.into_iter() {
+            if account_info
                 .key()
                 .eq(&TickArrayBitmapExtension::key(pool_state.key()))
             {
+                tickarray_bitmap_extension = Some(
+                    *(AccountLoader::<TickArrayBitmapExtension>::try_from(account_info)?
+                        .load()?
+                        .deref()),
+                );
                 continue;
             }
-            tick_array_states.push_back(TickArrayState::load_mut(tick_array_info)?);
+            tick_array_states.push_back(TickArrayState::load_mut(account_info)?);
         }
 
         (amount_0, amount_1) = swap_internal(
