@@ -256,9 +256,10 @@ pub fn swap_internal<'b, 'info>(
         };
         #[cfg(feature = "enable-log")]
         msg!(
-            "next_initialized_tick, status:{}, tick_index:{}",
+            "next_initialized_tick, status:{}, tick_index:{}, tick_array_current:{}",
             next_initialized_tick.is_initialized(),
-            identity(next_initialized_tick.tick)
+            identity(next_initialized_tick.tick),
+            tick_array_current.key().to_string(),
         );
         if !next_initialized_tick.is_initialized() {
             let next_initialized_tickarray_index = pool_state
@@ -270,30 +271,27 @@ pub fn swap_internal<'b, 'info>(
             if next_initialized_tickarray_index.is_none() {
                 return err!(ErrorCode::LiquidityInsufficient);
             }
-            current_vaild_tick_array_start_index = next_initialized_tickarray_index.unwrap();
 
             let expected_next_tick_array_address = Pubkey::find_program_address(
                 &[
                     TICK_ARRAY_SEED.as_bytes(),
                     pool_state.key().as_ref(),
-                    &current_vaild_tick_array_start_index.to_be_bytes(),
+                    &next_initialized_tickarray_index.unwrap().to_be_bytes(),
                 ],
                 &crate::id(),
             )
             .0;
-            for _ in 0..tick_array_states.len() {
+            while tick_array_current
+                .key()
+                .ne(&expected_next_tick_array_address)
+            {
                 tick_array_current = tick_array_states
                     .pop_front()
                     .ok_or(ErrorCode::NotEnoughTickArrayAccount)?;
 
                 require_keys_eq!(tick_array_current.pool_id, pool_state.key());
-                if tick_array_current
-                    .key()
-                    .ne(&expected_next_tick_array_address)
-                {
-                    continue;
-                }
             }
+            current_vaild_tick_array_start_index = next_initialized_tickarray_index.unwrap();
 
             let first_initialized_tick = tick_array_current.first_initialized_tick(zero_for_one)?;
             next_initialized_tick = Box::new(*first_initialized_tick);
@@ -334,6 +332,8 @@ pub fn swap_internal<'b, 'info>(
             is_base_input,
             zero_for_one,
         );
+        #[cfg(feature = "enable-log")]
+        msg!("{:#?}", swap_step);
         state.sqrt_price_x64 = swap_step.sqrt_price_next_x64;
         step.amount_in = swap_step.amount_in;
         step.amount_out = swap_step.amount_out;
