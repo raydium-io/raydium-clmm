@@ -867,16 +867,12 @@ pub mod pool_test {
                     .bit(pool_state.get_tick_array_offset(-38400).unwrap())
                     == true
             );
-            println!("{}", pool_state.get_tick_array_offset(0).unwrap());
-            println!("{}", pool_state.get_tick_array_offset(-600).unwrap());
-            println!("{}", pool_state.get_tick_array_offset(-38400).unwrap());
             pool_state.flip_tick_array_bit(&None, -39000).unwrap();
             assert!(
                 U1024(pool_state.tick_array_bitmap)
                     .bit(pool_state.get_tick_array_offset(-39000).unwrap())
                     == true
             );
-            println!("{}", pool_state.get_tick_array_offset(-39000).unwrap());
             pool_state.flip_tick_array_bit(&None, -307200).unwrap();
             assert!(
                 U1024(pool_state.tick_array_bitmap)

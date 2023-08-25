@@ -59,12 +59,9 @@ impl TickArrayBitmapExtension {
         );
         Self::check_extension_boundary(tick_index, tick_spacing)?;
         let ticks_in_one_bitmap = max_tick_in_tickarray_bitmap(tick_spacing);
-        let mut offset = tick_index.abs() / ticks_in_one_bitmap;
-        require_gte!(offset, 1);
-        if tick_index > 0 {
-            offset = offset - 1
-        } else {
-            offset = (EXTENSION_TICKARRAY_BITMAP_SIZE as i32) - offset
+        let mut offset = tick_index.abs() / ticks_in_one_bitmap - 1;
+        if tick_index < 0 && tick_index.abs() % ticks_in_one_bitmap == 0 {
+            offset -= 1;
         }
         Ok(offset as usize)
     }
@@ -207,10 +204,9 @@ impl TickArrayBitmapExtension {
     }
 
     pub fn tick_array_offset_in_bitmap(tick_array_start_index: i32, tick_spacing: u16) -> i32 {
-        let mut tick_array_offset_in_bitmap = tick_array_start_index.abs()
-            % max_tick_in_tickarray_bitmap(tick_spacing)
-            / TickArrayState::tick_count(tick_spacing);
-        if tick_array_start_index < 0 {
+        let m = tick_array_start_index.abs() % max_tick_in_tickarray_bitmap(tick_spacing);
+        let mut tick_array_offset_in_bitmap = m / TickArrayState::tick_count(tick_spacing);
+        if tick_array_start_index < 0 && m != 0 {
             tick_array_offset_in_bitmap = TICK_ARRAY_BITMAP_SIZE - tick_array_offset_in_bitmap;
         }
         tick_array_offset_in_bitmap
@@ -275,6 +271,67 @@ pub mod tick_array_bitmap_extension_test {
     }
 
     #[test]
+    fn get_bitmap_offset_test() {
+        let tick_spacing = 1;
+        let tick_spacing_u16: u16 = 1;
+        let mut offset = TickArrayBitmapExtension::get_bitmap_offset(
+            tick_spacing * TICK_ARRAY_SIZE * 512,
+            tick_spacing_u16,
+        )
+        .unwrap();
+        assert!(offset == 0);
+
+        offset = TickArrayBitmapExtension::get_bitmap_offset(
+            tick_spacing * TICK_ARRAY_SIZE * 513,
+            tick_spacing_u16,
+        )
+        .unwrap();
+        assert!(offset == 0);
+
+        offset = TickArrayBitmapExtension::get_bitmap_offset(
+            tick_spacing * TICK_ARRAY_SIZE * 1024,
+            tick_spacing_u16,
+        )
+        .unwrap();
+        assert!(offset == 1);
+
+        offset = TickArrayBitmapExtension::get_bitmap_offset(
+            tick_spacing * TICK_ARRAY_SIZE * 7393,
+            tick_spacing_u16,
+        )
+        .unwrap();
+        assert!(offset == 13);
+
+        let mut offset = TickArrayBitmapExtension::get_bitmap_offset(
+            -tick_spacing * TICK_ARRAY_SIZE * 513,
+            tick_spacing_u16,
+        )
+        .unwrap();
+        assert!(offset == 0);
+
+        offset = TickArrayBitmapExtension::get_bitmap_offset(
+            -tick_spacing * TICK_ARRAY_SIZE * 1024,
+            tick_spacing_u16,
+        )
+        .unwrap();
+        assert!(offset == 0);
+
+        offset = TickArrayBitmapExtension::get_bitmap_offset(
+            -tick_spacing * TICK_ARRAY_SIZE * 1025,
+            tick_spacing_u16,
+        )
+        .unwrap();
+        assert!(offset == 1);
+
+        offset = TickArrayBitmapExtension::get_bitmap_offset(
+            -tick_spacing * TICK_ARRAY_SIZE * 7394,
+            tick_spacing_u16,
+        )
+        .unwrap();
+        assert!(offset == 13);
+    }
+
+    #[test]
     fn get_bitmap_test() {
         let tick_spacing = 1;
         let tick_array_bitmap_extension = TickArrayBitmapExtension::default();
@@ -302,7 +359,7 @@ pub mod tick_array_bitmap_extension_test {
         let (offset, _) = tick_array_bitmap_extension
             .get_bitmap(-tick_spacing * TICK_ARRAY_SIZE * 513, tick_spacing as u16)
             .unwrap();
-        assert!(offset == 13);
+        assert!(offset == 0);
     }
 
     #[test]
@@ -318,6 +375,7 @@ pub mod tick_array_bitmap_extension_test {
                 tick_spacing * TICK_ARRAY_SIZE * 7393, // max positvie tick array start index boundary in extension
                 -tick_spacing * TICK_ARRAY_SIZE * 513, // min negative tick array start index boundary in extension
                 -tick_spacing * TICK_ARRAY_SIZE * 514,
+                -tick_spacing * TICK_ARRAY_SIZE * 1024,
                 -tick_spacing * TICK_ARRAY_SIZE * 7394, // max negative tick array start index boundary in extension
             ],
         );
@@ -325,9 +383,10 @@ pub mod tick_array_bitmap_extension_test {
         assert!(U512(tick_array_bitmap_extension.positive_tick_array_bitmap[0]).bit(0) == true);
         assert!(U512(tick_array_bitmap_extension.positive_tick_array_bitmap[0]).bit(1) == true);
         assert!(U512(tick_array_bitmap_extension.positive_tick_array_bitmap[13]).bit(225) == true);
-        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[13]).bit(511) == true);
-        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[13]).bit(510) == true);
-        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[0]).bit(286) == true);
+        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[0]).bit(511) == true);
+        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[0]).bit(510) == true);
+        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[0]).bit(0) == true);
+        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[13]).bit(286) == true);
 
         flip_tick_array_bit_helper(
             tick_array_bitmap_extension,
@@ -344,9 +403,9 @@ pub mod tick_array_bitmap_extension_test {
         assert!(U512(tick_array_bitmap_extension.positive_tick_array_bitmap[0]).bit(0) == false);
         assert!(U512(tick_array_bitmap_extension.positive_tick_array_bitmap[0]).bit(1) == false);
         assert!(U512(tick_array_bitmap_extension.positive_tick_array_bitmap[13]).bit(225) == false);
-        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[13]).bit(511) == false);
-        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[13]).bit(510) == false);
-        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[0]).bit(286) == false);
+        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[0]).bit(511) == false);
+        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[0]).bit(510) == false);
+        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[13]).bit(286) == false);
 
         let tick_array_bitmap_extension = &mut TickArrayBitmapExtension::default();
         let tick_spacing = 3;
@@ -363,8 +422,8 @@ pub mod tick_array_bitmap_extension_test {
 
         assert!(U512(tick_array_bitmap_extension.positive_tick_array_bitmap[0]).bit(0) == true);
         assert!(U512(tick_array_bitmap_extension.positive_tick_array_bitmap[3]).bit(416) == true);
-        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[13]).bit(511) == true);
-        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[10]).bit(95) == true);
+        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[0]).bit(511) == true);
+        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[3]).bit(95) == true);
 
         let tick_array_bitmap_extension = &mut TickArrayBitmapExtension::default();
         let tick_spacing = 10;
@@ -381,8 +440,8 @@ pub mod tick_array_bitmap_extension_test {
 
         assert!(U512(tick_array_bitmap_extension.positive_tick_array_bitmap[0]).bit(0) == true);
         assert!(U512(tick_array_bitmap_extension.positive_tick_array_bitmap[0]).bit(227) == true);
-        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[13]).bit(511) == true);
-        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[13]).bit(284) == true);
+        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[0]).bit(511) == true);
+        assert!(U512(tick_array_bitmap_extension.negative_tick_array_bitmap[0]).bit(284) == true);
     }
 
     #[test]
