@@ -620,6 +620,7 @@ pub fn exact_internal<'b, 'info>(
 
         let mut tickarray_bitmap_extension = None;
         let tick_array_states = &mut VecDeque::new();
+        tick_array_states.push_back(ctx.tick_array_state.load_mut()?);
 
         for account_info in remaining_accounts.into_iter() {
             if account_info
