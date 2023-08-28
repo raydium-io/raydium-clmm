@@ -11,6 +11,10 @@ construct_uint! {
     pub struct U256(4);
 }
 
+construct_uint! {
+    pub struct U512(8);
+}
+
 #[derive(Debug, Clone, Copy, Hash, PartialEq, PartialOrd, Eq, Ord)]
 pub struct U1024(pub [u64; 16]);
 const N_WORDS: usize = 16;

@@ -75,6 +75,19 @@ pub struct CreatePool<'info> {
     /// CHECK: Initialize an account to store oracle observations, the account must be created off-chain, constract will initialzied it
     pub observation_state: UncheckedAccount<'info>,
 
+    /// Initialize an account to store if a tick array is initialized.
+    #[account(
+        init,
+        seeds = [
+            POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+        ],
+        bump,
+        payer = pool_creator,
+        space = TickArrayBitmapExtension::LEN
+    )]
+    pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
+
     /// Spl token program or token program 2022
     #[account(
         address = anchor_spl::token::ID
@@ -97,6 +110,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u6
     {
         return err!(ErrorCode::NotSupportMint);
     }
+    let pool_id = ctx.accounts.pool_state.key();
     let mut pool_state = ctx.accounts.pool_state.load_init()?;
     let observation_state_loader = initialize_observation_account(
         ctx.accounts.observation_state.to_account_info(),
@@ -125,6 +139,11 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u6
         ctx.accounts.token_mint_1.as_ref(),
         &observation_state_loader,
     )?;
+
+    ctx.accounts
+        .tick_array_bitmap
+        .load_init()?
+        .initialize(pool_id);
 
     emit!(PoolCreatedEvent {
         token_mint_0: ctx.accounts.token_mint_0.key(),

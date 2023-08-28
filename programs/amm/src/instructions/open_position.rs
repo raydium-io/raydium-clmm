@@ -53,6 +53,9 @@ pub struct AddLiquidityParam<'b, 'info> {
 
     /// token_vault_1 mint
     pub vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
+
+    /// The tick array bitmap extension
+    pub tick_array_bitmap_extension: Option<&'b AccountInfo<'info>>,
 }
 
 #[derive(Accounts)]
@@ -186,6 +189,15 @@ pub struct OpenPosition<'info> {
     /// CHECK: Metadata program address constraint applied
     #[account(address = mpl_token_metadata::ID)]
     pub metadata_program: UncheckedAccount<'info>,
+    // remaining account
+    // #[account(
+    //     seeds = [
+    //         POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
+    //         pool_state.key().as_ref(),
+    //     ],
+    //     bump
+    // )]
+    // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
 }
 
 #[derive(Accounts)]
@@ -334,6 +346,15 @@ pub struct OpenPositionV2<'info> {
         address = token_vault_1.mint
     )]
     pub vault_1_mint: InterfaceAccount<'info, Mint>,
+    // remaining account
+    // #[account(
+    //     seeds = [
+    //         POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
+    //         pool_state.key().as_ref(),
+    //     ],
+    //     bump
+    // )]
+    // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
 }
 
 pub struct OpenPositionParam<'b, 'info> {
@@ -406,7 +427,8 @@ pub struct OpenPositionParam<'b, 'info> {
 }
 
 pub fn open_position<'a, 'b, 'c, 'info>(
-    accounts: &mut OpenPositionParam,
+    accounts: &mut OpenPositionParam<'b, 'info>,
+    remaining_accounts: &[AccountInfo<'info>],
     bumps: &BTreeMap<String, u8>,
     liquidity: u128,
     amount_0_max: u64,
@@ -471,14 +493,18 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             protocol_position.tick_upper_index = tick_upper_index;
             tick_array_lower_loader
                 .load_mut()?
-                .get_tick_state_mut(tick_lower_index, i32::from(pool_state.tick_spacing))?
+                .get_tick_state_mut(tick_lower_index, pool_state.tick_spacing)?
                 .tick = tick_lower_index;
             tick_array_upper_loader
                 .load_mut()?
-                .get_tick_state_mut(tick_upper_index, i32::from(pool_state.tick_spacing))?
+                .get_tick_state_mut(tick_upper_index, pool_state.tick_spacing)?
                 .tick = tick_upper_index;
         }
 
+        let use_tickarray_bitmap_extension = pool_state.is_overflow_default_tickarray_bitmap(vec![
+            tick_array_lower_start_index,
+            tick_array_upper_start_index,
+        ]);
         let mut add_liquidity_context = AddLiquidityParam {
             payer: &accounts.payer,
             token_account_0: accounts.token_account_0,
@@ -492,6 +518,15 @@ pub fn open_position<'a, 'b, 'c, 'info>(
             protocol_position: accounts.protocol_position,
             token_program: accounts.token_program.clone(),
             token_program_2022: accounts.token_program_2022.clone(),
+            tick_array_bitmap_extension: if use_tickarray_bitmap_extension {
+                require_keys_eq!(
+                    remaining_accounts[0].key(),
+                    TickArrayBitmapExtension::key(accounts.pool_state.key())
+                );
+                Some(&remaining_accounts[0])
+            } else {
+                None
+            },
         };
 
         let mut amount_0: u64 = 0;
@@ -601,11 +636,11 @@ pub fn add_liquidity<'b, 'info>(
     let mut tick_lower_state = *context
         .tick_array_lower
         .load_mut()?
-        .get_tick_state_mut(tick_lower_index, i32::from(pool_state.tick_spacing))?;
+        .get_tick_state_mut(tick_lower_index, pool_state.tick_spacing)?;
     let mut tick_upper_state = *context
         .tick_array_upper
         .load_mut()?
-        .get_tick_state_mut(tick_upper_index, i32::from(pool_state.tick_spacing))?;
+        .get_tick_state_mut(tick_upper_index, pool_state.tick_spacing)?;
     if tick_lower_state.tick == 0 {
         tick_lower_state.tick = tick_lower_index;
     }
@@ -625,12 +660,12 @@ pub fn add_liquidity<'b, 'info>(
     // update tick_state
     context.tick_array_lower.load_mut()?.update_tick_state(
         tick_lower_index,
-        i32::from(pool_state.tick_spacing),
+        pool_state.tick_spacing,
         tick_lower_state,
     )?;
     context.tick_array_upper.load_mut()?.update_tick_state(
         tick_upper_index,
-        i32::from(pool_state.tick_spacing),
+        pool_state.tick_spacing,
         tick_upper_state,
     )?;
 
@@ -640,7 +675,10 @@ pub fn add_liquidity<'b, 'info>(
         tick_array_lower.update_initialized_tick_count(true)?;
 
         if before_init_tick_count == 0 {
-            pool_state.flip_tick_array_bit(tick_array_lower.start_tick_index)?;
+            pool_state.flip_tick_array_bit(
+                &context.tick_array_bitmap_extension,
+                tick_array_lower.start_tick_index,
+            )?;
         }
     }
     if flip_tick_upper {
@@ -649,7 +687,10 @@ pub fn add_liquidity<'b, 'info>(
         tick_array_upper.update_initialized_tick_count(true)?;
 
         if before_init_tick_count == 0 {
-            pool_state.flip_tick_array_bit(tick_array_upper.start_tick_index)?;
+            pool_state.flip_tick_array_bit(
+                &context.tick_array_bitmap_extension,
+                tick_array_upper.start_tick_index,
+            )?;
         }
     }
     require!(

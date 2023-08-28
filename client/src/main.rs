@@ -639,7 +639,7 @@ fn main() -> Result<()> {
                     let tick = v[1].parse::<i32>().unwrap();
                     let tick_spacing = v[2].parse::<i32>().unwrap();
                     let tick_array_start_index =
-                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                        raydium_amm_v3::states::TickArrayState::get_array_start_index(
                             tick,
                             tick_spacing,
                         );
@@ -1074,12 +1074,12 @@ fn main() -> Result<()> {
                     let amount_1_max = amount_1 as u64;
 
                     let tick_array_lower_start_index =
-                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                        raydium_amm_v3::states::TickArrayState::get_array_start_index(
                             tick_lower_index,
                             pool.tick_spacing.into(),
                         );
                     let tick_array_upper_start_index =
-                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                        raydium_amm_v3::states::TickArrayState::get_array_start_index(
                             tick_upper_index,
                             pool.tick_spacing.into(),
                         );
@@ -1282,12 +1282,12 @@ fn main() -> Result<()> {
                     let amount_1_max = amount_1 as u64;
 
                     let tick_array_lower_start_index =
-                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                        raydium_amm_v3::states::TickArrayState::get_array_start_index(
                             tick_lower_index,
                             pool.tick_spacing.into(),
                         );
                     let tick_array_upper_start_index =
-                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                        raydium_amm_v3::states::TickArrayState::get_array_start_index(
                             tick_upper_index,
                             pool.tick_spacing.into(),
                         );
@@ -1361,12 +1361,12 @@ fn main() -> Result<()> {
                         program.account(pool_config.pool_id_account.unwrap())?;
 
                     let tick_array_lower_start_index =
-                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                        raydium_amm_v3::states::TickArrayState::get_array_start_index(
                             tick_lower_index,
                             pool.tick_spacing.into(),
                         );
                     let tick_array_upper_start_index =
-                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                        raydium_amm_v3::states::TickArrayState::get_array_start_index(
                             tick_upper_index,
                             pool.tick_spacing.into(),
                         );
@@ -1485,7 +1485,7 @@ fn main() -> Result<()> {
                         program.account(pool_config.pool_id_account.unwrap())?;
 
                     let tick_array_start_index =
-                        raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                        raydium_amm_v3::states::TickArrayState::get_array_start_index(
                             tick,
                             pool.tick_spacing.into(),
                         );

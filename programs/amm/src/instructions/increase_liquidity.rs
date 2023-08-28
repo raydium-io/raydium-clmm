@@ -75,6 +75,15 @@ pub struct IncreaseLiquidity<'info> {
 
     /// Program to create mint account and mint tokens
     pub token_program: Program<'info, Token>,
+    // remaining account
+    // #[account(
+    //     seeds = [
+    //         POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
+    //         pool_state.key().as_ref(),
+    //     ],
+    //     bump
+    // )]
+    // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
 }
 
 #[derive(Accounts)]
@@ -162,6 +171,15 @@ pub struct IncreaseLiquidityV2<'info> {
             address = token_vault_1.mint
     )]
     pub vault_1_mint: InterfaceAccount<'info, Mint>,
+    // remaining account
+    // #[account(
+    //     seeds = [
+    //         POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
+    //         pool_state.key().as_ref(),
+    //     ],
+    //     bump
+    // )]
+    // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
 }
 
 pub struct IncreaseLiquidityParam<'b, 'info> {
@@ -209,7 +227,8 @@ pub struct IncreaseLiquidityParam<'b, 'info> {
 }
 
 pub fn increase_liquidity<'a, 'b, 'c, 'info>(
-    accounts: &mut IncreaseLiquidityParam,
+    accounts: &mut IncreaseLiquidityParam<'b, 'info>,
+    remaining_accounts: &'b [AccountInfo<'info>],
     liquidity: u128,
     amount_0_max: u64,
     amount_1_max: u64,
@@ -221,6 +240,9 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
     }
     let tick_lower = accounts.personal_position.tick_lower_index;
     let tick_upper = accounts.personal_position.tick_upper_index;
+
+    let use_tickarray_bitmap_extension =
+        pool_state.is_overflow_default_tickarray_bitmap(vec![tick_lower, tick_upper]);
     let mut add_liquidity_context = AddLiquidityParam {
         payer: &accounts.nft_owner,
         token_account_0: accounts.token_account_0,
@@ -234,7 +256,13 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         protocol_position: accounts.protocol_position,
         token_program: accounts.token_program.clone(),
         token_program_2022: accounts.token_program_2022.clone(),
+        tick_array_bitmap_extension: if use_tickarray_bitmap_extension {
+            Some(&remaining_accounts[0])
+        } else {
+            None
+        },
     };
+
     let (amount_0, amount_1, amount_0_transfer_fee, amount_1_transfer_fee) = add_liquidity(
         &mut add_liquidity_context,
         &mut pool_state,

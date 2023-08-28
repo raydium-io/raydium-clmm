@@ -3,14 +3,14 @@ use crate::{error::ErrorCode, libraries::big_num::U128};
 use anchor_lang::require;
 
 /// The minimum tick
-pub const MIN_TICK: i32 = -307200;
+pub const MIN_TICK: i32 = -443636;
 /// The minimum tick
 pub const MAX_TICK: i32 = -MIN_TICK;
 
 /// The minimum value that can be returned from #get_sqrt_price_at_tick. Equivalent to get_sqrt_price_at_tick(MIN_TICK)
-pub const MIN_SQRT_PRICE_X64: u128 = 3939943522091;
+pub const MIN_SQRT_PRICE_X64: u128 = 4295048016;
 /// The maximum value that can be returned from #get_sqrt_price_at_tick. Equivalent to get_sqrt_price_at_tick(MAX_TICK)
-pub const MAX_SQRT_PRICE_X64: u128 = 86367321006760116002434269;
+pub const MAX_SQRT_PRICE_X64: u128 = 79226673521066979257578248091;
 
 // Number 64, encoded as a U128
 const NUM_64: U128 = U128([64, 0]);
@@ -215,11 +215,11 @@ mod tick_math_test {
                 get_tick_at_sqrt_price(MIN_SQRT_PRICE_X64).unwrap(),
                 MIN_TICK,
             );
-            
+
             // we can't reach MAX_SQRT_PRICE_X64
             assert_eq!(
-                get_tick_at_sqrt_price(MAX_SQRT_PRICE_X64-1).unwrap(),
-                MAX_TICK-1,
+                get_tick_at_sqrt_price(MAX_SQRT_PRICE_X64 - 1).unwrap(),
+                MAX_TICK - 1,
             );
         }
     }

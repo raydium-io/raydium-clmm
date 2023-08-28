@@ -296,6 +296,7 @@ pub mod amm_v3 {
         };
         instructions::open_position(
             open_position_param,
+            ctx.remaining_accounts,
             &ctx.bumps,
             liquidity,
             amount_0_max,
@@ -364,6 +365,7 @@ pub mod amm_v3 {
         };
         instructions::open_position(
             open_position_param,
+            ctx.remaining_accounts,
             &ctx.bumps,
             liquidity,
             amount_0_max,
@@ -425,6 +427,7 @@ pub mod amm_v3 {
         };
         instructions::increase_liquidity(
             increase_liquidity_param,
+            ctx.remaining_accounts,
             liquidity,
             amount_0_max,
             amount_1_max,
@@ -472,6 +475,7 @@ pub mod amm_v3 {
         };
         instructions::increase_liquidity(
             increase_liquidity_param,
+            ctx.remaining_accounts,
             liquidity,
             amount_0_max,
             amount_1_max,
@@ -633,5 +637,17 @@ pub mod amm_v3 {
         amount_out_minimum: u64,
     ) -> Result<()> {
         instructions::swap_router_base_in(ctx, amount_in, amount_out_minimum)
+    }
+
+    /// Create tick array bitmap extension if needed for a pool
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    ///
+    pub fn create_tick_array_bitmap_extension(
+        ctx: Context<CreateTickArrayBitmapExtension>,
+    ) -> Result<()> {
+        instructions::create_tick_array_bitmap_extension(ctx)
     }
 }

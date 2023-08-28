@@ -25,7 +25,7 @@ paramset = []
 anchor-lang = { version = "0.28.0", features = ["init-if-needed"] }
 anchor-spl = "0.28.0"
 solana-program = "<1.17.0"
-uint = "0.9.1"
+uint = "0.9.5"
 mpl-token-metadata = { version = "^1.11.0", features = ["no-entrypoint"] }
 bytemuck = { version = "1.4.0", features = ["derive", "min_const_generics"] }
 arrayref = { version = "0.3.6" }
