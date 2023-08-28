@@ -323,6 +323,14 @@ pub fn swap_internal<'b, 'info>(
             require_gte!(step.sqrt_price_next_x64, step.sqrt_price_start_x64);
             require_gte!(target_price, step.sqrt_price_start_x64);
         }
+        #[cfg(feature = "enable-log")]
+        msg!(
+            "sqrt_price_current_x64:{}, sqrt_price_target:{}, liquidity:{}, amount_remaining:{}",
+            step.sqrt_price_start_x64,
+            target_price,
+            state.liquidity,
+            state.amount_specified_remaining
+        );
         let swap_step = swap_math::compute_swap_step(
             step.sqrt_price_start_x64,
             target_price,

@@ -13,15 +13,18 @@ pub fn max_tick_in_tickarray_bitmap(tick_spacing: u16) -> i32 {
 }
 
 pub fn get_bitmap_tick_boundary(tick_array_start_index: i32, tick_spacing: u16) -> (i32, i32) {
-    let ticks_in_one_bitmap = max_tick_in_tickarray_bitmap(tick_spacing);
-    let offset = tick_array_start_index.abs() / max_tick_in_tickarray_bitmap(tick_spacing);
-
-    let max_value = ticks_in_one_bitmap * (offset + 1);
-    let min_value: i32 = ticks_in_one_bitmap * offset;
+    let ticks_in_one_bitmap: i32 = max_tick_in_tickarray_bitmap(tick_spacing);
+    let mut m = tick_array_start_index.abs() / ticks_in_one_bitmap;
+    if tick_array_start_index < 0
+        && tick_array_start_index.abs() % ticks_in_one_bitmap != 0
+    {
+        m += 1;
+    }
+    let min_value: i32 = ticks_in_one_bitmap * m;
     if tick_array_start_index < 0 {
-        (-max_value, -min_value)
+        (-min_value, -min_value + ticks_in_one_bitmap)
     } else {
-        (min_value, max_value)
+        (min_value, min_value + ticks_in_one_bitmap)
     }
 }
 
@@ -186,7 +189,7 @@ mod test {
                 break;
             }
             tick_array_start_index =
-                TickArrayState::get_arrary_start_index(array_start_index, tick_spacing);
+                TickArrayState::get_array_start_index(array_start_index, tick_spacing);
         }
     }
     #[test]
@@ -206,7 +209,7 @@ mod test {
                 break;
             }
             tick_array_start_index =
-                TickArrayState::get_arrary_start_index(array_start_index, tick_spacing);
+                TickArrayState::get_array_start_index(array_start_index, tick_spacing);
         }
     }
     #[test]
@@ -226,7 +229,7 @@ mod test {
                 break;
             }
             tick_array_start_index =
-                TickArrayState::get_arrary_start_index(array_start_index, tick_spacing);
+                TickArrayState::get_array_start_index(array_start_index, tick_spacing);
         }
     }
 
@@ -247,7 +250,7 @@ mod test {
                 break;
             }
             tick_array_start_index =
-                TickArrayState::get_arrary_start_index(array_start_index, tick_spacing);
+                TickArrayState::get_array_start_index(array_start_index, tick_spacing);
         }
     }
     #[test]
@@ -267,7 +270,7 @@ mod test {
                 break;
             }
             tick_array_start_index =
-                TickArrayState::get_arrary_start_index(array_start_index, tick_spacing);
+                TickArrayState::get_array_start_index(array_start_index, tick_spacing);
         }
     }
     #[test]
@@ -287,7 +290,7 @@ mod test {
                 break;
             }
             tick_array_start_index =
-                TickArrayState::get_arrary_start_index(array_start_index, tick_spacing);
+                TickArrayState::get_array_start_index(array_start_index, tick_spacing);
         }
     }
 
@@ -371,5 +374,24 @@ mod test {
         );
         assert!(is_found == false);
         assert!(array_start_index == tick_array_start_index);
+    }
+
+    #[test]
+    fn get_bitmap_tick_boundary_test() {
+        let (mut min, mut max) = get_bitmap_tick_boundary(-430080, 1);
+        assert!(min == -430080);
+        assert!(max == -399360);
+
+        (min, max) = get_bitmap_tick_boundary(-430140, 1);
+        assert!(min == -460800);
+        assert!(max == -430080);
+
+        let (mut min, mut max) = get_bitmap_tick_boundary(430080, 1);
+        assert!(min == 430080);
+        assert!(max == 460800);
+
+        (min, max) = get_bitmap_tick_boundary(430020, 1);
+        assert!(min == 399360);
+        assert!(max == 430080);
     }
 }

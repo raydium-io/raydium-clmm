@@ -473,28 +473,27 @@ impl PoolState {
         tickarray_bitmap_extension: &Option<TickArrayBitmapExtension>,
         zero_for_one: bool,
     ) -> Result<(bool, i32)> {
-        let (is_initialized, start_index) = if self
-            .is_overflow_default_tickarray_bitmap(vec![self.tick_current])
-        {
-            tickarray_bitmap_extension
-                .unwrap()
-                .check_tick_array_is_initialized(
-                    TickArrayState::get_arrary_start_index(self.tick_current, self.tick_spacing),
-                    self.tick_spacing,
+        let (is_initialized, start_index) =
+            if self.is_overflow_default_tickarray_bitmap(vec![self.tick_current]) {
+                tickarray_bitmap_extension
+                    .unwrap()
+                    .check_tick_array_is_initialized(
+                        TickArrayState::get_array_start_index(self.tick_current, self.tick_spacing),
+                        self.tick_spacing,
+                    )?
+            } else {
+                check_current_tick_array_is_initialized(
+                    U1024(self.tick_array_bitmap),
+                    self.tick_current,
+                    self.tick_spacing.into(),
                 )?
-        } else {
-            check_current_tick_array_is_initialized(
-                U1024(self.tick_array_bitmap),
-                self.tick_current,
-                self.tick_spacing.into(),
-            )?
-        };
+            };
         if is_initialized {
             return Ok((true, start_index));
         }
         let next_start_index = self.next_initialized_tick_array_start_index(
             tickarray_bitmap_extension,
-            TickArrayState::get_arrary_start_index(self.tick_current, self.tick_spacing),
+            TickArrayState::get_array_start_index(self.tick_current, self.tick_spacing),
             zero_for_one,
         )?;
         return Ok((false, next_start_index.unwrap()));
@@ -507,7 +506,7 @@ impl PoolState {
         zero_for_one: bool,
     ) -> Result<Option<i32>> {
         last_tick_array_start_index =
-            TickArrayState::get_arrary_start_index(last_tick_array_start_index, self.tick_spacing);
+            TickArrayState::get_array_start_index(last_tick_array_start_index, self.tick_spacing);
 
         loop {
             let (is_found, start_index) =
@@ -570,7 +569,7 @@ impl PoolState {
         let (max_tick_boundary, min_tick_boundary) = self.tick_range();
         for tick_index in tick_array_start_indexs {
             let tick_array_start_index =
-                TickArrayState::get_arrary_start_index(tick_index, self.tick_spacing);
+                TickArrayState::get_array_start_index(tick_index, self.tick_spacing);
             if tick_array_start_index >= max_tick_boundary
                 || tick_array_start_index < min_tick_boundary
             {

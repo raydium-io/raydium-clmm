@@ -172,7 +172,7 @@ impl TickArrayState {
 
     /// Get tick's offset in current tick array, tick must be include in tick array， otherwise throw an error
     fn get_tick_offset_in_array(self, tick_index: i32, tick_spacing: u16) -> Result<usize> {
-        let start_tick_index = TickArrayState::get_arrary_start_index(tick_index, tick_spacing);
+        let start_tick_index = TickArrayState::get_array_start_index(tick_index, tick_spacing);
         require_eq!(
             start_tick_index,
             self.start_tick_index,
@@ -215,7 +215,7 @@ impl TickArrayState {
         zero_for_one: bool,
     ) -> Result<Option<&mut TickState>> {
         let current_tick_array_start_index =
-            TickArrayState::get_arrary_start_index(current_tick_index, tick_spacing);
+            TickArrayState::get_array_start_index(current_tick_index, tick_spacing);
         if current_tick_array_start_index != self.start_tick_index {
             return Ok(None);
         }
@@ -252,7 +252,7 @@ impl TickArrayState {
     }
 
     /// Input an arbitrary tick_index, output the start_index of the tick_array it sits on
-    pub fn get_arrary_start_index(tick_index: i32, tick_spacing: u16) -> i32 {
+    pub fn get_array_start_index(tick_index: i32, tick_spacing: u16) -> i32 {
         let ticks_in_array = TickArrayState::tick_count(tick_spacing);
         let mut start = tick_index / ticks_in_array;
         if tick_index < 0 && tick_index % ticks_in_array != 0 {
@@ -267,7 +267,7 @@ impl TickArrayState {
                 return false;
             }
             let min_start_index =
-                TickArrayState::get_arrary_start_index(tick_math::MIN_TICK, tick_spacing);
+                TickArrayState::get_array_start_index(tick_math::MIN_TICK, tick_spacing);
             return tick_index == min_start_index;
         }
         tick_index % TickArrayState::tick_count(tick_spacing) == 0
@@ -520,7 +520,15 @@ pub fn check_tick_array_start_index(
     tick_index: i32,
     tick_spacing: u16,
 ) -> Result<()> {
-    let expect_start_index = TickArrayState::get_arrary_start_index(tick_index, tick_spacing);
+    require!(
+        tick_index >= tick_math::MIN_TICK,
+        ErrorCode::TickLowerOverflow
+    );
+    require!(
+        tick_index <= tick_math::MAX_TICK,
+        ErrorCode::TickUpperOverflow
+    );
+    let expect_start_index = TickArrayState::get_array_start_index(tick_index, tick_spacing);
     require_eq!(tick_array_start_index, expect_start_index);
     Ok(())
 }
@@ -614,14 +622,14 @@ pub mod tick_array_test {
 
         #[test]
         fn get_arrary_start_index_test() {
-            assert_eq!(TickArrayState::get_arrary_start_index(120, 3), 0);
-            assert_eq!(TickArrayState::get_arrary_start_index(1002, 30), 0);
-            assert_eq!(TickArrayState::get_arrary_start_index(-120, 3), -180);
-            assert_eq!(TickArrayState::get_arrary_start_index(-1002, 30), -1800);
-            assert_eq!(TickArrayState::get_arrary_start_index(-20, 10), -600);
-            assert_eq!(TickArrayState::get_arrary_start_index(20, 10), 0);
-            assert_eq!(TickArrayState::get_arrary_start_index(-1002, 10), -1200);
-            assert_eq!(TickArrayState::get_arrary_start_index(-600, 10), -600);
+            assert_eq!(TickArrayState::get_array_start_index(120, 3), 0);
+            assert_eq!(TickArrayState::get_array_start_index(1002, 30), 0);
+            assert_eq!(TickArrayState::get_array_start_index(-120, 3), -180);
+            assert_eq!(TickArrayState::get_array_start_index(-1002, 30), -1800);
+            assert_eq!(TickArrayState::get_array_start_index(-20, 10), -600);
+            assert_eq!(TickArrayState::get_array_start_index(20, 10), 0);
+            assert_eq!(TickArrayState::get_array_start_index(-1002, 10), -1200);
+            assert_eq!(TickArrayState::get_array_start_index(-600, 10), -600);
         }
 
         #[test]
