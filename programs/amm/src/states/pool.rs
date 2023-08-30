@@ -1140,6 +1140,7 @@ pub mod pool_test {
                     &mut pool_state,
                     &Some(&tick_array_bitmap_extension_info),
                     vec![
+                        -tick_spacing * TICK_ARRAY_SIZE * 7394, // max negative tick array start index boundary in extension
                         -tick_spacing * TICK_ARRAY_SIZE * 1000, // tick in extension
                         -tick_spacing * TICK_ARRAY_SIZE * 513,  // tick in extension
                         tick_spacing * TICK_ARRAY_SIZE * 510,   // tick in pool bitmap
@@ -1184,6 +1185,26 @@ pub mod pool_test {
                     )
                     .unwrap();
                 assert!(start_index.unwrap() == -tick_spacing * TICK_ARRAY_SIZE * 1000);
+
+                pool_state.tick_current = -tick_spacing * TICK_ARRAY_SIZE * 7393;
+                let start_index = pool_state
+                    .next_initialized_tick_array_start_index(
+                        &tick_array_bitmap_extension,
+                        pool_state.tick_current,
+                        true,
+                    )
+                    .unwrap();
+                assert!(start_index.unwrap() == -tick_spacing * TICK_ARRAY_SIZE * 7394);
+
+                pool_state.tick_current = -tick_spacing * TICK_ARRAY_SIZE * 7394;
+                let start_index = pool_state
+                    .next_initialized_tick_array_start_index(
+                        &tick_array_bitmap_extension,
+                        pool_state.tick_current,
+                        true,
+                    )
+                    .unwrap();
+                assert!(start_index.is_none() == true);
             }
 
             #[test]
@@ -1202,9 +1223,10 @@ pub mod pool_test {
                     &mut pool_state,
                     &Some(&tick_array_bitmap_extension_info),
                     vec![
-                        tick_spacing * TICK_ARRAY_SIZE * 510, // tick in pool bitmap
-                        tick_spacing * TICK_ARRAY_SIZE * 511, // tick in pool bitmap
-                        tick_spacing * TICK_ARRAY_SIZE * 512, // tick in extension boundary
+                        tick_spacing * TICK_ARRAY_SIZE * 510,  // tick in pool bitmap
+                        tick_spacing * TICK_ARRAY_SIZE * 511,  // tick in pool bitmap
+                        tick_spacing * TICK_ARRAY_SIZE * 512,  // tick in extension boundary
+                        tick_spacing * TICK_ARRAY_SIZE * 7393, // max positvie tick array start index boundary in extension
                     ],
                 );
 
@@ -1246,6 +1268,16 @@ pub mod pool_test {
                     )
                     .unwrap();
                 assert!(start_index.unwrap() == tick_spacing * TICK_ARRAY_SIZE * 512);
+
+                pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 7393;
+                let start_index = pool_state
+                    .next_initialized_tick_array_start_index(
+                        &tick_array_bitmap_extension,
+                        pool_state.tick_current,
+                        false,
+                    )
+                    .unwrap();
+                assert!(start_index.is_none() == true);
             }
 
             #[test]
@@ -1376,6 +1408,48 @@ pub mod pool_test {
                     )
                     .unwrap();
                 assert!(start_index.is_none());
+            }
+
+            #[test]
+            fn min_tick_max_tick_initialized_test() {
+                let mut pool_state = PoolState::default();
+                pool_state.tick_spacing = 1;
+                pool_state.tick_current = 0;
+                let tick_spacing = pool_state.tick_spacing as i32;
+
+                let param: &mut BuildExtensionAccountInfo =
+                    &mut BuildExtensionAccountInfo::default();
+                let tick_array_bitmap_extension_info: AccountInfo<'_> =
+                    build_tick_array_bitmap_extension_info(param);
+
+                pool_flip_tick_array_bit_helper(
+                    &mut pool_state,
+                    &Some(&tick_array_bitmap_extension_info),
+                    vec![
+                        -tick_spacing * TICK_ARRAY_SIZE * 7394, // The tickarray where min_tick(-443636) is located
+                        tick_spacing * TICK_ARRAY_SIZE * 7393,  // The tickarray where max_tick(443636) is located
+                    ],
+                );
+
+                let tick_array_bitmap_extension = Some(
+                    *AccountLoader::<TickArrayBitmapExtension>::try_from(
+                        &tick_array_bitmap_extension_info,
+                    )
+                    .unwrap()
+                    .load()
+                    .unwrap()
+                    .deref(),
+                );
+
+                let start_index = pool_state
+                    .next_initialized_tick_array_start_index(
+                        &tick_array_bitmap_extension,
+                        -tick_spacing * TICK_ARRAY_SIZE * 7394,
+                        false,
+                    )
+                    .unwrap();
+                assert!(start_index.unwrap() == tick_spacing * TICK_ARRAY_SIZE * 7393);
+
             }
         }
     }
