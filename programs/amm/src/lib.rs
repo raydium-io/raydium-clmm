@@ -638,16 +638,4 @@ pub mod amm_v3 {
     ) -> Result<()> {
         instructions::swap_router_base_in(ctx, amount_in, amount_out_minimum)
     }
-
-    /// Create tick array bitmap extension if needed for a pool
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - The context of accounts
-    ///
-    pub fn create_tick_array_bitmap_extension(
-        ctx: Context<CreateTickArrayBitmapExtension>,
-    ) -> Result<()> {
-        instructions::create_tick_array_bitmap_extension(ctx)
-    }
 }

@@ -630,6 +630,16 @@ pub mod tick_array_test {
             assert_eq!(TickArrayState::get_array_start_index(20, 10), 0);
             assert_eq!(TickArrayState::get_array_start_index(-1002, 10), -1200);
             assert_eq!(TickArrayState::get_array_start_index(-600, 10), -600);
+            assert_eq!(TickArrayState::get_array_start_index(-30720, 1), -30720);
+            assert_eq!(TickArrayState::get_array_start_index(30720, 1), 30720);
+            assert_eq!(
+                TickArrayState::get_array_start_index(tick_math::MIN_TICK, 1),
+                -443640
+            );
+            assert_eq!(
+                TickArrayState::get_array_start_index(tick_math::MAX_TICK, 1),
+                443580
+            );
         }
 
         #[test]

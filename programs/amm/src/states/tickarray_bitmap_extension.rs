@@ -19,9 +19,9 @@ const EXTENSION_TICKARRAY_BITMAP_SIZE: usize = 14;
 pub struct TickArrayBitmapExtension {
     pub pool_id: Pubkey,
     /// Packed initialized tick array state for start_tick_index is positive
-    pub positive_tick_array_bitmap: [TickArryBitmap; EXTENSION_TICKARRAY_BITMAP_SIZE],
+    pub positive_tick_array_bitmap: [[u64; 8]; EXTENSION_TICKARRAY_BITMAP_SIZE],
     /// Packed initialized tick array state for start_tick_index is negitive
-    pub negative_tick_array_bitmap: [TickArryBitmap; EXTENSION_TICKARRAY_BITMAP_SIZE],
+    pub negative_tick_array_bitmap: [[u64; 8]; EXTENSION_TICKARRAY_BITMAP_SIZE],
 }
 
 impl Default for TickArrayBitmapExtension {
@@ -138,6 +138,17 @@ impl TickArrayBitmapExtension {
         } else {
             last_tick_array_start_index + multiplier
         };
+        let min_tick_array_start_index =
+            TickArrayState::get_array_start_index(tick_math::MIN_TICK, tick_spacing);
+        let max_tick_array_start_index =
+            TickArrayState::get_array_start_index(tick_math::MAX_TICK, tick_spacing);
+
+        if next_tick_array_start_index < min_tick_array_start_index
+            || next_tick_array_start_index > max_tick_array_start_index
+        {
+            return Ok((false, next_tick_array_start_index));
+        }
+
         let (_, tickarray_bitmap) = self.get_bitmap(next_tick_array_start_index, tick_spacing)?;
 
         Ok(Self::next_initialized_tick_array_in_bitmap(
