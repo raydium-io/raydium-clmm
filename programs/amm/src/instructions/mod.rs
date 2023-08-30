@@ -36,6 +36,3 @@ pub use collect_remaining_rewards::*;
 
 pub mod admin;
 pub use admin::*;
-
-pub mod create_tickarray_bitmap_extension;
-pub use create_tickarray_bitmap_extension::*;
