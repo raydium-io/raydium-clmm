@@ -99,4 +99,6 @@ pub enum ErrorCode {
     NotSupportMint,
     #[msg("Missing tickarray bitmap extension account")]
     MissingTickArrayBitmapExtensionAccount,
+    #[msg("Insufficient liquidity for this direction")]
+    InsufficientLiquidityForDirection,
 }

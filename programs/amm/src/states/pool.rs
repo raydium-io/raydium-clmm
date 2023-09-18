@@ -496,6 +496,10 @@ impl PoolState {
             TickArrayState::get_array_start_index(self.tick_current, self.tick_spacing),
             zero_for_one,
         )?;
+        require!(
+            next_start_index.is_some(),
+            ErrorCode::InsufficientLiquidityForDirection
+        );
         return Ok((false, next_start_index.unwrap()));
     }
 
@@ -1427,7 +1431,7 @@ pub mod pool_test {
                     &Some(&tick_array_bitmap_extension_info),
                     vec![
                         -tick_spacing * TICK_ARRAY_SIZE * 7394, // The tickarray where min_tick(-443636) is located
-                        tick_spacing * TICK_ARRAY_SIZE * 7393,  // The tickarray where max_tick(443636) is located
+                        tick_spacing * TICK_ARRAY_SIZE * 7393, // The tickarray where max_tick(443636) is located
                     ],
                 );
 
@@ -1449,7 +1453,6 @@ pub mod pool_test {
                     )
                     .unwrap();
                 assert!(start_index.unwrap() == tick_spacing * TICK_ARRAY_SIZE * 7393);
-
             }
         }
     }
