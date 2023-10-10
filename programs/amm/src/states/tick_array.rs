@@ -528,6 +528,7 @@ pub fn check_tick_array_start_index(
         tick_index <= tick_math::MAX_TICK,
         ErrorCode::TickUpperOverflow
     );
+    require_eq!(0, tick_index % i32::from(tick_spacing));
     let expect_start_index = TickArrayState::get_array_start_index(tick_index, tick_spacing);
     require_eq!(tick_array_start_index, expect_start_index);
     Ok(())
