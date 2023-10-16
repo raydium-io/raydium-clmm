@@ -127,6 +127,7 @@ pub fn create_pool_instr(
     token_mint_1: Pubkey,
     token_program_0: Pubkey,
     token_program_1: Pubkey,
+    tick_array_bitmap: Pubkey,
     sqrt_price_x64: u128,
     open_time: u64,
 ) -> Result<Vec<Instruction>> {
@@ -171,6 +172,7 @@ pub fn create_pool_instr(
             token_vault_0,
             token_vault_1,
             observation_state: observation_key,
+            tick_array_bitmap,
             token_program_0,
             token_program_1,
             system_program: system_program::id(),
@@ -195,6 +197,7 @@ pub fn open_position_instr(
     nft_to_owner: Pubkey,
     user_token_account_0: Pubkey,
     user_token_account_1: Pubkey,
+    remaining_accounts: Vec<AccountMeta>,
     liquidity: u128,
     amount_0_max: u64,
     amount_1_max: u64,
@@ -274,6 +277,7 @@ pub fn open_position_instr(
             vault_0_mint: token_mint_0,
             vault_1_mint: token_mint_1,
         })
+        .accounts(remaining_accounts)
         .args(raydium_instruction::OpenPositionV2 {
             liquidity,
             amount_0_max,
@@ -299,6 +303,7 @@ pub fn increase_liquidity_instr(
     nft_mint_key: Pubkey,
     user_token_account_0: Pubkey,
     user_token_account_1: Pubkey,
+    remaining_accounts: Vec<AccountMeta>,
     liquidity: u128,
     amount_0_max: u64,
     amount_1_max: u64,
@@ -363,6 +368,7 @@ pub fn increase_liquidity_instr(
             vault_0_mint: token_mint_0,
             vault_1_mint: token_mint_1,
         })
+        .accounts(remaining_accounts)
         .args(raydium_instruction::IncreaseLiquidityV2 {
             liquidity,
             amount_0_max,

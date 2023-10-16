@@ -39,7 +39,7 @@ pub fn create_and_init_mint_instr(
         .iter()
         .map(|e| e.extension())
         .collect::<Vec<_>>();
-    let space = ExtensionType::get_account_len::<Mint>(&extension_types);
+    let space = ExtensionType::try_calculate_account_len::<Mint>(&extension_types)?;
 
     let mut instructions = vec![system_instruction::create_account(
         &program.payer(),
@@ -142,7 +142,7 @@ pub fn create_and_init_auxiliary_token(
                 required_extensions.push(extension_type);
             }
         }
-        let space = ExtensionType::get_account_len::<Account>(&required_extensions);
+        let space = ExtensionType::try_calculate_account_len::<Account>(&required_extensions)?;
 
         (client.program(spl_token_2022::id())?, space)
     };

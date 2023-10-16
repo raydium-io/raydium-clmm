@@ -23,12 +23,10 @@ devnet = []
 paramset = []
 
 [dependencies]
-anchor-lang = { git = " https://github.com/acheroncrypto/anchor", branch = "replace-pubsubclienterror-unexpectedmessage", features = ["init-if-needed"] }
-anchor-spl = { git = " https://github.com/acheroncrypto/anchor", branch = "replace-pubsubclienterror-unexpectedmessage" }
-#anchor-lang = { version = "0.28.0", features = ["init-if-needed"] }
-#anchor-spl = "0.28.0"
+anchor-lang = { version = "0.28.0", features = ["init-if-needed"] }
+anchor-spl = "0.28.0"
 solana-program = "<1.17.0"
-spl-memo = "=3.0.1"
+spl-memo = "4.0.0"
 uint = "0.9.1"
 mpl-token-metadata = { version = "^1.11.0", features = ["no-entrypoint"] }
 bytemuck = { version = "1.4.0", features = ["derive", "min_const_generics"] }

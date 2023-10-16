@@ -37,8 +37,8 @@ use instructions::rpc::*;
 use instructions::token_instructions::*;
 use instructions::utils::*;
 use raydium_amm_v3::{
-    libraries::{fixed_point_64, liquidity_math, tick_array_bit_map, tick_math},
-    states::{PoolState, TickArrayState},
+    libraries::{fixed_point_64, liquidity_math, tick_math},
+    states::{PoolState, TickArrayBitmapExtension, TickArrayState, POOL_TICK_ARRAY_BITMAP_SEED},
 };
 use spl_associated_token_account::get_associated_token_address;
 use spl_token_2022::{
@@ -62,6 +62,7 @@ pub struct ClientConfig {
     mint0: Option<Pubkey>,
     mint1: Option<Pubkey>,
     pool_id_account: Option<Pubkey>,
+    tickarray_bitmap_extension: Option<Pubkey>,
     amm_config_index: u16,
 }
 
@@ -143,6 +144,20 @@ fn load_cfg(client_config: &String) -> Result<ClientConfig> {
     } else {
         None
     };
+    let tickarray_bitmap_extension = if pool_id_account != None {
+        Some(
+            Pubkey::find_program_address(
+                &[
+                    POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
+                    pool_id_account.unwrap().to_bytes().as_ref(),
+                ],
+                &raydium_v3_program,
+            )
+            .0,
+        )
+    } else {
+        None
+    };
 
     Ok(ClientConfig {
         http_url,
@@ -155,6 +170,7 @@ fn load_cfg(client_config: &String) -> Result<ClientConfig> {
         mint0,
         mint1,
         pool_id_account,
+        tickarray_bitmap_extension,
         amm_config_index,
     })
 }
@@ -174,10 +190,11 @@ fn load_cur_and_next_five_tick_array(
     rpc_client: &RpcClient,
     pool_config: &ClientConfig,
     pool_state: &PoolState,
+    tickarray_bitmap_extension: &TickArrayBitmapExtension,
     zero_for_one: bool,
 ) -> VecDeque<TickArrayState> {
     let (_, mut current_vaild_tick_array_start_index) = pool_state
-        .get_first_initialized_tick_array(zero_for_one)
+        .get_first_initialized_tick_array(&Some(*tickarray_bitmap_extension), zero_for_one)
         .unwrap();
     let mut tick_array_keys = Vec::new();
     tick_array_keys.push(
@@ -193,12 +210,13 @@ fn load_cur_and_next_five_tick_array(
     );
     let mut max_array_size = 5;
     while max_array_size != 0 {
-        let next_tick_array_index = tick_array_bit_map::next_initialized_tick_array_start_index(
-            raydium_amm_v3::libraries::U1024(pool_state.tick_array_bitmap),
-            current_vaild_tick_array_start_index,
-            pool_state.tick_spacing.into(),
-            zero_for_one,
-        );
+        let next_tick_array_index = pool_state
+            .next_initialized_tick_array_start_index(
+                &Some(*tickarray_bitmap_extension),
+                current_vaild_tick_array_start_index,
+                zero_for_one,
+            )
+            .unwrap();
         if next_tick_array_index.is_none() {
             break;
         }
@@ -435,11 +453,11 @@ pub enum CommandsName {
     },
     TickWithSpacing {
         tick: i32,
-        tick_spacing: i32,
+        tick_spacing: u16,
     },
     TickArraryStartIndex {
         tick: i32,
-        tick_spacing: i32,
+        tick_spacing: u16,
     },
     LiquidityToAmounts {
         tick_lower: i32,
@@ -568,8 +586,7 @@ fn main() -> Result<()> {
                 extensions.push(ExtensionInitializationParams::ConfidentialTransferMint {
                     authority: Some(authority),
                     auto_approve_new_accounts: auto_approve,
-                    auditor_encryption_pubkey: None,
-                    withdraw_withheld_authority_encryption_pubkey: None,
+                    auditor_elgamal_pubkey: None,
                 });
             }
 
@@ -812,6 +829,7 @@ fn main() -> Result<()> {
                 mint1,
                 mint0_owner,
                 mint1_owner,
+                pool_config.tickarray_bitmap_extension.unwrap(),
                 sqrt_price_x64,
                 open_time,
             )?;
@@ -1036,12 +1054,12 @@ fn main() -> Result<()> {
                 .unwrap();
 
             let tick_array_lower_start_index =
-                raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                raydium_amm_v3::states::TickArrayState::get_array_start_index(
                     tick_lower_index,
                     pool.tick_spacing.into(),
                 );
             let tick_array_upper_start_index =
-                raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                raydium_amm_v3::states::TickArrayState::get_array_start_index(
                     tick_upper_index,
                     pool.tick_spacing.into(),
                 );
@@ -1077,6 +1095,12 @@ fn main() -> Result<()> {
                 // personal position not exist
                 // new nft mint
                 let nft_mint = Keypair::generate(&mut OsRng);
+                let mut remaining_accounts = Vec::new();
+                remaining_accounts.push(AccountMeta::new(
+                    pool_config.tickarray_bitmap_extension.unwrap(),
+                    false,
+                ));
+
                 let mut instructions = Vec::new();
                 let request_inits_instr =
                     ComputeBudgetInstruction::set_compute_unit_limit(1400_000u32);
@@ -1098,6 +1122,7 @@ fn main() -> Result<()> {
                         &payer.pubkey(),
                         &pool_config.mint1.unwrap(),
                     ),
+                    remaining_accounts,
                     liquidity,
                     amount_0_max,
                     amount_1_max,
@@ -1229,12 +1254,12 @@ fn main() -> Result<()> {
                 .unwrap();
 
             let tick_array_lower_start_index =
-                raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                raydium_amm_v3::states::TickArrayState::get_array_start_index(
                     tick_lower_index,
                     pool.tick_spacing.into(),
                 );
             let tick_array_upper_start_index =
-                raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                raydium_amm_v3::states::TickArrayState::get_array_start_index(
                     tick_upper_index,
                     pool.tick_spacing.into(),
                 );
@@ -1251,6 +1276,12 @@ fn main() -> Result<()> {
                 && find_position.pool_id == pool_config.pool_id_account.unwrap()
             {
                 // personal position exist
+                let mut remaining_accounts = Vec::new();
+                remaining_accounts.push(AccountMeta::new_readonly(
+                    pool_config.tickarray_bitmap_extension.unwrap(),
+                    false,
+                ));
+
                 let increase_instr = increase_liquidity_instr(
                     &pool_config.clone(),
                     pool_config.pool_id_account.unwrap(),
@@ -1267,6 +1298,7 @@ fn main() -> Result<()> {
                         &payer.pubkey(),
                         &pool_config.mint1.unwrap(),
                     ),
+                    remaining_accounts,
                     liquidity,
                     amount_0_max,
                     amount_1_max,
@@ -1302,12 +1334,12 @@ fn main() -> Result<()> {
                 program.account(pool_config.pool_id_account.unwrap())?;
 
             let tick_array_lower_start_index =
-                raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                raydium_amm_v3::states::TickArrayState::get_array_start_index(
                     tick_lower_index,
                     pool.tick_spacing.into(),
                 );
             let tick_array_upper_start_index =
-                raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                raydium_amm_v3::states::TickArrayState::get_array_start_index(
                     tick_upper_index,
                     pool.tick_spacing.into(),
                 );
@@ -1388,10 +1420,17 @@ fn main() -> Result<()> {
                     .checked_sub(transfer_fee.1.transfer_fee)
                     .unwrap();
 
-                let remaining_accounts = reward_vault_with_user_vault
+                let mut remaining_accounts = Vec::new();
+                remaining_accounts.push(AccountMeta::new(
+                    pool_config.tickarray_bitmap_extension.unwrap(),
+                    false,
+                ));
+
+                let mut accounts = reward_vault_with_user_vault
                     .into_iter()
                     .map(|item| AccountMeta::new(item.0, false))
                     .collect();
+                remaining_accounts.append(&mut accounts);
                 // personal position exist
                 let mut decrease_instr = decrease_liquidity_instr(
                     &pool_config.clone(),
@@ -1464,10 +1503,11 @@ fn main() -> Result<()> {
                 output_token,
                 pool_config.amm_config_key,
                 pool_config.pool_id_account.unwrap(),
+                pool_config.tickarray_bitmap_extension.unwrap(),
             ];
             let rsps = rpc_client.get_multiple_accounts(&load_accounts)?;
-            let [user_input_account, user_output_account, amm_config_account, pool_account] =
-                array_ref![rsps, 0, 4];
+            let [user_input_account, user_output_account, amm_config_account, pool_account, tickarray_bitmap_extension_account] =
+                array_ref![rsps, 0, 5];
             let user_input_state =
                 spl_token::state::Account::unpack(&user_input_account.as_ref().unwrap().data)
                     .unwrap();
@@ -1480,6 +1520,10 @@ fn main() -> Result<()> {
             let pool_state = deserialize_anchor_account::<raydium_amm_v3::states::PoolState>(
                 pool_account.as_ref().unwrap(),
             )?;
+            let tickarray_bitmap_extension =
+                deserialize_anchor_account::<raydium_amm_v3::states::TickArrayBitmapExtension>(
+                    tickarray_bitmap_extension_account.as_ref().unwrap(),
+                )?;
             let zero_for_one = user_input_state.mint == pool_state.token_mint_0
                 && user_output_state.mint == pool_state.token_mint_1;
             // load tick_arrays
@@ -1487,6 +1531,7 @@ fn main() -> Result<()> {
                 &rpc_client,
                 &pool_config,
                 &pool_state,
+                &tickarray_bitmap_extension,
                 zero_for_one,
             );
 
@@ -1508,6 +1553,7 @@ fn main() -> Result<()> {
                     base_in,
                     &amm_config_state,
                     &pool_state,
+                    &tickarray_bitmap_extension,
                     &mut tick_arrays,
                 )
                 .unwrap();
@@ -1530,7 +1576,12 @@ fn main() -> Result<()> {
                 &pool_config.raydium_v3_program,
             )
             .0;
-            let remaining_accounts = tick_array_indexs
+            let mut remaining_accounts = Vec::new();
+            remaining_accounts.push(AccountMeta::new_readonly(
+                pool_config.tickarray_bitmap_extension.unwrap(),
+                false,
+            ));
+            let mut accounts = tick_array_indexs
                 .into_iter()
                 .map(|index| {
                     AccountMeta::new(
@@ -1547,6 +1598,7 @@ fn main() -> Result<()> {
                     )
                 })
                 .collect();
+            remaining_accounts.append(&mut accounts);
             let swap_instr = swap_instr(
                 &pool_config.clone(),
                 pool_state.amm_config,
@@ -1597,13 +1649,14 @@ fn main() -> Result<()> {
                 output_token,
                 pool_config.amm_config_key,
                 pool_config.pool_id_account.unwrap(),
+                pool_config.tickarray_bitmap_extension.unwrap(),
                 pool_config.mint0.unwrap(),
                 pool_config.mint1.unwrap(),
             ];
             let rsps = rpc_client.get_multiple_accounts(&load_accounts)?;
             let epoch = rpc_client.get_epoch_info().unwrap().epoch;
-            let [user_input_account, user_output_account, amm_config_account, pool_account, mint0_account, mint1_account] =
-                array_ref![rsps, 0, 6];
+            let [user_input_account, user_output_account, amm_config_account, pool_account, tickarray_bitmap_extension_account, mint0_account, mint1_account] =
+                array_ref![rsps, 0, 7];
 
             let mut user_input_token_data = user_input_account.clone().unwrap().data;
             let user_input_state =
@@ -1621,6 +1674,10 @@ fn main() -> Result<()> {
             let pool_state = deserialize_anchor_account::<raydium_amm_v3::states::PoolState>(
                 pool_account.as_ref().unwrap(),
             )?;
+            let tickarray_bitmap_extension =
+                deserialize_anchor_account::<raydium_amm_v3::states::TickArrayBitmapExtension>(
+                    tickarray_bitmap_extension_account.as_ref().unwrap(),
+                )?;
             let zero_for_one = user_input_state.base.mint == pool_state.token_mint_0
                 && user_output_state.base.mint == pool_state.token_mint_1;
 
@@ -1639,6 +1696,7 @@ fn main() -> Result<()> {
                 &rpc_client,
                 &pool_config,
                 &pool_state,
+                &tickarray_bitmap_extension,
                 zero_for_one,
             );
 
@@ -1660,6 +1718,7 @@ fn main() -> Result<()> {
                     base_in,
                     &amm_config_state,
                     &pool_state,
+                    &tickarray_bitmap_extension,
                     &mut tick_arrays,
                 )
                 .unwrap();
@@ -1680,7 +1739,12 @@ fn main() -> Result<()> {
                 other_amount_threshold += transfer_fee;
             }
 
-            let remaining_accounts = tick_array_indexs
+            let mut remaining_accounts = Vec::new();
+            remaining_accounts.push(AccountMeta::new_readonly(
+                pool_config.tickarray_bitmap_extension.unwrap(),
+                false,
+            ));
+            let mut accounts = tick_array_indexs
                 .into_iter()
                 .map(|index| {
                     AccountMeta::new(
@@ -1697,6 +1761,7 @@ fn main() -> Result<()> {
                     )
                 })
                 .collect();
+            remaining_accounts.append(&mut accounts);
             let swap_instr = swap_v2_instr(
                 &pool_config.clone(),
                 pool_state.amm_config,
@@ -1782,7 +1847,7 @@ fn main() -> Result<()> {
             let pool: raydium_amm_v3::states::PoolState = program.account(pool_id)?;
 
             let tick_array_start_index =
-                raydium_amm_v3::states::TickArrayState::get_arrary_start_index(
+                raydium_amm_v3::states::TickArrayState::get_array_start_index(
                     tick,
                     pool.tick_spacing.into(),
                 );
@@ -1858,7 +1923,7 @@ fn main() -> Result<()> {
                 "tick:{}, tick_spacing:{}, tick_with_spacing:{}",
                 tick,
                 tick_spacing,
-                tick_with_spacing(tick, tick_spacing)
+                tick_with_spacing(tick, tick_spacing as i32)
             );
         }
         CommandsName::TickArraryStartIndex { tick, tick_spacing } => {
@@ -1866,7 +1931,7 @@ fn main() -> Result<()> {
                 "tick:{}, tick_spacing:{},tick_array_start_index:{}",
                 tick,
                 tick_spacing,
-                raydium_amm_v3::states::TickArrayState::get_arrary_start_index(tick, tick_spacing,)
+                raydium_amm_v3::states::TickArrayState::get_array_start_index(tick, tick_spacing,)
             );
         }
         CommandsName::LiquidityToAmounts {
