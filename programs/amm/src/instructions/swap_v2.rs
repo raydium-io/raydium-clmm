@@ -83,7 +83,7 @@ pub fn exact_internal_v2<'info>(
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
 ) -> Result<u64> {
-    invoke_memo_instruction(SWAP_MEMO_MSG, ctx.memo_program.to_account_info())?;
+    // invoke_memo_instruction(SWAP_MEMO_MSG, ctx.memo_program.to_account_info())?;
 
     let block_timestamp = solana_program::clock::Clock::get()?.unix_timestamp as u64;
 

@@ -2,7 +2,7 @@ use super::calculate_latest_token_fees;
 use super::modify_position;
 use crate::error::ErrorCode;
 use crate::states::*;
-use crate::util::{self, invoke_memo_instruction, transfer_from_pool_vault_to_user};
+use crate::util::{self, transfer_from_pool_vault_to_user};
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::Mint;
@@ -252,10 +252,10 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     amount_0_min: u64,
     amount_1_min: u64,
 ) -> Result<()> {
-    if accounts.memo_program.is_some() {
-        let memp_program = accounts.memo_program.as_ref().unwrap().to_account_info();
-        invoke_memo_instruction(DECREASE_MEMO_MSG, memp_program)?;
-    }
+    // if accounts.memo_program.is_some() {
+    //     let memp_program = accounts.memo_program.as_ref().unwrap().to_account_info();
+    //     invoke_memo_instruction(DECREASE_MEMO_MSG, memp_program)?;
+    // }
     assert!(liquidity <= accounts.personal_position.liquidity);
     let liquidity_before;
     let pool_sqrt_price_x64;

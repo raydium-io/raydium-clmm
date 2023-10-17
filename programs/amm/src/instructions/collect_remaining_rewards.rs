@@ -1,6 +1,6 @@
 use crate::error::ErrorCode;
 use crate::states::*;
-use crate::util::{invoke_memo_instruction, transfer_from_pool_vault_to_user};
+use crate::util::transfer_from_pool_vault_to_user;
 use anchor_lang::prelude::*;
 use anchor_spl::{
     token::{self, Token},
@@ -44,10 +44,10 @@ pub fn collect_remaining_rewards(
     ctx: Context<CollectRemainingRewards>,
     reward_index: u8,
 ) -> Result<()> {
-    invoke_memo_instruction(
-        COLLECT_REMAINING_MEMO_MSG,
-        ctx.accounts.memo_program.to_account_info(),
-    )?;
+    // invoke_memo_instruction(
+    //     COLLECT_REMAINING_MEMO_MSG,
+    //     ctx.accounts.memo_program.to_account_info(),
+    // )?;
     let amount_remaining = get_remaining_reward_amount(
         &ctx.accounts.pool_state,
         &ctx.accounts.reward_token_vault,

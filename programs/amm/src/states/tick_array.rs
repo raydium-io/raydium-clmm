@@ -690,8 +690,8 @@ pub mod tick_array_test {
                 tick_array_ref
                     .borrow()
                     .get_tick_offset_in_array(1105, tick_spacing)
-                    .unwrap_err(),
-                error!(anchor_lang::error::ErrorCode::RequireEqViolated)
+                    .unwrap(),
+                36
             );
             // (1108-960) / tick_spacing
             assert_eq!(
