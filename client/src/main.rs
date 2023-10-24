@@ -325,10 +325,15 @@ pub enum CommandsName {
         #[arg(short, long)]
         decimals: u8,
         authority: Option<Pubkey>,
-        token_2022: Option<String>,
+        #[arg(short, long)]
+        token_2022: bool,
+        #[arg(short, long)]
         enable_freeze: bool,
+        #[arg(short, long)]
         enable_close: bool,
+        #[arg(short, long)]
         enable_non_transferable: bool,
+        #[arg(short, long)]
         enable_permanent_delegate: bool,
         rate_bps: Option<i16>,
         default_account_state: Option<String>,
@@ -338,7 +343,8 @@ pub enum CommandsName {
     NewToken {
         mint: Pubkey,
         authority: Pubkey,
-        not_ata: Option<bool>,
+        #[arg(short, long)]
+        not_ata: bool,
     },
     MintTo {
         mint: Pubkey,
@@ -368,7 +374,7 @@ pub enum CommandsName {
         price: f64,
         mint0: Pubkey,
         mint1: Pubkey,
-        #[arg(default_value_t = 0)]
+        #[arg(short, long, default_value_t = 0)]
         open_time: u64,
     },
     InitReward {
@@ -391,14 +397,16 @@ pub enum CommandsName {
     OpenPosition {
         tick_lower_price: f64,
         tick_upper_price: f64,
+        #[arg(short, long)]
         is_base_0: bool,
-        imput_amount: u64,
-        #[arg(default_value_t = true)]
-        with_matedata: bool,
+        input_amount: u64,
+        #[arg(short, long)]
+        with_metadata: bool,
     },
     IncreaseLiquidity {
         tick_lower_price: f64,
         tick_upper_price: f64,
+        #[arg(short, long)]
         is_base_0: bool,
         imput_amount: u64,
     },
@@ -406,12 +414,13 @@ pub enum CommandsName {
         tick_lower_index: i32,
         tick_upper_index: i32,
         liquidity: Option<u128>,
+        #[arg(short, long)]
         simulate: bool,
     },
     Swap {
         input_token: Pubkey,
         output_token: Pubkey,
-        #[arg(default_value_t = true)]
+        #[arg(short, long)]
         base_in: bool,
         amount: u64,
         limit_price: Option<f64>,
@@ -419,7 +428,7 @@ pub enum CommandsName {
     SwapV2 {
         input_token: Pubkey,
         output_token: Pubkey,
-        #[arg(default_value_t = true)]
+        #[arg(short, long)]
         base_in: bool,
         amount: u64,
         limit_price: Option<f64>,
@@ -476,6 +485,9 @@ pub enum CommandsName {
     PPool {
         pool_id: Option<Pubkey>,
     },
+    PBitmapExtension {
+        bitmap_extension: Option<Pubkey>,
+    },
     PProtocol {
         protocol_id: Pubkey,
     },
@@ -525,7 +537,7 @@ fn main() -> Result<()> {
             transfer_fee,
             confidential_transfer_auto_approve,
         } => {
-            let token_program = if Some("token_2022".to_string()) == token_2022 {
+            let token_program = if token_2022 {
                 spl_token_2022::id()
             } else {
                 spl_token::id()
@@ -619,7 +631,7 @@ fn main() -> Result<()> {
         } => {
             let mut signers = vec![&payer];
             let auxiliary_token_keypair = Keypair::generate(&mut OsRng);
-            let create_ata_instr = if not_ata.is_some() && not_ata.unwrap() {
+            let create_ata_instr = if not_ata {
                 signers.push(&auxiliary_token_keypair);
                 create_and_init_auxiliary_token(
                     &pool_config.clone(),
@@ -972,8 +984,8 @@ fn main() -> Result<()> {
             tick_lower_price,
             tick_upper_price,
             is_base_0,
-            imput_amount,
-            with_matedata,
+            input_amount,
+            with_metadata,
         } => {
             // load pool to get observation
             let pool: raydium_amm_v3::states::PoolState =
@@ -1008,14 +1020,14 @@ fn main() -> Result<()> {
                     pool.sqrt_price_x64,
                     tick_lower_price_x64,
                     tick_upper_price_x64,
-                    imput_amount,
+                    input_amount,
                 )
             } else {
                 liquidity_math::get_liquidity_from_single_amount_1(
                     pool.sqrt_price_x64,
                     tick_lower_price_x64,
                     tick_upper_price_x64,
-                    imput_amount,
+                    input_amount,
                 )
             };
             let (amount_0, amount_1) = liquidity_math::get_delta_amounts_signed(
@@ -1046,11 +1058,11 @@ fn main() -> Result<()> {
                 "transfer_fee_0:{}, transfer_fee_1:{}",
                 transfer_fee.0.transfer_fee, transfer_fee.1.transfer_fee
             );
-            let amount_0_max = (amount_0 as u64)
+            let amount_0_max = (amount_0_with_slippage as u64)
                 .checked_add(transfer_fee.0.transfer_fee)
                 .unwrap();
-            let amount_1_max = (amount_0 as u64)
-                .checked_add(transfer_fee.0.transfer_fee)
+            let amount_1_max = (amount_1_with_slippage as u64)
+                .checked_add(transfer_fee.1.transfer_fee)
                 .unwrap();
 
             let tick_array_lower_start_index =
@@ -1130,7 +1142,7 @@ fn main() -> Result<()> {
                     tick_upper_index,
                     tick_array_lower_start_index,
                     tick_array_upper_start_index,
-                    with_matedata,
+                    with_metadata,
                 )?;
                 instructions.extend(open_position_instr);
                 // send
@@ -1246,11 +1258,11 @@ fn main() -> Result<()> {
                 "transfer_fee_0:{}, transfer_fee_1:{}",
                 transfer_fee.0.transfer_fee, transfer_fee.1.transfer_fee
             );
-            let amount_0_max = (amount_0 as u64)
+            let amount_0_max = (amount_0_with_slippage as u64)
                 .checked_add(transfer_fee.0.transfer_fee)
                 .unwrap();
-            let amount_1_max = (amount_0 as u64)
-                .checked_add(transfer_fee.0.transfer_fee)
+            let amount_1_max = (amount_1_with_slippage as u64)
+                .checked_add(transfer_fee.1.transfer_fee)
                 .unwrap();
 
             let tick_array_lower_start_index =
@@ -2094,6 +2106,17 @@ fn main() -> Result<()> {
             println!("pool_id:{}", pool_id);
             let pool_account: raydium_amm_v3::states::PoolState = program.account(pool_id)?;
             println!("{:#?}", pool_account);
+        }
+        CommandsName::PBitmapExtension { bitmap_extension } => {
+            let bitmap_extension = if let Some(bitmap_extension) = bitmap_extension {
+                bitmap_extension
+            } else {
+                pool_config.tickarray_bitmap_extension.unwrap()
+            };
+            println!("bitmap_extension:{}", bitmap_extension);
+            let bitmap_extension_account: raydium_amm_v3::states::TickArrayBitmapExtension =
+                program.account(bitmap_extension)?;
+            println!("{:#?}", bitmap_extension_account);
         }
         CommandsName::PProtocol { protocol_id } => {
             let protocol_account: raydium_amm_v3::states::ProtocolPositionState =

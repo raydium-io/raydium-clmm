@@ -602,6 +602,7 @@ pub fn handle_program_instruction(
                 pub amount_0_max: u64,
                 pub amount_1_max: u64,
                 pub base_flag: Option<bool>,
+                pub with_metadata: bool,
             }
             impl From<instruction::OpenPositionV2> for OpenPositionV2 {
                 fn from(instr: instruction::OpenPositionV2) -> OpenPositionV2 {
@@ -614,6 +615,7 @@ pub fn handle_program_instruction(
                         amount_0_max: instr.amount_0_max,
                         amount_1_max: instr.amount_1_max,
                         base_flag: instr.base_flag,
+                        with_metadata: instr.with_matedata,
                     }
                 }
             }

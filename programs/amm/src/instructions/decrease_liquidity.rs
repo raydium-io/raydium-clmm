@@ -260,9 +260,9 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     let liquidity_before;
     let pool_sqrt_price_x64;
     let pool_tick_current;
-    let tickarray_bitmap_extension;
+    let mut tickarray_bitmap_extension = None;
 
-    let remaining_accounts_iter = &mut remaining_accounts.iter();
+    let remaining_collect_accounts = &mut Vec::new();
     {
         let pool_state = accounts.pool_state.load()?;
         if !pool_state.get_status_by_bit(PoolStatusBitIndex::DecreaseLiquidity)
@@ -280,16 +280,22 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
             accounts.tick_array_upper.load()?.start_tick_index,
         ]);
 
-        tickarray_bitmap_extension = if use_tickarray_bitmap_extension {
-            let tickarray_bitmap_extension_info = remaining_accounts_iter.next().unwrap();
-            require_keys_eq!(
-                tickarray_bitmap_extension_info.key(),
-                TickArrayBitmapExtension::key(pool_state.key())
+        for account_info in remaining_accounts.into_iter() {
+            if account_info
+                .key()
+                .eq(&TickArrayBitmapExtension::key(pool_state.key()))
+            {
+                tickarray_bitmap_extension = Some(account_info);
+                continue;
+            }
+            remaining_collect_accounts.push(account_info);
+        }
+        if use_tickarray_bitmap_extension {
+            require!(
+                tickarray_bitmap_extension.is_some(),
+                ErrorCode::MissingTickArrayBitmapExtensionAccount
             );
-            Some(tickarray_bitmap_extension_info)
-        } else {
-            None
-        };
+        }
     }
 
     let (decrease_amount_0, latest_fees_owed_0, decrease_amount_1, latest_fees_owed_1) =
@@ -381,7 +387,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     let personal_position = &mut accounts.personal_position;
     let reward_amounts = collect_rewards(
         &accounts.pool_state,
-        remaining_accounts_iter.as_slice(),
+        remaining_collect_accounts.as_slice(),
         accounts.token_program.clone(),
         token_2022_program_opt.clone(),
         personal_position,
@@ -565,7 +571,7 @@ pub fn burn_liquidity<'b, 'info>(
 
 pub fn collect_rewards<'a, 'b, 'c, 'info>(
     pool_state_loader: &AccountLoader<'info, PoolState>,
-    remaining_accounts: &[AccountInfo<'info>],
+    remaining_accounts: &[&AccountInfo<'info>],
     token_program: Program<'info, Token>,
     token_program_2022: Option<AccountInfo<'info>>,
     personal_position_state: &mut PersonalPositionState,
@@ -592,14 +598,14 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
     let mut remaining_accounts = remaining_accounts.iter();
     for i in 0..remaining_accounts_len / reward_group_account_num {
         let reward_token_vault =
-            InterfaceAccount::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
+            InterfaceAccount::<TokenAccount>::try_from(remaining_accounts.next().unwrap())?;
         let recipient_token_account =
-            InterfaceAccount::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
+            InterfaceAccount::<TokenAccount>::try_from(remaining_accounts.next().unwrap())?;
 
         let mut reward_vault_mint: Option<InterfaceAccount<Mint>> = None;
         if need_reward_mint {
             reward_vault_mint = Some(InterfaceAccount::<Mint>::try_from(
-                &remaining_accounts.next().unwrap(),
+                remaining_accounts.next().unwrap(),
             )?);
         }
         require_keys_eq!(reward_token_vault.mint, recipient_token_account.mint);
@@ -653,7 +659,7 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
 
 fn check_required_accounts_length(
     pool_state_loader: &AccountLoader<PoolState>,
-    remaining_accounts: &[AccountInfo],
+    remaining_accounts: &[&AccountInfo],
     reward_group_account_num: usize,
 ) -> Result<()> {
     let pool_state = pool_state_loader.load()?;
