@@ -7,6 +7,9 @@ use anchor_spl::{
     token_interface::{Mint, Token2022, TokenAccount},
 };
 
+/// Memo msg for collect remaining
+pub const COLLECT_REMAINING_MEMO_MSG: &'static [u8] = b"raydium_collect_remaining";
+
 #[derive(Accounts)]
 pub struct CollectRemainingRewards<'info> {
     /// The founder who init reward info in berfore
@@ -31,9 +34,9 @@ pub struct CollectRemainingRewards<'info> {
 
     /// memo program
     /// CHECK:
-    // #[account(
-    //     address = spl_memo::id()
-    // )]
+    #[account(
+        address = spl_memo::id()
+    )]
     pub memo_program: UncheckedAccount<'info>,
 }
 
@@ -41,6 +44,10 @@ pub fn collect_remaining_rewards(
     ctx: Context<CollectRemainingRewards>,
     reward_index: u8,
 ) -> Result<()> {
+    // invoke_memo_instruction(
+    //     COLLECT_REMAINING_MEMO_MSG,
+    //     ctx.accounts.memo_program.to_account_info(),
+    // )?;
     let amount_remaining = get_remaining_reward_amount(
         &ctx.accounts.pool_state,
         &ctx.accounts.reward_token_vault,

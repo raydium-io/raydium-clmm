@@ -5,6 +5,7 @@ pub mod states;
 pub mod util;
 
 use anchor_lang::prelude::*;
+use core as core_;
 use instructions::*;
 use states::*;
 use util::access_control::*;

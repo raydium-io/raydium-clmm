@@ -9,6 +9,9 @@ use crate::{states::*, util};
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
+
+/// Memo msg for swap
+pub const SWAP_MEMO_MSG: &'static [u8] = b"raydium_swap";
 #[derive(Accounts)]
 pub struct SwapSingleV2<'info> {
     /// The user performing the swap
@@ -49,9 +52,9 @@ pub struct SwapSingleV2<'info> {
     pub token_program_2022: Program<'info, Token2022>,
 
     /// CHECK:
-    // #[account(
-    //     address = spl_memo::id()
-    // )]
+    #[account(
+        address = spl_memo::id()
+    )]
     pub memo_program: UncheckedAccount<'info>,
 
     /// The mint of token vault 0
@@ -80,6 +83,8 @@ pub fn exact_internal_v2<'info>(
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
 ) -> Result<u64> {
+    // invoke_memo_instruction(SWAP_MEMO_MSG, ctx.memo_program.to_account_info())?;
+
     let block_timestamp = solana_program::clock::Clock::get()?.unix_timestamp as u64;
 
     let amount_0;
@@ -116,7 +121,7 @@ pub fn exact_internal_v2<'info>(
 
         let mut tickarray_bitmap_extension = None;
         let tick_array_states = &mut VecDeque::new();
-        
+
         for account_info in remaining_accounts.into_iter() {
             if account_info
                 .key()

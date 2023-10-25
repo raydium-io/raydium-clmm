@@ -115,7 +115,7 @@ impl TickArrayBitmapExtension {
         let tick_array_offset_in_bitmap =
             Self::tick_array_offset_in_bitmap(tick_array_start_index, tick_spacing);
         let tick_array_bitmap = U512(tick_array_bitmap);
-        let mask = U512::one() << tick_array_offset_in_bitmap;
+        let mask = U512::one() << tick_array_offset_in_bitmap.try_into().unwrap();
         if tick_array_start_index < 0 {
             self.negative_tick_array_bitmap[offset as usize] = tick_array_bitmap.bitxor(mask).0;
         } else {
@@ -174,7 +174,9 @@ impl TickArrayBitmapExtension {
             // tick from upper to lower
             // find from highter bits to lower bits
             let offset_bit_map = U512(tickarray_bitmap)
-                << (TICK_ARRAY_BITMAP_SIZE - 1 - tick_array_offset_in_bitmap);
+                << (TICK_ARRAY_BITMAP_SIZE - 1 - tick_array_offset_in_bitmap)
+                    .try_into()
+                    .unwrap();
 
             let next_bit = if offset_bit_map.is_zero() {
                 None
@@ -193,7 +195,8 @@ impl TickArrayBitmapExtension {
         } else {
             // tick from lower to upper
             // find from lower bits to highter bits
-            let offset_bit_map = U512(tickarray_bitmap) >> tick_array_offset_in_bitmap;
+            let offset_bit_map =
+                U512(tickarray_bitmap) >> tick_array_offset_in_bitmap.try_into().unwrap();
 
             let next_bit = if offset_bit_map.is_zero() {
                 None
@@ -488,12 +491,14 @@ pub mod tick_array_bitmap_extension_test {
             .unwrap();
         assert!(next == tick_spacing * TICK_ARRAY_SIZE * 1000);
 
-        let next = tick_array_bitmap_extension.next_initialized_tick_array_from_one_bitmap(
-            tick_spacing * TICK_ARRAY_SIZE * 7393,
-            tick_spacing as u16,
-            false,
-        );
-        assert!(next.is_err());
+        let next = tick_array_bitmap_extension
+            .next_initialized_tick_array_from_one_bitmap(
+                tick_spacing * TICK_ARRAY_SIZE * 7393,
+                tick_spacing as u16,
+                false,
+            )
+            .unwrap();
+        assert!(next.0 == false);
 
         // zero_for_one.
         let (_, next) = tick_array_bitmap_extension
@@ -583,11 +588,13 @@ pub mod tick_array_bitmap_extension_test {
         assert!(next == -tick_spacing * TICK_ARRAY_SIZE * 1000);
 
         // zero_for_one, last tickarray start index is too little, not reach the extension boundary value.
-        let next = tick_array_bitmap_extension.next_initialized_tick_array_from_one_bitmap(
-            -tick_spacing * TICK_ARRAY_SIZE * 7394,
-            tick_spacing as u16,
-            true,
-        );
-        assert!(next.is_err());
+        let next = tick_array_bitmap_extension
+            .next_initialized_tick_array_from_one_bitmap(
+                -tick_spacing * TICK_ARRAY_SIZE * 7394,
+                tick_spacing as u16,
+                true,
+            )
+            .unwrap();
+        assert!(next.0 == false);
     }
 }

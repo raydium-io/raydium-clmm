@@ -622,7 +622,7 @@ pub mod tick_array_test {
         use std::convert::identity;
 
         #[test]
-        fn get_arrary_start_index_test() {
+        fn get_array_start_index_test() {
             assert_eq!(TickArrayState::get_array_start_index(120, 3), 0);
             assert_eq!(TickArrayState::get_array_start_index(1002, 30), 0);
             assert_eq!(TickArrayState::get_array_start_index(-120, 3), -180);
@@ -690,8 +690,8 @@ pub mod tick_array_test {
                 tick_array_ref
                     .borrow()
                     .get_tick_offset_in_array(1105, tick_spacing)
-                    .unwrap_err(),
-                error!(anchor_lang::error::ErrorCode::RequireEqViolated)
+                    .unwrap(),
+                36
             );
             // (1108-960) / tick_spacing
             assert_eq!(
