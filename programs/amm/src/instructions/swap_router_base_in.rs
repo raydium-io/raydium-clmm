@@ -32,7 +32,7 @@ pub struct SwapRouterBaseIn<'info> {
     pub memo_program: UncheckedAccount<'info>,
 }
 
-pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
+pub fn swap_router_base_in<'a, 'b, 'c: 'info, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, SwapRouterBaseIn<'info>>,
     amount_in: u64,
     amount_out_minimum: u64,

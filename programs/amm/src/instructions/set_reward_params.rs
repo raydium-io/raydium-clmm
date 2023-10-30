@@ -38,7 +38,7 @@ pub struct SetRewardParams<'info> {
     pub token_program_2022: Program<'info, Token2022>,
 }
 
-pub fn set_reward_params<'a, 'b, 'c, 'info>(
+pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, SetRewardParams<'info>>,
     reward_index: u8,
     emissions_per_second_x64: u128,

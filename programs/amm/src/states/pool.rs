@@ -228,7 +228,7 @@ impl PoolState {
         self.padding1 = [0; 25];
         self.padding2 = [0; 32];
 
-        let mut observation_state = observation_state_loader.load_mut()?;
+        let mut observation_state = observation_state_loader.load_init()?;
         require_eq!(observation_state.initialized, false);
         require_keys_eq!(observation_state.pool_id, Pubkey::default());
         self.observation_key = observation_state_loader.key();
@@ -452,9 +452,9 @@ impl PoolState {
         Ok(())
     }
 
-    pub fn flip_tick_array_bit(
+    pub fn flip_tick_array_bit<'b: 'info, 'info>(
         &mut self,
-        tickarray_bitmap_extension: &Option<&AccountInfo>,
+        tickarray_bitmap_extension: Option<&'b AccountInfo<'info>>,
         tick_array_start_index: i32,
     ) -> Result<()> {
         if self.is_overflow_default_tickarray_bitmap(vec![tick_array_start_index]) {
@@ -782,35 +782,35 @@ pub struct LiquidityChangeEvent {
     pub liquidity_after: u128,
 }
 
-/// Emitted when price move in a swap step
-#[event]
-#[cfg_attr(feature = "client", derive(Debug))]
-pub struct PriceChangeEvent {
-    /// The pool for swap
-    #[index]
-    pub pool_state: Pubkey,
+// /// Emitted when price move in a swap step
+// #[event]
+// #[cfg_attr(feature = "client", derive(Debug))]
+// pub struct PriceChangeEvent {
+//     /// The pool for swap
+//     #[index]
+//     pub pool_state: Pubkey,
 
-    /// The tick of the pool before price change
-    pub tick_before: i32,
+//     /// The tick of the pool before price change
+//     pub tick_before: i32,
 
-    /// The tick of the pool after tprice change
-    pub tick_after: i32,
+//     /// The tick of the pool after tprice change
+//     pub tick_after: i32,
 
-    /// The sqrt(price) of the pool before price change, as a Q64.64
-    pub sqrt_price_x64_before: u128,
+//     /// The sqrt(price) of the pool before price change, as a Q64.64
+//     pub sqrt_price_x64_before: u128,
 
-    /// The sqrt(price) of the pool after price change, as a Q64.64
-    pub sqrt_price_x64_after: u128,
+//     /// The sqrt(price) of the pool after price change, as a Q64.64
+//     pub sqrt_price_x64_after: u128,
 
-    /// The liquidity of the pool before price change
-    pub liquidity_before: u128,
+//     /// The liquidity of the pool before price change
+//     pub liquidity_before: u128,
 
-    /// The liquidity of the pool after price change
-    pub liquidity_after: u128,
+//     /// The liquidity of the pool after price change
+//     pub liquidity_after: u128,
 
-    /// The direction of swap
-    pub zero_for_one: bool,
-}
+//     /// The direction of swap
+//     pub zero_for_one: bool,
+// }
 
 #[cfg(test)]
 pub mod pool_test {

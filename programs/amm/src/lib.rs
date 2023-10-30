@@ -200,7 +200,7 @@ pub mod amm_v3 {
     /// * `open_time` - reward open timestamp, must be set when state a new cycle
     /// * `end_time` - reward end timestamp
     ///
-    pub fn set_reward_params<'a, 'b, 'c, 'info>(
+    pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, SetRewardParams<'info>>,
         reward_index: u8,
         emissions_per_second_x64: u128,
@@ -271,44 +271,44 @@ pub mod amm_v3 {
         amount_0_max: u64,
         amount_1_max: u64,
     ) -> Result<()> {
-        let open_position_param = &mut OpenPositionParam {
-            payer: &mut ctx.accounts.payer,
-            position_nft_owner: &ctx.accounts.position_nft_owner,
-            position_nft_mint: &mut ctx.accounts.position_nft_mint,
-            position_nft_account: &mut ctx.accounts.position_nft_account,
-            metadata_account: &mut ctx.accounts.metadata_account,
-            pool_state: &mut ctx.accounts.pool_state,
-            protocol_position: &mut ctx.accounts.protocol_position,
-            tick_array_lower: &mut ctx.accounts.tick_array_lower,
-            tick_array_upper: &mut ctx.accounts.tick_array_upper,
-            personal_position: &mut ctx.accounts.personal_position,
-            token_account_0: &mut ctx.accounts.token_account_0,
-            token_account_1: &mut ctx.accounts.token_account_1,
-            token_vault_0: &mut ctx.accounts.token_vault_0,
-            token_vault_1: &mut ctx.accounts.token_vault_1,
-            rent: ctx.accounts.rent.clone(),
-            system_program: ctx.accounts.system_program.clone(),
-            token_program: ctx.accounts.token_program.clone(),
-            associated_token_program: ctx.accounts.associated_token_program.clone(),
-            metadata_program: ctx.accounts.metadata_program.clone(),
-            token_program_2022: None,
-            vault_0_mint: None,
-            vault_1_mint: None,
-        };
-        instructions::open_position(
-            open_position_param,
-            ctx.remaining_accounts,
-            &ctx.bumps,
-            liquidity,
-            amount_0_max,
-            amount_1_max,
-            tick_lower_index,
-            tick_upper_index,
-            tick_array_lower_start_index,
-            tick_array_upper_start_index,
-            true,
-            None,
-        )
+        // let open_position_param = &mut OpenPositionParam {
+        //     payer: &mut ctx.accounts.payer,
+        //     position_nft_owner: &ctx.accounts.position_nft_owner,
+        //     position_nft_mint: &mut ctx.accounts.position_nft_mint,
+        //     position_nft_account: &mut ctx.accounts.position_nft_account,
+        //     metadata_account: &mut ctx.accounts.metadata_account,
+        //     pool_state: &mut ctx.accounts.pool_state,
+        //     protocol_position: &mut ctx.accounts.protocol_position,
+        //     tick_array_lower: &mut ctx.accounts.tick_array_lower,
+        //     tick_array_upper: &mut ctx.accounts.tick_array_upper,
+        //     personal_position: &mut ctx.accounts.personal_position,
+        //     token_account_0: &mut ctx.accounts.token_account_0,
+        //     token_account_1: &mut ctx.accounts.token_account_1,
+        //     token_vault_0: &mut ctx.accounts.token_vault_0,
+        //     token_vault_1: &mut ctx.accounts.token_vault_1,
+        //     rent: ctx.accounts.rent.clone(),
+        //     system_program: ctx.accounts.system_program.clone(),
+        //     token_program: ctx.accounts.token_program.clone(),
+        //     associated_token_program: ctx.accounts.associated_token_program.clone(),
+        //     metadata_program: ctx.accounts.metadata_program.clone(),
+        //     token_program_2022: None,
+        //     vault_0_mint: None,
+        //     vault_1_mint: None,
+        // };
+        // instructions::open_position_v1(
+        //     ctx,
+        //     liquidity,
+        //     amount_0_max,
+        //     amount_1_max,
+        //     tick_lower_index,
+        //     tick_upper_index,
+        //     tick_array_lower_start_index,
+        //     tick_array_upper_start_index,
+        //     true,
+        //     None,
+        // )
+
+        Ok(())
     }
 
     /// Creates a new position wrapped in a NFT, support Token2022
@@ -325,7 +325,7 @@ pub mod amm_v3 {
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
     /// * `base_flag` - must be special if liquidity is zero, false: calculate liquidity base amount_0_max otherwise base amount_1_max
     ///
-    pub fn open_position_v2<'a, 'b, 'c, 'info>(
+    pub fn open_position_v2<'a, 'b, 'c: 'info, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, OpenPositionV2<'info>>,
         tick_lower_index: i32,
         tick_upper_index: i32,
@@ -340,34 +340,32 @@ pub mod amm_v3 {
         if liquidity == 0 {
             assert!(base_flag.is_some());
         }
-        let open_position_param = &mut OpenPositionParam {
-            payer: &mut ctx.accounts.payer,
-            position_nft_owner: &ctx.accounts.position_nft_owner,
-            position_nft_mint: &mut ctx.accounts.position_nft_mint,
-            position_nft_account: &mut ctx.accounts.position_nft_account,
-            metadata_account: &mut ctx.accounts.metadata_account,
-            pool_state: &mut ctx.accounts.pool_state,
-            protocol_position: &mut ctx.accounts.protocol_position,
-            tick_array_lower: &mut ctx.accounts.tick_array_lower,
-            tick_array_upper: &mut ctx.accounts.tick_array_upper,
-            personal_position: &mut ctx.accounts.personal_position,
-            token_account_0: &mut ctx.accounts.token_account_0,
-            token_account_1: &mut ctx.accounts.token_account_1,
-            token_vault_0: &mut ctx.accounts.token_vault_0,
-            token_vault_1: &mut ctx.accounts.token_vault_1,
-            rent: ctx.accounts.rent.clone(),
-            system_program: ctx.accounts.system_program.clone(),
-            token_program: ctx.accounts.token_program.clone(),
-            associated_token_program: ctx.accounts.associated_token_program.clone(),
-            metadata_program: ctx.accounts.metadata_program.clone(),
-            token_program_2022: Some(ctx.accounts.token_program_2022.clone()),
-            vault_0_mint: Some(ctx.accounts.vault_0_mint.clone()),
-            vault_1_mint: Some(ctx.accounts.vault_1_mint.clone()),
-        };
-        instructions::open_position(
-            open_position_param,
-            ctx.remaining_accounts,
-            &ctx.bumps,
+        // let open_position_param = &mut OpenPositionParam {
+        //     payer: &mut ctx.accounts.payer,
+        //     position_nft_owner: &ctx.accounts.position_nft_owner,
+        //     position_nft_mint: &mut ctx.accounts.position_nft_mint,
+        //     position_nft_account: &mut ctx.accounts.position_nft_account,
+        //     metadata_account: &mut ctx.accounts.metadata_account,
+        //     pool_state: &mut ctx.accounts.pool_state,
+        //     protocol_position: &mut ctx.accounts.protocol_position,
+        //     tick_array_lower: &mut ctx.accounts.tick_array_lower,
+        //     tick_array_upper: &mut ctx.accounts.tick_array_upper,
+        //     personal_position: &mut ctx.accounts.personal_position,
+        //     token_account_0: &mut ctx.accounts.token_account_0,
+        //     token_account_1: &mut ctx.accounts.token_account_1,
+        //     token_vault_0: &mut ctx.accounts.token_vault_0,
+        //     token_vault_1: &mut ctx.accounts.token_vault_1,
+        //     rent: ctx.accounts.rent.clone(),
+        //     system_program: ctx.accounts.system_program.clone(),
+        //     token_program: ctx.accounts.token_program.clone(),
+        //     associated_token_program: ctx.accounts.associated_token_program.clone(),
+        //     metadata_program: ctx.accounts.metadata_program.clone(),
+        //     token_program_2022: Some(ctx.accounts.token_program_2022.clone()),
+        //     vault_0_mint: Some(ctx.accounts.vault_0_mint.clone()),
+        //     vault_1_mint: Some(ctx.accounts.vault_1_mint.clone()),
+        // };
+        instructions::open_position_v2(
+            ctx,
             liquidity,
             amount_0_max,
             amount_1_max,
@@ -378,6 +376,8 @@ pub mod amm_v3 {
             with_matedata,
             base_flag,
         )
+
+        // Ok(())
     }
 
     /// Close a position, the nft mint and nft account
@@ -494,7 +494,7 @@ pub mod amm_v3 {
     /// * `amount_1_min` - The minimum amount of token_1 that should be accounted for the burned liquidity
     ///
     #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
-    pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
+    pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, DecreaseLiquidity<'info>>,
         liquidity: u128,
         amount_0_min: u64,
@@ -538,7 +538,7 @@ pub mod amm_v3 {
     /// * `amount_1_min` - The minimum amount of token_1 that should be accounted for the burned liquidity
     ///
     #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
-    pub fn decrease_liquidity_v2<'a, 'b, 'c, 'info>(
+    pub fn decrease_liquidity_v2<'a, 'b, 'c: 'info, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, DecreaseLiquidityV2<'info>>,
         liquidity: u128,
         amount_0_min: u64,
@@ -582,7 +582,7 @@ pub mod amm_v3 {
     /// * `sqrt_price_limit` - The Q64.64 sqrt price √P limit. If zero for one, the price cannot
     /// * `is_base_input` - swap base input or swap base output
     ///
-    pub fn swap<'a, 'b, 'c, 'info>(
+    pub fn swap<'a, 'b, 'c: 'info, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, SwapSingle<'info>>,
         amount: u64,
         other_amount_threshold: u64,
@@ -608,7 +608,7 @@ pub mod amm_v3 {
     /// * `sqrt_price_limit` - The Q64.64 sqrt price √P limit. If zero for one, the price cannot
     /// * `is_base_input` - swap base input or swap base output
     ///
-    pub fn swap_v2<'a, 'b, 'c, 'info>(
+    pub fn swap_v2<'a, 'b, 'c: 'info, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, SwapSingleV2<'info>>,
         amount: u64,
         other_amount_threshold: u64,
@@ -632,7 +632,7 @@ pub mod amm_v3 {
     /// * `amount_in` - Token amount to be swapped in
     /// * `amount_out_minimum` - Panic if output amount is below minimum amount. For slippage.
     ///
-    pub fn swap_router_base_in<'a, 'b, 'c, 'info>(
+    pub fn swap_router_base_in<'a, 'b, 'c: 'info, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, SwapRouterBaseIn<'info>>,
         amount_in: u64,
         amount_out_minimum: u64,

@@ -583,9 +583,9 @@ pub fn swap_internal<'b, 'info>(
 
 /// Performs a single exact input/output swap
 /// if is_base_input = true, return vaule is the max_amount_out, otherwise is min_amount_in
-pub fn exact_internal<'b, 'info>(
+pub fn exact_internal<'b, 'c: 'info, 'info>(
     ctx: &mut SwapAccounts<'b, 'info>,
-    remaining_accounts: &[AccountInfo<'info>],
+    remaining_accounts: &'c [AccountInfo<'info>],
     amount_specified: u64,
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
@@ -770,7 +770,7 @@ pub fn exact_internal<'b, 'info>(
     }
 }
 
-pub fn swap<'a, 'b, 'c, 'info>(
+pub fn swap<'a, 'b, 'c: 'info, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, SwapSingle<'info>>,
     amount: u64,
     other_amount_threshold: u64,
@@ -863,7 +863,7 @@ mod swap_test {
             ));
             pool_state
                 .borrow_mut()
-                .flip_tick_array_bit(&None, tick_array_info.start_tick_index)
+                .flip_tick_array_bit(None, tick_array_info.start_tick_index)
                 .unwrap();
         }
 

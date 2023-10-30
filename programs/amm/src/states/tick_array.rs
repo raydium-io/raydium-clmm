@@ -71,7 +71,7 @@ impl TickArrayState {
     /// Load a TickArrayState of type AccountLoader from tickarray account info, if tickarray account is not exist, then create it.
     pub fn get_or_create_tick_array<'info>(
         payer: AccountInfo<'info>,
-        tick_array_account_info: AccountInfo<'info>,
+        tick_array_account_info: &'info AccountInfo<'info>,
         system_program: AccountInfo<'info>,
         pool_state_loader: &AccountLoader<'info, PoolState>,
         tick_array_start_index: i32,
@@ -107,7 +107,7 @@ impl TickArrayState {
             )?;
             let tick_array_state_loader = AccountLoader::<TickArrayState>::try_from_unchecked(
                 &crate::id(),
-                &tick_array_account_info,
+                tick_array_account_info,
             )?;
             {
                 let mut tick_array_account = tick_array_state_loader.load_init()?;
@@ -121,7 +121,7 @@ impl TickArrayState {
             tick_array_state_loader.exit(&crate::id())?;
             tick_array_state_loader
         } else {
-            AccountLoader::<TickArrayState>::try_from(&tick_array_account_info)?
+            AccountLoader::<TickArrayState>::try_from(tick_array_account_info)?
         };
         Ok(tick_array_state)
     }

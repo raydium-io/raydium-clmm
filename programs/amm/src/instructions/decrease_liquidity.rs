@@ -245,9 +245,9 @@ pub struct DecreaseLiquidityParam<'b, 'info> {
     pub vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
 }
 
-pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
+pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
     accounts: &mut DecreaseLiquidityParam<'b, 'info>,
-    remaining_accounts: &[AccountInfo<'info>],
+    remaining_accounts: &'c [AccountInfo<'info>],
     liquidity: u128,
     amount_0_min: u64,
     amount_1_min: u64,
@@ -305,7 +305,7 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
             &mut accounts.personal_position,
             &accounts.tick_array_lower,
             &accounts.tick_array_upper,
-            &tickarray_bitmap_extension,
+            tickarray_bitmap_extension,
             liquidity,
         )?;
 
@@ -412,13 +412,13 @@ pub fn decrease_liquidity<'a, 'b, 'c, 'info>(
     Ok(())
 }
 
-pub fn decrease_liquidity_and_update_position<'a, 'b, 'c, 'info>(
+pub fn decrease_liquidity_and_update_position<'a, 'b: 'info, 'c, 'info>(
     pool_state_loader: &AccountLoader<'info, PoolState>,
     protocol_position: &mut Box<Account<'info, ProtocolPositionState>>,
     personal_position: &mut Box<Account<'info, PersonalPositionState>>,
     tick_array_lower: &AccountLoader<'info, TickArrayState>,
     tick_array_upper: &AccountLoader<'info, TickArrayState>,
-    tick_array_bitmap_extension: &Option<&AccountInfo<'info>>,
+    tick_array_bitmap_extension: Option<&'b AccountInfo<'info>>,
     liquidity: u128,
 ) -> Result<(u64, u64, u64, u64)> {
     let mut pool_state = pool_state_loader.load_mut()?;
@@ -494,12 +494,12 @@ pub fn decrease_liquidity_and_update_position<'a, 'b, 'c, 'info>(
     ))
 }
 
-pub fn burn_liquidity<'b, 'info>(
+pub fn burn_liquidity<'b: 'info, 'info>(
     pool_state: &mut RefMut<PoolState>,
     tick_array_lower_loader: &AccountLoader<'info, TickArrayState>,
     tick_array_upper_loader: &AccountLoader<'info, TickArrayState>,
     protocol_position: &mut ProtocolPositionState,
-    tickarray_bitmap_extension: &Option<&AccountInfo<'info>>,
+    tickarray_bitmap_extension: Option<&'b AccountInfo<'info>>,
     liquidity: u128,
 ) -> Result<(u64, u64)> {
     require_keys_eq!(tick_array_lower_loader.load()?.pool_id, pool_state.key());
@@ -571,7 +571,7 @@ pub fn burn_liquidity<'b, 'info>(
 
 pub fn collect_rewards<'a, 'b, 'c, 'info>(
     pool_state_loader: &AccountLoader<'info, PoolState>,
-    remaining_accounts: &[&AccountInfo<'info>],
+    remaining_accounts: &[&'info AccountInfo<'info>],
     token_program: Program<'info, Token>,
     token_program_2022: Option<AccountInfo<'info>>,
     personal_position_state: &mut PersonalPositionState,

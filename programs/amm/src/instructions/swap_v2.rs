@@ -76,9 +76,9 @@ pub struct SwapSingleV2<'info> {
 
 /// Performs a single exact input/output swap
 /// if is_base_input = true, return vaule is the max_amount_out, otherwise is min_amount_in
-pub fn exact_internal_v2<'info>(
+pub fn exact_internal_v2<'c: 'info, 'info>(
     ctx: &mut SwapSingleV2<'info>,
-    remaining_accounts: &[AccountInfo<'info>],
+    remaining_accounts: &'c [AccountInfo<'info>],
     amount_specified: u64,
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
@@ -283,7 +283,7 @@ pub fn exact_internal_v2<'info>(
     }
 }
 
-pub fn swap_v2<'a, 'b, 'c, 'info>(
+pub fn swap_v2<'a, 'b, 'c: 'info, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, SwapSingleV2<'info>>,
     amount: u64,
     other_amount_threshold: u64,
