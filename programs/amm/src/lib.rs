@@ -357,31 +357,7 @@ pub mod amm_v3 {
         amount_1_max: u64,
     ) -> Result<()> {
         assert!(liquidity != 0);
-        let increase_liquidity_param = &mut IncreaseLiquidityParam {
-            nft_owner: &ctx.accounts.nft_owner,
-            nft_account: &mut ctx.accounts.nft_account,
-            pool_state: &mut ctx.accounts.pool_state,
-            protocol_position: &mut ctx.accounts.protocol_position,
-            personal_position: &mut ctx.accounts.personal_position,
-            tick_array_lower: &mut ctx.accounts.tick_array_lower,
-            tick_array_upper: &mut ctx.accounts.tick_array_upper,
-            token_account_0: &mut ctx.accounts.token_account_0,
-            token_account_1: &mut ctx.accounts.token_account_1,
-            token_vault_0: &mut ctx.accounts.token_vault_0,
-            token_vault_1: &mut ctx.accounts.token_vault_1,
-            token_program: ctx.accounts.token_program.clone(),
-            token_program_2022: None,
-            vault_0_mint: None,
-            vault_1_mint: None,
-        };
-        instructions::increase_liquidity(
-            increase_liquidity_param,
-            ctx.remaining_accounts,
-            liquidity,
-            amount_0_max,
-            amount_1_max,
-            None,
-        )
+        instructions::increase_liquidity_v1(ctx, liquidity, amount_0_max, amount_1_max, None)
     }
 
     /// Increases liquidity with a exist position, with amount paid by `payer`, support Token2022
@@ -405,31 +381,7 @@ pub mod amm_v3 {
         if liquidity == 0 {
             assert!(base_flag.is_some());
         }
-        let increase_liquidity_param = &mut IncreaseLiquidityParam {
-            nft_owner: &ctx.accounts.nft_owner,
-            nft_account: &mut ctx.accounts.nft_account,
-            pool_state: &mut ctx.accounts.pool_state,
-            protocol_position: &mut ctx.accounts.protocol_position,
-            personal_position: &mut ctx.accounts.personal_position,
-            tick_array_lower: &mut ctx.accounts.tick_array_lower,
-            tick_array_upper: &mut ctx.accounts.tick_array_upper,
-            token_account_0: &mut ctx.accounts.token_account_0,
-            token_account_1: &mut ctx.accounts.token_account_1,
-            token_vault_0: &mut ctx.accounts.token_vault_0,
-            token_vault_1: &mut ctx.accounts.token_vault_1,
-            token_program: ctx.accounts.token_program.clone(),
-            token_program_2022: Some(ctx.accounts.token_program_2022.clone()),
-            vault_0_mint: Some(ctx.accounts.vault_0_mint.clone()),
-            vault_1_mint: Some(ctx.accounts.vault_1_mint.clone()),
-        };
-        instructions::increase_liquidity(
-            increase_liquidity_param,
-            ctx.remaining_accounts,
-            liquidity,
-            amount_0_max,
-            amount_1_max,
-            base_flag,
-        )
+        instructions::increase_liquidity_v2(ctx, liquidity, amount_0_max, amount_1_max, base_flag)
     }
 
     /// Decreases liquidity with a exist position
@@ -448,32 +400,7 @@ pub mod amm_v3 {
         amount_0_min: u64,
         amount_1_min: u64,
     ) -> Result<()> {
-        let decrease_liquidity_param = &mut DecreaseLiquidityParam {
-            nft_owner: &ctx.accounts.nft_owner,
-            nft_account: &ctx.accounts.nft_account,
-            personal_position: &mut ctx.accounts.personal_position,
-            pool_state: &mut ctx.accounts.pool_state,
-            protocol_position: &mut ctx.accounts.protocol_position,
-            token_vault_0: &mut ctx.accounts.token_vault_0,
-            token_vault_1: &mut ctx.accounts.token_vault_1,
-            tick_array_lower: &mut ctx.accounts.tick_array_lower,
-            tick_array_upper: &mut ctx.accounts.tick_array_upper,
-            recipient_token_account_0: &mut ctx.accounts.recipient_token_account_0,
-            recipient_token_account_1: &mut ctx.accounts.recipient_token_account_1,
-            token_program: ctx.accounts.token_program.clone(),
-            token_program_2022: None,
-            memo_program: None,
-            vault_0_mint: None,
-            vault_1_mint: None,
-        };
-
-        instructions::decrease_liquidity(
-            decrease_liquidity_param,
-            ctx.remaining_accounts,
-            liquidity,
-            amount_0_min,
-            amount_1_min,
-        )
+        instructions::decrease_liquidity_v1(ctx, liquidity, amount_0_min, amount_1_min)
     }
 
     /// Decreases liquidity with a exist position, support Token2022
@@ -492,32 +419,7 @@ pub mod amm_v3 {
         amount_0_min: u64,
         amount_1_min: u64,
     ) -> Result<()> {
-        let decrease_liquidity_param = &mut DecreaseLiquidityParam {
-            nft_owner: &ctx.accounts.nft_owner,
-            nft_account: &ctx.accounts.nft_account,
-            personal_position: &mut ctx.accounts.personal_position,
-            pool_state: &mut ctx.accounts.pool_state,
-            protocol_position: &mut ctx.accounts.protocol_position,
-            token_vault_0: &mut ctx.accounts.token_vault_0,
-            token_vault_1: &mut ctx.accounts.token_vault_1,
-            tick_array_lower: &mut ctx.accounts.tick_array_lower,
-            tick_array_upper: &mut ctx.accounts.tick_array_upper,
-            recipient_token_account_0: &mut ctx.accounts.recipient_token_account_0,
-            recipient_token_account_1: &mut ctx.accounts.recipient_token_account_1,
-            token_program: ctx.accounts.token_program.clone(),
-            token_program_2022: Some(ctx.accounts.token_program_2022.clone()),
-            memo_program: Some(ctx.accounts.memo_program.clone()),
-            vault_0_mint: Some(ctx.accounts.vault_0_mint.clone()),
-            vault_1_mint: Some(ctx.accounts.vault_1_mint.clone()),
-        };
-
-        instructions::decrease_liquidity(
-            decrease_liquidity_param,
-            ctx.remaining_accounts,
-            liquidity,
-            amount_0_min,
-            amount_1_min,
-        )
+        instructions::decrease_liquidity_v2(ctx, liquidity, amount_0_min, amount_1_min)
     }
 
     /// Swaps one token for as much as possible of another token across a single pool

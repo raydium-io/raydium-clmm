@@ -16,6 +16,7 @@ use std::cell::RefMut;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
 use std::ops::Deref;
+use std::ops::DerefMut;
 
 pub struct AddLiquidityParam<'b, 'info> {
     /// Pays to mint liquidity
@@ -373,20 +374,20 @@ pub fn open_position_v1<'a, 'b, 'c: 'info, 'info>(
     base_flag: Option<bool>,
 ) -> Result<()> {
     open_position(
-        &mut ctx.accounts.payer,
+        &ctx.accounts.payer,
         &ctx.accounts.position_nft_owner,
-        &mut ctx.accounts.position_nft_mint,
-        &mut ctx.accounts.position_nft_account,
-        &mut ctx.accounts.metadata_account,
-        &mut ctx.accounts.pool_state,
+        &ctx.accounts.position_nft_mint,
+        &ctx.accounts.position_nft_account,
+        &ctx.accounts.metadata_account,
+        &ctx.accounts.pool_state,
+        &ctx.accounts.tick_array_lower,
+        &ctx.accounts.tick_array_upper,
         &mut ctx.accounts.protocol_position,
-        &mut ctx.accounts.tick_array_lower,
-        &mut ctx.accounts.tick_array_upper,
         &mut ctx.accounts.personal_position,
-        &mut ctx.accounts.token_account_0,
-        &mut ctx.accounts.token_account_1,
-        &mut ctx.accounts.token_vault_0,
-        &mut ctx.accounts.token_vault_1,
+        &ctx.accounts.token_account_0,
+        &ctx.accounts.token_account_1,
+        &ctx.accounts.token_vault_0,
+        &ctx.accounts.token_vault_1,
         &ctx.accounts.rent,
         &ctx.accounts.system_program,
         &ctx.accounts.token_program,
@@ -422,30 +423,27 @@ pub fn open_position_v2<'a, 'b, 'c: 'info, 'info>(
     base_flag: Option<bool>,
 ) -> Result<()> {
     open_position(
-        &mut ctx.accounts.payer,
+        &ctx.accounts.payer,
         &ctx.accounts.position_nft_owner,
-        &mut ctx.accounts.position_nft_mint,
-        &mut ctx.accounts.position_nft_account,
-        &mut ctx.accounts.metadata_account,
-        &mut ctx.accounts.pool_state,
+        &ctx.accounts.position_nft_mint,
+        &ctx.accounts.position_nft_account,
+        &ctx.accounts.metadata_account,
+        &ctx.accounts.pool_state,
+        &ctx.accounts.tick_array_lower,
+        &ctx.accounts.tick_array_upper,
         &mut ctx.accounts.protocol_position,
-        &mut ctx.accounts.tick_array_lower,
-        &mut ctx.accounts.tick_array_upper,
         &mut ctx.accounts.personal_position,
-        &mut ctx.accounts.token_account_0,
-        &mut ctx.accounts.token_account_1,
-        &mut ctx.accounts.token_vault_0,
-        &mut ctx.accounts.token_vault_1,
+        &ctx.accounts.token_account_0,
+        &ctx.accounts.token_account_1,
+        &ctx.accounts.token_vault_0,
+        &ctx.accounts.token_vault_1,
         &ctx.accounts.rent,
         &ctx.accounts.system_program,
         &ctx.accounts.token_program,
         &ctx.accounts.metadata_program,
-        // Some(ctx.accounts.token_program_2022.clone()),
-        // Some(ctx.accounts.vault_0_mint.clone()),
-        // Some(ctx.accounts.vault_1_mint.clone()),
-        None,
-        None,
-        None,
+        Some(ctx.accounts.token_program_2022.clone()),
+        Some(ctx.accounts.vault_0_mint.clone()),
+        Some(ctx.accounts.vault_1_mint.clone()),
         &ctx.remaining_accounts,
         ctx.bumps.protocol_position,
         ctx.bumps.personal_position,
@@ -462,20 +460,20 @@ pub fn open_position_v2<'a, 'b, 'c: 'info, 'info>(
 }
 
 pub fn open_position<'a, 'b, 'c: 'info, 'info>(
-    payer: &'b mut Signer<'info>,
+    payer: &'b Signer<'info>,
     position_nft_owner: &'b UncheckedAccount<'info>,
-    position_nft_mint: &'b mut Box<InterfaceAccount<'info, Mint>>,
-    position_nft_account: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-    metadata_account: &'b mut UncheckedAccount<'info>,
-    pool_state_loader: &'b mut AccountLoader<'info, PoolState>,
+    position_nft_mint: &'b Box<InterfaceAccount<'info, Mint>>,
+    position_nft_account: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    metadata_account: &'b UncheckedAccount<'info>,
+    pool_state_loader: &'b AccountLoader<'info, PoolState>,
+    tick_array_lower_loader: &'b AccountLoader<'info, TickArrayState>,
+    tick_array_upper_loader: &'b AccountLoader<'info, TickArrayState>,
     protocol_position: &'b mut Box<Account<'info, ProtocolPositionState>>,
-    tick_array_lower_loader: &'b mut AccountLoader<'info, TickArrayState>,
-    tick_array_upper_loader: &'b mut AccountLoader<'info, TickArrayState>,
     personal_position: &'b mut Box<Account<'info, PersonalPositionState>>,
-    token_account_0: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-    token_account_1: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-    token_vault_0: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-    token_vault_1: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
+    token_account_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    token_account_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    token_vault_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    token_vault_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
     rent: &'b Sysvar<'info, Rent>,
     system_program: &'b Program<'info, System>,
     token_program: &'b Program<'info, Token>,
@@ -549,6 +547,7 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
         }
 
         // check if protocol position is initilized
+        let protocol_position = protocol_position.deref_mut();
         if protocol_position.pool_id == Pubkey::default() {
             protocol_position.bump = protocol_position_bump;
             protocol_position.pool_id = pool_state_loader.key();
@@ -588,7 +587,7 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
                 &mut tick_array_upper,
                 protocol_position,
                 token_program_2022,
-                token_program.clone(),
+                token_program,
                 vault_0_mint,
                 vault_1_mint,
                 if use_tickarray_bitmap_extension {
@@ -659,15 +658,15 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
 /// Add liquidity to an initialized pool
 pub fn add_liquidity<'b, 'c: 'info, 'info>(
     payer: &'b Signer<'info>,
-    token_account_0: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-    token_account_1: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-    token_vault_0: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-    token_vault_1: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
+    token_account_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    token_account_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    token_vault_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    token_vault_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
     tick_array_lower: &mut RefMut<TickArrayState>,
     tick_array_upper: &mut RefMut<TickArrayState>,
     protocol_position: &mut ProtocolPositionState,
     token_program_2022: Option<Program<'info, Token2022>>,
-    token_program: Program<'info, Token>,
+    token_program: &'b Program<'info, Token>,
     vault_0_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
     vault_1_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
     tick_array_bitmap_extension: Option<&'c AccountInfo<'info>>,
@@ -799,9 +798,9 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
         token_2022_program_opt = Some(token_program_2022.clone().unwrap().to_account_info());
     }
     transfer_from_user_to_pool_vault(
-        &payer,
-        &token_account_0,
-        &token_vault_0,
+        payer,
+        token_account_0,
+        token_vault_0,
         vault_0_mint,
         &token_program,
         token_2022_program_opt.clone(),
@@ -809,9 +808,9 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
     )?;
 
     transfer_from_user_to_pool_vault(
-        &payer,
-        &token_account_1,
-        &token_vault_1,
+        payer,
+        token_account_1,
+        token_vault_1,
         vault_1_mint,
         &token_program,
         token_2022_program_opt.clone(),
