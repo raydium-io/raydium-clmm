@@ -1,10 +1,8 @@
-use super::pool::PoolState;
 use crate::error::ErrorCode;
 use crate::libraries::{liquidity_math, tick_math};
 use crate::pool::{RewardInfo, REWARD_NUM};
-use crate::util::*;
 use crate::Result;
-use anchor_lang::{error::ErrorCode as anchorErrorCode, prelude::*, system_program};
+use anchor_lang::{error::ErrorCode as anchorErrorCode, prelude::*};
 use arrayref::array_ref;
 use std::cell::RefMut;
 #[cfg(feature = "enable-log")]
@@ -68,62 +66,27 @@ impl TickArrayState {
         }))
     }
 
-    /// Load a TickArrayState of type AccountLoader from tickarray account info, if tickarray account is not exist, then create it.
-    pub fn get_or_create_tick_array<'info>(
-        payer: AccountInfo<'info>,
-        tick_array_account_info: &'info AccountInfo<'info>,
-        system_program: AccountInfo<'info>,
-        pool_state_loader: &AccountLoader<'info, PoolState>,
-        tick_array_start_index: i32,
-        tick_spacing: u16,
-    ) -> Result<AccountLoader<'info, TickArrayState>> {
-        require!(
-            TickArrayState::check_is_valid_start_index(tick_array_start_index, tick_spacing),
-            ErrorCode::InvaildTickIndex
-        );
+    pub fn check_tick_array_init<'a>(account_info: &'a AccountInfo) -> Result<bool> {
+        if account_info.owner != &crate::id() {
+            return Err(Error::from(anchorErrorCode::AccountOwnedByWrongProgram)
+                .with_pubkeys((*account_info.owner, crate::id())));
+        }
+        if !account_info.is_writable {
+            return Err(anchorErrorCode::AccountNotMutable.into());
+        }
+        require_eq!(account_info.data_len(), TickArrayState::LEN);
 
-        let tick_array_state = if tick_array_account_info.owner == &system_program::ID {
-            let (expect_pda_address, bump) = Pubkey::find_program_address(
-                &[
-                    TICK_ARRAY_SEED.as_bytes(),
-                    pool_state_loader.key().as_ref(),
-                    &tick_array_start_index.to_be_bytes(),
-                ],
-                &crate::id(),
-            );
-            require_keys_eq!(expect_pda_address, tick_array_account_info.key());
-            create_or_allocate_account(
-                &crate::id(),
-                payer,
-                system_program,
-                tick_array_account_info.clone(),
-                &[
-                    TICK_ARRAY_SEED.as_bytes(),
-                    pool_state_loader.key().as_ref(),
-                    &tick_array_start_index.to_be_bytes(),
-                    &[bump],
-                ],
-                TickArrayState::LEN,
-            )?;
-            let tick_array_state_loader = AccountLoader::<TickArrayState>::try_from_unchecked(
-                &crate::id(),
-                tick_array_account_info,
-            )?;
-            {
-                let mut tick_array_account = tick_array_state_loader.load_init()?;
-                tick_array_account.initialize(
-                    tick_array_start_index,
-                    tick_spacing,
-                    pool_state_loader.key(),
-                )?;
-            }
-            // save the 8 byte discriminator
-            tick_array_state_loader.exit(&crate::id())?;
-            tick_array_state_loader
-        } else {
-            AccountLoader::<TickArrayState>::try_from(tick_array_account_info)?
-        };
-        Ok(tick_array_state)
+        let data = account_info.try_borrow_mut_data()?;
+        let disc_bytes = array_ref![data, 0, 8];
+        let discriminator = u64::from_le_bytes(*disc_bytes);
+        if discriminator == 0 {
+            // tick_array account is not init
+            return Ok(false);
+        }
+        if disc_bytes != &TickArrayState::discriminator() {
+            return Err(anchorErrorCode::AccountDiscriminatorMismatch.into());
+        }
+        Ok(true)
     }
 
     /**

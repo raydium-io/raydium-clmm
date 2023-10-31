@@ -261,7 +261,7 @@ pub mod amm_v3 {
     /// * `amount_0_max` - The max amount of token_0 to spend, which serves as a slippage check
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
     ///
-    pub fn open_position<'a, 'b, 'c, 'info>(
+    pub fn open_position<'a, 'b, 'c: 'info, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, OpenPosition<'info>>,
         tick_lower_index: i32,
         tick_upper_index: i32,
@@ -271,44 +271,18 @@ pub mod amm_v3 {
         amount_0_max: u64,
         amount_1_max: u64,
     ) -> Result<()> {
-        // let open_position_param = &mut OpenPositionParam {
-        //     payer: &mut ctx.accounts.payer,
-        //     position_nft_owner: &ctx.accounts.position_nft_owner,
-        //     position_nft_mint: &mut ctx.accounts.position_nft_mint,
-        //     position_nft_account: &mut ctx.accounts.position_nft_account,
-        //     metadata_account: &mut ctx.accounts.metadata_account,
-        //     pool_state: &mut ctx.accounts.pool_state,
-        //     protocol_position: &mut ctx.accounts.protocol_position,
-        //     tick_array_lower: &mut ctx.accounts.tick_array_lower,
-        //     tick_array_upper: &mut ctx.accounts.tick_array_upper,
-        //     personal_position: &mut ctx.accounts.personal_position,
-        //     token_account_0: &mut ctx.accounts.token_account_0,
-        //     token_account_1: &mut ctx.accounts.token_account_1,
-        //     token_vault_0: &mut ctx.accounts.token_vault_0,
-        //     token_vault_1: &mut ctx.accounts.token_vault_1,
-        //     rent: ctx.accounts.rent.clone(),
-        //     system_program: ctx.accounts.system_program.clone(),
-        //     token_program: ctx.accounts.token_program.clone(),
-        //     associated_token_program: ctx.accounts.associated_token_program.clone(),
-        //     metadata_program: ctx.accounts.metadata_program.clone(),
-        //     token_program_2022: None,
-        //     vault_0_mint: None,
-        //     vault_1_mint: None,
-        // };
-        // instructions::open_position_v1(
-        //     ctx,
-        //     liquidity,
-        //     amount_0_max,
-        //     amount_1_max,
-        //     tick_lower_index,
-        //     tick_upper_index,
-        //     tick_array_lower_start_index,
-        //     tick_array_upper_start_index,
-        //     true,
-        //     None,
-        // )
-
-        Ok(())
+        instructions::open_position_v1(
+            ctx,
+            liquidity,
+            amount_0_max,
+            amount_1_max,
+            tick_lower_index,
+            tick_upper_index,
+            tick_array_lower_start_index,
+            tick_array_upper_start_index,
+            true,
+            None,
+        )
     }
 
     /// Creates a new position wrapped in a NFT, support Token2022
@@ -340,30 +314,6 @@ pub mod amm_v3 {
         if liquidity == 0 {
             assert!(base_flag.is_some());
         }
-        // let open_position_param = &mut OpenPositionParam {
-        //     payer: &mut ctx.accounts.payer,
-        //     position_nft_owner: &ctx.accounts.position_nft_owner,
-        //     position_nft_mint: &mut ctx.accounts.position_nft_mint,
-        //     position_nft_account: &mut ctx.accounts.position_nft_account,
-        //     metadata_account: &mut ctx.accounts.metadata_account,
-        //     pool_state: &mut ctx.accounts.pool_state,
-        //     protocol_position: &mut ctx.accounts.protocol_position,
-        //     tick_array_lower: &mut ctx.accounts.tick_array_lower,
-        //     tick_array_upper: &mut ctx.accounts.tick_array_upper,
-        //     personal_position: &mut ctx.accounts.personal_position,
-        //     token_account_0: &mut ctx.accounts.token_account_0,
-        //     token_account_1: &mut ctx.accounts.token_account_1,
-        //     token_vault_0: &mut ctx.accounts.token_vault_0,
-        //     token_vault_1: &mut ctx.accounts.token_vault_1,
-        //     rent: ctx.accounts.rent.clone(),
-        //     system_program: ctx.accounts.system_program.clone(),
-        //     token_program: ctx.accounts.token_program.clone(),
-        //     associated_token_program: ctx.accounts.associated_token_program.clone(),
-        //     metadata_program: ctx.accounts.metadata_program.clone(),
-        //     token_program_2022: Some(ctx.accounts.token_program_2022.clone()),
-        //     vault_0_mint: Some(ctx.accounts.vault_0_mint.clone()),
-        //     vault_1_mint: Some(ctx.accounts.vault_1_mint.clone()),
-        // };
         instructions::open_position_v2(
             ctx,
             liquidity,
@@ -376,8 +326,6 @@ pub mod amm_v3 {
             with_matedata,
             base_flag,
         )
-
-        // Ok(())
     }
 
     /// Close a position, the nft mint and nft account
@@ -402,7 +350,7 @@ pub mod amm_v3 {
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
     ///
     #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
-    pub fn increase_liquidity<'a, 'b, 'c, 'info>(
+    pub fn increase_liquidity<'a, 'b, 'c: 'info, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, IncreaseLiquidity<'info>>,
         liquidity: u128,
         amount_0_max: u64,
@@ -447,7 +395,7 @@ pub mod amm_v3 {
     /// * `base_flag` - active if liquidity is zero, 0: calculate liquidity base amount_0_max otherwise base amount_1_max
     ///
     #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
-    pub fn increase_liquidity_v2<'a, 'b, 'c, 'info>(
+    pub fn increase_liquidity_v2<'a, 'b, 'c: 'info, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, IncreaseLiquidityV2<'info>>,
         liquidity: u128,
         amount_0_max: u64,

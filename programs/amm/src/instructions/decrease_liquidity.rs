@@ -176,13 +176,13 @@ pub struct DecreaseLiquidityV2<'info> {
     #[account(
         address = token_vault_0.mint
     )]
-    pub vault_0_mint: InterfaceAccount<'info, Mint>,
+    pub vault_0_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// The mint of token vault 1
     #[account(
         address = token_vault_1.mint
     )]
-    pub vault_1_mint: InterfaceAccount<'info, Mint>,
+    pub vault_1_mint: Box<InterfaceAccount<'info, Mint>>,
     // remaining account
     // #[account(
     //     seeds = [
@@ -239,10 +239,10 @@ pub struct DecreaseLiquidityParam<'b, 'info> {
     pub memo_program: Option<UncheckedAccount<'info>>,
 
     /// The mint of token vault 0
-    pub vault_0_mint: Option<InterfaceAccount<'info, Mint>>,
+    pub vault_0_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
 
     /// The mint of token vault 1
-    pub vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
+    pub vault_1_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
 }
 
 pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
@@ -602,11 +602,11 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
         let recipient_token_account =
             InterfaceAccount::<TokenAccount>::try_from(remaining_accounts.next().unwrap())?;
 
-        let mut reward_vault_mint: Option<InterfaceAccount<Mint>> = None;
+        let mut reward_vault_mint: Option<Box<InterfaceAccount<Mint>>> = None;
         if need_reward_mint {
-            reward_vault_mint = Some(InterfaceAccount::<Mint>::try_from(
+            reward_vault_mint = Some(Box::new(InterfaceAccount::<Mint>::try_from(
                 remaining_accounts.next().unwrap(),
-            )?);
+            )?));
         }
         require_keys_eq!(reward_token_vault.mint, recipient_token_account.mint);
         require_keys_eq!(

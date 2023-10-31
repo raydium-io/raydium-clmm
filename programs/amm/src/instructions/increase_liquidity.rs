@@ -1,4 +1,4 @@
-use super::{add_liquidity, AddLiquidityParam};
+use super::add_liquidity;
 use crate::error::ErrorCode;
 use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::states::*;
@@ -164,13 +164,13 @@ pub struct IncreaseLiquidityV2<'info> {
     #[account(
             address = token_vault_0.mint
     )]
-    pub vault_0_mint: InterfaceAccount<'info, Mint>,
+    pub vault_0_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// The mint of token vault 1
     #[account(
             address = token_vault_1.mint
     )]
-    pub vault_1_mint: InterfaceAccount<'info, Mint>,
+    pub vault_1_mint: Box<InterfaceAccount<'info, Mint>>,
     // remaining account
     // #[account(
     //     seeds = [
@@ -221,14 +221,14 @@ pub struct IncreaseLiquidityParam<'b, 'info> {
     pub token_program_2022: Option<Program<'info, Token2022>>,
 
     /// The mint of token vault 0
-    pub vault_0_mint: Option<InterfaceAccount<'info, Mint>>,
+    pub vault_0_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
     /// The mint of token vault 1
-    pub vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
+    pub vault_1_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
 }
 
-pub fn increase_liquidity<'a, 'b, 'c, 'info>(
+pub fn increase_liquidity<'a, 'b, 'c: 'info, 'info>(
     accounts: &mut IncreaseLiquidityParam<'b, 'info>,
-    remaining_accounts: &'b [AccountInfo<'info>],
+    remaining_accounts: &'c [AccountInfo<'info>],
     liquidity: u128,
     amount_0_max: u64,
     amount_1_max: u64,
@@ -243,85 +243,67 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
 
     let use_tickarray_bitmap_extension =
         pool_state.is_overflow_default_tickarray_bitmap(vec![tick_lower, tick_upper]);
-    // let mut add_liquidity_context = AddLiquidityParam {
-    //     payer: &accounts.nft_owner,
-    //     token_account_0: accounts.token_account_0,
-    //     token_account_1: accounts.token_account_1,
-    //     token_vault_0: accounts.token_vault_0,
-    //     token_vault_1: accounts.token_vault_1,
-    //     vault_0_mint: accounts.vault_0_mint.clone(),
-    //     vault_1_mint: accounts.vault_1_mint.clone(),
-    //     tick_array_lower: &accounts.tick_array_lower,
-    //     tick_array_upper: &accounts.tick_array_upper,
-    //     protocol_position: accounts.protocol_position,
-    //     token_program: accounts.token_program.clone(),
-    //     token_program_2022: accounts.token_program_2022.clone(),
-    //     tick_array_bitmap_extension: if use_tickarray_bitmap_extension {
-    //         Some(&remaining_accounts[0])
-    //     } else {
-    //         None
-    //     },
-    // };
+    let mut tick_array_lower = accounts.tick_array_lower.load_mut()?;
+    let mut tick_array_upper = accounts.tick_array_upper.load_mut()?;
 
-    // let (amount_0, amount_1, amount_0_transfer_fee, amount_1_transfer_fee) = add_liquidity(
-    //     &accounts.nft_owner,
-    //     accounts.token_account_0,
-    //     accounts.token_account_1,
-    //     accounts.token_vault_0,
-    //     accounts.token_vault_1,
-    //     accounts.vault_0_mint.clone(),
-    //     accounts.vault_1_mint.clone(),
-    //     &accounts.tick_array_lower,
-    //     &accounts.tick_array_upper,
-    //     accounts.protocol_position,
-    //     accounts.token_program.clone(),
-    //     accounts.token_program_2022.clone(),
-    //     if use_tickarray_bitmap_extension {
-    //         Some(&remaining_accounts[0])
-    //     } else {
-    //         None
-    //     },
-    //     &mut pool_state,
-    //     liquidity,
-    //     amount_0_max,
-    //     amount_1_max,
-    //     tick_lower,
-    //     tick_upper,
-    //     base_flag,
-    // )?;
-    // let updated_protocol_position = accounts.protocol_position;
+    let (amount_0, amount_1, amount_0_transfer_fee, amount_1_transfer_fee) = add_liquidity(
+        &accounts.nft_owner,
+        accounts.token_account_0,
+        accounts.token_account_1,
+        accounts.token_vault_0,
+        accounts.token_vault_1,
+        &mut tick_array_lower,
+        &mut tick_array_upper,
+        accounts.protocol_position,
+        accounts.token_program_2022.clone(),
+        accounts.token_program.clone(),
+        accounts.vault_0_mint.clone(),
+        accounts.vault_1_mint.clone(),
+        if use_tickarray_bitmap_extension {
+            Some(&remaining_accounts[0])
+        } else {
+            None
+        },
+        &mut pool_state,
+        liquidity,
+        amount_0_max,
+        amount_1_max,
+        tick_lower,
+        tick_upper,
+        base_flag,
+    )?;
 
-    // let personal_position = &mut accounts.personal_position;
-    // personal_position.token_fees_owed_0 = calculate_latest_token_fees(
-    //     personal_position.token_fees_owed_0,
-    //     personal_position.fee_growth_inside_0_last_x64,
-    //     updated_protocol_position.fee_growth_inside_0_last_x64,
-    //     personal_position.liquidity,
-    // );
-    // personal_position.token_fees_owed_1 = calculate_latest_token_fees(
-    //     personal_position.token_fees_owed_1,
-    //     personal_position.fee_growth_inside_1_last_x64,
-    //     updated_protocol_position.fee_growth_inside_1_last_x64,
-    //     personal_position.liquidity,
-    // );
+    let personal_position = &mut accounts.personal_position;
+    personal_position.token_fees_owed_0 = calculate_latest_token_fees(
+        personal_position.token_fees_owed_0,
+        personal_position.fee_growth_inside_0_last_x64,
+        accounts.protocol_position.fee_growth_inside_0_last_x64,
+        personal_position.liquidity,
+    );
+    personal_position.token_fees_owed_1 = calculate_latest_token_fees(
+        personal_position.token_fees_owed_1,
+        personal_position.fee_growth_inside_1_last_x64,
+        accounts.protocol_position.fee_growth_inside_1_last_x64,
+        personal_position.liquidity,
+    );
 
-    // personal_position.fee_growth_inside_0_last_x64 =
-    //     updated_protocol_position.fee_growth_inside_0_last_x64;
-    // personal_position.fee_growth_inside_1_last_x64 =
-    //     updated_protocol_position.fee_growth_inside_1_last_x64;
+    personal_position.fee_growth_inside_0_last_x64 =
+        accounts.protocol_position.fee_growth_inside_0_last_x64;
+    personal_position.fee_growth_inside_1_last_x64 =
+        accounts.protocol_position.fee_growth_inside_1_last_x64;
 
-    // // update rewards, must update before increase liquidity
-    // personal_position.update_rewards(updated_protocol_position.reward_growth_inside, true)?;
-    // personal_position.liquidity = personal_position.liquidity.checked_add(liquidity).unwrap();
+    // update rewards, must update before increase liquidity
+    personal_position.update_rewards(accounts.protocol_position.reward_growth_inside, true)?;
+    personal_position.liquidity = personal_position.liquidity.checked_add(liquidity).unwrap();
 
-    // emit!(IncreaseLiquidityEvent {
-    //     position_nft_mint: personal_position.nft_mint,
-    //     liquidity,
-    //     amount_0,
-    //     amount_1,
-    //     amount_0_transfer_fee,
-    //     amount_1_transfer_fee
-    // });
+    emit!(IncreaseLiquidityEvent {
+        position_nft_mint: personal_position.nft_mint,
+        liquidity,
+        amount_0,
+        amount_1,
+        amount_0_transfer_fee,
+        amount_1_transfer_fee
+    });
 
     Ok(())
 }

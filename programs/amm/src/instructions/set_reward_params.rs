@@ -111,7 +111,7 @@ pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
             &ctx.accounts.authority,
             &authority_token_account,
             &reward_token_vault,
-            Some(reward_vault_mint),
+            Some(Box::new(reward_vault_mint)),
             &ctx.accounts.token_program,
             Some(ctx.accounts.token_program_2022.to_account_info()),
             reward_amount,

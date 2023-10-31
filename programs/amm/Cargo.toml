@@ -24,7 +24,7 @@ paramset = []
 
 [dependencies]
 anchor-lang = { version = "0.29.0", features = ["init-if-needed"] }
-anchor-spl = "0.29.0"
+anchor-spl = {version = "0.29.0", features = ["metadata"]}
 solana-program = "<1.17.0"
 spl-memo = "4.0.0"
 uint = "0.9.1"
