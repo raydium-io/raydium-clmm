@@ -6,6 +6,7 @@ use crate::util;
 use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program;
+use anchor_spl::associated_token;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::metadata::Metadata;
 use anchor_spl::token::{self, Token};
@@ -17,47 +18,6 @@ use std::cell::RefMut;
 use std::convert::identity;
 use std::ops::Deref;
 use std::ops::DerefMut;
-
-pub struct AddLiquidityParam<'b, 'info> {
-    /// Pays to mint liquidity
-    pub payer: &'b Signer<'info>,
-
-    /// The token account spending token_0 to mint the position
-    pub token_account_0: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// The token account spending token_1 to mint the position
-    pub token_account_1: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// The address that holds pool tokens for token_0
-    pub token_vault_0: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// The address that holds pool tokens for token_1
-    pub token_vault_1: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// The bitmap storing initialization state of the lower tick
-    pub tick_array_lower: &'b AccountLoader<'info, TickArrayState>,
-
-    /// The bitmap storing initialization state of the upper tick
-    pub tick_array_upper: &'b AccountLoader<'info, TickArrayState>,
-
-    /// The position into which liquidity is minted
-    pub protocol_position: &'b mut Box<Account<'info, ProtocolPositionState>>,
-
-    /// The SPL program to perform token transfers
-    pub token_program: Program<'info, Token>,
-
-    /// The SPL program to perform token transfers
-    pub token_program_2022: Option<Program<'info, Token2022>>,
-
-    /// token_vault_0 mint
-    pub vault_0_mint: Option<InterfaceAccount<'info, Mint>>,
-
-    /// token_vault_1 mint
-    pub vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
-
-    /// The tick array bitmap extension
-    pub tick_array_bitmap_extension: Option<&'b AccountInfo<'info>>,
-}
 
 #[derive(Accounts)]
 #[instruction(tick_lower_index: i32, tick_upper_index: i32,tick_array_lower_start_index:i32,tick_array_upper_start_index:i32)]
@@ -80,14 +40,16 @@ pub struct OpenPosition<'info> {
     pub position_nft_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// Token account where position NFT will be minted
+    /// This account created in the contract by cpi to avoid large stack variables
     #[account(
-        init,
-        associated_token::mint = position_nft_mint,
-        associated_token::authority = position_nft_owner,
-        payer = payer,
-        token::token_program = token_program,
+        // init,
+        // associated_token::mint = position_nft_mint,
+        // associated_token::authority = position_nft_owner,
+        // payer = payer,
+        // token::token_program = token_program,
+        mut
     )]
-    pub position_nft_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub position_nft_account: UncheckedAccount<'info>,
 
     /// To store metaplex metadata
     /// CHECK: Safety check performed inside function body
@@ -225,14 +187,16 @@ pub struct OpenPositionV2<'info> {
     pub position_nft_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// Token account where position NFT will be minted
+    /// This account created in the contract by cpi to avoid large stack variables
     #[account(
-        init,
-        associated_token::mint = position_nft_mint,
-        associated_token::authority = position_nft_owner,
-        payer = payer,
-        token::token_program = token_program,
+        // init,
+        // associated_token::mint = position_nft_mint,
+        // associated_token::authority = position_nft_owner,
+        // payer = payer,
+        // token::token_program = token_program,
+        mut
     )]
-    pub position_nft_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub position_nft_account: UncheckedAccount<'info>,
 
     /// To store metaplex metadata
     /// CHECK: Safety check performed inside function body
@@ -391,6 +355,7 @@ pub fn open_position_v1<'a, 'b, 'c: 'info, 'info>(
         &ctx.accounts.rent,
         &ctx.accounts.system_program,
         &ctx.accounts.token_program,
+        &ctx.accounts.associated_token_program,
         &ctx.accounts.metadata_program,
         None,
         None,
@@ -440,6 +405,7 @@ pub fn open_position_v2<'a, 'b, 'c: 'info, 'info>(
         &ctx.accounts.rent,
         &ctx.accounts.system_program,
         &ctx.accounts.token_program,
+        &ctx.accounts.associated_token_program,
         &ctx.accounts.metadata_program,
         Some(ctx.accounts.token_program_2022.clone()),
         Some(ctx.accounts.vault_0_mint.clone()),
@@ -463,7 +429,7 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
     payer: &'b Signer<'info>,
     position_nft_owner: &'b UncheckedAccount<'info>,
     position_nft_mint: &'b Box<InterfaceAccount<'info, Mint>>,
-    position_nft_account: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    position_nft_account: &'b UncheckedAccount<'info>,
     metadata_account: &'b UncheckedAccount<'info>,
     pool_state_loader: &'b AccountLoader<'info, PoolState>,
     tick_array_lower_loader: &'b AccountLoader<'info, TickArrayState>,
@@ -477,6 +443,7 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
     rent: &'b Sysvar<'info, Rent>,
     system_program: &'b Program<'info, System>,
     token_program: &'b Program<'info, Token>,
+    associated_token_program: &'b Program<'info, AssociatedToken>,
     metadata_program: &'b Program<'info, Metadata>,
     token_program_2022: Option<Program<'info, Token2022>>,
     vault_0_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
@@ -638,17 +605,18 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
             deposit_amount_1_transfer_fee: amount_1_transfer_fee
         });
     }
-
     create_nft_with_metadata(
-        &payer.to_account_info(),
-        &pool_state_loader,
-        &position_nft_mint.to_account_info(),
-        &position_nft_account.to_account_info(),
-        &metadata_account.to_account_info(),
-        &metadata_program.to_account_info(),
-        token_program.to_account_info(),
-        system_program.to_account_info(),
-        rent.to_account_info(),
+        payer,
+        pool_state_loader,
+        position_nft_mint,
+        position_nft_account,
+        position_nft_owner,
+        metadata_account,
+        metadata_program,
+        associated_token_program,
+        token_program,
+        system_program,
+        rent,
         with_matedata,
     )?;
 
@@ -951,26 +919,40 @@ const METADATA_URI: &str =
     "https://cloudflare-ipfs.com/ipfs/QmbzJafuKY3B4t25eq9zdKZMgXiMeW4jHLzf6KE6ZmHWn1/02.json";
 
 fn create_nft_with_metadata<'info>(
-    payer: &AccountInfo<'info>,
+    payer: &Signer<'info>,
     pool_state_loader: &AccountLoader<'info, PoolState>,
-    position_nft_mint: &AccountInfo<'info>,
-    position_nft_account: &AccountInfo<'info>,
-    metadata_account: &AccountInfo<'info>,
-    metadata_program: &AccountInfo<'info>,
-    token_program: AccountInfo<'info>,
-    system_program: AccountInfo<'info>,
-    rent: AccountInfo<'info>,
+    position_nft_mint: &Box<InterfaceAccount<'info, Mint>>,
+    position_nft_account: &UncheckedAccount<'info>,
+    position_nft_owner: &UncheckedAccount<'info>,
+    metadata_account: &UncheckedAccount<'info>,
+    metadata_program: &Program<'info, Metadata>,
+    associated_token_program: &Program<'info, AssociatedToken>,
+    token_program: &Program<'info, Token>,
+    system_program: &Program<'info, System>,
+    rent: &Sysvar<'info, Rent>,
     with_matedata: bool,
 ) -> Result<()> {
     let pool_state = pool_state_loader.load()?;
     let seeds = pool_state.seeds();
+    // Creat the NFT account
+    associated_token::create(CpiContext::new(
+        associated_token_program.to_account_info(),
+        associated_token::Create {
+            payer: payer.to_account_info(),
+            associated_token: position_nft_account.to_account_info(),
+            authority: position_nft_owner.to_account_info(),
+            mint: position_nft_mint.to_account_info(),
+            system_program: system_program.to_account_info(),
+            token_program: token_program.to_account_info(),
+        },
+    ))?;
     // Mint the NFT
     token::mint_to(
         CpiContext::new_with_signer(
-            token_program.clone(),
+            token_program.to_account_info(),
             token::MintTo {
-                mint: position_nft_mint.clone(),
-                to: position_nft_account.clone(),
+                mint: position_nft_mint.to_account_info(),
+                to: position_nft_account.to_account_info(),
                 authority: pool_state_loader.to_account_info(),
             },
             &[&seeds],
@@ -1003,12 +985,12 @@ fn create_nft_with_metadata<'info>(
         solana_program::program::invoke_signed(
             &create_metadata_ix,
             &[
-                metadata_account.clone(),
-                position_nft_mint.clone(),
-                payer.to_account_info().clone(),
+                metadata_account.to_account_info(),
+                position_nft_mint.to_account_info(),
+                payer.to_account_info(),
                 pool_state_loader.to_account_info(),
-                system_program.clone(),
-                rent.clone(),
+                system_program.to_account_info(),
+                rent.to_account_info(),
             ],
             &[&seeds],
         )?;
@@ -1016,10 +998,10 @@ fn create_nft_with_metadata<'info>(
     // Disable minting
     token_2022::set_authority(
         CpiContext::new_with_signer(
-            token_program.clone(),
+            token_program.to_account_info(),
             token_2022::SetAuthority {
                 current_authority: pool_state_loader.to_account_info(),
-                account_or_mint: position_nft_mint.clone(),
+                account_or_mint: position_nft_mint.to_account_info(),
             },
             &[&seeds],
         ),
