@@ -451,6 +451,7 @@ pub enum CommandsName {
         token: Pubkey,
     },
     POperation,
+    PObservation,
     PConfig {
         config_index: u16,
     },
@@ -1910,6 +1911,14 @@ fn main() -> Result<()> {
             let operation_account: raydium_amm_v3::states::OperationState =
                 program.account(operation_account_key)?;
             println!("{:#?}", operation_account);
+        }
+        CommandsName::PObservation => {
+            let pool: raydium_amm_v3::states::PoolState =
+                program.account(pool_config.pool_id_account.unwrap())?;
+            println!("{}", pool.observation_key);
+            let observation_account: raydium_amm_v3::states::ObservationState =
+                program.account(pool.observation_key)?;
+            println!("{:#?}", observation_account);
         }
         CommandsName::PConfig { config_index } => {
             let (amm_config_key, __bump) = Pubkey::find_program_address(

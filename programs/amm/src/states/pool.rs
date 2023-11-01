@@ -189,7 +189,7 @@ impl PoolState {
         amm_config: &Account<AmmConfig>,
         token_mint_0: &InterfaceAccount<Mint>,
         token_mint_1: &InterfaceAccount<Mint>,
-        observation_state_loader: &AccountLoader<ObservationState>,
+        observation_state_key: Pubkey,
     ) -> Result<()> {
         self.bump = [bump];
         self.amm_config = amm_config.key();
@@ -227,12 +227,7 @@ impl PoolState {
         self.open_time = open_time;
         self.padding1 = [0; 25];
         self.padding2 = [0; 32];
-
-        let mut observation_state = observation_state_loader.load_init()?;
-        require_eq!(observation_state.initialized, false);
-        require_keys_eq!(observation_state.pool_id, Pubkey::default());
-        self.observation_key = observation_state_loader.key();
-        observation_state.pool_id = self.key();
+        self.observation_key = observation_state_key;
 
         Ok(())
     }

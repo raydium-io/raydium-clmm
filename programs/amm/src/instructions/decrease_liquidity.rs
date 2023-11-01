@@ -240,10 +240,10 @@ pub fn decrease_liquidity_v2<'a, 'b, 'c: 'info, 'info>(
         &ctx.accounts.recipient_token_account_0,
         &ctx.accounts.recipient_token_account_1,
         &ctx.accounts.token_program,
-        None,
-        None,
-        None,
-        None,
+        Some(ctx.accounts.token_program_2022.clone()),
+        Some(ctx.accounts.memo_program.clone()),
+        Some(ctx.accounts.vault_0_mint.clone()),
+        Some(ctx.accounts.vault_1_mint.clone()),
         &ctx.remaining_accounts,
         liquidity,
         amount_0_min,
@@ -422,13 +422,13 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
     Ok(())
 }
 
-pub fn decrease_liquidity_and_update_position<'a, 'b: 'info, 'c, 'info>(
+pub fn decrease_liquidity_and_update_position<'a, 'b, 'c: 'info, 'info>(
     pool_state_loader: &AccountLoader<'info, PoolState>,
     protocol_position: &mut Box<Account<'info, ProtocolPositionState>>,
     personal_position: &mut Box<Account<'info, PersonalPositionState>>,
     tick_array_lower: &AccountLoader<'info, TickArrayState>,
     tick_array_upper: &AccountLoader<'info, TickArrayState>,
-    tick_array_bitmap_extension: Option<&'b AccountInfo<'info>>,
+    tick_array_bitmap_extension: Option<&'c AccountInfo<'info>>,
     liquidity: u128,
 ) -> Result<(u64, u64, u64, u64)> {
     let mut pool_state = pool_state_loader.load_mut()?;
@@ -504,12 +504,12 @@ pub fn decrease_liquidity_and_update_position<'a, 'b: 'info, 'c, 'info>(
     ))
 }
 
-pub fn burn_liquidity<'b: 'info, 'info>(
+pub fn burn_liquidity<'c: 'info, 'info>(
     pool_state: &mut RefMut<PoolState>,
     tick_array_lower_loader: &AccountLoader<'info, TickArrayState>,
     tick_array_upper_loader: &AccountLoader<'info, TickArrayState>,
     protocol_position: &mut ProtocolPositionState,
-    tickarray_bitmap_extension: Option<&'b AccountInfo<'info>>,
+    tickarray_bitmap_extension: Option<&'c AccountInfo<'info>>,
     liquidity: u128,
 ) -> Result<(u64, u64)> {
     require_keys_eq!(tick_array_lower_loader.load()?.pool_id, pool_state.key());

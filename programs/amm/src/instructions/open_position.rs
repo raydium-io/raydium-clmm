@@ -39,6 +39,7 @@ pub struct OpenPosition<'info> {
     )]
     pub position_nft_mint: Box<InterfaceAccount<'info, Mint>>,
 
+    /// CHECK:
     /// Token account where position NFT will be minted
     /// This account created in the contract by cpi to avoid large stack variables
     #[account(
@@ -186,6 +187,7 @@ pub struct OpenPositionV2<'info> {
     )]
     pub position_nft_mint: Box<InterfaceAccount<'info, Mint>>,
 
+    /// CHECK:
     /// Token account where position NFT will be minted
     /// This account created in the contract by cpi to avoid large stack variables
     #[account(
