@@ -1612,6 +1612,9 @@ fn main() -> Result<()> {
                 })
                 .collect();
             remaining_accounts.append(&mut accounts);
+            let mut instructions = Vec::new();
+            let request_inits_instr = ComputeBudgetInstruction::set_compute_unit_limit(1400_000u32);
+            instructions.push(request_inits_instr);
             let swap_instr = swap_instr(
                 &pool_config.clone(),
                 pool_state.amm_config,
@@ -1637,11 +1640,12 @@ fn main() -> Result<()> {
                 base_in,
             )
             .unwrap();
+            instructions.extend(swap_instr);
             // send
             let signers = vec![&payer];
             let recent_hash = rpc_client.get_latest_blockhash()?;
             let txn = Transaction::new_signed_with_payer(
-                &swap_instr,
+                &instructions,
                 Some(&payer.pubkey()),
                 &signers,
                 recent_hash,
@@ -1775,6 +1779,9 @@ fn main() -> Result<()> {
                 })
                 .collect();
             remaining_accounts.append(&mut accounts);
+            let mut instructions = Vec::new();
+            let request_inits_instr = ComputeBudgetInstruction::set_compute_unit_limit(1400_000u32);
+            instructions.push(request_inits_instr);
             let swap_instr = swap_v2_instr(
                 &pool_config.clone(),
                 pool_state.amm_config,
@@ -1809,11 +1816,12 @@ fn main() -> Result<()> {
                 base_in,
             )
             .unwrap();
+            instructions.extend(swap_instr);
             // send
             let signers = vec![&payer];
             let recent_hash = rpc_client.get_latest_blockhash()?;
             let txn = Transaction::new_signed_with_payer(
-                &swap_instr,
+                &instructions,
                 Some(&payer.pubkey()),
                 &signers,
                 recent_hash,
@@ -2062,10 +2070,11 @@ fn main() -> Result<()> {
                 >(&position.1)?;
                 if protocol_position.pool_id == pool_id {
                     println!(
-                        "protocol_position:{} lower_index:{}, upper_index:{}",
+                        "protocol_position:{} lower_index:{}, upper_index:{}, liquidity:{}",
                         position.0,
                         protocol_position.tick_lower_index,
                         protocol_position.tick_upper_index,
+                        protocol_position.liquidity,
                     );
                 }
             }
@@ -2103,6 +2112,11 @@ fn main() -> Result<()> {
                         identity(tick_array_state.start_tick_index),
                         identity(tick_array_state.initialized_tick_count)
                     );
+                    for tick_state in tick_array_state.ticks {
+                        if tick_state.liquidity_gross != 0 {
+                            println!("{:#?}", tick_state);
+                        }
+                    }
                 }
             }
         }

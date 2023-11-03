@@ -634,7 +634,7 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
                 );
                 continue;
             }
-            tick_array_states.push_back(TickArrayState::load_mut(account_info)?);
+            tick_array_states.push_back(AccountLoad::load_data_mut(account_info)?);
         }
 
         (amount_0, amount_1) = swap_internal(

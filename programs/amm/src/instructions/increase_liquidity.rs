@@ -2,6 +2,7 @@ use super::add_liquidity;
 use crate::error::ErrorCode;
 use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::states::*;
+use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
@@ -272,8 +273,6 @@ pub fn increase_liquidity<'a, 'b, 'c: 'info, 'info>(
 
     let use_tickarray_bitmap_extension =
         pool_state.is_overflow_default_tickarray_bitmap(vec![tick_lower, tick_upper]);
-    let mut tick_array_lower = tick_array_lower_loader.load_mut()?;
-    let mut tick_array_upper = tick_array_upper_loader.load_mut()?;
 
     let (amount_0, amount_1, amount_0_transfer_fee, amount_1_transfer_fee) = add_liquidity(
         &nft_owner,
@@ -281,8 +280,8 @@ pub fn increase_liquidity<'a, 'b, 'c: 'info, 'info>(
         token_account_1,
         token_vault_0,
         token_vault_1,
-        &mut tick_array_lower,
-        &mut tick_array_upper,
+        &AccountLoad::<TickArrayState>::try_from(&tick_array_lower_loader.to_account_info())?,
+        &AccountLoad::<TickArrayState>::try_from(&tick_array_upper_loader.to_account_info())?,
         protocol_position,
         token_program_2022,
         token_program,
