@@ -1388,13 +1388,15 @@ fn main() -> Result<()> {
             if find_position.nft_mint != Pubkey::default()
                 && find_position.pool_id == pool_config.pool_id_account.unwrap()
             {
-                let mut reward_vault_with_user_vault: Vec<(Pubkey, Pubkey)> = Vec::new();
+                let mut reward_vault_with_user_vault: Vec<Pubkey> = Vec::new();
                 for item in pool.reward_infos.into_iter() {
                     if item.token_mint != Pubkey::default() {
-                        reward_vault_with_user_vault.push((
-                            item.token_vault,
-                            get_associated_token_address(&payer.pubkey(), &item.token_mint),
+                        reward_vault_with_user_vault.push(item.token_vault);
+                        reward_vault_with_user_vault.push(get_associated_token_address(
+                            &payer.pubkey(),
+                            &item.token_mint,
                         ));
+                        reward_vault_with_user_vault.push(item.token_mint);
                     }
                 }
                 let liquidity = if let Some(liquidity) = liquidity {
@@ -1441,7 +1443,7 @@ fn main() -> Result<()> {
 
                 let mut accounts = reward_vault_with_user_vault
                     .into_iter()
-                    .map(|item| AccountMeta::new(item.0, false))
+                    .map(|item| AccountMeta::new(item, false))
                     .collect();
                 remaining_accounts.append(&mut accounts);
                 // personal position exist
