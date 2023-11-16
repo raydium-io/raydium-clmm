@@ -229,23 +229,21 @@ pub fn get_delta_amount_0_signed(
     sqrt_ratio_a_x64: u128,
     sqrt_ratio_b_x64: u128,
     liquidity: i128,
-) -> i64 {
+) -> u64 {
     if liquidity < 0 {
-        -(i64::try_from(get_delta_amount_0_unsigned(
+        get_delta_amount_0_unsigned(
             sqrt_ratio_a_x64,
             sqrt_ratio_b_x64,
             u128::try_from(-liquidity).unwrap(),
             false,
-        ))
-        .unwrap())
+        )
     } else {
-        i64::try_from(get_delta_amount_0_unsigned(
+        get_delta_amount_0_unsigned(
             sqrt_ratio_a_x64,
             sqrt_ratio_b_x64,
             u128::try_from(liquidity).unwrap(),
             true,
-        ))
-        .unwrap()
+        )
     }
 }
 
@@ -254,23 +252,21 @@ pub fn get_delta_amount_1_signed(
     sqrt_ratio_a_x64: u128,
     sqrt_ratio_b_x64: u128,
     liquidity: i128,
-) -> i64 {
+) -> u64 {
     if liquidity < 0 {
-        -(i64::try_from(get_delta_amount_1_unsigned(
+        get_delta_amount_1_unsigned(
             sqrt_ratio_a_x64,
             sqrt_ratio_b_x64,
             u128::try_from(-liquidity).unwrap(),
             false,
-        ))
-        .unwrap())
+        )
     } else {
-        i64::try_from(get_delta_amount_1_unsigned(
+        get_delta_amount_1_unsigned(
             sqrt_ratio_a_x64,
             sqrt_ratio_b_x64,
             u128::try_from(liquidity).unwrap(),
             true,
-        ))
-        .unwrap()
+        )
     }
 }
 
@@ -280,7 +276,7 @@ pub fn get_delta_amounts_signed(
     tick_lower: i32,
     tick_upper: i32,
     liquidity_delta: i128,
-) -> Result<(i64, i64)> {
+) -> Result<(u64, u64)> {
     let mut amount_0 = 0;
     let mut amount_1 = 0;
     if tick_current < tick_lower {

@@ -523,7 +523,7 @@ pub fn burn_liquidity<'c: 'info, 'info>(
         .load_mut()?
         .get_tick_state_mut(protocol_position.tick_upper_index, pool_state.tick_spacing)?;
     let clock = Clock::get()?;
-    let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = modify_position(
+    let (amount_0, amount_1, flip_tick_lower, flip_tick_upper) = modify_position(
         -i128::try_from(liquidity).unwrap(),
         pool_state,
         protocol_position,
@@ -574,8 +574,6 @@ pub fn burn_liquidity<'c: 'info, 'info>(
         liquidity_after: pool_state.liquidity,
     });
 
-    let amount_0 = u64::try_from(-amount_0_int).unwrap();
-    let amount_1 = u64::try_from(-amount_1_int).unwrap();
     Ok((amount_0, amount_1))
 }
 

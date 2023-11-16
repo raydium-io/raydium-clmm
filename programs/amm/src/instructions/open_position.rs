@@ -662,7 +662,7 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
         tick_upper_state.tick = tick_upper_index;
     }
     let clock = Clock::get()?;
-    let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = modify_position(
+    let (amount_0, amount_1, flip_tick_lower, flip_tick_upper) = modify_position(
         i128::try_from(liquidity).unwrap(),
         pool_state,
         protocol_position,
@@ -708,12 +708,10 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
         }
     }
     require!(
-        amount_0_int > 0 || amount_1_int > 0,
+        amount_0 > 0 || amount_1 > 0,
         ErrorCode::ForbidBothZeroForSupplyLiquidity
     );
 
-    let amount_0 = u64::try_from(amount_0_int).unwrap();
-    let amount_1 = u64::try_from(amount_1_int).unwrap();
     let mut amount_0_transfer_fee = 0;
     let mut amount_1_transfer_fee = 0;
     if vault_0_mint.is_some() {
@@ -791,7 +789,7 @@ pub fn modify_position(
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,
     timestamp: u64,
-) -> Result<(i64, i64, bool, bool)> {
+) -> Result<(u64, u64, bool, bool)> {
     let (flip_tick_lower, flip_tick_upper) = update_position(
         liquidity_delta,
         pool_state,

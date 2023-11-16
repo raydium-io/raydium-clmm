@@ -1404,23 +1404,17 @@ fn main() -> Result<()> {
                 } else {
                     find_position.liquidity
                 };
-                let (amount_0_int, amount_1_int) = liquidity_math::get_delta_amounts_signed(
+                let (amount_0, amount_1) = liquidity_math::get_delta_amounts_signed(
                     pool.tick_current,
                     pool.sqrt_price_x64,
                     tick_lower_index,
                     tick_upper_index,
                     -(liquidity as i128),
                 )?;
-                let amount_0_with_slippage = amount_with_slippage(
-                    u64::try_from(-amount_0_int).unwrap(),
-                    pool_config.slippage,
-                    false,
-                );
-                let amount_1_with_slippage = amount_with_slippage(
-                    u64::try_from(-amount_1_int).unwrap(),
-                    pool_config.slippage,
-                    false,
-                );
+                let amount_0_with_slippage =
+                    amount_with_slippage(amount_0, pool_config.slippage, false);
+                let amount_1_with_slippage =
+                    amount_with_slippage(amount_1, pool_config.slippage, false);
                 let transfer_fee = get_pool_mints_transfer_fee(
                     &rpc_client,
                     pool.token_mint_0,
