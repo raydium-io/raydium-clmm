@@ -192,21 +192,11 @@ pub fn swap_internal<'b, 'info>(
         pool_state.get_first_initialized_tick_array(&tickarray_bitmap_extension, zero_for_one)?;
     let mut current_vaild_tick_array_start_index = first_vaild_tick_array_start_index;
 
-    let expected_first_tick_array_address = Pubkey::find_program_address(
-        &[
-            TICK_ARRAY_SEED.as_bytes(),
-            pool_state.key().as_ref(),
-            &current_vaild_tick_array_start_index.to_be_bytes(),
-        ],
-        &crate::id(),
-    )
-    .0;
-
     let mut tick_array_current = tick_array_states.pop_front().unwrap();
     for _ in 0..tick_array_states.len() {
         // check tick_array account is owned by the pool
         require_keys_eq!(tick_array_current.pool_id, pool_state.key());
-        if tick_array_current.key() == expected_first_tick_array_address {
+        if tick_array_current.start_tick_index == current_vaild_tick_array_start_index {
             break;
         }
         tick_array_current = tick_array_states
@@ -214,9 +204,9 @@ pub fn swap_internal<'b, 'info>(
             .ok_or(ErrorCode::NotEnoughTickArrayAccount)?;
     }
     // check first tick array account is correct
-    require_keys_eq!(
-        tick_array_current.key(),
-        expected_first_tick_array_address,
+    require_eq!(
+        tick_array_current.start_tick_index,
+        current_vaild_tick_array_start_index,
         ErrorCode::InvalidFirstTickArrayAccount
     );
 
@@ -272,19 +262,7 @@ pub fn swap_internal<'b, 'info>(
                 return err!(ErrorCode::LiquidityInsufficient);
             }
 
-            let expected_next_tick_array_address = Pubkey::find_program_address(
-                &[
-                    TICK_ARRAY_SEED.as_bytes(),
-                    pool_state.key().as_ref(),
-                    &next_initialized_tickarray_index.unwrap().to_be_bytes(),
-                ],
-                &crate::id(),
-            )
-            .0;
-            while tick_array_current
-                .key()
-                .ne(&expected_next_tick_array_address)
-            {
+            while tick_array_current.start_tick_index != next_initialized_tickarray_index.unwrap() {
                 tick_array_current = tick_array_states
                     .pop_front()
                     .ok_or(ErrorCode::NotEnoughTickArrayAccount)?;
@@ -622,11 +600,9 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
         let tick_array_states = &mut VecDeque::new();
         tick_array_states.push_back(ctx.tick_array_state.load_mut()?);
 
+        let tick_array_bitmap_extension_key = TickArrayBitmapExtension::key(pool_state.key());
         for account_info in remaining_accounts.into_iter() {
-            if account_info
-                .key()
-                .eq(&TickArrayBitmapExtension::key(pool_state.key()))
-            {
+            if account_info.key().eq(&tick_array_bitmap_extension_key) {
                 tickarray_bitmap_extension = Some(
                     *(AccountLoader::<TickArrayBitmapExtension>::try_from(account_info)?
                         .load()?
