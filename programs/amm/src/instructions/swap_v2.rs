@@ -76,9 +76,9 @@ pub struct SwapSingleV2<'info> {
 
 /// Performs a single exact input/output swap
 /// if is_base_input = true, return vaule is the max_amount_out, otherwise is min_amount_in
-pub fn exact_internal_v2<'info>(
+pub fn exact_internal_v2<'c: 'info, 'info>(
     ctx: &mut SwapSingleV2<'info>,
-    remaining_accounts: &[AccountInfo<'info>],
+    remaining_accounts: &'c [AccountInfo<'info>],
     amount_specified: u64,
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
@@ -98,7 +98,7 @@ pub fn exact_internal_v2<'info>(
     let mut transfer_fee = 0;
     if is_base_input {
         transfer_fee =
-            util::get_transfer_fee(*ctx.input_vault_mint.clone(), amount_specified).unwrap();
+            util::get_transfer_fee(ctx.input_vault_mint.clone(), amount_specified).unwrap();
     }
 
     {
@@ -122,11 +122,9 @@ pub fn exact_internal_v2<'info>(
         let mut tickarray_bitmap_extension = None;
         let tick_array_states = &mut VecDeque::new();
 
+        let tick_array_bitmap_extension_key = TickArrayBitmapExtension::key(pool_state.key());
         for account_info in remaining_accounts.into_iter() {
-            if account_info
-                .key()
-                .eq(&TickArrayBitmapExtension::key(pool_state.key()))
-            {
+            if account_info.key().eq(&tick_array_bitmap_extension_key) {
                 tickarray_bitmap_extension = Some(
                     *(AccountLoader::<TickArrayBitmapExtension>::try_from(account_info)?
                         .load()?
@@ -134,7 +132,7 @@ pub fn exact_internal_v2<'info>(
                 );
                 continue;
             }
-            tick_array_states.push_back(TickArrayState::load_mut(account_info)?);
+            tick_array_states.push_back(AccountLoad::load_data_mut(account_info)?);
         }
 
         (amount_0, amount_1) = swap_internal(
@@ -194,14 +192,14 @@ pub fn exact_internal_v2<'info>(
     if zero_for_one {
         if !is_base_input {
             transfer_fee =
-                util::get_transfer_inverse_fee(*ctx.input_vault_mint.clone(), amount_0).unwrap();
+                util::get_transfer_inverse_fee(ctx.input_vault_mint.clone(), amount_0).unwrap();
         }
         //  x -> y, deposit x token from user to pool vault.
         transfer_from_user_to_pool_vault(
             &ctx.payer,
             &token_account_0,
             &vault_0,
-            Some(*vault_0_mint),
+            Some(vault_0_mint),
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
             amount_0 + transfer_fee,
@@ -215,7 +213,7 @@ pub fn exact_internal_v2<'info>(
             &ctx.pool_state,
             &vault_1,
             &token_account_1,
-            Some(*vault_1_mint),
+            Some(vault_1_mint),
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
             amount_1,
@@ -223,13 +221,13 @@ pub fn exact_internal_v2<'info>(
     } else {
         if !is_base_input {
             transfer_fee =
-                util::get_transfer_inverse_fee(*ctx.input_vault_mint.clone(), amount_1).unwrap();
+                util::get_transfer_inverse_fee(ctx.input_vault_mint.clone(), amount_1).unwrap();
         }
         transfer_from_user_to_pool_vault(
             &ctx.payer,
             &token_account_1,
             &vault_1,
-            Some(*vault_1_mint),
+            Some(vault_1_mint),
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
             amount_1 + transfer_fee,
@@ -242,7 +240,7 @@ pub fn exact_internal_v2<'info>(
             &ctx.pool_state,
             &vault_0,
             &token_account_0,
-            Some(*vault_0_mint),
+            Some(vault_0_mint),
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
             amount_0,
@@ -283,7 +281,7 @@ pub fn exact_internal_v2<'info>(
     }
 }
 
-pub fn swap_v2<'a, 'b, 'c, 'info>(
+pub fn swap_v2<'a, 'b, 'c: 'info, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, SwapSingleV2<'info>>,
     amount: u64,
     other_amount_threshold: u64,

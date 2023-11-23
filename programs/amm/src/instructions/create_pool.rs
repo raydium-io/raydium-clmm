@@ -3,6 +3,7 @@ use crate::states::*;
 use crate::{libraries::tick_math, util};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
+// use solana_program::{program::invoke_signed, system_instruction};
 #[derive(Accounts)]
 pub struct CreatePool<'info> {
     /// Address paying to create the pool. Can be anyone
@@ -73,6 +74,7 @@ pub struct CreatePool<'info> {
     pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// CHECK: Initialize an account to store oracle observations, the account must be created off-chain, constract will initialzied it
+    #[account(mut)]
     pub observation_state: UncheckedAccount<'info>,
 
     /// Initialize an account to store if a tick array is initialized.
@@ -112,10 +114,6 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u6
     }
     let pool_id = ctx.accounts.pool_state.key();
     let mut pool_state = ctx.accounts.pool_state.load_init()?;
-    let observation_state_loader = initialize_observation_account(
-        ctx.accounts.observation_state.to_account_info(),
-        &crate::id(),
-    )?;
 
     let tick = tick_math::get_tick_at_sqrt_price(sqrt_price_x64)?;
     #[cfg(feature = "enable-log")]
@@ -124,8 +122,10 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u6
         sqrt_price_x64,
         tick
     );
+    // init observation
+    ObservationState::initialize(ctx.accounts.observation_state.as_ref(), pool_id)?;
 
-    let bump = *ctx.bumps.get("pool_state").unwrap();
+    let bump = ctx.bumps.pool_state;
     pool_state.initialize(
         bump,
         sqrt_price_x64,
@@ -137,7 +137,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u6
         ctx.accounts.amm_config.as_ref(),
         ctx.accounts.token_mint_0.as_ref(),
         ctx.accounts.token_mint_1.as_ref(),
-        &observation_state_loader,
+        ctx.accounts.observation_state.key(),
     )?;
 
     ctx.accounts
@@ -156,16 +156,4 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u6
         token_vault_1: ctx.accounts.token_vault_1.key(),
     });
     Ok(())
-}
-
-fn initialize_observation_account<'info>(
-    observation_account_info: AccountInfo<'info>,
-    program_id: &Pubkey,
-) -> Result<AccountLoader<'info, ObservationState>> {
-    let observation_loader = AccountLoader::<ObservationState>::try_from_unchecked(
-        program_id,
-        &observation_account_info,
-    )?;
-    observation_loader.exit(&crate::id())?;
-    Ok(observation_loader)
 }

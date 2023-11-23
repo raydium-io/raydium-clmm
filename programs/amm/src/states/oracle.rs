@@ -1,7 +1,12 @@
 use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
+use crate::Result;
+use anchor_lang::error::ErrorCode as anchorErrorCode;
 /// Oracle provides price data useful for a wide variety of system designs
 ///
 use anchor_lang::prelude::*;
+use arrayref::array_ref;
+use std::cell::RefMut;
+use std::ops::DerefMut;
 #[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};
 /// Seed to derive account address and signature
@@ -29,6 +34,7 @@ impl Observation {
 
 #[account(zero_copy(unsafe))]
 #[repr(packed)]
+#[cfg_attr(feature = "client", derive(Debug))]
 pub struct ObservationState {
     /// Whether the ObservationState is initialized
     pub initialized: bool,
@@ -53,6 +59,46 @@ impl Default for ObservationState {
 
 impl ObservationState {
     pub const LEN: usize = 8 + 1 + 32 + (Observation::LEN * OBSERVATION_NUM) + 16 * 5;
+
+    fn discriminator() -> [u8; 8] {
+        [122, 174, 197, 53, 129, 9, 165, 132]
+    }
+
+    fn load_init_mut<'a>(account_info: &'a AccountInfo) -> Result<RefMut<'a, Self>> {
+        if account_info.owner != &crate::id() {
+            return Err(Error::from(anchorErrorCode::AccountOwnedByWrongProgram)
+                .with_pubkeys((*account_info.owner, crate::id())));
+        }
+        if !account_info.is_writable {
+            return Err(anchorErrorCode::AccountNotMutable.into());
+        }
+        require_eq!(account_info.data_len(), ObservationState::LEN);
+
+        let mut data = account_info.try_borrow_mut_data()?;
+        let disc_bytes = array_ref![data, 0, 8];
+
+        let discriminator = u64::from_le_bytes(*disc_bytes);
+        if discriminator != 0 {
+            // the account is in use
+            return Err(anchorErrorCode::AccountDiscriminatorAlreadySet.into());
+        }
+        // write discriminator
+        data[..8].copy_from_slice(&ObservationState::discriminator());
+
+        Ok(RefMut::map(data, |data| {
+            bytemuck::from_bytes_mut(
+                &mut data.deref_mut()[8..std::mem::size_of::<ObservationState>() + 8],
+            )
+        }))
+    }
+
+    pub fn initialize(account_info: &AccountInfo, pool_id: Pubkey) -> Result<()> {
+        let observation_state = &mut Self::load_init_mut(account_info)?;
+        require_eq!(observation_state.initialized, false);
+        require_keys_eq!(observation_state.pool_id, Pubkey::default());
+        observation_state.pool_id = pool_id;
+        Ok(())
+    }
 
     // Writes an oracle observation to the account, returning the next observation_index.
     /// Writable at most once per second. Index represents the most recently written element.

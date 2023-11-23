@@ -27,6 +27,6 @@ pub struct CreateOperationAccount<'info> {
 
 pub fn create_operation_account(ctx: Context<CreateOperationAccount>) -> Result<()> {
     let mut operation_state = ctx.accounts.operation_state.load_init()?;
-    operation_state.initialize(*ctx.bumps.get("operation_state").unwrap());
+    operation_state.initialize(ctx.bumps.operation_state);
     Ok(())
 }

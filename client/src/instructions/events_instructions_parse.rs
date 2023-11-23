@@ -139,8 +139,8 @@ pub fn handle_program_log(
             disc
         };
         match disc {
-            CreateConfigEvent::DISCRIMINATOR => {
-                println!("{:#?}", decode_event::<CreateConfigEvent>(&mut slice)?);
+            ConfigChangeEvent::DISCRIMINATOR => {
+                println!("{:#?}", decode_event::<ConfigChangeEvent>(&mut slice)?);
             }
             CollectPersonalFeeEvent::DISCRIMINATOR => {
                 println!(
@@ -175,12 +175,9 @@ pub fn handle_program_log(
             LiquidityChangeEvent::DISCRIMINATOR => {
                 println!("{:#?}", decode_event::<LiquidityChangeEvent>(&mut slice)?);
             }
-            UpdaterConfigEvent::DISCRIMINATOR => {
-                println!("{:#?}", decode_event::<UpdaterConfigEvent>(&mut slice)?);
-            }
-            PriceChangeEvent::DISCRIMINATOR => {
-                println!("{:#?}", decode_event::<PriceChangeEvent>(&mut slice)?);
-            }
+            // PriceChangeEvent::DISCRIMINATOR => {
+            //     println!("{:#?}", decode_event::<PriceChangeEvent>(&mut slice)?);
+            // }
             SwapEvent::DISCRIMINATOR => {
                 println!("{:#?}", decode_event::<SwapEvent>(&mut slice)?);
             }

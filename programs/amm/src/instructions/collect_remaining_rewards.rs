@@ -26,7 +26,7 @@ pub struct CollectRemainingRewards<'info> {
     #[account(
         address = reward_token_vault.mint
     )]
-    pub reward_vault_mint: InterfaceAccount<'info, Mint>,
+    pub reward_vault_mint: Box<InterfaceAccount<'info, Mint>>,
     #[account(address = token::ID)]
     pub token_program: Program<'info, Token>,
     /// Token program 2022

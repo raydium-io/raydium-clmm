@@ -1,7 +1,8 @@
-use super::{add_liquidity, AddLiquidityParam};
+use super::add_liquidity;
 use crate::error::ErrorCode;
 use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::states::*;
+use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
@@ -164,13 +165,13 @@ pub struct IncreaseLiquidityV2<'info> {
     #[account(
             address = token_vault_0.mint
     )]
-    pub vault_0_mint: InterfaceAccount<'info, Mint>,
+    pub vault_0_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// The mint of token vault 1
     #[account(
             address = token_vault_1.mint
     )]
-    pub vault_1_mint: InterfaceAccount<'info, Mint>,
+    pub vault_1_mint: Box<InterfaceAccount<'info, Mint>>,
     // remaining account
     // #[account(
     //     seeds = [
@@ -182,90 +183,116 @@ pub struct IncreaseLiquidityV2<'info> {
     // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
 }
 
-pub struct IncreaseLiquidityParam<'b, 'info> {
-    /// Pays to mint the position
-    pub nft_owner: &'b Signer<'info>,
-
-    /// The token account for nft
-    pub nft_account: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-
-    pub pool_state: &'b mut AccountLoader<'info, PoolState>,
-
-    pub protocol_position: &'b mut Box<Account<'info, ProtocolPositionState>>,
-
-    /// Increase liquidity for this position
-    pub personal_position: &'b mut Box<Account<'info, PersonalPositionState>>,
-
-    /// Stores init state for the lower tick
-    pub tick_array_lower: &'b mut AccountLoader<'info, TickArrayState>,
-
-    /// Stores init state for the upper tick
-    pub tick_array_upper: &'b mut AccountLoader<'info, TickArrayState>,
-
-    /// The payer's token account for token_0
-    pub token_account_0: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// The token account spending token_1 to mint the position
-    pub token_account_1: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// The address that holds pool tokens for token_0
-    pub token_vault_0: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// The address that holds pool tokens for token_1
-    pub token_vault_1: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// Program to create mint account and mint tokens
-    pub token_program: Program<'info, Token>,
-
-    /// Token program 2022
-    pub token_program_2022: Option<Program<'info, Token2022>>,
-
-    /// The mint of token vault 0
-    pub vault_0_mint: Option<InterfaceAccount<'info, Mint>>,
-    /// The mint of token vault 1
-    pub vault_1_mint: Option<InterfaceAccount<'info, Mint>>,
-}
-
-pub fn increase_liquidity<'a, 'b, 'c, 'info>(
-    accounts: &mut IncreaseLiquidityParam<'b, 'info>,
-    remaining_accounts: &'b [AccountInfo<'info>],
+pub fn increase_liquidity_v1<'a, 'b, 'c: 'info, 'info>(
+    ctx: Context<'a, 'b, 'c, 'info, IncreaseLiquidity<'info>>,
     liquidity: u128,
     amount_0_max: u64,
     amount_1_max: u64,
     base_flag: Option<bool>,
 ) -> Result<()> {
-    let mut pool_state = accounts.pool_state.load_mut()?;
+    increase_liquidity(
+        &ctx.accounts.nft_owner,
+        &ctx.accounts.pool_state,
+        &mut ctx.accounts.protocol_position,
+        &mut ctx.accounts.personal_position,
+        &ctx.accounts.tick_array_lower,
+        &ctx.accounts.tick_array_upper,
+        &ctx.accounts.token_account_0,
+        &ctx.accounts.token_account_1,
+        &ctx.accounts.token_vault_0,
+        &ctx.accounts.token_vault_1,
+        &ctx.accounts.token_program,
+        None,
+        None,
+        None,
+        &ctx.remaining_accounts,
+        liquidity,
+        amount_0_max,
+        amount_1_max,
+        base_flag,
+    )
+}
+
+pub fn increase_liquidity_v2<'a, 'b, 'c: 'info, 'info>(
+    ctx: Context<'a, 'b, 'c, 'info, IncreaseLiquidityV2<'info>>,
+    liquidity: u128,
+    amount_0_max: u64,
+    amount_1_max: u64,
+    base_flag: Option<bool>,
+) -> Result<()> {
+    increase_liquidity(
+        &ctx.accounts.nft_owner,
+        &ctx.accounts.pool_state,
+        &mut ctx.accounts.protocol_position,
+        &mut ctx.accounts.personal_position,
+        &ctx.accounts.tick_array_lower,
+        &ctx.accounts.tick_array_upper,
+        &ctx.accounts.token_account_0,
+        &ctx.accounts.token_account_1,
+        &ctx.accounts.token_vault_0,
+        &ctx.accounts.token_vault_1,
+        &ctx.accounts.token_program,
+        Some(ctx.accounts.token_program_2022.clone()),
+        Some(ctx.accounts.vault_0_mint.clone()),
+        Some(ctx.accounts.vault_1_mint.clone()),
+        &ctx.remaining_accounts,
+        liquidity,
+        amount_0_max,
+        amount_1_max,
+        base_flag,
+    )
+}
+pub fn increase_liquidity<'a, 'b, 'c: 'info, 'info>(
+    nft_owner: &'b Signer<'info>,
+    pool_state_loader: &'b AccountLoader<'info, PoolState>,
+    protocol_position: &'b mut Box<Account<'info, ProtocolPositionState>>,
+    personal_position: &'b mut Box<Account<'info, PersonalPositionState>>,
+    tick_array_lower_loader: &'b AccountLoader<'info, TickArrayState>,
+    tick_array_upper_loader: &'b AccountLoader<'info, TickArrayState>,
+    token_account_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    token_account_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    token_vault_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    token_vault_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    token_program: &'b Program<'info, Token>,
+    token_program_2022: Option<Program<'info, Token2022>>,
+    vault_0_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
+    vault_1_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
+
+    remaining_accounts: &'c [AccountInfo<'info>],
+    liquidity: u128,
+    amount_0_max: u64,
+    amount_1_max: u64,
+    base_flag: Option<bool>,
+) -> Result<()> {
+    let pool_state = &mut pool_state_loader.load_mut()?;
     if !pool_state.get_status_by_bit(PoolStatusBitIndex::OpenPositionOrIncreaseLiquidity) {
         return err!(ErrorCode::NotApproved);
     }
-    let tick_lower = accounts.personal_position.tick_lower_index;
-    let tick_upper = accounts.personal_position.tick_upper_index;
+    let tick_lower = personal_position.tick_lower_index;
+    let tick_upper = personal_position.tick_upper_index;
 
     let use_tickarray_bitmap_extension =
         pool_state.is_overflow_default_tickarray_bitmap(vec![tick_lower, tick_upper]);
-    let mut add_liquidity_context = AddLiquidityParam {
-        payer: &accounts.nft_owner,
-        token_account_0: accounts.token_account_0,
-        token_account_1: accounts.token_account_1,
-        token_vault_0: accounts.token_vault_0,
-        token_vault_1: accounts.token_vault_1,
-        vault_0_mint: accounts.vault_0_mint.clone(),
-        vault_1_mint: accounts.vault_1_mint.clone(),
-        tick_array_lower: &accounts.tick_array_lower,
-        tick_array_upper: &accounts.tick_array_upper,
-        protocol_position: accounts.protocol_position,
-        token_program: accounts.token_program.clone(),
-        token_program_2022: accounts.token_program_2022.clone(),
-        tick_array_bitmap_extension: if use_tickarray_bitmap_extension {
+
+    let (amount_0, amount_1, amount_0_transfer_fee, amount_1_transfer_fee) = add_liquidity(
+        &nft_owner,
+        token_account_0,
+        token_account_1,
+        token_vault_0,
+        token_vault_1,
+        &AccountLoad::<TickArrayState>::try_from(&tick_array_lower_loader.to_account_info())?,
+        &AccountLoad::<TickArrayState>::try_from(&tick_array_upper_loader.to_account_info())?,
+        protocol_position,
+        token_program_2022,
+        token_program,
+        vault_0_mint,
+        vault_1_mint,
+        if use_tickarray_bitmap_extension {
             Some(&remaining_accounts[0])
         } else {
             None
         },
-    };
-
-    let (amount_0, amount_1, amount_0_transfer_fee, amount_1_transfer_fee) = add_liquidity(
-        &mut add_liquidity_context,
-        &mut pool_state,
+        pool_state,
         liquidity,
         amount_0_max,
         amount_1_max,
@@ -273,29 +300,25 @@ pub fn increase_liquidity<'a, 'b, 'c, 'info>(
         tick_upper,
         base_flag,
     )?;
-    let updated_protocol_position = add_liquidity_context.protocol_position;
 
-    let personal_position = &mut accounts.personal_position;
     personal_position.token_fees_owed_0 = calculate_latest_token_fees(
         personal_position.token_fees_owed_0,
         personal_position.fee_growth_inside_0_last_x64,
-        updated_protocol_position.fee_growth_inside_0_last_x64,
+        protocol_position.fee_growth_inside_0_last_x64,
         personal_position.liquidity,
     );
     personal_position.token_fees_owed_1 = calculate_latest_token_fees(
         personal_position.token_fees_owed_1,
         personal_position.fee_growth_inside_1_last_x64,
-        updated_protocol_position.fee_growth_inside_1_last_x64,
+        protocol_position.fee_growth_inside_1_last_x64,
         personal_position.liquidity,
     );
 
-    personal_position.fee_growth_inside_0_last_x64 =
-        updated_protocol_position.fee_growth_inside_0_last_x64;
-    personal_position.fee_growth_inside_1_last_x64 =
-        updated_protocol_position.fee_growth_inside_1_last_x64;
+    personal_position.fee_growth_inside_0_last_x64 = protocol_position.fee_growth_inside_0_last_x64;
+    personal_position.fee_growth_inside_1_last_x64 = protocol_position.fee_growth_inside_1_last_x64;
 
     // update rewards, must update before increase liquidity
-    personal_position.update_rewards(updated_protocol_position.reward_growth_inside, true)?;
+    personal_position.update_rewards(protocol_position.reward_growth_inside, true)?;
     personal_position.liquidity = personal_position.liquidity.checked_add(liquidity).unwrap();
 
     emit!(IncreaseLiquidityEvent {

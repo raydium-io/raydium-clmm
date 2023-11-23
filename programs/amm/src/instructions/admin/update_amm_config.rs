@@ -31,10 +31,12 @@ pub fn update_amm_config(ctx: Context<UpdateAmmConfig>, param: u8, value: u32) -
         _ => return err!(ErrorCode::InvalidUpdateConfigFlag),
     }
 
-    emit!(UpdaterConfigEvent {
+    emit!(ConfigChangeEvent {
+        index: amm_config.index,
         owner: amm_config.owner,
         trade_fee_rate: amm_config.trade_fee_rate,
         protocol_fee_rate: amm_config.protocol_fee_rate,
+        tick_spacing: amm_config.tick_spacing,
         fund_fee_rate: amm_config.fund_fee_rate,
         fund_owner: amm_config.fund_owner,
     });

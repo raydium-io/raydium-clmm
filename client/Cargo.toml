@@ -5,8 +5,8 @@ rust-version = "1.56"
 edition = "2021"
 
 [dependencies]
-anchor-client = "0.28.0"
-anchor-lang = "0.28.0"
+anchor-client = "0.29.0"
+anchor-lang = "0.29.0"
 raydium-amm-v3 = {path = "../programs/amm", features = ["no-entrypoint", "client"]}
 solana-sdk = ">=1.14, <1.17"
 solana-client = ">=1.14, <1.17"

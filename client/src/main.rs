@@ -451,6 +451,7 @@ pub enum CommandsName {
         token: Pubkey,
     },
     POperation,
+    PObservation,
     PConfig {
         config_index: u16,
     },
@@ -1387,13 +1388,15 @@ fn main() -> Result<()> {
             if find_position.nft_mint != Pubkey::default()
                 && find_position.pool_id == pool_config.pool_id_account.unwrap()
             {
-                let mut reward_vault_with_user_vault: Vec<(Pubkey, Pubkey)> = Vec::new();
+                let mut reward_vault_with_user_vault: Vec<Pubkey> = Vec::new();
                 for item in pool.reward_infos.into_iter() {
                     if item.token_mint != Pubkey::default() {
-                        reward_vault_with_user_vault.push((
-                            item.token_vault,
-                            get_associated_token_address(&payer.pubkey(), &item.token_mint),
+                        reward_vault_with_user_vault.push(item.token_vault);
+                        reward_vault_with_user_vault.push(get_associated_token_address(
+                            &payer.pubkey(),
+                            &item.token_mint,
                         ));
+                        reward_vault_with_user_vault.push(item.token_mint);
                     }
                 }
                 let liquidity = if let Some(liquidity) = liquidity {
@@ -1401,23 +1404,17 @@ fn main() -> Result<()> {
                 } else {
                     find_position.liquidity
                 };
-                let (amount_0_int, amount_1_int) = liquidity_math::get_delta_amounts_signed(
+                let (amount_0, amount_1) = liquidity_math::get_delta_amounts_signed(
                     pool.tick_current,
                     pool.sqrt_price_x64,
                     tick_lower_index,
                     tick_upper_index,
                     -(liquidity as i128),
                 )?;
-                let amount_0_with_slippage = amount_with_slippage(
-                    u64::try_from(-amount_0_int).unwrap(),
-                    pool_config.slippage,
-                    false,
-                );
-                let amount_1_with_slippage = amount_with_slippage(
-                    u64::try_from(-amount_1_int).unwrap(),
-                    pool_config.slippage,
-                    false,
-                );
+                let amount_0_with_slippage =
+                    amount_with_slippage(amount_0, pool_config.slippage, false);
+                let amount_1_with_slippage =
+                    amount_with_slippage(amount_1, pool_config.slippage, false);
                 let transfer_fee = get_pool_mints_transfer_fee(
                     &rpc_client,
                     pool.token_mint_0,
@@ -1440,7 +1437,7 @@ fn main() -> Result<()> {
 
                 let mut accounts = reward_vault_with_user_vault
                     .into_iter()
-                    .map(|item| AccountMeta::new(item.0, false))
+                    .map(|item| AccountMeta::new(item, false))
                     .collect();
                 remaining_accounts.append(&mut accounts);
                 // personal position exist
@@ -1611,6 +1608,9 @@ fn main() -> Result<()> {
                 })
                 .collect();
             remaining_accounts.append(&mut accounts);
+            let mut instructions = Vec::new();
+            let request_inits_instr = ComputeBudgetInstruction::set_compute_unit_limit(1400_000u32);
+            instructions.push(request_inits_instr);
             let swap_instr = swap_instr(
                 &pool_config.clone(),
                 pool_state.amm_config,
@@ -1636,11 +1636,12 @@ fn main() -> Result<()> {
                 base_in,
             )
             .unwrap();
+            instructions.extend(swap_instr);
             // send
             let signers = vec![&payer];
             let recent_hash = rpc_client.get_latest_blockhash()?;
             let txn = Transaction::new_signed_with_payer(
-                &swap_instr,
+                &instructions,
                 Some(&payer.pubkey()),
                 &signers,
                 recent_hash,
@@ -1774,6 +1775,9 @@ fn main() -> Result<()> {
                 })
                 .collect();
             remaining_accounts.append(&mut accounts);
+            let mut instructions = Vec::new();
+            let request_inits_instr = ComputeBudgetInstruction::set_compute_unit_limit(1400_000u32);
+            instructions.push(request_inits_instr);
             let swap_instr = swap_v2_instr(
                 &pool_config.clone(),
                 pool_state.amm_config,
@@ -1808,11 +1812,12 @@ fn main() -> Result<()> {
                 base_in,
             )
             .unwrap();
+            instructions.extend(swap_instr);
             // send
             let signers = vec![&payer];
             let recent_hash = rpc_client.get_latest_blockhash()?;
             let txn = Transaction::new_signed_with_payer(
-                &swap_instr,
+                &instructions,
                 Some(&payer.pubkey()),
                 &signers,
                 recent_hash,
@@ -1910,6 +1915,14 @@ fn main() -> Result<()> {
             let operation_account: raydium_amm_v3::states::OperationState =
                 program.account(operation_account_key)?;
             println!("{:#?}", operation_account);
+        }
+        CommandsName::PObservation => {
+            let pool: raydium_amm_v3::states::PoolState =
+                program.account(pool_config.pool_id_account.unwrap())?;
+            println!("{}", pool.observation_key);
+            let observation_account: raydium_amm_v3::states::ObservationState =
+                program.account(pool.observation_key)?;
+            println!("{:#?}", observation_account);
         }
         CommandsName::PConfig { config_index } => {
             let (amm_config_key, __bump) = Pubkey::find_program_address(
@@ -2053,10 +2066,11 @@ fn main() -> Result<()> {
                 >(&position.1)?;
                 if protocol_position.pool_id == pool_id {
                     println!(
-                        "protocol_position:{} lower_index:{}, upper_index:{}",
+                        "protocol_position:{} lower_index:{}, upper_index:{}, liquidity:{}",
                         position.0,
                         protocol_position.tick_lower_index,
                         protocol_position.tick_upper_index,
+                        protocol_position.liquidity,
                     );
                 }
             }
@@ -2094,6 +2108,11 @@ fn main() -> Result<()> {
                         identity(tick_array_state.start_tick_index),
                         identity(tick_array_state.initialized_tick_count)
                     );
+                    for tick_state in tick_array_state.ticks {
+                        if tick_state.liquidity_gross != 0 {
+                            println!("{:#?}", tick_state);
+                        }
+                    }
                 }
             }
         }
