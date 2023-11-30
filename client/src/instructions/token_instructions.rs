@@ -15,7 +15,7 @@ use spl_token_2022::{
     state::{Account, Mint},
 };
 use spl_token_client::token::ExtensionInitializationParams;
-use std::rc::Rc;
+use std::{rc::Rc, str::FromStr};
 
 pub fn create_and_init_mint_instr(
     config: &ClientConfig,
@@ -252,6 +252,40 @@ pub fn spl_token_mint_to_instr(
             amount,
         )?)
         .signer(mint_authority)
+        .instructions()?;
+    Ok(instructions)
+}
+
+pub fn wrap_sol_instr(config: &ClientConfig, amount: u64) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let wallet_key = payer.pubkey();
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    let wsol_mint = Pubkey::from_str("So11111111111111111111111111111111111111112")?;
+    let wsol_ata_account =
+        spl_associated_token_account::get_associated_token_address(&wallet_key, &wsol_mint);
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
+    let program = client.program(spl_token::id())?;
+
+    let instructions = program
+        .request()
+        .instruction(
+            spl_associated_token_account::instruction::create_associated_token_account_idempotent(
+                &program.payer(),
+                &wallet_key,
+                &wsol_mint,
+                &program.id(),
+            ),
+        )
+        .instruction(system_instruction::transfer(
+            &wallet_key,
+            &wsol_ata_account,
+            amount,
+        ))
+        .instruction(spl_token::instruction::sync_native(
+            &program.id(),
+            &wsol_ata_account,
+        )?)
         .instructions()?;
     Ok(instructions)
 }

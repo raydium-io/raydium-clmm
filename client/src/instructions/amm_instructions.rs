@@ -580,7 +580,7 @@ pub fn swap_v2_instr(
             output_vault_mint,
         })
         .accounts(remaining_accounts)
-        .args(raydium_instruction::Swap {
+        .args(raydium_instruction::SwapV2 {
             amount,
             other_amount_threshold,
             sqrt_price_limit_x64: sqrt_price_limit_x64.unwrap_or(0u128),
@@ -683,6 +683,8 @@ pub fn transfer_reward_owner(
     config: &ClientConfig,
     pool_account_key: Pubkey,
     new_owner: Pubkey,
+    encode: bool,
+    authority: Option<Pubkey>,
 ) -> Result<Vec<Instruction>> {
     let admin = read_keypair_file(&config.admin_path)?;
     let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
@@ -693,7 +695,11 @@ pub fn transfer_reward_owner(
     let instructions = program
         .request()
         .accounts(raydium_accounts::TransferRewardOwner {
-            authority: program.payer(),
+            authority: if encode {
+                authority.unwrap()
+            } else {
+                program.payer()
+            },
             pool_state: pool_account_key,
         })
         .args(raydium_instruction::TransferRewardOwner { new_owner })

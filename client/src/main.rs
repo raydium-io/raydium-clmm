@@ -19,6 +19,7 @@ use solana_client::{
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     compute_budget::ComputeBudgetInstruction,
+    message::Message,
     program_pack::Pack,
     pubkey::Pubkey,
     signature::{Keypair, Signature, Signer},
@@ -31,6 +32,7 @@ use std::str::FromStr;
 use std::{collections::VecDeque, convert::identity, mem::size_of};
 
 mod instructions;
+use bincode::serialize;
 use instructions::amm_instructions::*;
 use instructions::events_instructions_parse::*;
 use instructions::rpc::*;
@@ -351,6 +353,12 @@ pub enum CommandsName {
         to_token: Pubkey,
         amount: u64,
     },
+    WrapSol {
+        amount: u64,
+    },
+    UnWrapSol {
+        wrap_sol_account: Pubkey,
+    },
     CreateConfig {
         config_index: u16,
         tick_spacing: u16,
@@ -393,6 +401,9 @@ pub enum CommandsName {
     TransferRewardOwner {
         pool_id: Pubkey,
         new_owner: Pubkey,
+        #[arg(short, long)]
+        encode: bool,
+        authority: Option<Pubkey>,
     },
     OpenPosition {
         tick_lower_price: f64,
@@ -422,6 +433,8 @@ pub enum CommandsName {
         output_token: Pubkey,
         #[arg(short, long)]
         base_in: bool,
+        #[arg(short, long)]
+        simulate: bool,
         amount: u64,
         limit_price: Option<f64>,
     },
@@ -430,6 +443,8 @@ pub enum CommandsName {
         output_token: Pubkey,
         #[arg(short, long)]
         base_in: bool,
+        #[arg(short, long)]
+        simulate: bool,
         amount: u64,
         limit_price: Option<f64>,
     },
@@ -679,6 +694,35 @@ fn main() -> Result<()> {
             let recent_hash = rpc_client.get_latest_blockhash()?;
             let txn = Transaction::new_signed_with_payer(
                 &mint_to_instr,
+                Some(&payer.pubkey()),
+                &signers,
+                recent_hash,
+            );
+            let signature = send_txn(&rpc_client, &txn, true)?;
+            println!("{}", signature);
+        }
+        CommandsName::WrapSol { amount } => {
+            let wrap_sol_instr = wrap_sol_instr(&pool_config, amount)?;
+            // send
+            let signers = vec![&payer];
+            let recent_hash = rpc_client.get_latest_blockhash()?;
+            let txn = Transaction::new_signed_with_payer(
+                &wrap_sol_instr,
+                Some(&payer.pubkey()),
+                &signers,
+                recent_hash,
+            );
+            let signature = send_txn(&rpc_client, &txn, true)?;
+            println!("{}", signature);
+        }
+        CommandsName::UnWrapSol { wrap_sol_account } => {
+            let unwrap_sol_instr =
+                close_token_account(&pool_config, &wrap_sol_account, &payer.pubkey(), &payer)?;
+            // send
+            let signers = vec![&payer];
+            let recent_hash = rpc_client.get_latest_blockhash()?;
+            let txn = Transaction::new_signed_with_payer(
+                &unwrap_sol_instr,
                 Some(&payer.pubkey()),
                 &signers,
                 recent_hash,
@@ -966,20 +1010,37 @@ fn main() -> Result<()> {
             let signature = send_txn(&rpc_client, &txn, true)?;
             println!("{}", signature);
         }
-        CommandsName::TransferRewardOwner { pool_id, new_owner } => {
+        CommandsName::TransferRewardOwner {
+            pool_id,
+            new_owner,
+            encode,
+            authority,
+        } => {
             let transfer_reward_owner_instrs =
-                transfer_reward_owner(&pool_config.clone(), pool_id, new_owner).unwrap();
-            // send
-            let signers = vec![&payer, &admin];
-            let recent_hash = rpc_client.get_latest_blockhash()?;
-            let txn = Transaction::new_signed_with_payer(
-                &transfer_reward_owner_instrs,
-                Some(&payer.pubkey()),
-                &signers,
-                recent_hash,
-            );
-            let signature = send_txn(&rpc_client, &txn, true)?;
-            println!("{}", signature);
+                transfer_reward_owner(&pool_config.clone(), pool_id, new_owner, encode, authority)
+                    .unwrap();
+            if encode {
+                println!(
+                    "instruction.data:{:?}",
+                    transfer_reward_owner_instrs[0].data
+                );
+                let message = Message::new(&transfer_reward_owner_instrs, None);
+                let serialize_data = serialize(&message).unwrap();
+                let raw_data = bs58::encode(serialize_data).into_string();
+                println!("raw_data:{:?}", raw_data);
+            } else {
+                // send
+                let signers = vec![&payer, &admin];
+                let recent_hash = rpc_client.get_latest_blockhash()?;
+                let txn = Transaction::new_signed_with_payer(
+                    &transfer_reward_owner_instrs,
+                    Some(&payer.pubkey()),
+                    &signers,
+                    recent_hash,
+                );
+                let signature = send_txn(&rpc_client, &txn, true)?;
+                println!("{}", signature);
+            }
         }
         CommandsName::OpenPosition {
             tick_lower_price,
@@ -1503,6 +1564,7 @@ fn main() -> Result<()> {
             input_token,
             output_token,
             base_in,
+            simulate,
             amount,
             limit_price,
         } => {
@@ -1566,6 +1628,10 @@ fn main() -> Result<()> {
                     &mut tick_arrays,
                 )
                 .unwrap();
+            println!(
+                "amount:{}, other_amount_threshold:{}",
+                amount, other_amount_threshold
+            );
             if base_in {
                 // min out
                 other_amount_threshold =
@@ -1646,13 +1712,20 @@ fn main() -> Result<()> {
                 &signers,
                 recent_hash,
             );
-            let signature = send_txn(&rpc_client, &txn, true)?;
-            println!("{}", signature);
+            if simulate {
+                let ret =
+                    simulate_transaction(&rpc_client, &txn, true, CommitmentConfig::confirmed())?;
+                println!("{:#?}", ret);
+            } else {
+                let signature = send_txn(&rpc_client, &txn, true)?;
+                println!("{}", signature);
+            }
         }
         CommandsName::SwapV2 {
             input_token,
             output_token,
             base_in,
+            simulate,
             amount,
             limit_price,
         } => {
@@ -1735,6 +1808,10 @@ fn main() -> Result<()> {
                     &mut tick_arrays,
                 )
                 .unwrap();
+            println!(
+                "amount:{}, other_amount_threshold:{}",
+                amount, other_amount_threshold
+            );
             if base_in {
                 // calc mint out amount with slippage
                 other_amount_threshold =
@@ -1801,9 +1878,9 @@ fn main() -> Result<()> {
                     pool_state.token_mint_1
                 },
                 if zero_for_one {
-                    pool_state.token_mint_0
-                } else {
                     pool_state.token_mint_1
+                } else {
+                    pool_state.token_mint_0
                 },
                 remaining_accounts,
                 amount,
@@ -1822,8 +1899,14 @@ fn main() -> Result<()> {
                 &signers,
                 recent_hash,
             );
-            let signature = send_txn(&rpc_client, &txn, true)?;
-            println!("{}", signature);
+            if simulate {
+                let ret =
+                    simulate_transaction(&rpc_client, &txn, true, CommitmentConfig::confirmed())?;
+                println!("{:#?}", ret);
+            } else {
+                let signature = send_txn(&rpc_client, &txn, true)?;
+                println!("{}", signature);
+            }
         }
         CommandsName::PPositionByOwner { user_wallet } => {
             // load position

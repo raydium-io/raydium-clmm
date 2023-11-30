@@ -320,6 +320,11 @@ pub fn swap_internal<'b, 'info>(
         );
         #[cfg(feature = "enable-log")]
         msg!("{:#?}", swap_step);
+        if zero_for_one {
+            require_gte!(swap_step.sqrt_price_next_x64, target_price);
+        } else {
+            require_gte!(target_price, swap_step.sqrt_price_next_x64);
+        }
         state.sqrt_price_x64 = swap_step.sqrt_price_next_x64;
         step.amount_in = swap_step.amount_in;
         step.amount_out = swap_step.amount_out;
