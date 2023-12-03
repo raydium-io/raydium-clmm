@@ -450,6 +450,7 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
     with_matedata: bool,
     base_flag: Option<bool>,
 ) -> Result<()> {
+    let mut liquidity = liquidity;
     {
         let pool_state = &mut pool_state_loader.load_mut()?;
         if !pool_state.get_status_by_bit(PoolStatusBitIndex::OpenPositionOrIncreaseLiquidity) {
@@ -515,48 +516,36 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
             tick_array_upper_start_index,
         ]);
 
-        let mut amount_0: u64 = 0;
-        let mut amount_1: u64 = 0;
-        let mut amount_0_transfer_fee: u64 = 0;
-        let mut amount_1_transfer_fee: u64 = 0;
-
-        if liquidity > 0 {
-            (
-                amount_0,
-                amount_1,
-                amount_0_transfer_fee,
-                amount_1_transfer_fee,
-            ) = add_liquidity(
-                payer,
-                token_account_0,
-                token_account_1,
-                token_vault_0,
-                token_vault_1,
-                &tick_array_lower_loader,
-                &tick_array_upper_loader,
-                protocol_position,
-                token_program_2022,
-                token_program,
-                vault_0_mint,
-                vault_1_mint,
-                if use_tickarray_bitmap_extension {
-                    require_keys_eq!(
-                        remaining_accounts[0].key(),
-                        TickArrayBitmapExtension::key(pool_state_loader.key())
-                    );
-                    Some(&remaining_accounts[0])
-                } else {
-                    None
-                },
-                pool_state,
-                liquidity,
-                amount_0_max,
-                amount_1_max,
-                tick_lower_index,
-                tick_upper_index,
-                base_flag,
-            )?;
-        }
+        let (amount_0, amount_1, amount_0_transfer_fee, amount_1_transfer_fee) = add_liquidity(
+            payer,
+            token_account_0,
+            token_account_1,
+            token_vault_0,
+            token_vault_1,
+            &tick_array_lower_loader,
+            &tick_array_upper_loader,
+            protocol_position,
+            token_program_2022,
+            token_program,
+            vault_0_mint,
+            vault_1_mint,
+            if use_tickarray_bitmap_extension {
+                require_keys_eq!(
+                    remaining_accounts[0].key(),
+                    TickArrayBitmapExtension::key(pool_state_loader.key())
+                );
+                Some(&remaining_accounts[0])
+            } else {
+                None
+            },
+            pool_state,
+            &mut liquidity,
+            amount_0_max,
+            amount_1_max,
+            tick_lower_index,
+            tick_upper_index,
+            base_flag,
+        )?;
 
         // let personal_position = &mut personal_position;
         personal_position.bump = personal_position_bump;
@@ -619,23 +608,23 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
     vault_1_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
     tick_array_bitmap_extension: Option<&'c AccountInfo<'info>>,
     pool_state: &mut RefMut<PoolState>,
-    mut liquidity: u128,
+    liquidity: &mut u128,
     amount_0_max: u64,
     amount_1_max: u64,
     tick_lower_index: i32,
     tick_upper_index: i32,
     base_flag: Option<bool>,
 ) -> Result<(u64, u64, u64, u64)> {
-    if liquidity == 0 {
+    if *liquidity == 0 {
         if base_flag.unwrap() {
-            liquidity = liquidity_math::get_liquidity_from_single_amount_0(
+            *liquidity = liquidity_math::get_liquidity_from_single_amount_0(
                 pool_state.sqrt_price_x64,
                 tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
                 tick_math::get_sqrt_price_at_tick(tick_upper_index)?,
                 amount_0_max,
             );
         } else {
-            liquidity = liquidity_math::get_liquidity_from_single_amount_1(
+            *liquidity = liquidity_math::get_liquidity_from_single_amount_1(
                 pool_state.sqrt_price_x64,
                 tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
                 tick_math::get_sqrt_price_at_tick(tick_upper_index)?,
@@ -643,7 +632,7 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
             );
         }
     }
-    assert!(liquidity > 0);
+    assert!(*liquidity > 0);
     let liquidity_before = pool_state.liquidity;
     require_keys_eq!(tick_array_lower_loader.load()?.pool_id, pool_state.key());
     require_keys_eq!(tick_array_upper_loader.load()?.pool_id, pool_state.key());
@@ -663,7 +652,7 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
     }
     let clock = Clock::get()?;
     let (amount_0, amount_1, flip_tick_lower, flip_tick_upper) = modify_position(
-        i128::try_from(liquidity).unwrap(),
+        i128::try_from(*liquidity).unwrap(),
         pool_state,
         protocol_position,
         &mut tick_lower_state,
