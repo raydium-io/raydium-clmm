@@ -264,6 +264,7 @@ pub fn increase_liquidity<'a, 'b, 'c: 'info, 'info>(
     amount_1_max: u64,
     base_flag: Option<bool>,
 ) -> Result<()> {
+    assert!(liquidity > 0);
     let mut liquidity = liquidity;
     let pool_state = &mut pool_state_loader.load_mut()?;
     if !pool_state.get_status_by_bit(PoolStatusBitIndex::OpenPositionOrIncreaseLiquidity) {
