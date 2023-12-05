@@ -616,24 +616,28 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
     base_flag: Option<bool>,
 ) -> Result<(u64, u64, u64, u64)> {
     if *liquidity == 0 {
-        if base_flag.is_none() {
-            // when establishing a new position , liquidity allows for further additions
-            return Ok((0, 0, 0, 0));
-        }
-        if base_flag.unwrap() {
-            *liquidity = liquidity_math::get_liquidity_from_single_amount_0(
-                pool_state.sqrt_price_x64,
-                tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
-                tick_math::get_sqrt_price_at_tick(tick_upper_index)?,
-                amount_0_max,
-            );
-        } else {
-            *liquidity = liquidity_math::get_liquidity_from_single_amount_1(
-                pool_state.sqrt_price_x64,
-                tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
-                tick_math::get_sqrt_price_at_tick(tick_upper_index)?,
-                amount_1_max,
-            );
+        match base_flag {
+            Some(base) => {
+                if base {
+                    *liquidity = liquidity_math::get_liquidity_from_single_amount_0(
+                        pool_state.sqrt_price_x64,
+                        tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
+                        tick_math::get_sqrt_price_at_tick(tick_upper_index)?,
+                        amount_0_max,
+                    );
+                } else {
+                    *liquidity = liquidity_math::get_liquidity_from_single_amount_1(
+                        pool_state.sqrt_price_x64,
+                        tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
+                        tick_math::get_sqrt_price_at_tick(tick_upper_index)?,
+                        amount_1_max,
+                    );
+                }
+            }
+            None => {
+                // when establishing a new position , liquidity allows for further additions
+                return Ok((0, 0, 0, 0));
+            }
         }
     }
     assert!(*liquidity > 0);
