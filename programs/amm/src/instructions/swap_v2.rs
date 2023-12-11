@@ -92,14 +92,20 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
     let zero_for_one;
     let swap_price_before;
 
-    let input_balance_before = ctx.input_vault.amount;
-    let output_balance_before = ctx.output_vault.amount;
+    let input_balance_before = ctx.input_token_account.amount;
+    let output_balance_before = ctx.output_token_account.amount;
 
-    let mut transfer_fee = 0;
-    if is_base_input {
-        transfer_fee =
+    // calculate specified amount because the amount includes thransfer_fee as input and without thransfer_fee as output
+    let amount_specified = if is_base_input {
+        let transfer_fee =
             util::get_transfer_fee(ctx.input_vault_mint.clone(), amount_specified).unwrap();
-    }
+        amount_specified - transfer_fee
+    } else {
+        let transfer_fee =
+            util::get_transfer_inverse_fee(ctx.output_vault_mint.clone(), amount_specified)
+                .unwrap();
+        amount_specified + transfer_fee
+    };
 
     {
         swap_price_before = ctx.pool_state.load()?.sqrt_price_x64;
@@ -141,7 +147,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             tick_array_states,
             &mut ctx.observation_state.load_mut()?,
             &tickarray_bitmap_extension,
-            amount_specified - transfer_fee,
+            amount_specified,
             if sqrt_price_limit_x64 == 0 {
                 if zero_for_one {
                     tick_math::MIN_SQRT_PRICE_X64 + 1
@@ -190,10 +196,11 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         };
 
     if zero_for_one {
-        if !is_base_input {
-            transfer_fee =
-                util::get_transfer_inverse_fee(ctx.input_vault_mint.clone(), amount_0).unwrap();
-        }
+        let (transfer_amount_0, transfer_amount_1) = (
+            amount_0
+                + util::get_transfer_inverse_fee(ctx.input_vault_mint.clone(), amount_0).unwrap(),
+            amount_1,
+        );
         //  x -> y, deposit x token from user to pool vault.
         transfer_from_user_to_pool_vault(
             &ctx.payer,
@@ -202,9 +209,9 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             Some(vault_0_mint),
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
-            amount_0 + transfer_fee,
+            transfer_amount_0,
         )?;
-        if vault_1.amount <= amount_1 {
+        if vault_1.amount <= transfer_amount_1 {
             // freeze pool, disable all instructions
             ctx.pool_state.load_mut()?.set_status(255);
         }
@@ -216,13 +223,14 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             Some(vault_1_mint),
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
-            amount_1,
+            transfer_amount_1,
         )?;
     } else {
-        if !is_base_input {
-            transfer_fee =
-                util::get_transfer_inverse_fee(ctx.input_vault_mint.clone(), amount_1).unwrap();
-        }
+        let (transfer_amount_0, transfer_amount_1) = (
+            amount_0,
+            amount_1
+                + util::get_transfer_inverse_fee(ctx.input_vault_mint.clone(), amount_1).unwrap(),
+        );
         transfer_from_user_to_pool_vault(
             &ctx.payer,
             &token_account_1,
@@ -230,9 +238,9 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             Some(vault_1_mint),
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
-            amount_1 + transfer_fee,
+            transfer_amount_1,
         )?;
-        if vault_0.amount <= amount_0 {
+        if vault_0.amount <= transfer_amount_0 {
             // freeze pool, disable all instructions
             ctx.pool_state.load_mut()?.set_status(255);
         }
@@ -243,11 +251,11 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             Some(vault_0_mint),
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
-            amount_0,
+            transfer_amount_0,
         )?;
     }
-    ctx.output_vault.reload()?;
-    ctx.input_vault.reload()?;
+    ctx.output_token_account.reload()?;
+    ctx.input_token_account.reload()?;
 
     let pool_state = ctx.pool_state.load()?;
     emit!(SwapEvent {
@@ -269,14 +277,14 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
     }
 
     if is_base_input {
-        Ok(output_balance_before
-            .checked_sub(ctx.output_vault.amount)
+        Ok(ctx
+            .output_token_account
+            .amount
+            .checked_sub(output_balance_before)
             .unwrap())
     } else {
-        Ok(ctx
-            .input_vault
-            .amount
-            .checked_sub(input_balance_before)
+        Ok(input_balance_before
+            .checked_sub(ctx.input_token_account.amount)
             .unwrap())
     }
 }
