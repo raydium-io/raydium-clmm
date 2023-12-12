@@ -195,12 +195,19 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             )
         };
 
+    // user or pool real amount delta without tranfer fee
+    let amount_0_without_fee;
+    let amount_1_without_fee;
+    // the transfer fee amount charged by withheld_amount
+    let transfer_fee_0;
+    let transfer_fee_1;
     if zero_for_one {
-        let (transfer_amount_0, transfer_amount_1) = (
-            amount_0
-                + util::get_transfer_inverse_fee(ctx.input_vault_mint.clone(), amount_0).unwrap(),
-            amount_1,
-        );
+        transfer_fee_0 = util::get_transfer_inverse_fee(vault_0_mint.clone(), amount_0).unwrap();
+        transfer_fee_1 = util::get_transfer_fee(vault_1_mint.clone(), amount_1).unwrap();
+
+        amount_0_without_fee = amount_0;
+        amount_1_without_fee = amount_1.checked_sub(transfer_fee_1).unwrap();
+        let (transfer_amount_0, transfer_amount_1) = (amount_0 + transfer_fee_0, amount_1);
         //  x -> y, deposit x token from user to pool vault.
         transfer_from_user_to_pool_vault(
             &ctx.payer,
@@ -226,11 +233,12 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             transfer_amount_1,
         )?;
     } else {
-        let (transfer_amount_0, transfer_amount_1) = (
-            amount_0,
-            amount_1
-                + util::get_transfer_inverse_fee(ctx.input_vault_mint.clone(), amount_1).unwrap(),
-        );
+        transfer_fee_0 = util::get_transfer_fee(vault_0_mint.clone(), amount_0).unwrap();
+        transfer_fee_1 = util::get_transfer_inverse_fee(vault_1_mint.clone(), amount_1).unwrap();
+
+        amount_0_without_fee = amount_0.checked_sub(transfer_fee_0).unwrap();
+        amount_1_without_fee = amount_1;
+        let (transfer_amount_0, transfer_amount_1) = (amount_0, amount_1 + transfer_fee_1);
         transfer_from_user_to_pool_vault(
             &ctx.payer,
             &token_account_1,
@@ -263,8 +271,10 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         sender: ctx.payer.key(),
         token_account_0: token_account_0.key(),
         token_account_1: token_account_1.key(),
-        amount_0,
-        amount_1,
+        amount_0: amount_0_without_fee,
+        transfer_fee_0,
+        amount_1: amount_1_without_fee,
+        transfer_fee_1,
         zero_for_one,
         sqrt_price_x64: pool_state.sqrt_price_x64,
         liquidity: pool_state.liquidity,
