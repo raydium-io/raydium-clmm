@@ -624,7 +624,7 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
             // must deduct transfer fee before calculate liquidity
             // because only v2 instruction support token_2022, vault_0_mint must be exist
             let amount_0_transfer_fee =
-                get_transfer_inverse_fee(vault_0_mint.clone().unwrap(), amount_0_max).unwrap();
+                get_transfer_fee(vault_0_mint.clone().unwrap(), amount_0_max).unwrap();
             *liquidity = liquidity_math::get_liquidity_from_single_amount_0(
                 pool_state.sqrt_price_x64,
                 tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
@@ -642,7 +642,7 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
             // must deduct transfer fee before calculate liquidity
             // because only v2 instruction support token_2022, vault_1_mint must be exist
             let amount_1_transfer_fee =
-                get_transfer_inverse_fee(vault_1_mint.clone().unwrap(), amount_1_max).unwrap();
+                get_transfer_fee(vault_1_mint.clone().unwrap(), amount_1_max).unwrap();
             *liquidity = liquidity_math::get_liquidity_from_single_amount_1(
                 pool_state.sqrt_price_x64,
                 tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
