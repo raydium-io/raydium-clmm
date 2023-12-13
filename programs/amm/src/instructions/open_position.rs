@@ -631,6 +631,13 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
                 tick_math::get_sqrt_price_at_tick(tick_upper_index)?,
                 amount_0_max.checked_sub(amount_0_transfer_fee).unwrap(),
             );
+            #[cfg(feature = "enable-log")]
+            msg!(
+                "liquidity: {}, amount_0_max:{}, amount_0_transfer_fee:{}",
+                *liquidity,
+                amount_0_max,
+                amount_0_transfer_fee
+            );
         } else {
             // must deduct transfer fee before calculate liquidity
             // because only v2 instruction support token_2022, vault_1_mint must be exist
@@ -641,6 +648,13 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
                 tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
                 tick_math::get_sqrt_price_at_tick(tick_upper_index)?,
                 amount_1_max.checked_sub(amount_1_transfer_fee).unwrap(),
+            );
+            #[cfg(feature = "enable-log")]
+            msg!(
+                "liquidity: {}, amount_1_max:{}, amount_1_transfer_fee:{}",
+                *liquidity,
+                amount_1_max,
+                amount_1_transfer_fee
             );
         }
     }
@@ -734,6 +748,14 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
         transfer_fee_0: amount_0_transfer_fee,
         transfer_fee_1: amount_1_transfer_fee,
     });
+    #[cfg(feature = "enable-log")]
+    msg!(
+        "amount_0: {}, amount_0_transfer_fee: {}, amount_1: {}, amount_1_transfer_fee: {}",
+        amount_0,
+        amount_0_transfer_fee,
+        amount_1,
+        amount_1_transfer_fee
+    );
     require_gte!(
         amount_0_max,
         amount_0 + amount_0_transfer_fee,
