@@ -294,10 +294,10 @@ pub mod amm_v3 {
     /// * `tick_upper_index` - The upper boundary of market
     /// * `tick_array_lower_start_index` - The start index of tick array which include tick low
     /// * `tick_array_upper_start_index` - The start index of tick array which include tick upper
-    /// * `liquidity` - The liquidity to be added, if zero, calculate liquidity base amount_0_max or amount_1_max according base_flag
+    /// * `liquidity` - The liquidity to be added, if zero, and the base_flage is specified, calculate liquidity base amount_0_max or amount_1_max according base_flag, otherwise open position with zero liquidity
     /// * `amount_0_max` - The max amount of token_0 to spend, which serves as a slippage check
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
-    /// * `base_flag` - must be special if liquidity is zero, false: calculate liquidity base amount_0_max otherwise base amount_1_max
+    /// * `base_flag` - if the liquidity specified as zero, true: calculate liquidity base amount_0_max otherwise base amount_1_max
     ///
     pub fn open_position_v2<'a, 'b, 'c: 'info, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, OpenPositionV2<'info>>,
@@ -311,9 +311,6 @@ pub mod amm_v3 {
         with_matedata: bool,
         base_flag: Option<bool>,
     ) -> Result<()> {
-        if liquidity == 0 {
-            assert!(base_flag.is_some());
-        }
         instructions::open_position_v2(
             ctx,
             liquidity,
@@ -368,7 +365,7 @@ pub mod amm_v3 {
     /// * `liquidity` - The desired liquidity to be added, if zero, calculate liquidity base amount_0 or amount_1 according base_flag
     /// * `amount_0_max` - The max amount of token_0 to spend, which serves as a slippage check
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
-    /// * `base_flag` - active if liquidity is zero, 0: calculate liquidity base amount_0_max otherwise base amount_1_max
+    /// * `base_flag` - must be specified if liquidity is zero, true: calculate liquidity base amount_0_max otherwise base amount_1_max
     ///
     #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
     pub fn increase_liquidity_v2<'a, 'b, 'c: 'info, 'info>(
