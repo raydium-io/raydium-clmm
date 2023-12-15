@@ -616,28 +616,46 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
     base_flag: Option<bool>,
 ) -> Result<(u64, u64, u64, u64)> {
     if *liquidity == 0 {
-        match base_flag {
-            Some(base) => {
-                if base {
-                    *liquidity = liquidity_math::get_liquidity_from_single_amount_0(
-                        pool_state.sqrt_price_x64,
-                        tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
-                        tick_math::get_sqrt_price_at_tick(tick_upper_index)?,
-                        amount_0_max,
-                    );
-                } else {
-                    *liquidity = liquidity_math::get_liquidity_from_single_amount_1(
-                        pool_state.sqrt_price_x64,
-                        tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
-                        tick_math::get_sqrt_price_at_tick(tick_upper_index)?,
-                        amount_1_max,
-                    );
-                }
-            }
-            None => {
-                // when establishing a new position , liquidity allows for further additions
-                return Ok((0, 0, 0, 0));
-            }
+        if base_flag.is_none() {
+            // when establishing a new position , liquidity allows for further additions
+            return Ok((0, 0, 0, 0));
+        }
+        if base_flag.unwrap() {
+            // must deduct transfer fee before calculate liquidity
+            // because only v2 instruction support token_2022, vault_0_mint must be exist
+            let amount_0_transfer_fee =
+                get_transfer_fee(vault_0_mint.clone().unwrap(), amount_0_max).unwrap();
+            *liquidity = liquidity_math::get_liquidity_from_single_amount_0(
+                pool_state.sqrt_price_x64,
+                tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
+                tick_math::get_sqrt_price_at_tick(tick_upper_index)?,
+                amount_0_max.checked_sub(amount_0_transfer_fee).unwrap(),
+            );
+            #[cfg(feature = "enable-log")]
+            msg!(
+                "liquidity: {}, amount_0_max:{}, amount_0_transfer_fee:{}",
+                *liquidity,
+                amount_0_max,
+                amount_0_transfer_fee
+            );
+        } else {
+            // must deduct transfer fee before calculate liquidity
+            // because only v2 instruction support token_2022, vault_1_mint must be exist
+            let amount_1_transfer_fee =
+                get_transfer_fee(vault_1_mint.clone().unwrap(), amount_1_max).unwrap();
+            *liquidity = liquidity_math::get_liquidity_from_single_amount_1(
+                pool_state.sqrt_price_x64,
+                tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
+                tick_math::get_sqrt_price_at_tick(tick_upper_index)?,
+                amount_1_max.checked_sub(amount_1_transfer_fee).unwrap(),
+            );
+            #[cfg(feature = "enable-log")]
+            msg!(
+                "liquidity: {}, amount_1_max:{}, amount_1_transfer_fee:{}",
+                *liquidity,
+                amount_1_max,
+                amount_1_transfer_fee
+            );
         }
     }
     assert!(*liquidity > 0);
@@ -730,6 +748,14 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
         transfer_fee_0: amount_0_transfer_fee,
         transfer_fee_1: amount_1_transfer_fee,
     });
+    #[cfg(feature = "enable-log")]
+    msg!(
+        "amount_0: {}, amount_0_transfer_fee: {}, amount_1: {}, amount_1_transfer_fee: {}",
+        amount_0,
+        amount_0_transfer_fee,
+        amount_1,
+        amount_1_transfer_fee
+    );
     require_gte!(
         amount_0_max,
         amount_0 + amount_0_transfer_fee,

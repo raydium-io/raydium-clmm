@@ -349,6 +349,16 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
         transfer_fee_0,
         transfer_fee_1,
     });
+    #[cfg(feature = "enable-log")]
+    msg!(
+        "decrease_amount_0: {}, transfer_fee_0: {}, latest_fees_owed_0: {}, decrease_amount_1: {}, transfer_fee_1: {}, latest_fees_owed_1: {}",
+        decrease_amount_0,
+        transfer_fee_0,
+        latest_fees_owed_0,
+        decrease_amount_1,
+        transfer_fee_1,
+        latest_fees_owed_1
+    );
     if liquidity > 0 {
         require_gte!(
             decrease_amount_0 - transfer_fee_0,

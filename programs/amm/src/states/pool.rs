@@ -735,11 +735,17 @@ pub struct SwapEvent {
     #[index]
     pub token_account_1: Pubkey,
 
-    /// The delta of the token_0 balance of the pool
+    /// The real delta amount of the token_0 of the pool or user
     pub amount_0: u64,
 
-    /// The delta of the token_1 balance of the pool
+    /// The transfer fee charged by the withheld_amount of the token_0
+    pub transfer_fee_0: u64,
+
+    /// The real delta of the token_1 of the pool or user
     pub amount_1: u64,
+
+    /// The transfer fee charged by the withheld_amount of the token_1
+    pub transfer_fee_1: u64,
 
     /// if true, amount_0 is negtive and amount_1 is positive
     pub zero_for_one: bool,

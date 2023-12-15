@@ -54,9 +54,6 @@ pub struct InitializeReward<'info> {
     )]
     pub reward_token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    #[account(
-        address = anchor_spl::token::ID
-    )]
     pub reward_token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
