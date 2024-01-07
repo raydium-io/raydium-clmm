@@ -69,6 +69,7 @@ pub struct SwapSingleV2<'info> {
     )]
     pub output_vault_mint: Box<InterfaceAccount<'info, Mint>>,
     // remaining accounts
+    // tickarray_bitmap_extension: must add account if need regardless the sequence
     // tick_array_account_1
     // tick_array_account_2
     // tick_array_account_...
