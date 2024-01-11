@@ -454,6 +454,10 @@ impl PoolState {
         tick_array_start_index: i32,
     ) -> Result<()> {
         if self.is_overflow_default_tickarray_bitmap(vec![tick_array_start_index]) {
+            require_keys_eq!(
+                tickarray_bitmap_extension.unwrap().key(),
+                TickArrayBitmapExtension::key(self.key())
+            );
             AccountLoader::<TickArrayBitmapExtension>::try_from(
                 tickarray_bitmap_extension.unwrap(),
             )?
