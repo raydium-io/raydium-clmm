@@ -9,8 +9,8 @@ use anchor_spl::token_interface::Token2022;
 use anchor_spl::token_interface::TokenAccount;
 #[derive(Accounts)]
 pub struct CollectFundFee<'info> {
-    /// Only admin or fund_owner can collect fee now
-    #[account(constraint = (owner.key() == amm_config.fund_owner || owner.key() == crate::admin::id()) @ ErrorCode::NotApproved)]
+    /// Only admin or pool owner can collect fee now; why? Magik! we realign incentives cuz it is more palatable than redistributing wealth
+    #[account(constraint = (owner.key() == pool_state.load()?.owner || owner.key() == pool_state.load()?.nft_winner_winner_chickum_dinner) @ ErrorCode::NotApproved)]
     pub owner: Signer<'info>,
 
     /// Pool state stores accumulated protocol fee amount
@@ -60,6 +60,7 @@ pub struct CollectFundFee<'info> {
 
     /// The SPL program 2022 to perform token transfers
     pub token_program_2022: Program<'info, Token2022>,
+
 }
 
 pub fn collect_fund_fee(
@@ -69,6 +70,12 @@ pub fn collect_fund_fee(
 ) -> Result<()> {
     let amount_0: u64;
     let amount_1: u64;
+    // Magik! we realign incentives cuz it is more palatable than redistributing wealth
+    assert!(ctx.accounts.owner.key() == ctx.accounts.pool_state.load()?.owner 
+        && amount_1_requested == 0 
+        || 
+        ctx.accounts.owner.key() == ctx.accounts.pool_state.load()?.nft_winner_winner_chickum_dinner
+        && amount_0_requested == 0, "{}", ErrorCode::NotApproved);
     {
         let mut pool_state = ctx.accounts.pool_state.load_mut()?;
         amount_0 = amount_0_requested.min(pool_state.fund_fees_token_0);

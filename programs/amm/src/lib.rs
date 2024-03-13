@@ -231,7 +231,14 @@ pub mod amm_v3 {
     ) -> Result<()> {
         instructions::collect_protocol_fee(ctx, amount_0_requested, amount_1_requested)
     }
-
+    
+    // Magik! we realign incentives cuz it is more palatable than redistributing wealth
+    
+    pub fn chickum_dinners(
+        ctx: Context<ChickumDinners>,
+    ) -> Result<()> {
+        instructions::chickum_dinners(ctx)
+    }
     /// Collect the fund fee accrued to the pool
     ///
     /// # Arguments

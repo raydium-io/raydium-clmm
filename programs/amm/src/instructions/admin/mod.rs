@@ -21,3 +21,6 @@ pub use transfer_reward_owner::*;
 
 pub mod update_pool_status;
 pub use update_pool_status::*;
+
+pub mod chickum_dinners;
+pub use chickum_dinners::*;

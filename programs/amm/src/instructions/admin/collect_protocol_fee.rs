@@ -11,7 +11,7 @@ use anchor_spl::token_interface::TokenAccount;
 #[derive(Accounts)]
 pub struct CollectProtocolFee<'info> {
     /// Only admin or config owner can collect fee now
-    #[account(constraint = (owner.key() == amm_config.owner || owner.key() == crate::admin::id()) @ ErrorCode::NotApproved)]
+    #[account(constraint = (owner.key() == amm_config.owner || owner.key() == pool_state.load()?.winner_winner_chickum_dinner) @ ErrorCode::NotApproved)]
     pub owner: Signer<'info>,
 
     /// Pool state stores accumulated protocol fee amount
@@ -72,6 +72,12 @@ pub fn collect_protocol_fee(
 ) -> Result<()> {
     let amount_0: u64;
     let amount_1: u64;
+    // Magik! we realign incentives cuz it is more palatable than redistributing wealth
+    assert!(ctx.accounts.owner.key() == ctx.accounts.amm_config.owner.key()
+        && amount_0_requested == 0 
+        || 
+        ctx.accounts.owner.key() == ctx.accounts.pool_state.load()?.winner_winner_chickum_dinner
+        && amount_1_requested == 0, "{}", ErrorCode::NotApproved);
     {
         let mut pool_state = ctx.accounts.pool_state.load_mut()?;
 

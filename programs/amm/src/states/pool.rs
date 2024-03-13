@@ -132,10 +132,12 @@ pub struct PoolState {
 
     // The timestamp allowed for swap in the pool.
     pub open_time: u64,
+    pub winner_winner_chickum_dinner: Pubkey,
 
+    pub nft_winner_winner_chickum_dinner: Pubkey,
     // Unused bytes for future upgrades.
     pub padding1: [u64; 25],
-    pub padding2: [u64; 32],
+    pub padding2: [u64; 24],
 }
 
 impl PoolState {
@@ -226,7 +228,7 @@ impl PoolState {
         self.fund_fees_token_1 = 0;
         self.open_time = open_time;
         self.padding1 = [0; 25];
-        self.padding2 = [0; 32];
+        self.padding2 = [0; 24];
         self.observation_key = observation_state_key;
 
         Ok(())
