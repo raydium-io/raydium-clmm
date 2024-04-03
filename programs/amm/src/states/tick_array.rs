@@ -609,6 +609,14 @@ pub mod tick_array_test {
                 TickArrayState::get_array_start_index(tick_math::MAX_TICK, 1),
                 443580
             );
+            assert_eq!(
+                TickArrayState::get_array_start_index(tick_math::MAX_TICK, 60),
+                442800
+            );
+            assert_eq!(
+                TickArrayState::get_array_start_index(tick_math::MIN_TICK, 60),
+                -446400
+            );
         }
 
         #[test]

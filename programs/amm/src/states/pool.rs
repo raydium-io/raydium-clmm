@@ -569,13 +569,14 @@ impl PoolState {
         self.status.bitand(status) == 0
     }
 
-    pub fn is_overflow_default_tickarray_bitmap(&self, tick_array_start_indexs: Vec<i32>) -> bool {
-        let (max_tick_boundary, min_tick_boundary) = self.tick_range();
-        for tick_index in tick_array_start_indexs {
+    pub fn is_overflow_default_tickarray_bitmap(&self, tick_indexs: Vec<i32>) -> bool {
+        let (min_tick_array_start_index_boundary, max_tick_array_index_boundary) =
+            self.tick_array_start_index_range();
+        for tick_index in tick_indexs {
             let tick_array_start_index =
                 TickArrayState::get_array_start_index(tick_index, self.tick_spacing);
-            if tick_array_start_index >= max_tick_boundary
-                || tick_array_start_index < min_tick_boundary
+            if tick_array_start_index >= max_tick_array_index_boundary
+                || tick_array_start_index < min_tick_array_start_index_boundary
             {
                 return true;
             }
@@ -583,17 +584,24 @@ impl PoolState {
         false
     }
 
-    pub fn tick_range(&self) -> (i32, i32) {
+    // the range of tick array start index that default tickarray bitmap can represent
+    // if tick_spacing = 1, the result range is [-30720, 30720)
+    pub fn tick_array_start_index_range(&self) -> (i32, i32) {
+        // the range of ticks that default tickarrary can represent
         let mut max_tick_boundary =
             tick_array_bit_map::max_tick_in_tickarray_bitmap(self.tick_spacing);
         let mut min_tick_boundary = -max_tick_boundary;
         if max_tick_boundary > tick_math::MAX_TICK {
-            max_tick_boundary = tick_math::MAX_TICK
+            max_tick_boundary =
+                TickArrayState::get_array_start_index(tick_math::MAX_TICK, self.tick_spacing);
+            // find the next tick array start index
+            max_tick_boundary = max_tick_boundary + TickArrayState::tick_count(self.tick_spacing);
         }
         if min_tick_boundary < tick_math::MIN_TICK {
-            min_tick_boundary = tick_math::MIN_TICK
+            min_tick_boundary =
+                TickArrayState::get_array_start_index(tick_math::MIN_TICK, self.tick_spacing);
         }
-        (max_tick_boundary, min_tick_boundary)
+        (min_tick_boundary, max_tick_boundary)
     }
 }
 
@@ -931,6 +939,28 @@ pub mod pool_test {
                     .bit(pool_state.get_tick_array_offset(306600).unwrap())
                     == true
             );
+        }
+
+        #[test]
+        fn default_tick_array_start_index_range_test() {
+            let mut pool_state = PoolState::default();
+            pool_state.tick_spacing = 60;
+            // -443580 is the min tick can use to open a position when tick_spacing is 60 due to MIN_TICK is -443636
+            assert!(pool_state.is_overflow_default_tickarray_bitmap(vec![-443580]) == false);
+            // 443580 is the min tick can use to open a position when tick_spacing is 60 due to MAX_TICK is 443636
+            assert!(pool_state.is_overflow_default_tickarray_bitmap(vec![443580]) == false);
+
+            pool_state.tick_spacing = 10;
+            assert!(pool_state.is_overflow_default_tickarray_bitmap(vec![-307200]) == false);
+            assert!(pool_state.is_overflow_default_tickarray_bitmap(vec![-307201]) == true);
+            assert!(pool_state.is_overflow_default_tickarray_bitmap(vec![307200]) == true);
+            assert!(pool_state.is_overflow_default_tickarray_bitmap(vec![307199]) == false);
+
+            pool_state.tick_spacing = 1;
+            assert!(pool_state.is_overflow_default_tickarray_bitmap(vec![-30720]) == false);
+            assert!(pool_state.is_overflow_default_tickarray_bitmap(vec![-30721]) == true);
+            assert!(pool_state.is_overflow_default_tickarray_bitmap(vec![30720]) == true);
+            assert!(pool_state.is_overflow_default_tickarray_bitmap(vec![30719]) == false);
         }
     }
 
