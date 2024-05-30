@@ -3276,6 +3276,7 @@ dependencies = [
  "quickcheck",
  "rand 0.8.5",
  "solana-program",
+ "solana-security-txt",
  "spl-memo 4.0.0",
  "uint",
 ]
@@ -4746,6 +4747,12 @@ dependencies = [
  "rustversion",
  "syn 2.0.38",
 ]
+
+[[package]]
+name = "solana-security-txt"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "468aa43b7edb1f9b7b7b686d5c3aeb6630dc1708e86e31343499dd5c4d775183"
 
 [[package]]
 name = "solana-send-transaction-service"
