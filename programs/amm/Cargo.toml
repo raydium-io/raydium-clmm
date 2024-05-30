@@ -31,6 +31,7 @@ uint = "0.9.1"
 mpl-token-metadata = { version = "^1.11.0", features = ["no-entrypoint"] }
 bytemuck = { version = "1.4.0", features = ["derive", "min_const_generics"] }
 arrayref = { version = "0.3.6" }
+solana-security-txt = "1.1.1"
 
 [dev-dependencies]
 quickcheck = "0.9"
