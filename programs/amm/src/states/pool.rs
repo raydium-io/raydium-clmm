@@ -862,7 +862,6 @@ pub mod pool_test {
     }
 
     mod tick_array_bitmap_test {
-
         use super::*;
 
         #[test]
@@ -1082,14 +1081,34 @@ pub mod pool_test {
     }
 
     mod use_tickarray_bitmap_extension_test {
-
-        use std::ops::Deref;
-
         use super::*;
+        use std::ops::Deref;
 
         use crate::tick_array_bitmap_extension_test::{
             build_tick_array_bitmap_extension_info, BuildExtensionAccountInfo,
         };
+
+        pub fn build_pool_and_extension() -> (PoolState, BuildExtensionAccountInfo) {
+            let mut state = PoolState {
+                tick_spacing: 1,
+                ..Default::default()
+            };
+            state.bump = [Pubkey::find_program_address(
+                &[
+                    POOL_SEED.as_bytes(),
+                    state.amm_config.as_ref(),
+                    state.token_mint_0.as_ref(),
+                    state.token_mint_1.as_ref(),
+                ],
+                &crate::id(),
+            )
+            .1];
+            let param = BuildExtensionAccountInfo {
+                key: TickArrayBitmapExtension::key(state.key()),
+                ..Default::default()
+            };
+            (state, param)
+        }
 
         pub fn pool_flip_tick_array_bit_helper<'c: 'info, 'info>(
             pool_state: &mut PoolState,
@@ -1105,14 +1124,12 @@ pub mod pool_test {
 
         #[test]
         fn get_first_initialized_tick_array_test() {
-            let mut pool_state = PoolState::default();
-            pool_state.tick_spacing = 1;
+            let (mut pool_state, mut param) = build_pool_and_extension();
             let tick_spacing = pool_state.tick_spacing as i32;
             pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 511 - 1;
 
-            let param: &mut BuildExtensionAccountInfo = &mut BuildExtensionAccountInfo::default();
             let tick_array_bitmap_extension_info: AccountInfo<'_> =
-                build_tick_array_bitmap_extension_info(param);
+                build_tick_array_bitmap_extension_info(&mut param);
 
             pool_flip_tick_array_bit_helper(
                 &mut pool_state,
@@ -1166,15 +1183,12 @@ pub mod pool_test {
             use super::*;
             #[test]
             fn from_pool_bitmap_to_extension_negative_bitmap() {
-                let mut pool_state = PoolState::default();
-                pool_state.tick_spacing = 1;
+                let (mut pool_state, mut param) = build_pool_and_extension();
                 let tick_spacing = pool_state.tick_spacing as i32;
                 pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 511;
 
-                let param: &mut BuildExtensionAccountInfo =
-                    &mut BuildExtensionAccountInfo::default();
                 let tick_array_bitmap_extension_info: AccountInfo<'_> =
-                    build_tick_array_bitmap_extension_info(param);
+                    build_tick_array_bitmap_extension_info(&mut param);
 
                 pool_flip_tick_array_bit_helper(
                     &mut pool_state,
@@ -1249,15 +1263,12 @@ pub mod pool_test {
 
             #[test]
             fn from_pool_bitmap_to_extension_positive_bitmap() {
-                let mut pool_state = PoolState::default();
-                pool_state.tick_spacing = 1;
+                let (mut pool_state, mut param) = build_pool_and_extension();
                 let tick_spacing = pool_state.tick_spacing as i32;
                 pool_state.tick_current = 0;
 
-                let param: &mut BuildExtensionAccountInfo =
-                    &mut BuildExtensionAccountInfo::default();
                 let tick_array_bitmap_extension_info: AccountInfo<'_> =
-                    build_tick_array_bitmap_extension_info(param);
+                    build_tick_array_bitmap_extension_info(&mut param);
 
                 pool_flip_tick_array_bit_helper(
                     &mut pool_state,
@@ -1322,15 +1333,12 @@ pub mod pool_test {
 
             #[test]
             fn from_extension_negative_bitmap_to_extension_positive_bitmap() {
-                let mut pool_state = PoolState::default();
-                pool_state.tick_spacing = 1;
+                let (mut pool_state, mut param) = build_pool_and_extension();
                 let tick_spacing = pool_state.tick_spacing as i32;
                 pool_state.tick_current = -tick_spacing * TICK_ARRAY_SIZE * 999;
 
-                let param: &mut BuildExtensionAccountInfo =
-                    &mut BuildExtensionAccountInfo::default();
                 let tick_array_bitmap_extension_info: AccountInfo<'_> =
-                    build_tick_array_bitmap_extension_info(param);
+                    build_tick_array_bitmap_extension_info(&mut param);
 
                 pool_flip_tick_array_bit_helper(
                     &mut pool_state,
@@ -1364,15 +1372,12 @@ pub mod pool_test {
 
             #[test]
             fn from_extension_positive_bitmap_to_extension_negative_bitmap() {
-                let mut pool_state = PoolState::default();
-                pool_state.tick_spacing = 1;
+                let (mut pool_state, mut param) = build_pool_and_extension();
                 let tick_spacing = pool_state.tick_spacing as i32;
                 pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 999;
 
-                let param: &mut BuildExtensionAccountInfo =
-                    &mut BuildExtensionAccountInfo::default();
                 let tick_array_bitmap_extension_info: AccountInfo<'_> =
-                    build_tick_array_bitmap_extension_info(param);
+                    build_tick_array_bitmap_extension_info(&mut param);
 
                 pool_flip_tick_array_bit_helper(
                     &mut pool_state,
@@ -1406,14 +1411,11 @@ pub mod pool_test {
 
             #[test]
             fn no_initialized_tick_array() {
-                let mut pool_state = PoolState::default();
-                pool_state.tick_spacing = 1;
+                let (mut pool_state, mut param) = build_pool_and_extension();
                 pool_state.tick_current = 0;
 
-                let param: &mut BuildExtensionAccountInfo =
-                    &mut BuildExtensionAccountInfo::default();
                 let tick_array_bitmap_extension_info: AccountInfo<'_> =
-                    build_tick_array_bitmap_extension_info(param);
+                    build_tick_array_bitmap_extension_info(&mut param);
 
                 pool_flip_tick_array_bit_helper(
                     &mut pool_state,
@@ -1452,15 +1454,12 @@ pub mod pool_test {
 
             #[test]
             fn min_tick_max_tick_initialized_test() {
-                let mut pool_state = PoolState::default();
-                pool_state.tick_spacing = 1;
-                pool_state.tick_current = 0;
+                let (mut pool_state, mut param) = build_pool_and_extension();
                 let tick_spacing = pool_state.tick_spacing as i32;
+                pool_state.tick_current = 0;
 
-                let param: &mut BuildExtensionAccountInfo =
-                    &mut BuildExtensionAccountInfo::default();
                 let tick_array_bitmap_extension_info: AccountInfo<'_> =
-                    build_tick_array_bitmap_extension_info(param);
+                    build_tick_array_bitmap_extension_info(&mut param);
 
                 pool_flip_tick_array_bit_helper(
                     &mut pool_state,
