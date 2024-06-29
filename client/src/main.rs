@@ -1165,63 +1165,63 @@ fn main() -> Result<()> {
                     find_position = position.clone();
                 }
             }
-            if find_position.nft_mint == Pubkey::default() {
-                // personal position not exist
-                // new nft mint
-                let nft_mint = Keypair::generate(&mut OsRng);
-                let mut remaining_accounts = Vec::new();
-                remaining_accounts.push(AccountMeta::new(
-                    pool_config.tickarray_bitmap_extension.unwrap(),
-                    false,
-                ));
+            // if find_position.nft_mint == Pubkey::default() {
+            //     // personal position not exist
+            //     // new nft mint
+            //     let nft_mint = Keypair::generate(&mut OsRng);
+            //     let mut remaining_accounts = Vec::new();
+            //     remaining_accounts.push(AccountMeta::new(
+            //         pool_config.tickarray_bitmap_extension.unwrap(),
+            //         false,
+            //     ));
 
-                let mut instructions = Vec::new();
-                let request_inits_instr =
-                    ComputeBudgetInstruction::set_compute_unit_limit(1400_000u32);
-                instructions.push(request_inits_instr);
-                let open_position_instr = open_position_instr(
-                    &pool_config.clone(),
-                    pool_config.pool_id_account.unwrap(),
-                    pool.token_vault_0,
-                    pool.token_vault_1,
-                    pool.token_mint_0,
-                    pool.token_mint_1,
-                    nft_mint.pubkey(),
-                    payer.pubkey(),
-                    spl_associated_token_account::get_associated_token_address(
-                        &payer.pubkey(),
-                        &pool_config.mint0.unwrap(),
-                    ),
-                    spl_associated_token_account::get_associated_token_address(
-                        &payer.pubkey(),
-                        &pool_config.mint1.unwrap(),
-                    ),
-                    remaining_accounts,
-                    liquidity,
-                    amount_0_max,
-                    amount_1_max,
-                    tick_lower_index,
-                    tick_upper_index,
-                    tick_array_lower_start_index,
-                    tick_array_upper_start_index,
-                    with_metadata,
-                )?;
-                instructions.extend(open_position_instr);
-                // send
-                let signers = vec![&payer, &nft_mint];
-                let recent_hash = rpc_client.get_latest_blockhash()?;
-                let txn = Transaction::new_signed_with_payer(
-                    &instructions,
-                    Some(&payer.pubkey()),
-                    &signers,
-                    recent_hash,
-                );
-                let signature = send_txn(&rpc_client, &txn, true)?;
-                println!("{}", signature);
-            } else {
-                // personal position exist
-                println!("personal position exist:{:?}", find_position);
-            }
+            //     let mut instructions = Vec::new();
+            //     let request_inits_instr =
+            //         ComputeBudgetInstruction::set_compute_unit_limit(1400_000u32);
+            //     instructions.push(request_inits_instr);
+            //     let open_position_instr = open_position_instr(
+            //         &pool_config.clone(),
+            //         pool_config.pool_id_account.unwrap(),
+            //         pool.token_vault_0,
+            //         pool.token_vault_1,
+            //         pool.token_mint_0,
+            //         pool.token_mint_1,
+            //         nft_mint.pubkey(),
+            //         payer.pubkey(),
+            //         spl_associated_token_account::get_associated_token_address(
+            //             &payer.pubkey(),
+            //             &pool_config.mint0.unwrap(),
+            //         ),
+            //         spl_associated_token_account::get_associated_token_address(
+            //             &payer.pubkey(),
+            //             &pool_config.mint1.unwrap(),
+            //         ),
+            //         remaining_accounts,
+            //         liquidity,
+            //         amount_0_max,
+            //         amount_1_max,
+            //         tick_lower_index,
+            //         tick_upper_index,
+            //         tick_array_lower_start_index,
+            //         tick_array_upper_start_index,
+            //         with_metadata,
+            //     )?;
+            //     instructions.extend(open_position_instr);
+            //     // send
+            //     let signers = vec![&payer, &nft_mint];
+            //     let recent_hash = rpc_client.get_latest_blockhash()?;
+            //     let txn = Transaction::new_signed_with_payer(
+            //         &instructions,
+            //         Some(&payer.pubkey()),
+            //         &signers,
+            //         recent_hash,
+            //     );
+            //     let signature = send_txn(&rpc_client, &txn, true)?;
+            //     println!("{}", signature);
+            // } else {
+            //     // personal position exist
+            //     println!("personal position exist:{:?}", find_position);
+            // }
         }
         CommandsName::IncreaseLiquidity {
             tick_lower_price,
