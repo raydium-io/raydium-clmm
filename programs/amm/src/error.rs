@@ -101,4 +101,6 @@ pub enum ErrorCode {
     MissingTickArrayBitmapExtensionAccount,
     #[msg("Insufficient liquidity for this direction")]
     InsufficientLiquidityForDirection,
+    #[msg("Max token overflow")]
+    MaxTokenOverflow,
 }

@@ -41,6 +41,7 @@ pub fn compute_swap_step(
                 liquidity,
                 true,
             )
+            .unwrap()
         } else {
             liquidity_math::get_delta_amount_1_unsigned(
                 sqrt_price_current_x64,
@@ -48,6 +49,7 @@ pub fn compute_swap_step(
                 liquidity,
                 true,
             )
+            .unwrap()
         };
         swap_step.sqrt_price_next_x64 = if amount_remaining_less_fee >= swap_step.amount_in {
             sqrt_price_target_x64
@@ -68,6 +70,7 @@ pub fn compute_swap_step(
                 liquidity,
                 false,
             )
+            .unwrap()
         } else {
             liquidity_math::get_delta_amount_0_unsigned(
                 sqrt_price_current_x64,
@@ -75,6 +78,7 @@ pub fn compute_swap_step(
                 liquidity,
                 false,
             )
+            .unwrap()
         };
         // In exact output case, amount_remaining is negative
         swap_step.sqrt_price_next_x64 = if amount_remaining >= swap_step.amount_out {
@@ -101,6 +105,7 @@ pub fn compute_swap_step(
                 liquidity,
                 true,
             )
+            .unwrap()
         };
         // if max is reached for exact output case, entire amount_out is needed
         if !(max && !is_base_input) {
@@ -109,7 +114,8 @@ pub fn compute_swap_step(
                 sqrt_price_current_x64,
                 liquidity,
                 false,
-            );
+            )
+            .unwrap();
         };
     } else {
         if !(max && is_base_input) {
@@ -119,6 +125,7 @@ pub fn compute_swap_step(
                 liquidity,
                 true,
             )
+            .unwrap()
         };
         if !(max && !is_base_input) {
             swap_step.amount_out = liquidity_math::get_delta_amount_0_unsigned(
@@ -127,6 +134,7 @@ pub fn compute_swap_step(
                 liquidity,
                 false,
             )
+            .unwrap()
         };
     }
 

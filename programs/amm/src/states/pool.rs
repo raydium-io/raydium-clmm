@@ -1,6 +1,6 @@
 use crate::error::ErrorCode;
 use crate::libraries::{
-    big_num::{U1024, U128, U256},
+    big_num::{BGU1024, U128, U256},
     check_current_tick_array_is_initialized, fixed_point_64,
     full_math::MulDiv,
     tick_array_bit_map, tick_math,
@@ -237,7 +237,7 @@ impl PoolState {
             tick >= tick_math::MIN_TICK && tick <= tick_math::MAX_TICK,
             ErrorCode::InvaildTickIndex
         );
-        if !U1024(self.tick_array_bitmap).is_zero() {
+        if !BGU1024(self.tick_array_bitmap).is_zero() {
             return err!(ErrorCode::NotApproved);
         }
         self.sqrt_price_x64 = sqrt_price_x64;
@@ -442,8 +442,8 @@ impl PoolState {
     fn flip_tick_array_bit_internal(&mut self, tick_array_start_index: i32) -> Result<()> {
         let tick_array_offset_in_bitmap = self.get_tick_array_offset(tick_array_start_index)?;
 
-        let tick_array_bitmap = U1024(self.tick_array_bitmap);
-        let mask = U1024::one() << tick_array_offset_in_bitmap.try_into().unwrap();
+        let tick_array_bitmap = BGU1024(self.tick_array_bitmap);
+        let mask = BGU1024::one() << tick_array_offset_in_bitmap.try_into().unwrap();
         self.tick_array_bitmap = tick_array_bitmap.bitxor(mask).0;
         Ok(())
     }
@@ -483,7 +483,7 @@ impl PoolState {
                     )?
             } else {
                 check_current_tick_array_is_initialized(
-                    U1024(self.tick_array_bitmap),
+                    BGU1024(self.tick_array_bitmap),
                     self.tick_current,
                     self.tick_spacing.into(),
                 )?
@@ -515,7 +515,7 @@ impl PoolState {
         loop {
             let (is_found, start_index) =
                 tick_array_bit_map::next_initialized_tick_array_start_index(
-                    U1024(self.tick_array_bitmap),
+                    BGU1024(self.tick_array_bitmap),
                     last_tick_array_start_index,
                     self.tick_spacing,
                     zero_for_one,
@@ -870,29 +870,29 @@ pub mod pool_test {
             let mut pool_state = PoolState::default();
             pool_state.tick_spacing = 10;
             pool_state.flip_tick_array_bit(None, -600).unwrap();
-            assert!(U1024(pool_state.tick_array_bitmap).bit(511) == true);
+            assert!(BGU1024(pool_state.tick_array_bitmap).bit(511) == true);
 
             pool_state.flip_tick_array_bit(None, -1200).unwrap();
-            assert!(U1024(pool_state.tick_array_bitmap).bit(510) == true);
+            assert!(BGU1024(pool_state.tick_array_bitmap).bit(510) == true);
 
             pool_state.flip_tick_array_bit(None, -1800).unwrap();
-            assert!(U1024(pool_state.tick_array_bitmap).bit(509) == true);
+            assert!(BGU1024(pool_state.tick_array_bitmap).bit(509) == true);
 
             pool_state.flip_tick_array_bit(None, -38400).unwrap();
             assert!(
-                U1024(pool_state.tick_array_bitmap)
+                BGU1024(pool_state.tick_array_bitmap)
                     .bit(pool_state.get_tick_array_offset(-38400).unwrap())
                     == true
             );
             pool_state.flip_tick_array_bit(None, -39000).unwrap();
             assert!(
-                U1024(pool_state.tick_array_bitmap)
+                BGU1024(pool_state.tick_array_bitmap)
                     .bit(pool_state.get_tick_array_offset(-39000).unwrap())
                     == true
             );
             pool_state.flip_tick_array_bit(None, -307200).unwrap();
             assert!(
-                U1024(pool_state.tick_array_bitmap)
+                BGU1024(pool_state.tick_array_bitmap)
                     .bit(pool_state.get_tick_array_offset(-307200).unwrap())
                     == true
             );
@@ -905,7 +905,7 @@ pub mod pool_test {
             pool_state.flip_tick_array_bit(None, 0).unwrap();
             assert!(pool_state.get_tick_array_offset(0).unwrap() == 512);
             assert!(
-                U1024(pool_state.tick_array_bitmap)
+                BGU1024(pool_state.tick_array_bitmap)
                     .bit(pool_state.get_tick_array_offset(0).unwrap())
                     == true
             );
@@ -913,21 +913,21 @@ pub mod pool_test {
             pool_state.flip_tick_array_bit(None, 600).unwrap();
             assert!(pool_state.get_tick_array_offset(600).unwrap() == 513);
             assert!(
-                U1024(pool_state.tick_array_bitmap)
+                BGU1024(pool_state.tick_array_bitmap)
                     .bit(pool_state.get_tick_array_offset(600).unwrap())
                     == true
             );
 
             pool_state.flip_tick_array_bit(None, 1200).unwrap();
             assert!(
-                U1024(pool_state.tick_array_bitmap)
+                BGU1024(pool_state.tick_array_bitmap)
                     .bit(pool_state.get_tick_array_offset(1200).unwrap())
                     == true
             );
 
             pool_state.flip_tick_array_bit(None, 38400).unwrap();
             assert!(
-                U1024(pool_state.tick_array_bitmap)
+                BGU1024(pool_state.tick_array_bitmap)
                     .bit(pool_state.get_tick_array_offset(38400).unwrap())
                     == true
             );
@@ -935,7 +935,7 @@ pub mod pool_test {
             pool_state.flip_tick_array_bit(None, 306600).unwrap();
             assert!(pool_state.get_tick_array_offset(306600).unwrap() == 1023);
             assert!(
-                U1024(pool_state.tick_array_bitmap)
+                BGU1024(pool_state.tick_array_bitmap)
                     .bit(pool_state.get_tick_array_offset(306600).unwrap())
                     == true
             );

@@ -1,5 +1,5 @@
 ///! Helper functions to get most and least significant non-zero bits
-use super::big_num::U1024;
+use super::big_num::BGU1024;
 use crate::error::ErrorCode;
 use crate::states::tick_array::{TickArrayState, TickState, TICK_ARRAY_SIZE};
 use anchor_lang::prelude::*;
@@ -15,9 +15,7 @@ pub fn max_tick_in_tickarray_bitmap(tick_spacing: u16) -> i32 {
 pub fn get_bitmap_tick_boundary(tick_array_start_index: i32, tick_spacing: u16) -> (i32, i32) {
     let ticks_in_one_bitmap: i32 = max_tick_in_tickarray_bitmap(tick_spacing);
     let mut m = tick_array_start_index.abs() / ticks_in_one_bitmap;
-    if tick_array_start_index < 0
-        && tick_array_start_index.abs() % ticks_in_one_bitmap != 0
-    {
+    if tick_array_start_index < 0 && tick_array_start_index.abs() % ticks_in_one_bitmap != 0 {
         m += 1;
     }
     let min_value: i32 = ticks_in_one_bitmap * m;
@@ -28,7 +26,7 @@ pub fn get_bitmap_tick_boundary(tick_array_start_index: i32, tick_spacing: u16) 
     }
 }
 
-pub fn most_significant_bit(x: U1024) -> Option<u16> {
+pub fn most_significant_bit(x: BGU1024) -> Option<u16> {
     if x.is_zero() {
         None
     } else {
@@ -36,7 +34,7 @@ pub fn most_significant_bit(x: U1024) -> Option<u16> {
     }
 }
 
-pub fn least_significant_bit(x: U1024) -> Option<u16> {
+pub fn least_significant_bit(x: BGU1024) -> Option<u16> {
     if x.is_zero() {
         None
     } else {
@@ -46,7 +44,7 @@ pub fn least_significant_bit(x: U1024) -> Option<u16> {
 
 /// Given a tick, calculate whether the tickarray it belongs to has been initialized.
 pub fn check_current_tick_array_is_initialized(
-    bit_map: U1024,
+    bit_map: BGU1024,
     tick_current: i32,
     tick_spacing: u16,
 ) -> Result<(bool, i32)> {
@@ -61,10 +59,10 @@ pub fn check_current_tick_array_is_initialized(
     }
     let bit_pos = compressed.abs();
     // set current bit
-    let mask = U1024::one() << bit_pos.try_into().unwrap();
+    let mask = BGU1024::one() << bit_pos.try_into().unwrap();
     let masked = bit_map & mask;
     // check the current bit whether initialized
-    let initialized = masked != U1024::default();
+    let initialized = masked != BGU1024::default();
     if initialized {
         return Ok((true, (compressed - 512) * multiplier));
     }
@@ -73,7 +71,7 @@ pub fn check_current_tick_array_is_initialized(
 }
 
 pub fn next_initialized_tick_array_start_index(
-    bit_map: U1024,
+    bit_map: BGU1024,
     last_tick_array_start_index: i32,
     tick_spacing: u16,
     zero_for_one: bool,
@@ -142,7 +140,7 @@ mod test {
     #[test]
     fn test_check_current_tick_array_is_initialized() {
         let tick_spacing = 10;
-        let bit_map = U1024([
+        let bit_map = BGU1024([
             1,
             0,
             0,
@@ -175,7 +173,7 @@ mod test {
     #[test]
     fn find_next_init_pos_in_bit_map_positive_price_down() {
         let tick_spacing = 10;
-        let bit_map = U1024::max_value();
+        let bit_map = BGU1024::max_value();
         let mut tick_array_start_index = 306600;
         for _i in 0..5 {
             let (is_found, array_start_index) = next_initialized_tick_array_start_index(
@@ -195,7 +193,7 @@ mod test {
     #[test]
     fn find_next_init_pos_in_bit_map_negative_price_down() {
         let tick_spacing = 10;
-        let bit_map = U1024::max_value();
+        let bit_map = BGU1024::max_value();
         let mut tick_array_start_index = -307200 + 600 + 600;
         for _i in 0..5 {
             let (is_found, array_start_index) = next_initialized_tick_array_start_index(
@@ -215,7 +213,7 @@ mod test {
     #[test]
     fn find_next_init_pos_in_bit_map_negative_price_down_crose_zero() {
         let tick_spacing = 10;
-        let bit_map = U1024::max_value();
+        let bit_map = BGU1024::max_value();
         let mut tick_array_start_index = 1800;
         for _i in 0..5 {
             let (is_found, array_start_index) = next_initialized_tick_array_start_index(
@@ -236,7 +234,7 @@ mod test {
     #[test]
     fn find_previous_init_pos_in_bit_map_positive_price_up() {
         let tick_spacing = 10;
-        let bit_map = U1024::max_value();
+        let bit_map = BGU1024::max_value();
         let mut tick_array_start_index = 306600 - 600 - 600;
         for _i in 0..5 {
             let (is_found, array_start_index) = next_initialized_tick_array_start_index(
@@ -256,7 +254,7 @@ mod test {
     #[test]
     fn find_previous_init_pos_in_bit_map_negative_price_up() {
         let tick_spacing = 10;
-        let bit_map = U1024::max_value();
+        let bit_map = BGU1024::max_value();
         let mut tick_array_start_index = -307200;
         for _i in 0..5 {
             let (is_found, array_start_index) = next_initialized_tick_array_start_index(
@@ -276,7 +274,7 @@ mod test {
     #[test]
     fn find_previous_init_pos_in_bit_map_negative_price_up_crose_zero() {
         let tick_spacing = 10;
-        let bit_map = U1024::max_value();
+        let bit_map = BGU1024::max_value();
         let mut tick_array_start_index = -1800;
         for _i in 0..5 {
             let (is_found, array_start_index) = next_initialized_tick_array_start_index(
@@ -316,42 +314,42 @@ mod test {
             9223372036854775808,
         ];
         let (_, mut array_start_index) =
-            next_initialized_tick_array_start_index(U1024(bit_map), 0, tick_spacing, true);
+            next_initialized_tick_array_start_index(BGU1024(bit_map), 0, tick_spacing, true);
         assert_eq!(array_start_index, -600);
         (_, array_start_index) =
-            next_initialized_tick_array_start_index(U1024(bit_map), -600, tick_spacing, true);
+            next_initialized_tick_array_start_index(BGU1024(bit_map), -600, tick_spacing, true);
         assert_eq!(array_start_index, -1200);
         (_, array_start_index) =
-            next_initialized_tick_array_start_index(U1024(bit_map), -1200, tick_spacing, true);
+            next_initialized_tick_array_start_index(BGU1024(bit_map), -1200, tick_spacing, true);
         assert_eq!(array_start_index, -1800);
         (_, array_start_index) =
-            next_initialized_tick_array_start_index(U1024(bit_map), -1800, tick_spacing, true);
+            next_initialized_tick_array_start_index(BGU1024(bit_map), -1800, tick_spacing, true);
         assert_eq!(array_start_index, -38400);
         (_, array_start_index) =
-            next_initialized_tick_array_start_index(U1024(bit_map), -38400, tick_spacing, true);
+            next_initialized_tick_array_start_index(BGU1024(bit_map), -38400, tick_spacing, true);
         assert_eq!(array_start_index, -39000);
         (_, array_start_index) =
-            next_initialized_tick_array_start_index(U1024(bit_map), -39000, tick_spacing, true);
+            next_initialized_tick_array_start_index(BGU1024(bit_map), -39000, tick_spacing, true);
         assert_eq!(array_start_index, -307200);
 
         (_, array_start_index) =
-            next_initialized_tick_array_start_index(U1024(bit_map), 0, tick_spacing, false);
+            next_initialized_tick_array_start_index(BGU1024(bit_map), 0, tick_spacing, false);
         assert_eq!(array_start_index, 600);
         (_, array_start_index) =
-            next_initialized_tick_array_start_index(U1024(bit_map), 600, tick_spacing, false);
+            next_initialized_tick_array_start_index(BGU1024(bit_map), 600, tick_spacing, false);
         assert_eq!(array_start_index, 1200);
         (_, array_start_index) =
-            next_initialized_tick_array_start_index(U1024(bit_map), 1200, tick_spacing, false);
+            next_initialized_tick_array_start_index(BGU1024(bit_map), 1200, tick_spacing, false);
         assert_eq!(array_start_index, 38400);
         (_, array_start_index) =
-            next_initialized_tick_array_start_index(U1024(bit_map), 38400, tick_spacing, false);
+            next_initialized_tick_array_start_index(BGU1024(bit_map), 38400, tick_spacing, false);
         assert_eq!(array_start_index, 306600);
     }
 
     #[test]
     fn next_initialized_tick_array_start_index_boundary_test() {
         let tick_spacing = 1;
-        let bit_map = U1024::max_value();
+        let bit_map = BGU1024::max_value();
         let mut tick_array_start_index = (tick_math::MIN_TICK / TICK_ARRAY_SIZE * tick_spacing - 1)
             * TICK_ARRAY_SIZE
             * tick_spacing;
