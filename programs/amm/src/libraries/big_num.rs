@@ -339,11 +339,6 @@ macro_rules! construct_bignum {
         }
     };
 }
-
 construct_bignum! {
-    pub struct BGU512(8);
-}
-
-construct_bignum! {
-    pub struct BGU1024(16);
+    pub struct U1024(16);
 }
