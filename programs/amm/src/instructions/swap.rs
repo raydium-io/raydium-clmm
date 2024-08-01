@@ -1,4 +1,5 @@
 use crate::error::ErrorCode;
+use crate::libraries::sqrt_price_math;
 use crate::libraries::{
     big_num::U128, fixed_point_64, full_math::MulDiv, liquidity_math, swap_math, tick_math,
 };
@@ -150,7 +151,7 @@ pub fn swap_internal<'b, 'info>(
     is_base_input: bool,
     block_timestamp: u32,
 ) -> Result<(u64, u64)> {
-    require!(amount_specified != 0, ErrorCode::InvaildSwapAmountSpecified);
+    require!(amount_specified != 0, ErrorCode::ZeroAmountSpecified);
     if !pool_state.get_status_by_bit(PoolStatusBitIndex::Swap) {
         return err!(ErrorCode::NotApproved);
     }
@@ -214,6 +215,10 @@ pub fn swap_internal<'b, 'info>(
     // continue swapping as long as we haven't used the entire input/output and haven't
     // reached the price limit
     while state.amount_specified_remaining != 0 && state.sqrt_price_x64 != sqrt_price_limit_x64 {
+        // println!(
+        //     "state.amount_specified_remaining:{}",
+        //     state.amount_specified_remaining
+        // );
         #[cfg(feature = "enable-log")]
         msg!(
             "while begin, is_base_input:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{},state_liquidity:{},state.protocol_fee:{}, protocol_fee_rate:{}",
@@ -238,8 +243,19 @@ pub fn swap_internal<'b, 'info>(
         {
             Box::new(*tick_state)
         } else {
-            if !is_match_pool_current_tick_array {
-                is_match_pool_current_tick_array = true;
+            // if !is_match_pool_current_tick_array {
+            //     is_match_pool_current_tick_array = true;
+            //     Box::new(*tick_array_current.first_initialized_tick(zero_for_one)?)
+            // } else {
+            //     Box::new(TickState::default())
+            // }
+
+            let cur_array_start_index =
+                TickArrayState::get_array_start_index(state.tick, pool_state.tick_spacing);
+
+            if zero_for_one && cur_array_start_index > tick_array_current.start_tick_index
+                || !zero_for_one && cur_array_start_index < tick_array_current.start_tick_index
+            {
                 Box::new(*tick_array_current.first_initialized_tick(zero_for_one)?)
             } else {
                 Box::new(TickState::default())
@@ -285,13 +301,15 @@ pub fn swap_internal<'b, 'info>(
         }
         step.sqrt_price_next_x64 = tick_math::get_sqrt_price_at_tick(step.tick_next)?;
 
-        let target_price = if (zero_for_one && step.sqrt_price_next_x64 < sqrt_price_limit_x64)
-            || (!zero_for_one && step.sqrt_price_next_x64 > sqrt_price_limit_x64)
-        {
-            sqrt_price_limit_x64
-        } else {
-            step.sqrt_price_next_x64
-        };
+        let target_price = get_next_target_price(
+            &state,
+            &step,
+            sqrt_price_limit_x64,
+            pool_state.tick_spacing,
+            zero_for_one,
+            is_base_input,
+            block_timestamp,
+        )?;
 
         if zero_for_one {
             require_gte!(state.tick, step.tick_next);
@@ -318,7 +336,7 @@ pub fn swap_internal<'b, 'info>(
             amm_config.trade_fee_rate,
             is_base_input,
             zero_for_one,
-        );
+        )?;
         #[cfg(feature = "enable-log")]
         msg!("{:#?}", swap_step);
         if zero_for_one {
@@ -345,10 +363,15 @@ pub fn swap_internal<'b, 'info>(
                 .amount_specified_remaining
                 .checked_sub(step.amount_out)
                 .unwrap();
+
+            let step_amount_calculate = step
+                .amount_in
+                .checked_add(step.fee_amount)
+                .ok_or(ErrorCode::CalculateOverflow)?;
             state.amount_calculated = state
                 .amount_calculated
-                .checked_add(step.amount_in + step.fee_amount)
-                .unwrap();
+                .checked_add(step_amount_calculate)
+                .ok_or(ErrorCode::CalculateOverflow)?;
         }
 
         let step_fee_amount = step.fee_amount;
@@ -563,6 +586,103 @@ pub fn swap_internal<'b, 'info>(
     }
 
     Ok((amount_0, amount_1))
+}
+
+#[cfg(test)]
+fn get_next_target_price(
+    state: &SwapState,
+    step: &StepComputations,
+    sqrt_price_limit_x64: u128,
+    tick_spacing: u16,
+    zero_for_one: bool,
+    is_base_input: bool,
+    block_timestamp: u32,
+) -> Result<u128> {
+    let mut target_price = if (zero_for_one && step.sqrt_price_next_x64 < sqrt_price_limit_x64)
+        || (!zero_for_one && step.sqrt_price_next_x64 > sqrt_price_limit_x64)
+    {
+        sqrt_price_limit_x64
+    } else {
+        step.sqrt_price_next_x64
+    };
+
+    if block_timestamp != 0 && state.liquidity != 0 {
+        let next_sqrt_price: u128 = if is_base_input {
+            sqrt_price_math::get_next_sqrt_price_from_input(
+                step.sqrt_price_start_x64,
+                state.liquidity,
+                state.amount_specified_remaining,
+                zero_for_one,
+            )
+        } else {
+            sqrt_price_math::get_next_sqrt_price_from_output(
+                step.sqrt_price_start_x64,
+                state.liquidity,
+                state.amount_specified_remaining,
+                zero_for_one,
+            )
+        };
+
+        let target_tick = tick_math::get_tick_at_sqrt_price(next_sqrt_price)?;
+        if zero_for_one {
+            let target_tick = (target_tick - 2 * tick_spacing as i32).max(tick_math::MIN_TICK);
+            // let target_tick = (target_tick - tick_spacing as i32).max(tick_math::MIN_TICK);
+            target_price = target_price.max(tick_math::get_sqrt_price_at_tick(target_tick)?);
+        } else {
+            // let target_tick = (target_tick + 2 * tick_spacing as i32).min(tick_math::MAX_TICK);
+            let target_tick = (target_tick + tick_spacing as i32).min(tick_math::MAX_TICK);
+            target_price = target_price.min(tick_math::get_sqrt_price_at_tick(target_tick)?);
+        }
+    }
+
+    Ok(target_price)
+}
+
+#[cfg(not(test))]
+fn get_next_target_price(
+    state: &SwapState,
+    step: &StepComputations,
+    sqrt_price_limit_x64: u128,
+    tick_spacing: u16,
+    zero_for_one: bool,
+    is_base_input: bool,
+    _block_time: u32,
+) -> Result<u128> {
+    let mut target_price = if (zero_for_one && step.sqrt_price_next_x64 < sqrt_price_limit_x64)
+        || (!zero_for_one && step.sqrt_price_next_x64 > sqrt_price_limit_x64)
+    {
+        sqrt_price_limit_x64
+    } else {
+        step.sqrt_price_next_x64
+    };
+
+    if state.liquidity != 0 {
+        let next_sqrt_price: u128 = if is_base_input {
+            sqrt_price_math::get_next_sqrt_price_from_input(
+                step.sqrt_price_start_x64,
+                state.liquidity,
+                state.amount_specified_remaining,
+                zero_for_one,
+            )
+        } else {
+            sqrt_price_math::get_next_sqrt_price_from_output(
+                step.sqrt_price_start_x64,
+                state.liquidity,
+                state.amount_specified_remaining,
+                zero_for_one,
+            )
+        };
+
+        let target_tick = tick_math::get_tick_at_sqrt_price(next_sqrt_price)?;
+        if zero_for_one {
+            let target_tick = (target_tick - tick_spacing as i32).max(tick_math::MIN_TICK);
+            target_price = target_price.max(tick_math::get_sqrt_price_at_tick(target_tick)?);
+        } else {
+            let target_tick = (target_tick + tick_spacing as i32).min(tick_math::MAX_TICK);
+            target_price = target_price.min(tick_math::get_sqrt_price_at_tick(target_tick)?);
+        }
+    }
+    Ok(target_price)
 }
 
 /// Performs a single exact input/output swap
@@ -796,12 +916,17 @@ pub fn swap<'a, 'b, 'c: 'info, 'info>(
 
 #[cfg(test)]
 mod swap_test {
+    use tick_array_bitmap_extension_test::{
+        build_tick_array_bitmap_extension_info, BuildExtensionAccountInfo,
+    };
+
     use super::*;
     use crate::states::pool_test::build_pool;
     use crate::states::tick_array_test::{
         build_tick, build_tick_array_with_tick_states, TickArrayInfo,
     };
     use std::cell::RefCell;
+    use std::collections::HashMap;
     use std::vec;
 
     pub fn get_tick_array_states_mut(
@@ -852,6 +977,210 @@ mod swap_test {
         }
 
         (amm_config, pool_state, tick_array_states, observation_state)
+    }
+
+    pub struct OpenPositionParam {
+        pub amount_0: u64,
+        pub amount_1: u64,
+        // pub liquidity: u128,
+        pub tick_lower: i32,
+        pub tick_upper: i32,
+    }
+
+    fn setup_swap_test<'info>(
+        start_tick: i32,
+        tick_spacing: u16,
+        position_params: Vec<OpenPositionParam>,
+        zero_for_one: bool,
+    ) -> (
+        AmmConfig,
+        RefCell<PoolState>,
+        VecDeque<RefCell<TickArrayState>>,
+        RefCell<ObservationState>,
+        TickArrayBitmapExtension,
+    ) {
+        let amm_config = AmmConfig {
+            trade_fee_rate: 1000,
+            tick_spacing,
+            ..Default::default()
+        };
+
+        let pool_state_refcel = build_pool(
+            start_tick,
+            tick_spacing,
+            tick_math::get_sqrt_price_at_tick(start_tick).unwrap(),
+            0,
+        );
+
+        let observation_state = RefCell::new(ObservationState::default());
+
+        let param = &mut BuildExtensionAccountInfo::default();
+        param.key = Pubkey::find_program_address(
+            &[
+                POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
+                pool_state_refcel.borrow().key().as_ref(),
+            ],
+            &crate::id(),
+        )
+        .0;
+        let bitmap_extension = build_tick_array_bitmap_extension_info(param);
+        let mut tick_array_states: VecDeque<RefCell<TickArrayState>> = VecDeque::new();
+        {
+            let mut pool_state = pool_state_refcel.borrow_mut();
+            observation_state.borrow_mut().pool_id = pool_state.key();
+
+            let mut tick_array_map = HashMap::new();
+            for position_param in position_params {
+                let liquidity = liquidity_math::get_liquidity_from_amounts(
+                    pool_state.sqrt_price_x64,
+                    tick_math::get_sqrt_price_at_tick(position_param.tick_lower).unwrap(),
+                    tick_math::get_sqrt_price_at_tick(position_param.tick_upper).unwrap(),
+                    position_param.amount_0,
+                    position_param.amount_1,
+                );
+
+                let tick_array_lower_start_index =
+                    TickArrayState::get_array_start_index(position_param.tick_lower, tick_spacing);
+
+                if !tick_array_map.contains_key(&tick_array_lower_start_index) {
+                    let mut tick_array_refcel = build_tick_array_with_tick_states(
+                        pool_state.key(),
+                        tick_array_lower_start_index,
+                        tick_spacing,
+                        vec![],
+                    );
+                    let tick_array_lower = tick_array_refcel.get_mut();
+
+                    let tick_lower = tick_array_lower
+                        .get_tick_state_mut(position_param.tick_lower, tick_spacing)
+                        .unwrap();
+                    tick_lower.tick = position_param.tick_lower;
+                    tick_lower
+                        .update(
+                            pool_state.tick_current,
+                            i128::try_from(liquidity).unwrap(),
+                            0,
+                            0,
+                            false,
+                            &[RewardInfo::default(); 3],
+                        )
+                        .unwrap();
+
+                    tick_array_map.insert(tick_array_lower_start_index, tick_array_refcel);
+                } else {
+                    let tick_array_lower = tick_array_map
+                        .get_mut(&tick_array_lower_start_index)
+                        .unwrap();
+                    let mut tick_array_lower_borrow_mut = tick_array_lower.borrow_mut();
+                    let tick_lower = tick_array_lower_borrow_mut
+                        .get_tick_state_mut(position_param.tick_lower, tick_spacing)
+                        .unwrap();
+
+                    tick_lower
+                        .update(
+                            pool_state.tick_current,
+                            i128::try_from(liquidity).unwrap(),
+                            0,
+                            0,
+                            false,
+                            &[RewardInfo::default(); 3],
+                        )
+                        .unwrap();
+                }
+                let tick_array_upper_start_index =
+                    TickArrayState::get_array_start_index(position_param.tick_upper, tick_spacing);
+                if !tick_array_map.contains_key(&tick_array_upper_start_index) {
+                    let mut tick_array_refcel = build_tick_array_with_tick_states(
+                        pool_state.key(),
+                        tick_array_upper_start_index,
+                        tick_spacing,
+                        vec![],
+                    );
+                    let tick_array_upper = tick_array_refcel.get_mut();
+
+                    let tick_upper = tick_array_upper
+                        .get_tick_state_mut(position_param.tick_upper, tick_spacing)
+                        .unwrap();
+                    tick_upper.tick = position_param.tick_upper;
+
+                    tick_upper
+                        .update(
+                            pool_state.tick_current,
+                            i128::try_from(liquidity).unwrap(),
+                            0,
+                            0,
+                            true,
+                            &[RewardInfo::default(); 3],
+                        )
+                        .unwrap();
+
+                    tick_array_map.insert(tick_array_upper_start_index, tick_array_refcel);
+                } else {
+                    let tick_array_upper = tick_array_map
+                        .get_mut(&tick_array_upper_start_index)
+                        .unwrap();
+
+                    let mut tick_array_upperr_borrow_mut = tick_array_upper.borrow_mut();
+                    let tick_upper = tick_array_upperr_borrow_mut
+                        .get_tick_state_mut(position_param.tick_upper, tick_spacing)
+                        .unwrap();
+
+                    tick_upper
+                        .update(
+                            pool_state.tick_current,
+                            i128::try_from(liquidity).unwrap(),
+                            0,
+                            0,
+                            true,
+                            &[RewardInfo::default(); 3],
+                        )
+                        .unwrap();
+                }
+                if pool_state.tick_current >= position_param.tick_lower
+                    && pool_state.tick_current < position_param.tick_upper
+                {
+                    pool_state.liquidity = liquidity_math::add_delta(
+                        pool_state.liquidity,
+                        i128::try_from(liquidity).unwrap(),
+                    )
+                    .unwrap();
+                }
+            }
+
+            for (tickarray_start_index, tick_array_info) in tick_array_map {
+                tick_array_states.push_back(tick_array_info);
+                pool_state
+                    .flip_tick_array_bit(Some(&bitmap_extension), tickarray_start_index)
+                    .unwrap();
+            }
+
+            use std::convert::identity;
+            if zero_for_one {
+                tick_array_states.make_contiguous().sort_by(|a, b| {
+                    identity(b.borrow().start_tick_index)
+                        .cmp(&identity(a.borrow().start_tick_index))
+                });
+            } else {
+                tick_array_states.make_contiguous().sort_by(|a, b| {
+                    identity(a.borrow().start_tick_index)
+                        .cmp(&identity(b.borrow().start_tick_index))
+                });
+            }
+        }
+
+        let bitmap_extension_state =
+            *AccountLoader::<TickArrayBitmapExtension>::try_from(&bitmap_extension)
+                .unwrap()
+                .load()
+                .unwrap()
+                .deref();
+        (
+            amm_config,
+            pool_state_refcel,
+            tick_array_states,
+            observation_state,
+            bitmap_extension_state,
+        )
     }
 
     #[cfg(test)]
@@ -1653,6 +1982,843 @@ mod swap_test {
                 pool_state.borrow().tick_current > -28860
                     && pool_state.borrow().tick_current <= -28800
             );
+        }
+    }
+
+    #[cfg(test)]
+    mod sqrt_price_limit_optimization_test {
+        use super::*;
+        use proptest::prelude::*;
+        use rand::Rng;
+        use std::u64;
+
+        proptest! {
+            // #![proptest_config(ProptestConfig::with_cases(2048))]
+            #[test]
+            fn zero_for_one_base_input_test(
+                tick_current in tick_math::MIN_TICK..tick_math::MAX_TICK,
+                amount_0 in 1000000..u64::MAX,
+                amount_1 in 1000000..u64::MAX,
+                tick_lower in (tick_math::MIN_TICK..=tick_math::MAX_TICK).prop_filter("Must be multiple of 10", |x| x % 10 == 0),
+                tick_upper in (tick_math::MIN_TICK..=tick_math::MAX_TICK).prop_filter("Must be multiple of 10", |x| x % 10 == 0),
+            ){
+                let tick_spacing = 10;
+                let zero_for_one = true;
+                if tick_lower%tick_spacing ==0 && tick_upper%tick_spacing ==0 && tick_current>tick_lower && tick_current<tick_upper{
+
+
+                    // let mut rng = rand::thread_rng();
+                    // let amount_specified  = rng.gen_range(0..(u64::MAX- amount_0));
+                    let amount_specified  = 1000;
+
+                    let (amm_config, pool_state, tick_array_states, observation_state,bitmap_extension_state) = setup_swap_test(
+                        tick_current,
+                        tick_spacing as u16,
+                        vec![OpenPositionParam{amount_0:amount_0,amount_1:amount_1, tick_lower:tick_lower, tick_upper:tick_upper}],
+                        zero_for_one
+                    );
+
+
+                    let result = swap_internal(
+                        &amm_config,
+                        &mut pool_state.borrow_mut(),
+                        &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                        &mut observation_state.borrow_mut(),
+                        &Some(bitmap_extension_state),
+                        amount_specified,
+                        tick_math::MIN_SQRT_PRICE_X64 + 1,
+                        zero_for_one,
+                        true,
+                        0,
+                    );
+
+
+
+                    if result.is_ok() {
+                        let ( amount_0_before, amount_1_before) = result.unwrap();
+
+                        let (amm_config, pool_state, tick_array_states, observation_state,bitmap_extension_state) = setup_swap_test(
+                            tick_current,
+                            tick_spacing as u16,
+                            vec![OpenPositionParam{amount_0:amount_0,amount_1:amount_1, tick_lower:tick_lower, tick_upper:tick_upper}],
+                            zero_for_one
+                        );
+                        let result = swap_internal(
+                            &amm_config,
+                            &mut pool_state.borrow_mut(),
+                            &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                            &mut observation_state.borrow_mut(),
+                            &Some(bitmap_extension_state),
+                            amount_specified,
+                            tick_math::MIN_SQRT_PRICE_X64 + 1,
+                            zero_for_one,
+                            true,
+                            oracle::block_timestamp_mock() as u32,
+                            // 0,
+                        );
+                        assert!(result.is_ok());
+
+
+                        if result.is_err(){
+                            let liquidity =  pool_state.borrow().liquidity;
+                            println!("----- input: tick_current:{}, amount_0:{}, amount_1:{}, amount_specified:{},tick_lower:{}, tick_upper:{},liquidity:{}, err:{}", tick_current, amount_0, amount_1,amount_specified, tick_lower, tick_upper,liquidity, result.err().unwrap());
+                        }else{
+                            let ( amount_0_after, amount_1_after) = result.unwrap();
+                            // println!("----- out: amount_0_before:{}, amount_1_before:{}, amount_0_after:{}, amount_1_after:{}",  amount_0_before, amount_1_before,amount_0_after, amount_1_after);
+                            assert_eq!(amount_0_before, amount_0_after);
+                            assert_eq!(amount_1_before, amount_1_after);
+                        }
+                    }else{
+                        let err =  result.err().unwrap();
+                        if err == crate::error::ErrorCode::MaxTokenOverflow.into(){
+                            println!("##### original swap is overflow ");
+                            let result = swap_internal(
+                                &amm_config,
+                                &mut pool_state.borrow_mut(),
+                                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                                &mut observation_state.borrow_mut(),
+                                &Some(bitmap_extension_state),
+                                amount_specified,
+                                tick_math::MIN_SQRT_PRICE_X64 + 1,
+                                zero_for_one,
+                                true,
+                                oracle::block_timestamp_mock() as u32,
+                            );
+                            assert!(result.is_ok());
+                            println!(">>>>> success after optimization ");
+                        }else{
+                            println!("{}", err);
+                        }
+                    }
+                }
+            }
+
+            #[test]
+            fn zero_for_one_base_output_test(
+                tick_current in tick_math::MIN_TICK..tick_math::MAX_TICK,
+                amount_0 in 1000000..u64::MAX,
+                amount_1 in 1000000..u64::MAX,
+                tick_lower in (tick_math::MIN_TICK..=tick_math::MAX_TICK).prop_filter("Must be multiple of 100", |x| x % 10 == 0),
+                tick_upper in (tick_math::MIN_TICK..=tick_math::MAX_TICK).prop_filter("Must be multiple of 100", |x| x % 10 == 0),
+            ){
+                let tick_spacing = 10;
+                let zero_for_one = true;
+                let base_input= false;
+                if tick_lower%tick_spacing ==0 && tick_upper%tick_spacing ==0 && tick_current>tick_lower && tick_current<tick_upper{
+                    let amount_specified  = 1000;
+
+                    // let mut rng = rand::thread_rng();
+                    // let amount_specified  = rng.gen_range(0..(u64::MAX- amount_0));
+
+
+                    let (amm_config, pool_state, tick_array_states, observation_state,bitmap_extension_state) = setup_swap_test(
+                        tick_current,
+                        tick_spacing as u16,
+                        vec![OpenPositionParam{amount_0:amount_0,amount_1:amount_1, tick_lower:tick_lower, tick_upper:tick_upper}],
+                        zero_for_one
+                    );
+
+                    println!("----- input: tick_current:{}, amount_0:{}, amount_1:{}, amount_specified:{},tick_lower:{}, tick_upper:{}", tick_current, amount_0, amount_1,amount_specified, tick_lower, tick_upper);
+
+
+                    let result = swap_internal(
+                        &amm_config,
+                        &mut pool_state.borrow_mut(),
+                        &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                        &mut observation_state.borrow_mut(),
+                        &Some(bitmap_extension_state),
+                        amount_specified,
+                        tick_math::MIN_SQRT_PRICE_X64 + 1,
+                        zero_for_one,
+                        base_input,
+                        0,
+                    );
+
+
+
+                    if result.is_ok() {
+                        let ( amount_0_before, amount_1_before) = result.unwrap();
+
+                        let (amm_config, pool_state, tick_array_states, observation_state,bitmap_extension_state) = setup_swap_test(
+                            tick_current,
+                            tick_spacing as u16,
+                            vec![OpenPositionParam{amount_0:amount_0,amount_1:amount_1, tick_lower:tick_lower, tick_upper:tick_upper}],
+                            zero_for_one
+                        );
+                        let result = swap_internal(
+                            &amm_config,
+                            &mut pool_state.borrow_mut(),
+                            &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                            &mut observation_state.borrow_mut(),
+                            &Some(bitmap_extension_state),
+                            amount_specified,
+                            tick_math::MIN_SQRT_PRICE_X64 + 1,
+                            zero_for_one,
+                            base_input,
+                            oracle::block_timestamp_mock() as u32,
+                            // 0,
+                        );
+                        assert!(result.is_ok());
+
+                        // println!("----- input: tick_current:{}, amount_0:{}, amount_1:{}, amount_specified:{},tick_lower:{}, tick_upper:{}", tick_current, amount_0, amount_1,amount_specified, tick_lower, tick_upper);
+                        if result.is_err(){
+                            // let liquidity =  pool_state.borrow().liquidity;
+                            // println!("----- input: tick_current:{}, amount_0:{}, amount_1:{}, amount_specified:{},tick_lower:{}, tick_upper:{},liquidity:{}, err:{}", tick_current, amount_0, amount_1,amount_specified, tick_lower, tick_upper,liquidity, result.err().unwrap());
+                        }else{
+                            let ( amount_0_after, amount_1_after) = result.unwrap();
+                            println!("----- out: amount_0:{}, amount_1:{}",  amount_0, amount_1);
+                            assert_eq!(amount_0_before, amount_0_after);
+                            assert_eq!(amount_1_before, amount_1_after);
+                        }
+                    }else{
+                        let err =  result.err().unwrap();
+                        if err == crate::error::ErrorCode::MaxTokenOverflow.into(){
+                            println!("##### original swap is overflow");
+                            let result = swap_internal(
+                                &amm_config,
+                                &mut pool_state.borrow_mut(),
+                                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                                &mut observation_state.borrow_mut(),
+                                &Some(bitmap_extension_state),
+                                amount_specified,
+                                tick_math::MIN_SQRT_PRICE_X64 + 1,
+                                zero_for_one,
+                                base_input,
+                                oracle::block_timestamp_mock() as u32,
+                            );
+                            assert!(result.is_ok());
+                        }else{
+                            println!("{}", err);
+                        }
+                    }
+                }
+            }
+
+            #[test]
+            fn one_for_zero_base_input_test(
+                tick_current in tick_math::MIN_TICK..tick_math::MAX_TICK,
+                amount_0 in 1000000..u64::MAX,
+                amount_1 in 1000000..u64::MAX,
+                tick_lower in (tick_math::MIN_TICK..=tick_math::MAX_TICK).prop_filter("Must be multiple of 100", |x| x % 10 == 0),
+                tick_upper in (tick_math::MIN_TICK..=tick_math::MAX_TICK).prop_filter("Must be multiple of 100", |x| x % 10 == 0),
+            ){
+                let tick_spacing = 10;
+                let zero_for_one = false;
+                if tick_lower%tick_spacing ==0 && tick_upper%tick_spacing ==0 && tick_current>tick_lower && tick_current<tick_upper{
+
+
+                    // let mut rng = rand::thread_rng();
+                    // let amount_specified  = rng.gen_range(0..(u64::MAX- amount_0));
+                    let amount_specified  = 1000;
+
+                    let (amm_config, pool_state, tick_array_states, observation_state,bitmap_extension_state) = setup_swap_test(
+                        tick_current,
+                        tick_spacing as u16,
+                        vec![OpenPositionParam{amount_0:amount_0,amount_1:amount_1, tick_lower:tick_lower, tick_upper:tick_upper}],
+                        zero_for_one
+                    );
+
+
+                    let result = swap_internal(
+                        &amm_config,
+                        &mut pool_state.borrow_mut(),
+                        &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                        &mut observation_state.borrow_mut(),
+                        &Some(bitmap_extension_state),
+                        amount_specified,
+                        tick_math::MAX_SQRT_PRICE_X64 - 1,
+                        zero_for_one,
+                        true,
+                        0,
+                    );
+
+
+                    if result.is_ok() {
+                        let ( amount_0_before, amount_1_before) = result.unwrap();
+
+                        let (amm_config, pool_state, tick_array_states, observation_state,bitmap_extension_state) = setup_swap_test(
+                            tick_current,
+                            tick_spacing as u16,
+                            vec![OpenPositionParam{amount_0:amount_0,amount_1:amount_1, tick_lower:tick_lower, tick_upper:tick_upper}],
+                            true
+                        );
+                        let result = swap_internal(
+                            &amm_config,
+                            &mut pool_state.borrow_mut(),
+                            &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                            &mut observation_state.borrow_mut(),
+                            &Some(bitmap_extension_state),
+                            amount_specified,
+                            tick_math::MAX_SQRT_PRICE_X64 - 1,
+                            zero_for_one,
+                            true,
+                            oracle::block_timestamp_mock() as u32,
+                            // 0,
+                        );
+                        assert!(result.is_ok());
+
+
+                        if result.is_err(){
+                            let liquidity =  pool_state.borrow().liquidity;
+                            println!("----- input: tick_current:{}, amount_0:{}, amount_1:{}, amount_specified:{},tick_lower:{}, tick_upper:{},liquidity:{}, err:{}", tick_current, amount_0, amount_1,amount_specified, tick_lower, tick_upper,liquidity, result.err().unwrap());
+                        }else{
+                            let (amount_0_after, amount_1_after) = result.unwrap();
+                            println!("----- out: amount_0:{}, amount_1:{}",  amount_0, amount_1);
+                            assert_eq!(amount_0_before, amount_0_after);
+                            assert_eq!(amount_1_before, amount_1_after);
+                        }
+                    }else {
+                        let err =  result.err().unwrap();
+                        if err == crate::error::ErrorCode::MaxTokenOverflow.into(){
+                            println!("##### original swap is overflow ");
+                            let result = swap_internal(
+                                &amm_config,
+                                &mut pool_state.borrow_mut(),
+                                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                                &mut observation_state.borrow_mut(),
+                                &Some(bitmap_extension_state),
+                                amount_specified,
+                                tick_math::MAX_SQRT_PRICE_X64 - 1,
+                                zero_for_one,
+                                true,
+                                oracle::block_timestamp_mock() as u32,
+                            );
+                            assert!(result.is_ok());
+                            println!(">>>>> success after optimization ");
+                        }else{
+                            println!("{}", err);
+                        }
+                }
+            }
+        }
+
+
+        }
+
+        #[test]
+        fn zero_for_one_base_output_test_6() {
+            let tick_current = -400831;
+            let amount_0 = 186044590741637;
+            let amount_1 = 1034439;
+            let tick_lower = -436570;
+            let tick_upper = -400830;
+            let tick_spacing = 10;
+
+            let amount_specified = 1000;
+            let (
+                amm_config,
+                pool_state,
+                tick_array_states,
+                observation_state,
+                bitmap_extension_state,
+            ) = setup_swap_test(
+                tick_current,
+                tick_spacing,
+                vec![OpenPositionParam {
+                    amount_0: amount_0,
+                    amount_1: amount_1,
+                    tick_lower: tick_lower,
+                    tick_upper: tick_upper,
+                }],
+                true,
+            );
+
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                &Some(bitmap_extension_state),
+                amount_specified,
+                tick_math::MIN_SQRT_PRICE_X64 + 1,
+                true,
+                false,
+                oracle::block_timestamp_mock() as u32,
+                // 0,
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+        }
+
+        #[test]
+        fn zero_for_one_base_output_test_5() {
+            let tick_current = -354887;
+            let amount_0 = 7177984596362332873;
+            let amount_1 = 16263217921561563711;
+            let tick_lower = -397770;
+            let tick_upper = 107800;
+            let tick_spacing = 10;
+
+            let amount_specified = 1000;
+            let (
+                amm_config,
+                pool_state,
+                tick_array_states,
+                observation_state,
+                bitmap_extension_state,
+            ) = setup_swap_test(
+                tick_current,
+                tick_spacing,
+                vec![OpenPositionParam {
+                    amount_0: amount_0,
+                    amount_1: amount_1,
+                    tick_lower: tick_lower,
+                    tick_upper: tick_upper,
+                }],
+                true,
+            );
+
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                &Some(bitmap_extension_state),
+                amount_specified,
+                tick_math::MIN_SQRT_PRICE_X64 + 1,
+                true,
+                false,
+                oracle::block_timestamp_mock() as u32,
+                // 0,
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+        }
+
+        #[test]
+        fn zero_for_one_base_input_test_2() {
+            let tick_current = 0;
+            let amount_0 = u64::MAX / 2;
+            let amount_1 = u64::MAX / 2;
+            let tick_lower = -1; // in tick_math::MIN_TICK..tick_math::MAX_TICK,
+            let tick_upper = 1; // in tick_math::MIN_TICK..tick_math::MAX_TICK,
+
+            let amount_specified = 100000;
+            let (
+                amm_config,
+                pool_state,
+                tick_array_states,
+                observation_state,
+                bitmap_extension_state,
+            ) = setup_swap_test(
+                tick_current,
+                1,
+                vec![OpenPositionParam {
+                    amount_0: amount_0,
+                    amount_1: amount_1,
+                    tick_lower: tick_lower,
+                    tick_upper: tick_upper,
+                }],
+                true,
+            );
+
+            // for tick_array_state in tick_array_states.clone() {
+            //     for tick in tick_array_state.borrow().ticks {
+            //         if tick.is_initialized() {
+            //             println!("{:#?}", tick);
+            //         }
+            //     }
+            // }
+
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                &Some(bitmap_extension_state),
+                amount_specified,
+                tick_math::MIN_SQRT_PRICE_X64 + 1,
+                true,
+                true,
+                oracle::block_timestamp_mock() as u32,
+                // 0,
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+        }
+
+        #[test]
+        fn zero_for_one_base_input_test_3() {
+            let amount_0 = u64::MAX / 2;
+            let amount_1 = u64::MAX / 2;
+            let tick_lower = tick_math::MIN_TICK / 60 * 60; // in tick_math::MIN_TICK..tick_math::MAX_TICK,
+            let tick_upper = tick_math::MAX_TICK / 60 * 60; // in tick_math::MIN_TICK..tick_math::MAX_TICK,
+            let tick_current = tick_upper - 10;
+            let amount_specified = 100000;
+            let (
+                amm_config,
+                pool_state,
+                tick_array_states,
+                observation_state,
+                bitmap_extension_state,
+            ) = setup_swap_test(
+                tick_current,
+                60,
+                vec![OpenPositionParam {
+                    amount_0: amount_0,
+                    amount_1: amount_1,
+                    tick_lower: tick_lower,
+                    tick_upper: tick_upper,
+                }],
+                true,
+            );
+
+            for tick_array_state in tick_array_states.clone() {
+                for tick in tick_array_state.borrow().ticks {
+                    if tick.is_initialized() {
+                        println!("{:#?}", tick);
+                    }
+                }
+            }
+
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                &Some(bitmap_extension_state),
+                amount_specified,
+                tick_math::MIN_SQRT_PRICE_X64 + 1,
+                true,
+                true,
+                oracle::block_timestamp_mock() as u32,
+                // 0,
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+        }
+
+        #[test]
+        fn zero_for_one_base_input_test_4() {
+            let amount_0 = u64::MAX / 2;
+            let amount_1 = u64::MAX / 2;
+            let tick_lower = tick_math::MIN_TICK / 60 * 60; // in tick_math::MIN_TICK..tick_math::MAX_TICK,
+            let tick_upper = tick_math::MAX_TICK / 60 * 60; // in tick_math::MIN_TICK..tick_math::MAX_TICK,
+            let tick_current = tick_upper + 10;
+            let amount_specified = 100000;
+            let (
+                amm_config,
+                pool_state,
+                tick_array_states,
+                observation_state,
+                bitmap_extension_state,
+            ) = setup_swap_test(
+                tick_current,
+                60,
+                vec![OpenPositionParam {
+                    amount_0: amount_0,
+                    amount_1: amount_1,
+                    tick_lower: tick_lower,
+                    tick_upper: tick_upper,
+                }],
+                true,
+            );
+
+            for tick_array_state in tick_array_states.clone() {
+                for tick in tick_array_state.borrow().ticks {
+                    if tick.is_initialized() {
+                        println!("{:#?}", tick);
+                    }
+                }
+            }
+
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                &Some(bitmap_extension_state),
+                amount_specified,
+                tick_math::MIN_SQRT_PRICE_X64 + 1,
+                true,
+                true,
+                oracle::block_timestamp_mock() as u32,
+                // 0,
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+        }
+
+        #[test]
+        fn zero_for_one_base_input_with_one_large_range_position_test() {
+            let tick_current = 0;
+            let liquidity = 5124165121219155245;
+            let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_current).unwrap();
+            let tick_spacing = 100;
+            let (amm_config, pool_state, tick_array_states, observation_state) = build_swap_param(
+                tick_current,
+                tick_spacing,
+                sqrt_price_x64,
+                liquidity,
+                vec![
+                    TickArrayInfo {
+                        start_tick_index: TickArrayState::get_array_start_index(
+                            -44000,
+                            tick_spacing,
+                        ),
+                        ticks: vec![build_tick(-44000, 5124165121219, -5124165121219).take()],
+                    },
+                    TickArrayInfo {
+                        start_tick_index: TickArrayState::get_array_start_index(
+                            44000,
+                            tick_spacing,
+                        ),
+                        ticks: vec![build_tick(44000, 5124165121219, -5124165121219).take()],
+                    },
+                ],
+            );
+            let result = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                &None,
+                12188240002,
+                tick_math::MIN_SQRT_PRICE_X64 + 1,
+                true,
+                true,
+                0,
+            );
+            assert!(result.is_err());
+
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                &None,
+                12188240002,
+                tick_math::MIN_SQRT_PRICE_X64 + 1,
+                true,
+                true,
+                oracle::block_timestamp_mock() as u32,
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+        }
+
+        #[test]
+        fn zero_for_one_base_input_cross_tick_test() {
+            let tick_current = -42500;
+            let liquidity = 5124165121;
+            let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_current).unwrap();
+            let tick_spacing = 100;
+            let (amm_config, pool_state, tick_array_states, observation_state) = build_swap_param(
+                tick_current,
+                tick_spacing,
+                sqrt_price_x64,
+                liquidity,
+                vec![
+                    TickArrayInfo {
+                        start_tick_index: TickArrayState::get_array_start_index(
+                            44000,
+                            tick_spacing,
+                        ),
+                        ticks: vec![build_tick(44000, 5124165121219, -5124165121219).take()],
+                    },
+                    TickArrayInfo {
+                        start_tick_index: TickArrayState::get_array_start_index(
+                            -43000,
+                            tick_spacing,
+                        ),
+                        ticks: vec![
+                            build_tick(-43000, 5124165121219, -5124165121219).take(),
+                            build_tick(-44000, 5124165121219, -5124165121219).take(),
+                        ],
+                    },
+                    TickArrayInfo {
+                        start_tick_index: TickArrayState::get_array_start_index(
+                            -48100,
+                            tick_spacing,
+                        ),
+                        ticks: vec![build_tick(-48100, 5124165121219, -5124165121219).take()],
+                    },
+                ],
+            );
+            let (amount_0_before, amount_1_before) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                &None,
+                1218824000,
+                tick_math::MIN_SQRT_PRICE_X64 + 1,
+                true,
+                true,
+                0,
+            )
+            .unwrap();
+            assert!(
+                pool_state.borrow().tick_current > -44000
+                    && pool_state.borrow().tick_current < -43000
+            );
+
+            let pool_state_clone = pool_state.clone();
+            // reset pool state
+            pool_state_clone.borrow_mut().tick_current = tick_current;
+            pool_state_clone.borrow_mut().liquidity = liquidity;
+            pool_state_clone.borrow_mut().sqrt_price_x64 = sqrt_price_x64;
+
+            let (amount_0_after, amount_1_after) = swap_internal(
+                &amm_config,
+                &mut pool_state_clone.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                &None,
+                1218824000,
+                tick_math::MIN_SQRT_PRICE_X64 + 1,
+                true,
+                true,
+                oracle::block_timestamp_mock() as u32,
+            )
+            .unwrap();
+
+            assert!(pool_state_clone.borrow().liquidity == pool_state.borrow().liquidity);
+            assert!(pool_state_clone.borrow().tick_current == pool_state.borrow().tick_current);
+            assert!(pool_state_clone.borrow().sqrt_price_x64 == pool_state.borrow().sqrt_price_x64);
+            assert_eq!(amount_0_after, amount_0_before);
+            assert_eq!(amount_1_after, amount_1_before);
+        }
+
+        #[test]
+        fn zero_for_one_base_output_with_one_large_range_position_test() {
+            let tick_current = 0;
+            let liquidity = 5124165121219155245;
+            let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_current).unwrap();
+            let tick_spacing = 100;
+            let (amm_config, pool_state, tick_array_states, observation_state) = build_swap_param(
+                tick_current,
+                tick_spacing,
+                sqrt_price_x64,
+                liquidity,
+                vec![
+                    TickArrayInfo {
+                        start_tick_index: TickArrayState::get_array_start_index(
+                            -44000,
+                            tick_spacing,
+                        ),
+                        ticks: vec![build_tick(-44000, 5124165121219, -5124165121219).take()],
+                    },
+                    TickArrayInfo {
+                        start_tick_index: TickArrayState::get_array_start_index(
+                            44000,
+                            tick_spacing,
+                        ),
+                        ticks: vec![build_tick(44000, 5124165121219, -5124165121219).take()],
+                    },
+                ],
+            );
+            let result = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                &None,
+                12188240002,
+                tick_math::MIN_SQRT_PRICE_X64 + 1,
+                true,
+                false,
+                0,
+            );
+            assert!(result.is_err());
+
+            let (amount_0, amount_1) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                &None,
+                12188240002,
+                tick_math::MIN_SQRT_PRICE_X64 + 1,
+                true,
+                false,
+                oracle::block_timestamp_mock() as u32,
+            )
+            .unwrap();
+            println!("amount_0:{},amount_1:{}", amount_0, amount_1);
+        }
+
+        #[test]
+        fn zero_for_one_base_output_cross_tick_test() {
+            let tick_current = -42500;
+            let liquidity = 5124165121;
+            let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_current).unwrap();
+            let tick_spacing = 100;
+            let (amm_config, pool_state, tick_array_states, observation_state) = build_swap_param(
+                tick_current,
+                tick_spacing,
+                sqrt_price_x64,
+                liquidity,
+                vec![
+                    TickArrayInfo {
+                        start_tick_index: TickArrayState::get_array_start_index(
+                            44000,
+                            tick_spacing,
+                        ),
+                        ticks: vec![build_tick(44000, 5124165121219, -5124165121219).take()],
+                    },
+                    TickArrayInfo {
+                        start_tick_index: TickArrayState::get_array_start_index(
+                            -43000,
+                            tick_spacing,
+                        ),
+                        ticks: vec![
+                            build_tick(-43000, 5124165121219, -5124165121219).take(),
+                            build_tick(-44000, 5124165121219, -5124165121219).take(),
+                        ],
+                    },
+                    TickArrayInfo {
+                        start_tick_index: TickArrayState::get_array_start_index(
+                            -48100,
+                            tick_spacing,
+                        ),
+                        ticks: vec![build_tick(-48100, 5124165121219, -5124165121219).take()],
+                    },
+                ],
+            );
+            let (amount_0_before, amount_1_before) = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                &None,
+                1218824000,
+                tick_math::MIN_SQRT_PRICE_X64 + 1,
+                true,
+                false,
+                0,
+            )
+            .unwrap();
+            assert!(
+                pool_state.borrow().tick_current > -44000
+                    && pool_state.borrow().tick_current < -43000
+            );
+
+            let pool_state_clone = pool_state.clone();
+            // reset pool state
+            pool_state_clone.borrow_mut().tick_current = tick_current;
+            pool_state_clone.borrow_mut().liquidity = liquidity;
+            pool_state_clone.borrow_mut().sqrt_price_x64 = sqrt_price_x64;
+
+            let (amount_0_after, amount_1_after) = swap_internal(
+                &amm_config,
+                &mut pool_state_clone.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                &None,
+                1218824000,
+                tick_math::MIN_SQRT_PRICE_X64 + 1,
+                true,
+                false,
+                oracle::block_timestamp_mock() as u32,
+            )
+            .unwrap();
+
+            assert!(pool_state_clone.borrow().liquidity == pool_state.borrow().liquidity);
+            assert!(pool_state_clone.borrow().tick_current == pool_state.borrow().tick_current);
+            assert!(pool_state_clone.borrow().sqrt_price_x64 == pool_state.borrow().sqrt_price_x64);
+            assert_eq!(amount_0_after, amount_0_before);
+            assert_eq!(amount_1_after, amount_1_before);
         }
     }
 }

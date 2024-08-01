@@ -61,7 +61,7 @@ pub enum ErrorCode {
     #[msg("Too much input paid")]
     TooMuchInputPaid,
     #[msg("Swap special amount can not be zero")]
-    InvaildSwapAmountSpecified,
+    ZeroAmountSpecified,
     #[msg("Input pool vault is invalid")]
     InvalidInputPoolVault,
     #[msg("Swap input or output amount is too small")]
@@ -103,4 +103,6 @@ pub enum ErrorCode {
     InsufficientLiquidityForDirection,
     #[msg("Max token overflow")]
     MaxTokenOverflow,
+    #[msg("calculate overflow")]
+    CalculateOverflow,
 }

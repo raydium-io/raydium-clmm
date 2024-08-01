@@ -381,6 +381,26 @@ mod liquidity_math_test {
 
     use proptest::prelude::*;
     proptest! {
+
+        #[test]
+        fn get_delta_amount_0_unsigned_test_1(
+            sqrt_ratio_a_x64 in tick_math::MIN_SQRT_PRICE_X64..tick_math::MAX_SQRT_PRICE_X64,
+            sqrt_ratio_b_x64 in tick_math::MIN_SQRT_PRICE_X64..tick_math::MAX_SQRT_PRICE_X64,
+            liquidity in u64::MIN..u64::MAX,
+        ){
+            get_delta_amount_0_unsigned(sqrt_ratio_a_x64,sqrt_ratio_b_x64, liquidity as u128,false).unwrap();
+        }
+
+
+        #[test]
+        fn get_delta_amount_0_unsigned_test_2(
+            sqrt_ratio_a_x64 in tick_math::MIN_SQRT_PRICE_X64..tick_math::MAX_SQRT_PRICE_X64,
+            sqrt_ratio_b_x64 in tick_math::MIN_SQRT_PRICE_X64..tick_math::MAX_SQRT_PRICE_X64,
+            liquidity in u128::MIN..u128::MAX,
+        ){
+            get_delta_amount_0_unsigned(sqrt_ratio_a_x64,sqrt_ratio_b_x64, liquidity as u128,false).unwrap();
+        }
+
         #[test]
         fn get_delta_amount_0_signed_test(
             sqrt_ratio_a_x64 in tick_math::MIN_SQRT_PRICE_X64..tick_math::MAX_SQRT_PRICE_X64,

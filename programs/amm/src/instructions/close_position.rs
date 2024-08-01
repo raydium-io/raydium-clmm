@@ -3,7 +3,7 @@ use crate::states::*;
 use crate::util::{burn, close_spl_account};
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
-use anchor_spl::token_interface::{Mint,TokenAccount};
+use anchor_spl::token_interface::{Mint, TokenAccount};
 
 #[derive(Accounts)]
 pub struct ClosePosition<'info> {
@@ -78,16 +78,15 @@ pub fn close_position<'a, 'b, 'c, 'info>(
         }
     }
 
-        burn(
-            &ctx.accounts.nft_owner,
-            &ctx.accounts.position_nft_mint,
-            &ctx.accounts.position_nft_account,
-            &ctx.accounts.token_program,
-            // &ctx.accounts.token_program_2022,
-            &[],
-            1,
-        )?;
-    
+    burn(
+        &ctx.accounts.nft_owner,
+        &ctx.accounts.position_nft_mint,
+        &ctx.accounts.position_nft_account,
+        &ctx.accounts.token_program,
+        // &ctx.accounts.token_program_2022,
+        &[],
+        1,
+    )?;
 
     close_spl_account(
         &ctx.accounts.nft_owner,
