@@ -65,8 +65,10 @@ pub fn swap_router_base_in<'a, 'b, 'c: 'info, 'info>(
         let output_token_mint = Box::new(InterfaceAccount::<Mint>::try_from(
             remaining_accounts.next().unwrap(),
         )?);
-        let observation_state =
-            AccountLoader::<ObservationState>::try_from(remaining_accounts.next().unwrap())?;
+        // TODO
+        // let observation_state =
+        //     AccountLoader::<ObservationState>::try_from(remaining_accounts.next().unwrap())?;
+        let observation_state = UncheckedAccount::try_from(remaining_accounts.next().unwrap());
 
         {
             let pool_state = pool_state_loader.load()?;

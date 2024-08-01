@@ -519,6 +519,10 @@ pub enum CommandsName {
     DecodeTxLog {
         tx_id: String,
     },
+    RsizeObseration {
+        pool_id: Pubkey,
+        observation: Pubkey,
+    },
 }
 // #[cfg(not(feature = "async"))]
 fn main() -> Result<()> {
@@ -2267,6 +2271,24 @@ fn main() -> Result<()> {
             )?;
             // decode logs
             parse_program_event(&pool_config.raydium_v3_program.to_string(), meta.clone())?;
+        }
+        CommandsName::RsizeObseration {
+            pool_id,
+            observation,
+        } => {
+            let increase_instr =
+                resize_observation_instr(&pool_config.clone(), pool_id, observation)?;
+            // send
+            let signers = vec![&payer];
+            let recent_hash = rpc_client.get_latest_blockhash()?;
+            let txn = Transaction::new_signed_with_payer(
+                &increase_instr,
+                Some(&payer.pubkey()),
+                &signers,
+                recent_hash,
+            );
+            let signature = send_txn(&rpc_client, &txn, true)?;
+            println!("{}", signature);
         }
     }
 

@@ -36,3 +36,9 @@ pub use collect_remaining_rewards::*;
 
 pub mod admin;
 pub use admin::*;
+
+pub mod create_observation;
+pub use create_observation::*;
+
+pub mod resize_observation;
+pub use resize_observation::*;

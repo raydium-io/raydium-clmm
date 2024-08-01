@@ -43,7 +43,10 @@ pub struct SwapSingleV2<'info> {
 
     /// The program account for the most recent oracle observation
     #[account(mut, address = pool_state.load()?.observation_key)]
-    pub observation_state: AccountLoader<'info, ObservationState>,
+    // TODO
+    // pub observation_state: AccountLoader<'info, ObservationState>,
+    /// CHECK:
+    pub observation_state: UncheckedAccount<'info>,
 
     /// SPL program for token transfers
     pub token_program: Program<'info, Token>,
@@ -146,7 +149,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             &ctx.amm_config,
             pool_state,
             tick_array_states,
-            &mut ctx.observation_state.load_mut()?,
+            // &mut ctx.observation_state.load_mut()?,
             &tickarray_bitmap_extension,
             amount_specified,
             if sqrt_price_limit_x64 == 0 {

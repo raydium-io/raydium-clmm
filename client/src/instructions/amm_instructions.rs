@@ -679,6 +679,31 @@ pub fn set_reward_params_instr(
     Ok(instructions)
 }
 
+pub fn resize_observation_instr(
+    config: &ClientConfig,
+    pool_account_key: Pubkey,
+    observation_key: Pubkey,
+) -> Result<Vec<Instruction>> {
+    let payer = read_keypair_file(&config.payer_path)?;
+    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
+    // Client.
+    let client = Client::new(url, Rc::new(payer));
+    let program = client.program(config.raydium_v3_program)?;
+
+    let instructions = program
+        .request()
+        .accounts(raydium_accounts::RsizeObservation {
+            payer: program.payer(),
+            pool_state: pool_account_key,
+            observation_state: observation_key,
+            token_program: spl_token::id(),
+            system_program: system_program::id(),
+        })
+        .args(raydium_instruction::RsizeObservation)
+        .instructions()?;
+    Ok(instructions)
+}
+
 pub fn transfer_reward_owner(
     config: &ClientConfig,
     pool_account_key: Pubkey,
