@@ -43,8 +43,10 @@ pub struct ProtocolPositionState {
 
     /// The reward growth per unit of liquidity as of the last update to liquidity
     pub reward_growth_inside: [u128; REWARD_NUM], // 24
+    // account update recent epoch
+    pub recent_epoch: u64,
     // Unused bytes for future upgrades.
-    pub padding: [u64; 8],
+    pub padding: [u64; 7],
 }
 
 impl ProtocolPositionState {
@@ -104,6 +106,7 @@ impl ProtocolPositionState {
             reward_growths_inside
         );
         self.update_reward_growths_inside(reward_growths_inside);
+        self.recent_epoch = Clock::get()?.epoch;
         Ok(())
     }
 

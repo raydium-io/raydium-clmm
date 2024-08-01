@@ -37,8 +37,10 @@ pub struct PersonalPositionState {
 
     // Position reward info
     pub reward_infos: [PositionRewardInfo; REWARD_NUM],
+    // account update recent epoch
+    pub recent_epoch: u64,
     // Unused bytes for future upgrades.
-    pub padding: [u64; 8],
+    pub padding: [u64; 7],
 }
 
 impl PersonalPositionState {
@@ -77,6 +79,7 @@ impl PersonalPositionState {
             }
             self.reward_infos[i].growth_inside_last_x64 = reward_growth_inside;
         }
+        self.recent_epoch = Clock::get()?.epoch;
         Ok(())
     }
 }

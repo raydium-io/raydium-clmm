@@ -95,6 +95,8 @@ impl ObservationState {
     pub fn initialize(account_info: &AccountInfo, pool_id: Pubkey) -> Result<()> {
         let observation_state = &mut Self::load_init_mut(account_info)?;
         require_eq!(observation_state.initialized, false);
+        let required_lamports = Rent::get()?.minimum_balance(Self::LEN);
+        require_gte!(account_info.lamports(), required_lamports);
         require_keys_eq!(observation_state.pool_id, Pubkey::default());
         observation_state.pool_id = pool_id;
         Ok(())

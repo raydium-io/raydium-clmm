@@ -132,9 +132,11 @@ pub struct PoolState {
 
     // The timestamp allowed for swap in the pool.
     pub open_time: u64,
+    // account recent update epoch
+    pub recent_epoch: u64,
 
     // Unused bytes for future upgrades.
-    pub padding1: [u64; 25],
+    pub padding1: [u64; 24],
     pub padding2: [u64; 32],
 }
 
@@ -225,7 +227,8 @@ impl PoolState {
         self.fund_fees_token_0 = 0;
         self.fund_fees_token_1 = 0;
         self.open_time = open_time;
-        self.padding1 = [0; 25];
+        self.recent_epoch = Clock::get()?.epoch;
+        self.padding1 = [0; 24];
         self.padding2 = [0; 32];
         self.observation_key = observation_state_key;
 
@@ -328,6 +331,7 @@ impl PoolState {
             lowest_index,
             self.reward_infos[lowest_index],
         );
+        self.recent_epoch = Clock::get()?.epoch;
         Ok(())
     }
 
@@ -406,6 +410,7 @@ impl PoolState {
         #[cfg(feature = "enable-log")]
         msg!("update pool reward info, reward_0_total_emissioned:{}, reward_1_total_emissioned:{}, reward_2_total_emissioned:{}, pool.liquidity:{}",
         identity(self.reward_infos[0].reward_total_emissioned),identity(self.reward_infos[1].reward_total_emissioned),identity(self.reward_infos[2].reward_total_emissioned), identity(self.liquidity));
+        self.recent_epoch = Clock::get()?.epoch;
         Ok(next_reward_infos)
     }
 

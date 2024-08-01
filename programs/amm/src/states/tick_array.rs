@@ -20,8 +20,10 @@ pub struct TickArrayState {
     pub start_tick_index: i32,
     pub ticks: [TickState; TICK_ARRAY_SIZE_USIZE],
     pub initialized_tick_count: u8,
+    // account update recent epoch
+    pub recent_epoch: u64,
     // Unused bytes for future upgrades.
-    pub padding: [u8; 115],
+    pub padding: [u8; 107],
 }
 
 impl TickArrayState {
@@ -106,6 +108,7 @@ impl TickArrayState {
         TickArrayState::check_is_valid_start_index(start_index, tick_spacing);
         self.start_tick_index = start_index;
         self.pool_id = pool_key;
+        self.recent_epoch = Clock::get()?.epoch;
         Ok(())
     }
 
@@ -135,6 +138,7 @@ impl TickArrayState {
     ) -> Result<()> {
         let offset_in_array = self.get_tick_offset_in_array(tick_index, tick_spacing)?;
         self.ticks[offset_in_array] = tick_state;
+        self.recent_epoch = Clock::get()?.epoch;
         Ok(())
     }
 
@@ -254,7 +258,8 @@ impl Default for TickArrayState {
             ticks: [TickState::default(); TICK_ARRAY_SIZE_USIZE],
             start_tick_index: 0,
             initialized_tick_count: 0,
-            padding: [0; 115],
+            recent_epoch: 0,
+            padding: [0; 107],
         }
     }
 }
