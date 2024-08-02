@@ -73,7 +73,7 @@ pub struct CreatePool<'info> {
     )]
     pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    /// Initialize an account to store oracle observations, the account must be created off-chain, constract will initialzied it
+    /// Initialize an account to store oracle observations
     #[account(
         init,
         seeds = [

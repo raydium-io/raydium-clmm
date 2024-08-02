@@ -9,7 +9,8 @@ use solana_sdk::{
 use raydium_amm_v3::accounts as raydium_accounts;
 use raydium_amm_v3::instruction as raydium_instruction;
 use raydium_amm_v3::states::{
-    AMM_CONFIG_SEED, OPERATION_SEED, POOL_SEED, POOL_VAULT_SEED, POSITION_SEED, TICK_ARRAY_SEED,
+    AMM_CONFIG_SEED, OBSERVATION_SEED, OPERATION_SEED, POOL_SEED, POOL_VAULT_SEED, POSITION_SEED,
+    TICK_ARRAY_SEED,
 };
 use std::rc::Rc;
 
@@ -122,7 +123,6 @@ pub fn update_operation_account_instr(
 pub fn create_pool_instr(
     config: &ClientConfig,
     amm_config: Pubkey,
-    observation_key: Pubkey,
     token_mint_0: Pubkey,
     token_mint_1: Pubkey,
     token_program_0: Pubkey,
@@ -158,6 +158,13 @@ pub fn create_pool_instr(
             POOL_VAULT_SEED.as_bytes(),
             pool_account_key.to_bytes().as_ref(),
             token_mint_1.to_bytes().as_ref(),
+        ],
+        &program.id(),
+    );
+    let (observation_key, __bump) = Pubkey::find_program_address(
+        &[
+            OBSERVATION_SEED.as_bytes(),
+            pool_account_key.to_bytes().as_ref(),
         ],
         &program.id(),
     );
@@ -675,31 +682,6 @@ pub fn set_reward_params_instr(
             open_time,
             end_time,
         })
-        .instructions()?;
-    Ok(instructions)
-}
-
-pub fn resize_observation_instr(
-    config: &ClientConfig,
-    pool_account_key: Pubkey,
-    observation_key: Pubkey,
-) -> Result<Vec<Instruction>> {
-    let payer = read_keypair_file(&config.payer_path)?;
-    let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
-    // Client.
-    let client = Client::new(url, Rc::new(payer));
-    let program = client.program(config.raydium_v3_program)?;
-
-    let instructions = program
-        .request()
-        .accounts(raydium_accounts::RsizeObservation {
-            payer: program.payer(),
-            pool_state: pool_account_key,
-            observation_state: observation_key,
-            token_program: spl_token::id(),
-            system_program: system_program::id(),
-        })
-        .args(raydium_instruction::RsizeObservation)
         .instructions()?;
     Ok(instructions)
 }

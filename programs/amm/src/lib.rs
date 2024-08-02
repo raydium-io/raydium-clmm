@@ -497,12 +497,4 @@ pub mod amm_v3 {
     ) -> Result<()> {
         instructions::swap_router_base_in(ctx, amount_in, amount_out_minimum)
     }
-
-    pub fn rsize_observation(ctx: Context<RsizeObservation>) -> Result<()> {
-        instructions::rsize_observation(ctx)
-    }
-
-    pub fn create_observation(ctx: Context<CreateObservation>) -> Result<()> {
-        instructions::create_observation(ctx)
-    }
 }

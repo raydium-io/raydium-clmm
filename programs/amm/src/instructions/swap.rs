@@ -56,10 +56,7 @@ pub struct SwapSingle<'info> {
 
     /// The program account for the most recent oracle observation
     #[account(mut, address = pool_state.load()?.observation_key)]
-    // TODO
-    // pub observation_state: AccountLoader<'info, ObservationState>,
-    /// CHECK:
-    pub observation_state: UncheckedAccount<'info>,
+    pub observation_state: AccountLoader<'info, ObservationState>,
 
     /// SPL program for token transfers
     pub token_program: Program<'info, Token>,
@@ -95,9 +92,9 @@ pub struct SwapAccounts<'b, 'info> {
 
     /// The tick_array account of current or next initialized
     pub tick_array_state: &'b mut AccountLoader<'info, TickArrayState>,
-    // TODO
-    // /// The program account for the oracle observation
-    // pub observation_state: &'b mut AccountLoader<'info, ObservationState>,
+
+    /// The program account for the oracle observation
+    pub observation_state: &'b mut AccountLoader<'info, ObservationState>,
 }
 
 // the top level state of the swap, the results of which are recorded in storage at the end
@@ -145,8 +142,7 @@ pub fn swap_internal<'b, 'info>(
     amm_config: &AmmConfig,
     pool_state: &mut RefMut<PoolState>,
     tick_array_states: &mut VecDeque<RefMut<TickArrayState>>,
-    // TODO
-    // observation_state: &mut RefMut<ObservationState>,
+    observation_state: &mut RefMut<ObservationState>,
     tickarray_bitmap_extension: &Option<TickArrayBitmapExtension>,
     amount_specified: u64,
     sqrt_price_limit_x64: u128,
@@ -189,9 +185,8 @@ pub fn swap_internal<'b, 'info>(
         liquidity: liquidity_start,
     };
 
-    // TODO
     // check observation account is owned by the pool
-    // require_keys_eq!(observation_state.pool_id, pool_state.key());
+    require_keys_eq!(observation_state.pool_id, pool_state.key());
 
     let (mut is_match_pool_current_tick_array, first_vaild_tick_array_start_index) =
         pool_state.get_first_initialized_tick_array(&tickarray_bitmap_extension, zero_for_one)?;
@@ -476,20 +471,9 @@ pub fn swap_internal<'b, 'info>(
     if state.tick != pool_state.tick_current {
         pool_state.tick_current = state.tick;
     }
-    // TODO
     // update the previous price to the observation
-    // let next_observation_index = observation_state
-    //     .update_check(
-    //         block_timestamp,
-    //         pool_state.sqrt_price_x64,
-    //         pool_state.observation_index,
-    //         pool_state.observation_update_duration.into(),
-    //     )
-    //     .unwrap();
-    // match next_observation_index {
-    //     Option::Some(index) => pool_state.observation_index = index,
-    //     Option::None => {}
-    // }
+    observation_state.update(block_timestamp, pool_state.tick_current);
+
     pool_state.sqrt_price_x64 = state.sqrt_price_x64;
 
     if liquidity_start != state.liquidity {
@@ -629,7 +613,7 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
             &ctx.amm_config,
             pool_state,
             tick_array_states,
-            // &mut ctx.observation_state.load_mut()?,
+            &mut ctx.observation_state.load_mut()?,
             &tickarray_bitmap_extension,
             amount_specified,
             if sqrt_price_limit_x64 == 0 {
@@ -778,7 +762,7 @@ pub fn swap<'a, 'b, 'c: 'info, 'info>(
             token_program: ctx.accounts.token_program.clone(),
             pool_state: &mut ctx.accounts.pool_state,
             tick_array_state: &mut ctx.accounts.tick_array,
-            // observation_state: &mut ctx.accounts.observation_state,
+            observation_state: &mut ctx.accounts.observation_state,
         },
         ctx.remaining_accounts,
         amount,

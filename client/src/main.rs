@@ -519,10 +519,6 @@ pub enum CommandsName {
     DecodeTxLog {
         tx_id: String,
     },
-    RsizeObseration {
-        pool_id: Pubkey,
-        observation: Pubkey,
-    },
 }
 // #[cfg(not(feature = "async"))]
 fn main() -> Result<()> {
@@ -875,17 +871,10 @@ fn main() -> Result<()> {
                 "tick:{}, price:{}, sqrt_price_x64:{}, amm_config_key:{}",
                 tick, price, sqrt_price_x64, amm_config_key
             );
-            let observation_account = Keypair::generate(&mut OsRng);
-            let mut create_observation_instr = create_account_rent_exmpt_instr(
-                &pool_config.clone(),
-                &observation_account.pubkey(),
-                pool_config.raydium_v3_program,
-                raydium_amm_v3::states::ObservationState::LEN,
-            )?;
+
             let create_pool_instr = create_pool_instr(
                 &pool_config.clone(),
                 amm_config_key,
-                observation_account.pubkey(),
                 mint0,
                 mint1,
                 mint0_owner,
@@ -894,13 +883,12 @@ fn main() -> Result<()> {
                 sqrt_price_x64,
                 open_time,
             )?;
-            create_observation_instr.extend(create_pool_instr);
 
             // send
-            let signers = vec![&payer, &observation_account];
+            let signers = vec![&payer];
             let recent_hash = rpc_client.get_latest_blockhash()?;
             let txn = Transaction::new_signed_with_payer(
-                &create_observation_instr,
+                &create_pool_instr,
                 Some(&payer.pubkey()),
                 &signers,
                 recent_hash,
@@ -2271,24 +2259,6 @@ fn main() -> Result<()> {
             )?;
             // decode logs
             parse_program_event(&pool_config.raydium_v3_program.to_string(), meta.clone())?;
-        }
-        CommandsName::RsizeObseration {
-            pool_id,
-            observation,
-        } => {
-            let increase_instr =
-                resize_observation_instr(&pool_config.clone(), pool_id, observation)?;
-            // send
-            let signers = vec![&payer];
-            let recent_hash = rpc_client.get_latest_blockhash()?;
-            let txn = Transaction::new_signed_with_payer(
-                &increase_instr,
-                Some(&payer.pubkey()),
-                &signers,
-                recent_hash,
-            );
-            let signature = send_txn(&rpc_client, &txn, true)?;
-            println!("{}", signature);
         }
     }
 
