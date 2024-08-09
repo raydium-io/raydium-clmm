@@ -472,18 +472,8 @@ pub fn swap_internal<'b, 'info>(
         pool_state.tick_current = state.tick;
     }
     // update the previous price to the observation
-    let next_observation_index = observation_state
-        .update_check(
-            block_timestamp,
-            pool_state.sqrt_price_x64,
-            pool_state.observation_index,
-            pool_state.observation_update_duration.into(),
-        )
-        .unwrap();
-    match next_observation_index {
-        Option::Some(index) => pool_state.observation_index = index,
-        Option::None => {}
-    }
+    observation_state.update(block_timestamp, pool_state.tick_current);
+
     pool_state.sqrt_price_x64 = state.sqrt_price_x64;
 
     if liquidity_start != state.liquidity {

@@ -73,9 +73,18 @@ pub struct CreatePool<'info> {
     )]
     pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    /// CHECK: Initialize an account to store oracle observations, the account must be created off-chain, constract will initialzied it
-    #[account(mut)]
-    pub observation_state: UncheckedAccount<'info>,
+    /// Initialize an account to store oracle observations
+    #[account(
+        init,
+        seeds = [
+            OBSERVATION_SEED.as_bytes(),
+            pool_state.key().as_ref(),
+        ],
+        bump,
+        payer = pool_creator,
+        space = ObservationState::LEN
+    )]
+    pub observation_state: AccountLoader<'info, ObservationState>,
 
     /// Initialize an account to store if a tick array is initialized.
     #[account(
@@ -117,7 +126,10 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u6
         tick
     );
     // init observation
-    ObservationState::initialize(ctx.accounts.observation_state.as_ref(), pool_id)?;
+    ctx.accounts
+        .observation_state
+        .load_init()?
+        .initialize(pool_id)?;
 
     let bump = ctx.bumps.pool_state;
     pool_state.initialize(

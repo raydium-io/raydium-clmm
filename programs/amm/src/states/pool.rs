@@ -19,7 +19,7 @@ pub const POOL_REWARD_VAULT_SEED: &str = "pool_reward_vault";
 pub const POOL_TICK_ARRAY_BITMAP_SEED: &str = "pool_tick_array_bitmap_extension";
 // Number of rewards Token
 pub const REWARD_NUM: usize = 3;
-pub const OBSERVATION_UPDATE_DURATION_DEFAULT: u16 = 15;
+
 #[cfg(feature = "paramset")]
 pub mod reward_period_limit {
     pub const MIN_REWARD_PERIOD: u64 = 1 * 60 * 60;
@@ -86,9 +86,8 @@ pub struct PoolState {
     /// The current tick of the pool, i.e. according to the last tick transition that was run.
     pub tick_current: i32,
 
-    /// the most-recently updated index of the observations array
-    pub observation_index: u16,
-    pub observation_update_duration: u16,
+    pub padding3: u16,
+    pub padding4: u16,
 
     /// The fee growth as a Q64.64 number, i.e. fees of token_0 and token_1 collected per
     /// unit of liquidity for the entire life of the pool.
@@ -132,9 +131,11 @@ pub struct PoolState {
 
     // The timestamp allowed for swap in the pool.
     pub open_time: u64,
+    // account recent update epoch
+    pub recent_epoch: u64,
 
     // Unused bytes for future upgrades.
-    pub padding1: [u64; 25],
+    pub padding1: [u64; 24],
     pub padding2: [u64; 32],
 }
 
@@ -204,8 +205,8 @@ impl PoolState {
         self.liquidity = 0;
         self.sqrt_price_x64 = sqrt_price_x64;
         self.tick_current = tick;
-        self.observation_update_duration = OBSERVATION_UPDATE_DURATION_DEFAULT;
-        self.observation_index = 0;
+        self.padding3 = 0;
+        self.padding4 = 0;
         self.reward_infos = [RewardInfo::new(pool_creator); REWARD_NUM];
         self.fee_growth_global_0_x64 = 0;
         self.fee_growth_global_1_x64 = 0;
@@ -225,38 +226,11 @@ impl PoolState {
         self.fund_fees_token_0 = 0;
         self.fund_fees_token_1 = 0;
         self.open_time = open_time;
-        self.padding1 = [0; 25];
+        self.recent_epoch = Clock::get()?.epoch;
+        self.padding1 = [0; 24];
         self.padding2 = [0; 32];
         self.observation_key = observation_state_key;
 
-        Ok(())
-    }
-
-    pub fn pool_check_reset(&mut self, sqrt_price_x64: u128, tick: i32) -> Result<()> {
-        require!(
-            tick >= tick_math::MIN_TICK && tick <= tick_math::MAX_TICK,
-            ErrorCode::InvaildTickIndex
-        );
-        if !U1024(self.tick_array_bitmap).is_zero() {
-            return err!(ErrorCode::NotApproved);
-        }
-        self.sqrt_price_x64 = sqrt_price_x64;
-        self.tick_current = tick;
-        self.liquidity = 0;
-        self.observation_index = 0;
-        self.fee_growth_global_0_x64 = 0;
-        self.fee_growth_global_1_x64 = 0;
-        self.protocol_fees_token_0 = 0;
-        self.protocol_fees_token_1 = 0;
-        self.swap_in_amount_token_0 = 0;
-        self.swap_out_amount_token_1 = 0;
-        self.swap_in_amount_token_1 = 0;
-        self.swap_out_amount_token_0 = 0;
-        self.total_fees_token_0 = 0;
-        self.total_fees_claimed_token_0 = 0;
-        self.total_fees_token_1 = 0;
-        self.total_fees_claimed_token_1 = 0;
-        self.reward_infos = [RewardInfo::new(self.owner); REWARD_NUM];
         Ok(())
     }
 
@@ -328,6 +302,7 @@ impl PoolState {
             lowest_index,
             self.reward_infos[lowest_index],
         );
+        self.recent_epoch = Clock::get()?.epoch;
         Ok(())
     }
 
@@ -406,6 +381,7 @@ impl PoolState {
         #[cfg(feature = "enable-log")]
         msg!("update pool reward info, reward_0_total_emissioned:{}, reward_1_total_emissioned:{}, reward_2_total_emissioned:{}, pool.liquidity:{}",
         identity(self.reward_infos[0].reward_total_emissioned),identity(self.reward_infos[1].reward_total_emissioned),identity(self.reward_infos[2].reward_total_emissioned), identity(self.liquidity));
+        self.recent_epoch = Clock::get()?.epoch;
         Ok(next_reward_infos)
     }
 
