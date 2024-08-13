@@ -471,7 +471,9 @@ fn swap_compute(
             fee,
             is_base_input,
             zero_for_one,
-        );
+            1,
+        )
+        .unwrap();
         state.sqrt_price_x64 = swap_step.sqrt_price_next_x64;
         step.amount_in = swap_step.amount_in;
         step.amount_out = swap_step.amount_out;

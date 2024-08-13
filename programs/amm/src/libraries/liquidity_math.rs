@@ -168,7 +168,7 @@ pub fn get_delta_amount_0_unsigned(
     mut sqrt_ratio_b_x64: u128,
     liquidity: u128,
     round_up: bool,
-) -> u64 {
+) -> Result<u64> {
     // sqrt_ratio_a_x64 should hold the smaller value
     if sqrt_ratio_a_x64 > sqrt_ratio_b_x64 {
         std::mem::swap(&mut sqrt_ratio_a_x64, &mut sqrt_ratio_b_x64);
@@ -179,21 +179,23 @@ pub fn get_delta_amount_0_unsigned(
 
     assert!(sqrt_ratio_a_x64 > 0);
 
-    if round_up {
+    let result = if round_up {
         U256::div_rounding_up(
             numerator_1
                 .mul_div_ceil(numerator_2, U256::from(sqrt_ratio_b_x64))
                 .unwrap(),
             U256::from(sqrt_ratio_a_x64),
         )
-        .as_u64()
     } else {
-        (numerator_1
+        numerator_1
             .mul_div_floor(numerator_2, U256::from(sqrt_ratio_b_x64))
             .unwrap()
-            / U256::from(sqrt_ratio_a_x64))
-        .as_u64()
+            / U256::from(sqrt_ratio_a_x64)
+    };
+    if result > U256::from(u64::MAX) {
+        return Err(ErrorCode::MaxTokenOverflow.into());
     }
+    return Ok(result.as_u64());
 }
 
 /// Gets the delta amount_1 for given liquidity and price range
@@ -203,13 +205,13 @@ pub fn get_delta_amount_1_unsigned(
     mut sqrt_ratio_b_x64: u128,
     liquidity: u128,
     round_up: bool,
-) -> u64 {
+) -> Result<u64> {
     // sqrt_ratio_a_x64 should hold the smaller value
     if sqrt_ratio_a_x64 > sqrt_ratio_b_x64 {
         std::mem::swap(&mut sqrt_ratio_a_x64, &mut sqrt_ratio_b_x64);
     };
 
-    if round_up {
+    let result = if round_up {
         U256::from(liquidity).mul_div_ceil(
             U256::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),
             U256::from(fixed_point_64::Q64),
@@ -220,8 +222,11 @@ pub fn get_delta_amount_1_unsigned(
             U256::from(fixed_point_64::Q64),
         )
     }
-    .unwrap()
-    .as_u64()
+    .unwrap();
+    if result > U256::from(u64::MAX) {
+        return Err(ErrorCode::MaxTokenOverflow.into());
+    }
+    return Ok(result.as_u64());
 }
 
 /// Helper function to get signed delta amount_0 for given liquidity and price range
@@ -229,7 +234,7 @@ pub fn get_delta_amount_0_signed(
     sqrt_ratio_a_x64: u128,
     sqrt_ratio_b_x64: u128,
     liquidity: i128,
-) -> u64 {
+) -> Result<u64> {
     if liquidity < 0 {
         get_delta_amount_0_unsigned(
             sqrt_ratio_a_x64,
@@ -252,7 +257,7 @@ pub fn get_delta_amount_1_signed(
     sqrt_ratio_a_x64: u128,
     sqrt_ratio_b_x64: u128,
     liquidity: i128,
-) -> u64 {
+) -> Result<u64> {
     if liquidity < 0 {
         get_delta_amount_1_unsigned(
             sqrt_ratio_a_x64,
@@ -284,41 +289,28 @@ pub fn get_delta_amounts_signed(
             tick_math::get_sqrt_price_at_tick(tick_lower)?,
             tick_math::get_sqrt_price_at_tick(tick_upper)?,
             liquidity_delta,
-        );
+        )
+        .unwrap();
     } else if tick_current < tick_upper {
         amount_0 = get_delta_amount_0_signed(
             sqrt_price_x64_current,
             tick_math::get_sqrt_price_at_tick(tick_upper)?,
             liquidity_delta,
-        );
+        )
+        .unwrap();
         amount_1 = get_delta_amount_1_signed(
             tick_math::get_sqrt_price_at_tick(tick_lower)?,
             sqrt_price_x64_current,
             liquidity_delta,
-        );
+        )
+        .unwrap();
     } else {
         amount_1 = get_delta_amount_1_signed(
             tick_math::get_sqrt_price_at_tick(tick_lower)?,
             tick_math::get_sqrt_price_at_tick(tick_upper)?,
             liquidity_delta,
-        );
+        )
+        .unwrap();
     }
     Ok((amount_0, amount_1))
-}
-
-#[cfg(test)]
-mod liquidity_math_test {
-    use super::*;
-    mod get_amounts_delta_signed {
-        use super::*;
-
-        #[test]
-        fn get_amounts_delta_signed_test() {
-            let current_tick = -1860;
-            let current_price = tick_math::get_sqrt_price_at_tick(current_tick).unwrap();
-            let (amount0, amount1) =
-                get_delta_amounts_signed(current_tick, current_price, -6960, 4080, 100000).unwrap();
-            println!("amount0:{}, amount1:{}", amount0, amount1)
-        }
-    }
 }

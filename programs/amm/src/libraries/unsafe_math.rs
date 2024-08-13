@@ -1,6 +1,5 @@
 use super::{big_num::U128, U256};
 
-
 pub trait UnsafeMathTrait {
     /// Returns ceil (x / y)
     /// Division by 0 throws a panic, and must be checked externally

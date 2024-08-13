@@ -10,6 +10,10 @@ construct_uint! {
     pub struct U256(4);
 }
 
+construct_uint! {
+    pub struct U512(8);
+}
+
 #[macro_export]
 macro_rules! construct_bignum {
     ( $(#[$attr:meta])* $visibility:vis struct $name:ident ( $n_words:tt ); ) => {
@@ -335,11 +339,6 @@ macro_rules! construct_bignum {
         }
     };
 }
-
-construct_bignum! {
-    pub struct U512(8);
-}
-
 construct_bignum! {
     pub struct U1024(16);
 }

@@ -3,7 +3,7 @@
 //! and supports U128 operations.
 //!
 
-use crate::libraries::big_num::{U128, U256};
+use crate::libraries::big_num::{U128, U256, U512};
 
 /// Trait for calculating `val * num / denom` with different rounding modes and overflow
 /// protection.
@@ -83,23 +83,43 @@ pub trait MulDiv<RHS = Self> {
     fn to_underflow_u64(self) -> u64;
 }
 
-pub trait Upcast {
+pub trait Upcast256 {
     fn as_u256(self) -> U256;
 }
-impl Upcast for U128 {
+impl Upcast256 for U128 {
     fn as_u256(self) -> U256 {
         U256([self.0[0], self.0[1], 0, 0])
     }
 }
 
-pub trait Downcast {
+pub trait Downcast256 {
     /// Unsafe cast to U128
     /// Bits beyond the 128th position are lost
     fn as_u128(self) -> U128;
 }
-impl Downcast for U256 {
+impl Downcast256 for U256 {
     fn as_u128(self) -> U128 {
         U128([self.0[0], self.0[1]])
+    }
+}
+
+pub trait Upcast512 {
+    fn as_u512(self) -> U512;
+}
+impl Upcast512 for U256 {
+    fn as_u512(self) -> U512 {
+        U512([self.0[0], self.0[1], self.0[2], self.0[3], 0, 0, 0, 0])
+    }
+}
+
+pub trait Downcast512 {
+    /// Unsafe cast to U256
+    /// Bits beyond the 256th position are lost
+    fn as_u256(self) -> U256;
+}
+impl Downcast512 for U512 {
+    fn as_u256(self) -> U256 {
+        U256([self.0[0], self.0[1], self.0[2], self.0[3]])
     }
 }
 
@@ -168,21 +188,21 @@ impl MulDiv for U256 {
 
     fn mul_div_floor(self, num: Self, denom: Self) -> Option<Self::Output> {
         assert_ne!(denom, U256::default());
-        let r = (self * num) / denom;
-        if r > U128::MAX.as_u256() {
+        let r = (self.as_u512() * num.as_u512()) / denom.as_u512();
+        if r > U256::MAX.as_u512() {
             None
         } else {
-            Some(r)
+            Some(r.as_u256())
         }
     }
 
     fn mul_div_ceil(self, num: Self, denom: Self) -> Option<Self::Output> {
         assert_ne!(denom, U256::default());
-        let r = (self * num + (denom - 1)) / denom;
-        if r > U128::MAX.as_u256() {
+        let r = (self.as_u512() * num.as_u512() + (denom - 1).as_u512()) / denom.as_u512();
+        if r > U256::MAX.as_u512() {
             None
         } else {
-            Some(r)
+            Some(r.as_u256())
         }
     }
 

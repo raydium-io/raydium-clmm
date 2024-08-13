@@ -115,7 +115,7 @@ impl TickArrayBitmapExtension {
         let tick_array_offset_in_bitmap =
             Self::tick_array_offset_in_bitmap(tick_array_start_index, tick_spacing);
         let tick_array_bitmap = U512(tick_array_bitmap);
-        let mask = U512::one() << tick_array_offset_in_bitmap.try_into().unwrap();
+        let mask = U512::one() << tick_array_offset_in_bitmap;
         if tick_array_start_index < 0 {
             self.negative_tick_array_bitmap[offset as usize] = tick_array_bitmap.bitxor(mask).0;
         } else {
@@ -174,9 +174,7 @@ impl TickArrayBitmapExtension {
             // tick from upper to lower
             // find from highter bits to lower bits
             let offset_bit_map = U512(tickarray_bitmap)
-                << (TICK_ARRAY_BITMAP_SIZE - 1 - tick_array_offset_in_bitmap)
-                    .try_into()
-                    .unwrap();
+                << (TICK_ARRAY_BITMAP_SIZE - 1 - tick_array_offset_in_bitmap);
 
             let next_bit = if offset_bit_map.is_zero() {
                 None
@@ -195,8 +193,7 @@ impl TickArrayBitmapExtension {
         } else {
             // tick from lower to upper
             // find from lower bits to highter bits
-            let offset_bit_map =
-                U512(tickarray_bitmap) >> tick_array_offset_in_bitmap.try_into().unwrap();
+            let offset_bit_map = U512(tickarray_bitmap) >> tick_array_offset_in_bitmap;
 
             let next_bit = if offset_bit_map.is_zero() {
                 None

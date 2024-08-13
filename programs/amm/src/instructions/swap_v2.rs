@@ -248,9 +248,14 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         amount_0_without_fee = amount_0.checked_sub(transfer_fee_0).unwrap();
         amount_1_without_fee = amount_1;
         let (transfer_amount_0, transfer_amount_1) = (amount_0, amount_1 + transfer_fee_1);
-
-        msg!("amount_0:{}, transfer_fee_0:{}", amount_0, transfer_fee_0);
-        msg!("amount_1:{}, transfer_fee_1:{}", amount_1, transfer_fee_1);
+        #[cfg(feature = "enable-log")]
+        msg!(
+            "amount_0:{}, transfer_fee_0:{}, amount_1:{}, transfer_fee_1:{}",
+            amount_0,
+            transfer_fee_0,
+            amount_1,
+            transfer_fee_1
+        );
         transfer_from_user_to_pool_vault(
             &ctx.payer,
             &token_account_1,
