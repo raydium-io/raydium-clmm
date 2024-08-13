@@ -16,6 +16,8 @@ use anchor_spl::{
 };
 use std::collections::HashSet;
 
+use super::get_recent_epoch;
+
 const MINT_WHITELIST: [&'static str; 4] = [
     "HVbpJAQGNpkgBaYBZQBR1t7yFdvaYVp2vCQQfKKEN4tM",
     "Crn4x1Y2HUKko7ox2EZMT6N2t2ZyH7eKtwkBGVnhEq1g",
@@ -194,7 +196,7 @@ pub fn get_transfer_inverse_fee(
     let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
 
     let fee = if let Ok(transfer_fee_config) = mint.get_extension::<TransferFeeConfig>() {
-        let epoch = Clock::get()?.epoch;
+        let epoch = get_recent_epoch()?;
 
         let transfer_fee = transfer_fee_config.get_epoch_fee(epoch);
         if u16::from(transfer_fee.transfer_fee_basis_points) == MAX_FEE_BASIS_POINTS {
@@ -224,7 +226,7 @@ pub fn get_transfer_fee(
 
     let fee = if let Ok(transfer_fee_config) = mint.get_extension::<TransferFeeConfig>() {
         transfer_fee_config
-            .calculate_epoch_fee(Clock::get()?.epoch, pre_fee_amount)
+            .calculate_epoch_fee(get_recent_epoch()?, pre_fee_amount)
             .unwrap()
     } else {
         0

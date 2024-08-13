@@ -108,7 +108,7 @@ impl TickArrayState {
         TickArrayState::check_is_valid_start_index(start_index, tick_spacing);
         self.start_tick_index = start_index;
         self.pool_id = pool_key;
-        self.recent_epoch = Clock::get()?.epoch;
+        self.recent_epoch = get_recent_epoch()?;
         Ok(())
     }
 
@@ -138,7 +138,7 @@ impl TickArrayState {
     ) -> Result<()> {
         let offset_in_array = self.get_tick_offset_in_array(tick_index, tick_spacing)?;
         self.ticks[offset_in_array] = tick_state;
-        self.recent_epoch = Clock::get()?.epoch;
+        self.recent_epoch = get_recent_epoch()?;
         Ok(())
     }
 

@@ -54,3 +54,18 @@ pub fn create_or_allocate_account<'a>(
     }
     Ok(())
 }
+
+#[cfg(not(test))]
+pub fn get_recent_epoch() -> Result<u64> {
+    Ok(Clock::get()?.epoch)
+}
+
+#[cfg(test)]
+pub fn get_recent_epoch() -> Result<u64> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    Ok(SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        / (2 * 24 * 3600))
+}

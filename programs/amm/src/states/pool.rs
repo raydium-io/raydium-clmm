@@ -6,6 +6,7 @@ use crate::libraries::{
     tick_array_bit_map, tick_math,
 };
 use crate::states::*;
+use crate::util::get_recent_epoch;
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::Mint;
 #[cfg(feature = "enable-log")]
@@ -226,7 +227,7 @@ impl PoolState {
         self.fund_fees_token_0 = 0;
         self.fund_fees_token_1 = 0;
         self.open_time = open_time;
-        self.recent_epoch = Clock::get()?.epoch;
+        self.recent_epoch = get_recent_epoch()?;
         self.padding1 = [0; 24];
         self.padding2 = [0; 32];
         self.observation_key = observation_state_key;
@@ -302,7 +303,7 @@ impl PoolState {
             lowest_index,
             self.reward_infos[lowest_index],
         );
-        self.recent_epoch = Clock::get()?.epoch;
+        self.recent_epoch = get_recent_epoch()?;
         Ok(())
     }
 
@@ -381,7 +382,7 @@ impl PoolState {
         #[cfg(feature = "enable-log")]
         msg!("update pool reward info, reward_0_total_emissioned:{}, reward_1_total_emissioned:{}, reward_2_total_emissioned:{}, pool.liquidity:{}",
         identity(self.reward_infos[0].reward_total_emissioned),identity(self.reward_infos[1].reward_total_emissioned),identity(self.reward_infos[2].reward_total_emissioned), identity(self.liquidity));
-        self.recent_epoch = Clock::get()?.epoch;
+        self.recent_epoch = get_recent_epoch()?;
         Ok(next_reward_infos)
     }
 

@@ -1,5 +1,6 @@
 use crate::libraries::{big_num::U256, fixed_point_64, full_math::MulDiv};
 use crate::pool::REWARD_NUM;
+use crate::util::get_recent_epoch;
 use anchor_lang::prelude::*;
 
 #[account]
@@ -79,7 +80,7 @@ impl PersonalPositionState {
             }
             self.reward_infos[i].growth_inside_last_x64 = reward_growth_inside;
         }
-        self.recent_epoch = Clock::get()?.epoch;
+        self.recent_epoch = get_recent_epoch()?;
         Ok(())
     }
 }

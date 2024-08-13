@@ -2,8 +2,8 @@
 ///
 use anchor_lang::prelude::*;
 
-#[cfg(test)]
-use std::time::{SystemTime, UNIX_EPOCH};
+use crate::util::get_recent_epoch;
+
 /// Seed to derive account address and signature
 pub const OBSERVATION_SEED: &str = "observation";
 // Number of ObservationState element
@@ -64,7 +64,7 @@ impl ObservationState {
 
     pub fn initialize(&mut self, pool_id: Pubkey) -> Result<()> {
         self.initialized = false;
-        self.recent_epoch = Clock::get()?.epoch;
+        self.recent_epoch = get_recent_epoch()?;
         self.observation_index = 0;
         self.pool_id = pool_id;
         self.observations = [Observation::default(); OBSERVATION_NUM];
@@ -115,6 +115,7 @@ pub fn block_timestamp() -> u32 {
 
 #[cfg(test)]
 pub fn block_timestamp_mock() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
