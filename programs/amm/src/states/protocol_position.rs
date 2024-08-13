@@ -1,6 +1,7 @@
 use crate::libraries::tick_math;
 use crate::libraries::{big_num::U128, full_math::MulDiv};
 use crate::pool::REWARD_NUM;
+use crate::util::get_recent_epoch;
 use crate::{
     error::ErrorCode,
     libraries::{fixed_point_64, liquidity_math},
@@ -106,7 +107,7 @@ impl ProtocolPositionState {
             reward_growths_inside
         );
         self.update_reward_growths_inside(reward_growths_inside);
-        self.recent_epoch = Clock::get()?.epoch;
+        self.recent_epoch = get_recent_epoch()?;
         Ok(())
     }
 
