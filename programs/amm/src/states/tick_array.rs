@@ -15,7 +15,6 @@ pub const TICK_ARRAY_SIZE: i32 = 60;
 // pub const MAX_TICK_ARRAY_START_INDEX: i32 = 306600;
 #[account(zero_copy(unsafe))]
 #[repr(packed)]
-#[derive(Debug)]
 pub struct TickArrayState {
     pub pool_id: Pubkey,
     pub start_tick_index: i32,
