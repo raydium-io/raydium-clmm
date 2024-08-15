@@ -347,7 +347,7 @@ pub fn get_out_put_amount_and_remaining_accounts(
         .get_first_initialized_tick_array(&Some(*tickarray_bitmap_extension), zero_for_one)
         .unwrap();
 
-    let (amount_calculated, tick_array_start_index_vec) = swap_compute(
+    let (amount_calculated, _, tick_array_start_index_vec) = swap_compute(
         zero_for_one,
         is_base_input,
         is_pool_current_tick_array,
@@ -375,7 +375,7 @@ pub fn swap_compute(
     pool_state: &PoolState,
     tickarray_bitmap_extension: &TickArrayBitmapExtension,
     tick_arrays: &mut VecDeque<TickArrayState>,
-) -> Result<(u64, VecDeque<i32>)> {
+) -> Result<(u64, u64, VecDeque<i32>)> {
     if amount_specified == 0 {
         return Err(anyhow!("amountSpecified must not be 0"));
     }
@@ -427,6 +427,7 @@ pub fn swap_compute(
     let mut tick_array_start_index_vec = VecDeque::new();
     tick_array_start_index_vec.push_back(tick_array_current.start_tick_index);
     let mut loop_count = 0;
+    let mut fee_amount = 0;
     // loop across ticks until input liquidity is consumed, or the limit price is reached
     while state.amount_specified_remaining != 0
         && state.sqrt_price_x64 != sqrt_price_limit_x64
@@ -547,8 +548,13 @@ pub fn swap_compute(
             // recompute unless we're on a lower tick boundary (i.e. already transitioned ticks), and haven't moved
             state.tick = tick_math::get_tick_at_sqrt_price(state.sqrt_price_x64)?;
         }
+        fee_amount = step.fee_amount;
         loop_count += 1;
     }
 
-    Ok((state.amount_calculated, tick_array_start_index_vec))
+    Ok((
+        state.amount_calculated,
+        fee_amount,
+        tick_array_start_index_vec,
+    ))
 }
