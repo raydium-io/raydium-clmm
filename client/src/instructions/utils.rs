@@ -472,10 +472,9 @@ pub fn swap_compute(
                 return Err(anyhow!("tick array start tick index does not match"));
             }
             tick_array_start_index_vec.push_back(tick_array_current.start_tick_index);
-            let mut first_initialized_tick =
-                tick_array_current.first_initialized_tick(zero_for_one)?;
+            let first_initialized_tick = tick_array_current.first_initialized_tick(zero_for_one)?;
 
-            next_initialized_tick = *first_initialized_tick.deref_mut();
+            next_initialized_tick = *first_initialized_tick;
         }
         step.tick_next = next_initialized_tick.tick;
         step.initialized = next_initialized_tick.is_initialized();
