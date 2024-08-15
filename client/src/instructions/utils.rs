@@ -1,9 +1,13 @@
 use anchor_lang::AccountDeserialize;
+use anyhow::anyhow;
+use anyhow::format_err;
 use anyhow::Result;
+use raydium_amm_v3::error::ErrorCode;
 use raydium_amm_v3::libraries::fixed_point_64;
 use raydium_amm_v3::libraries::*;
 use raydium_amm_v3::states::*;
 use solana_client::rpc_client::RpcClient;
+use solana_sdk::signature::Keypair;
 use solana_sdk::{account::Account, pubkey::Pubkey};
 use spl_token_2022::{
     extension::{
@@ -27,6 +31,23 @@ use std::ops::{DerefMut, Mul, Neg};
 pub fn deserialize_anchor_account<T: AccountDeserialize>(account: &Account) -> Result<T> {
     let mut data: &[u8] = &account.data;
     T::try_deserialize(&mut data).map_err(Into::into)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClientConfig {
+    pub http_url: String,
+    pub ws_url: String,
+    pub payer_path: String,
+    pub admin_path: String,
+    pub raydium_v3_program: Pubkey,
+    pub slippage: f64,
+    pub amm_config_key: Pubkey,
+
+    pub mint0: Option<Pubkey>,
+    pub mint1: Option<Pubkey>,
+    pub pool_id_account: Option<Pubkey>,
+    pub tickarray_bitmap_extension: Option<Pubkey>,
+    pub amm_config_index: u16,
 }
 
 #[derive(Debug)]
@@ -307,6 +328,11 @@ struct StepComputations {
     fee_amount: u64,
 }
 
+pub fn read_keypair_file(s: &str) -> Result<Keypair> {
+    solana_sdk::signature::read_keypair_file(s)
+        .map_err(|_| format_err!("failed to read keypair from {}", s))
+}
+
 pub fn get_out_put_amount_and_remaining_accounts(
     input_amount: u64,
     sqrt_price_limit_x64: Option<u128>,
@@ -316,7 +342,7 @@ pub fn get_out_put_amount_and_remaining_accounts(
     pool_state: &PoolState,
     tickarray_bitmap_extension: &TickArrayBitmapExtension,
     tick_arrays: &mut VecDeque<TickArrayState>,
-) -> Result<(u64, VecDeque<i32>), &'static str> {
+) -> Result<(u64, VecDeque<i32>)> {
     let (is_pool_current_tick_array, current_vaild_tick_array_start_index) = pool_state
         .get_first_initialized_tick_array(&Some(*tickarray_bitmap_extension), zero_for_one)
         .unwrap();
@@ -338,7 +364,7 @@ pub fn get_out_put_amount_and_remaining_accounts(
     Ok((amount_calculated, tick_array_start_index_vec))
 }
 
-fn swap_compute(
+pub fn swap_compute(
     zero_for_one: bool,
     is_base_input: bool,
     is_pool_current_tick_array: bool,
@@ -349,9 +375,9 @@ fn swap_compute(
     pool_state: &PoolState,
     tickarray_bitmap_extension: &TickArrayBitmapExtension,
     tick_arrays: &mut VecDeque<TickArrayState>,
-) -> Result<(u64, VecDeque<i32>), &'static str> {
+) -> Result<(u64, VecDeque<i32>)> {
     if amount_specified == 0 {
-        return Result::Err("amountSpecified must not be 0");
+        return Err(anyhow!("amountSpecified must not be 0"));
     }
     let sqrt_price_limit_x64 = if sqrt_price_limit_x64 == 0 {
         if zero_for_one {
@@ -364,17 +390,21 @@ fn swap_compute(
     };
     if zero_for_one {
         if sqrt_price_limit_x64 < tick_math::MIN_SQRT_PRICE_X64 {
-            return Result::Err("sqrt_price_limit_x64 must greater than MIN_SQRT_PRICE_X64");
+            return Err(anyhow!(
+                "sqrt_price_limit_x64 must greater than MIN_SQRT_PRICE_X64"
+            ));
         }
         if sqrt_price_limit_x64 >= pool_state.sqrt_price_x64 {
-            return Result::Err("sqrt_price_limit_x64 must smaller than current");
+            return Err(anyhow!("sqrt_price_limit_x64 must smaller than current"));
         }
     } else {
         if sqrt_price_limit_x64 > tick_math::MAX_SQRT_PRICE_X64 {
-            return Result::Err("sqrt_price_limit_x64 must smaller than MAX_SQRT_PRICE_X64");
+            return Err(anyhow!(
+                "sqrt_price_limit_x64 must smaller than MAX_SQRT_PRICE_X64"
+            ));
         }
         if sqrt_price_limit_x64 <= pool_state.sqrt_price_x64 {
-            return Result::Err("sqrt_price_limit_x64 must greater than current");
+            return Err(anyhow!("sqrt_price_limit_x64 must greater than current"));
         }
     }
     let mut tick_match_current_tick_array = is_pool_current_tick_array;
@@ -387,9 +417,12 @@ fn swap_compute(
         liquidity: pool_state.liquidity,
     };
 
-    let mut tick_array_current = tick_arrays.pop_front().unwrap();
+    let mut tick_array_current = tick_arrays
+        .pop_front()
+        .ok_or("missing tick index")
+        .map_err(|err| anyhow!(err))?;
     if tick_array_current.start_tick_index != current_vaild_tick_array_start_index {
-        return Result::Err("tick array start tick index does not match");
+        return Err(anyhow!("tick array start tick index does not match"));
     }
     let mut tick_array_start_index_vec = VecDeque::new();
     tick_array_start_index_vec.push_back(tick_array_current.start_tick_index);
@@ -401,26 +434,22 @@ fn swap_compute(
         && state.tick > tick_math::MIN_TICK
     {
         if loop_count > 10 {
-            return Result::Err("loop_count limit");
+            return Err(anyhow!("loop_count limit"));
         }
         let mut step = StepComputations::default();
         step.sqrt_price_start_x64 = state.sqrt_price_x64;
         // save the bitmap, and the tick account if it is initialized
         let mut next_initialized_tick = if let Some(tick_state) = tick_array_current
-            .next_initialized_tick(state.tick, pool_state.tick_spacing, zero_for_one)
-            .unwrap()
+            .next_initialized_tick(state.tick, pool_state.tick_spacing, zero_for_one)?
         {
-            Box::new(*tick_state)
+            *tick_state
         } else {
             if !tick_match_current_tick_array {
                 tick_match_current_tick_array = true;
-                Box::new(
-                    *tick_array_current
-                        .first_initialized_tick(zero_for_one)
-                        .unwrap(),
-                )
+
+                *tick_array_current.first_initialized_tick(zero_for_one)?
             } else {
-                Box::new(TickState::default())
+                TickState::default()
             }
         };
         if !next_initialized_tick.is_initialized() {
@@ -429,22 +458,23 @@ fn swap_compute(
                     &Some(*tickarray_bitmap_extension),
                     current_vaild_tick_array_start_index,
                     zero_for_one,
-                )
-                .unwrap();
-            tick_array_current = tick_arrays.pop_front().unwrap();
+                )?;
+            tick_array_current = tick_arrays
+                .pop_front()
+                .ok_or(anyhow!("missing tick index"))?;
+
             if current_vaild_tick_array_start_index.is_none() {
-                return Result::Err("tick array start tick index out of range limit");
+                return Err(anyhow!("tick array start tick index out of range limit"));
             }
             if tick_array_current.start_tick_index != current_vaild_tick_array_start_index.unwrap()
             {
-                return Result::Err("tick array start tick index does not match");
+                return Err(anyhow!("tick array start tick index does not match"));
             }
             tick_array_start_index_vec.push_back(tick_array_current.start_tick_index);
-            let mut first_initialized_tick = tick_array_current
-                .first_initialized_tick(zero_for_one)
-                .unwrap();
+            let mut first_initialized_tick =
+                tick_array_current.first_initialized_tick(zero_for_one)?;
 
-            next_initialized_tick = Box::new(*first_initialized_tick.deref_mut());
+            next_initialized_tick = *first_initialized_tick.deref_mut();
         }
         step.tick_next = next_initialized_tick.tick;
         step.initialized = next_initialized_tick.is_initialized();
@@ -454,7 +484,7 @@ fn swap_compute(
             step.tick_next = MAX_TICK;
         }
 
-        step.sqrt_price_next_x64 = tick_math::get_sqrt_price_at_tick(step.tick_next).unwrap();
+        step.sqrt_price_next_x64 = tick_math::get_sqrt_price_at_tick(step.tick_next)?;
 
         let target_price = if (zero_for_one && step.sqrt_price_next_x64 < sqrt_price_limit_x64)
             || (!zero_for_one && step.sqrt_price_next_x64 > sqrt_price_limit_x64)
@@ -472,8 +502,7 @@ fn swap_compute(
             is_base_input,
             zero_for_one,
             1,
-        )
-        .unwrap();
+        )?;
         state.sqrt_price_x64 = swap_step.sqrt_price_next_x64;
         step.amount_in = swap_step.amount_in;
         step.amount_out = swap_step.amount_out;
@@ -483,20 +512,20 @@ fn swap_compute(
             state.amount_specified_remaining = state
                 .amount_specified_remaining
                 .checked_sub(step.amount_in + step.fee_amount)
-                .unwrap();
+                .ok_or(anyhow!(ErrorCode::CalculateOverflow))?;
             state.amount_calculated = state
                 .amount_calculated
                 .checked_add(step.amount_out)
-                .unwrap();
+                .ok_or(anyhow!(ErrorCode::CalculateOverflow))?;
         } else {
             state.amount_specified_remaining = state
                 .amount_specified_remaining
                 .checked_sub(step.amount_out)
-                .unwrap();
+                .ok_or(anyhow!(ErrorCode::CalculateOverflow))?;
             state.amount_calculated = state
                 .amount_calculated
                 .checked_add(step.amount_in + step.fee_amount)
-                .unwrap();
+                .ok_or(anyhow!(ErrorCode::CalculateOverflow))?;
         }
 
         if state.sqrt_price_x64 == step.sqrt_price_next_x64 {
@@ -506,8 +535,7 @@ fn swap_compute(
                 if zero_for_one {
                     liquidity_net = liquidity_net.neg();
                 }
-                state.liquidity =
-                    liquidity_math::add_delta(state.liquidity, liquidity_net).unwrap();
+                state.liquidity = liquidity_math::add_delta(state.liquidity, liquidity_net)?;
             }
 
             state.tick = if zero_for_one {
@@ -517,7 +545,7 @@ fn swap_compute(
             };
         } else if state.sqrt_price_x64 != step.sqrt_price_start_x64 {
             // recompute unless we're on a lower tick boundary (i.e. already transitioned ticks), and haven't moved
-            state.tick = tick_math::get_tick_at_sqrt_price(state.sqrt_price_x64).unwrap();
+            state.tick = tick_math::get_tick_at_sqrt_price(state.sqrt_price_x64)?;
         }
         loop_count += 1;
     }

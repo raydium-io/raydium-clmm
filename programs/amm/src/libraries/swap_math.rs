@@ -35,7 +35,7 @@ pub fn compute_swap_step(
                 (FEE_RATE_DENOMINATOR_VALUE - fee_rate).into(),
                 u64::from(FEE_RATE_DENOMINATOR_VALUE),
             )
-            .unwrap();
+            .ok_or(ErrorCode::CalculateOverflow)?;
 
         let amount_in = calculate_amount_in_range(
             sqrt_price_current_x64,
@@ -138,7 +138,7 @@ pub fn compute_swap_step(
             // swap dust is granted as fee
             u64::from(amount_remaining)
                 .checked_sub(swap_step.amount_in)
-                .unwrap()
+                .ok_or(ErrorCode::CalculateOverflow)?
         } else {
             // take pip percentage as fee
             swap_step
@@ -147,7 +147,7 @@ pub fn compute_swap_step(
                     fee_rate.into(),
                     (FEE_RATE_DENOMINATOR_VALUE - fee_rate).into(),
                 )
-                .unwrap()
+                .ok_or(ErrorCode::CalculateOverflow)?
         };
 
     Ok(swap_step)
@@ -249,11 +249,11 @@ fn calculate_amount_in_range(
             if result.is_err() {
                 return Err(ErrorCode::MaxTokenOverflow.into());
             } else {
-                return Ok(Some(result.unwrap()));
+                return Ok(Some(result?));
             }
         }
         if result.is_ok() {
-            return Ok(Some(result.unwrap()));
+            return Ok(Some(result?));
         } else {
             if result.err().unwrap() == crate::error::ErrorCode::MaxTokenOverflow.into() {
                 return Ok(None);
@@ -278,7 +278,7 @@ fn calculate_amount_in_range(
             )
         };
         if result.is_ok() || block_timestamp == 0 {
-            return Ok(Some(result.unwrap()));
+            return Ok(Some(result?));
         } else {
             if result.err().unwrap() == crate::error::ErrorCode::MaxTokenOverflow.into() {
                 return Ok(None);
@@ -317,7 +317,7 @@ mod swap_math_test {
                 is_base_input,
                 zero_for_one,
                 1,
-            ).unwrap();
+            )?;
 
             let amount_in = swap_step.amount_in;
             let amount_out = swap_step.amount_out;

@@ -1,4 +1,3 @@
-use super::super::{read_keypair_file, ClientConfig};
 use anchor_client::{Client, Cluster};
 use anyhow::Result;
 use solana_client::rpc_client::RpcClient;
@@ -16,6 +15,8 @@ use spl_token_2022::{
 };
 use spl_token_client::token::ExtensionInitializationParams;
 use std::{rc::Rc, str::FromStr};
+
+use super::utils::{read_keypair_file, ClientConfig};
 
 pub fn create_and_init_mint_instr(
     config: &ClientConfig,

@@ -51,22 +51,6 @@ use spl_token_2022::{
 use spl_token_client::token::ExtensionInitializationParams;
 
 use crate::instructions::utils;
-#[derive(Clone, Debug, PartialEq)]
-pub struct ClientConfig {
-    http_url: String,
-    ws_url: String,
-    payer_path: String,
-    admin_path: String,
-    raydium_v3_program: Pubkey,
-    slippage: f64,
-    amm_config_key: Pubkey,
-
-    mint0: Option<Pubkey>,
-    mint1: Option<Pubkey>,
-    pool_id_account: Option<Pubkey>,
-    tickarray_bitmap_extension: Option<Pubkey>,
-    amm_config_index: u16,
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct PoolAccounts {
@@ -176,10 +160,7 @@ fn load_cfg(client_config: &String) -> Result<ClientConfig> {
         amm_config_index,
     })
 }
-fn read_keypair_file(s: &str) -> Result<Keypair> {
-    solana_sdk::signature::read_keypair_file(s)
-        .map_err(|_| format_err!("failed to read keypair from {}", s))
-}
+
 fn write_keypair_file(keypair: &Keypair, outfile: &str) -> Result<String> {
     solana_sdk::signature::write_keypair_file(keypair, outfile)
         .map_err(|_| format_err!("failed to write keypair to {}", outfile))
@@ -1075,14 +1056,14 @@ fn main() -> Result<()> {
                     tick_lower_price_x64,
                     tick_upper_price_x64,
                     input_amount,
-                )
+                )?
             } else {
                 liquidity_math::get_liquidity_from_single_amount_1(
                     pool.sqrt_price_x64,
                     tick_lower_price_x64,
                     tick_upper_price_x64,
                     input_amount,
-                )
+                )?
             };
             let (amount_0, amount_1) = liquidity_math::get_delta_amounts_signed(
                 pool.tick_current,
@@ -1275,14 +1256,14 @@ fn main() -> Result<()> {
                     tick_lower_price_x64,
                     tick_upper_price_x64,
                     imput_amount,
-                )
+                )?
             } else {
                 liquidity_math::get_liquidity_from_single_amount_1(
                     pool.sqrt_price_x64,
                     tick_lower_price_x64,
                     tick_upper_price_x64,
                     imput_amount,
-                )
+                )?
             };
             let (amount_0, amount_1) = liquidity_math::get_delta_amounts_signed(
                 pool.tick_current,
