@@ -72,7 +72,7 @@ impl ObservationState {
         Ok(())
     }
 
-    // Writes an oracle observation to the account
+    /// Writes an oracle observation to the account
     ///
     /// # Arguments
     ///
