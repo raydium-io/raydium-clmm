@@ -10,7 +10,7 @@ use anchor_spl::metadata::Metadata;
 use anchor_spl::token::{self, Token};
 use anchor_spl::token_2022::{self, spl_token_2022::instruction::AuthorityType};
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
-use mpl_token_metadata::{instruction::create_metadata_accounts_v3, state::Creator};
+// use mpl_token_metadata::{instruction::create_metadata_accounts_v3, state::Creator};
 use std::cell::RefMut;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
@@ -951,40 +951,40 @@ fn create_nft_with_metadata<'info>(
         1,
     )?;
     if with_matedata {
-        let create_metadata_ix = create_metadata_accounts_v3(
-            metadata_program.key(),
-            metadata_account.key(),
-            position_nft_mint.key(),
-            pool_state_loader.key(),
-            payer.key(),
-            pool_state_loader.key(),
-            String::from("Raydium Concentrated Liquidity"),
-            String::from("RCL"),
-            METADATA_URI.to_string(),
-            Some(vec![Creator {
-                address: pool_state_loader.key(),
-                verified: true,
-                share: 100,
-            }]),
-            0,
-            true,
-            false,
-            None,
-            None,
-            None,
-        );
-        solana_program::program::invoke_signed(
-            &create_metadata_ix,
-            &[
-                metadata_account.to_account_info(),
-                position_nft_mint.to_account_info(),
-                payer.to_account_info(),
-                pool_state_loader.to_account_info(),
-                system_program.to_account_info(),
-                rent.to_account_info(),
-            ],
-            &[&seeds],
-        )?;
+        // let create_metadata_ix = create_metadata_accounts_v3(
+        //     metadata_program.key(),
+        //     metadata_account.key(),
+        //     position_nft_mint.key(),
+        //     pool_state_loader.key(),
+        //     payer.key(),
+        //     pool_state_loader.key(),
+        //     String::from("Raydium Concentrated Liquidity"),
+        //     String::from("RCL"),
+        //     METADATA_URI.to_string(),
+        //     Some(vec![Creator {
+        //         address: pool_state_loader.key(),
+        //         verified: true,
+        //         share: 100,
+        //     }]),
+        //     0,
+        //     true,
+        //     false,
+        //     None,
+        //     None,
+        //     None,
+        // );
+        // solana_program::program::invoke_signed(
+        //     &create_metadata_ix,
+        //     &[
+        //         metadata_account.to_account_info(),
+        //         position_nft_mint.to_account_info(),
+        //         payer.to_account_info(),
+        //         pool_state_loader.to_account_info(),
+        //         system_program.to_account_info(),
+        //         rent.to_account_info(),
+        //     ],
+        //     &[&seeds],
+        // )?;
     }
     // Disable minting
     token_2022::set_authority(

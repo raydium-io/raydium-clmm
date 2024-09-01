@@ -11,10 +11,10 @@ raydium-amm-v3 = { path = "../programs/amm", features = [
     "no-entrypoint",
     "client",
 ] }
-solana-sdk = ">=1.14, <1.17"
-solana-client = ">=1.14, <1.17"
-solana-account-decoder = ">=1.14, <1.17"
-solana-transaction-status = ">=1.14, <1.17"
+solana-sdk = ">=1.14, <=1.18"
+solana-client = ">=1.14, <=1.18"
+solana-account-decoder = ">=1.14, <=1.18"
+solana-transaction-status = ">=1.14, <=1.18"
 spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
 spl-token-client = "0.7.0"
 spl-memo = "4.0.0"
@@ -22,7 +22,7 @@ spl-associated-token-account = { version = "2.2.0", features = [
     "no-entrypoint",
 ] }
 spl-token-2022 = { version = "0.9.0", features = ["no-entrypoint"] }
-mpl-token-metadata = { version = "^1.11.0", features = ["no-entrypoint"] }
+# mpl-token-metadata = { version = "^1.11.0", features = ["no-entrypoint"] }
 clap = { version = "4.1.8", features = ["derive"] }
 anyhow = "1.0.32"
 rand = "0.7.3"
