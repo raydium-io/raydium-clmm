@@ -36,3 +36,6 @@ pub use collect_remaining_rewards::*;
 
 pub mod admin;
 pub use admin::*;
+
+pub mod lock_position;
+pub use lock_position::*;

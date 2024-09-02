@@ -553,7 +553,6 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
         personal_position.pool_id = pool_state_loader.key();
         personal_position.tick_lower_index = tick_lower_index;
         personal_position.tick_upper_index = tick_upper_index;
-
         personal_position.fee_growth_inside_0_last_x64 =
             protocol_position.fee_growth_inside_0_last_x64;
         personal_position.fee_growth_inside_1_last_x64 =

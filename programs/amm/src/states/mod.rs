@@ -1,4 +1,5 @@
 pub mod config;
+pub mod locked_position;
 pub mod operation_account;
 pub mod oracle;
 pub mod personal_position;
@@ -8,6 +9,7 @@ pub mod tick_array;
 pub mod tickarray_bitmap_extension;
 
 pub use config::*;
+pub use locked_position::*;
 pub use operation_account::*;
 pub use oracle::*;
 pub use personal_position::*;

@@ -38,8 +38,10 @@ pub struct PersonalPositionState {
 
     // Position reward info
     pub reward_infos: [PositionRewardInfo; REWARD_NUM],
+
     // account update recent epoch
     pub recent_epoch: u64,
+
     // Unused bytes for future upgrades.
     pub padding: [u64; 7],
 }
