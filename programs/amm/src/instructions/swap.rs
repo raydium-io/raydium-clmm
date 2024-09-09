@@ -318,7 +318,7 @@ pub fn swap_internal<'b, 'info>(
             amm_config.trade_fee_rate,
             is_base_input,
             zero_for_one,
-        );
+        )?;
         #[cfg(feature = "enable-log")]
         msg!("{:#?}", swap_step);
         if zero_for_one {

@@ -168,7 +168,7 @@ pub fn get_delta_amount_0_unsigned(
     mut sqrt_ratio_b_x64: u128,
     liquidity: u128,
     round_up: bool,
-) -> u64 {
+) -> Result<u64> {
     // sqrt_ratio_a_x64 should hold the smaller value
     if sqrt_ratio_a_x64 > sqrt_ratio_b_x64 {
         std::mem::swap(&mut sqrt_ratio_a_x64, &mut sqrt_ratio_b_x64);
@@ -179,21 +179,37 @@ pub fn get_delta_amount_0_unsigned(
 
     assert!(sqrt_ratio_a_x64 > 0);
 
-    if round_up {
+    let val = if round_up {
         U256::div_rounding_up(
             numerator_1
                 .mul_div_ceil(numerator_2, U256::from(sqrt_ratio_b_x64))
                 .unwrap(),
             U256::from(sqrt_ratio_a_x64),
         )
-        .as_u64()
     } else {
         (numerator_1
             .mul_div_floor(numerator_2, U256::from(sqrt_ratio_b_x64))
             .unwrap()
             / U256::from(sqrt_ratio_a_x64))
-        .as_u64()
+    };
+
+    if fits_word(&val) {
+        return Ok(val.as_u64());
+    } else {
+        return err!(ErrorCode::U256toU64Overflow);
     }
+  
+}
+
+fn fits_word(value: &U256) -> bool {
+    let U256(ref arr) = *value; // Destructure to access the internal array.
+    // Loop through the array from index 1 onwards and check if any element is non-zero.
+    for i in 1..arr.len() {
+        if arr[i] != 0 {
+            return false;
+        }
+    }
+    true
 }
 
 /// Gets the delta amount_1 for given liquidity and price range
@@ -203,13 +219,13 @@ pub fn get_delta_amount_1_unsigned(
     mut sqrt_ratio_b_x64: u128,
     liquidity: u128,
     round_up: bool,
-) -> u64 {
+) -> Result<u64> {
     // sqrt_ratio_a_x64 should hold the smaller value
     if sqrt_ratio_a_x64 > sqrt_ratio_b_x64 {
         std::mem::swap(&mut sqrt_ratio_a_x64, &mut sqrt_ratio_b_x64);
     };
 
-    if round_up {
+    let val = if round_up {
         U256::from(liquidity).mul_div_ceil(
             U256::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64),
             U256::from(fixed_point_64::Q64),
@@ -220,8 +236,13 @@ pub fn get_delta_amount_1_unsigned(
             U256::from(fixed_point_64::Q64),
         )
     }
-    .unwrap()
-    .as_u64()
+    .unwrap();
+
+    if fits_word(&val) {
+        return Ok(val.as_u64());
+    } else {
+        return err!(ErrorCode::U256toU64Overflow);
+    }
 }
 
 /// Helper function to get signed delta amount_0 for given liquidity and price range
@@ -229,7 +250,7 @@ pub fn get_delta_amount_0_signed(
     sqrt_ratio_a_x64: u128,
     sqrt_ratio_b_x64: u128,
     liquidity: i128,
-) -> u64 {
+) -> Result<u64> {
     if liquidity < 0 {
         get_delta_amount_0_unsigned(
             sqrt_ratio_a_x64,
@@ -252,7 +273,7 @@ pub fn get_delta_amount_1_signed(
     sqrt_ratio_a_x64: u128,
     sqrt_ratio_b_x64: u128,
     liquidity: i128,
-) -> u64 {
+) -> Result<u64> {
     if liquidity < 0 {
         get_delta_amount_1_unsigned(
             sqrt_ratio_a_x64,
@@ -284,24 +305,24 @@ pub fn get_delta_amounts_signed(
             tick_math::get_sqrt_price_at_tick(tick_lower)?,
             tick_math::get_sqrt_price_at_tick(tick_upper)?,
             liquidity_delta,
-        );
+        )?;
     } else if tick_current < tick_upper {
         amount_0 = get_delta_amount_0_signed(
             sqrt_price_x64_current,
             tick_math::get_sqrt_price_at_tick(tick_upper)?,
             liquidity_delta,
-        );
+        )?;
         amount_1 = get_delta_amount_1_signed(
             tick_math::get_sqrt_price_at_tick(tick_lower)?,
             sqrt_price_x64_current,
             liquidity_delta,
-        );
+        )?;
     } else {
         amount_1 = get_delta_amount_1_signed(
             tick_math::get_sqrt_price_at_tick(tick_lower)?,
             tick_math::get_sqrt_price_at_tick(tick_upper)?,
             liquidity_delta,
-        );
+        )?;
     }
     Ok((amount_0, amount_1))
 }

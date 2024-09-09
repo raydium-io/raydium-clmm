@@ -462,7 +462,7 @@ fn swap_compute(
         } else {
             step.sqrt_price_next_x64
         };
-        let swap_step = swap_math::compute_swap_step(
+        let swap_step_result = swap_math::compute_swap_step(
             state.sqrt_price_x64,
             target_price,
             state.liquidity,
@@ -471,6 +471,12 @@ fn swap_compute(
             is_base_input,
             zero_for_one,
         );
+
+        let swap_step = match swap_step_result {
+            Ok(x) => x,
+            Err(_e) => return Err("Compute swap step failed")
+        };
+
         state.sqrt_price_x64 = swap_step.sqrt_price_next_x64;
         step.amount_in = swap_step.amount_in;
         step.amount_out = swap_step.amount_out;
