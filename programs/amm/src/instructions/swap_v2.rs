@@ -97,7 +97,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
     let output_balance_before = ctx.output_token_account.amount;
 
     // calculate specified amount because the amount includes thransfer_fee as input and without thransfer_fee as output
-    let amount_specified = if is_base_input {
+    let amount_calculate_specified = if is_base_input {
         let transfer_fee =
             util::get_transfer_fee(ctx.input_vault_mint.clone(), amount_specified).unwrap();
         amount_specified - transfer_fee
@@ -148,7 +148,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             tick_array_states,
             &mut ctx.observation_state.load_mut()?,
             &tickarray_bitmap_extension,
-            amount_specified,
+            amount_calculate_specified,
             if sqrt_price_limit_x64 == 0 {
                 if zero_for_one {
                     tick_math::MIN_SQRT_PRICE_X64 + 1
@@ -202,13 +202,16 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
     // the transfer fee amount charged by withheld_amount
     let transfer_fee_0;
     let transfer_fee_1;
+    // transfer amount
+    let transfer_amount_0;
+    let transfer_amount_1;
     if zero_for_one {
         transfer_fee_0 = util::get_transfer_inverse_fee(vault_0_mint.clone(), amount_0).unwrap();
         transfer_fee_1 = util::get_transfer_fee(vault_1_mint.clone(), amount_1).unwrap();
 
         amount_0_without_fee = amount_0;
         amount_1_without_fee = amount_1.checked_sub(transfer_fee_1).unwrap();
-        let (transfer_amount_0, transfer_amount_1) = (amount_0 + transfer_fee_0, amount_1);
+        (transfer_amount_0, transfer_amount_1) = (amount_0 + transfer_fee_0, amount_1);
         #[cfg(feature = "enable-log")]
         msg!(
             "amount_0:{}, transfer_fee_0:{}, amount_1:{}, transfer_fee_1:{}",
@@ -247,7 +250,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
 
         amount_0_without_fee = amount_0.checked_sub(transfer_fee_0).unwrap();
         amount_1_without_fee = amount_1;
-        let (transfer_amount_0, transfer_amount_1) = (amount_0, amount_1 + transfer_fee_1);
+        (transfer_amount_0, transfer_amount_1) = (amount_0, amount_1 + transfer_fee_1);
         #[cfg(feature = "enable-log")]
         msg!(
             "amount_0:{}, transfer_fee_0:{}, amount_1:{}, transfer_fee_1:{}",
@@ -301,6 +304,22 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         require_gt!(swap_price_before, pool_state.sqrt_price_x64);
     } else {
         require_gt!(pool_state.sqrt_price_x64, swap_price_before);
+    }
+    if sqrt_price_limit_x64 == 0 {
+        // Does't allow partial filled without specified limit_price.
+        if is_base_input {
+            if zero_for_one {
+                require_eq!(amount_specified, transfer_amount_0);
+            } else {
+                require_eq!(amount_specified, transfer_amount_1);
+            }
+        } else {
+            if zero_for_one {
+                require_eq!(amount_specified, transfer_amount_1);
+            } else {
+                require_eq!(amount_specified, transfer_amount_0);
+            }
+        }
     }
 
     if is_base_input {

@@ -214,10 +214,6 @@ pub fn swap_internal<'b, 'info>(
     // continue swapping as long as we haven't used the entire input/output and haven't
     // reached the price limit
     while state.amount_specified_remaining != 0 && state.sqrt_price_x64 != sqrt_price_limit_x64 {
-        // println!(
-        //     "state.amount_specified_remaining:{}",
-        //     state.amount_specified_remaining
-        // );
         #[cfg(feature = "enable-log")]
         msg!(
             "while begin, is_base_input:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{},state_liquidity:{},state.protocol_fee:{}, protocol_fee_rate:{}",
@@ -739,6 +735,22 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
         require_gt!(swap_price_before, pool_state.sqrt_price_x64);
     } else {
         require_gt!(pool_state.sqrt_price_x64, swap_price_before);
+    }
+    if sqrt_price_limit_x64 == 0 {
+        // Does't allow partial filled without specified limit_price.
+        if is_base_input {
+            if zero_for_one {
+                require_eq!(amount_specified, amount_0);
+            } else {
+                require_eq!(amount_specified, amount_1);
+            }
+        } else {
+            if zero_for_one {
+                require_eq!(amount_specified, amount_1);
+            } else {
+                require_eq!(amount_specified, amount_0);
+            }
+        }
     }
 
     if is_base_input {
