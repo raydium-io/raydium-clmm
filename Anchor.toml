@@ -1,5 +1,5 @@
 [toolchain]
-anchor_version = "0.29"
+anchor_version = "0.29.0"
 
 [features]
 seeds = false
@@ -9,6 +9,9 @@ amm_v3 = "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
 
 [programs.devnet]
 amm_v3 = "devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH"
+
+[programs.localnet]
+amm_v3 = "2mEsbBnNoWjbbxaTtzRhckgQYF8twigyrRK78kpRiNS8"
 
 [registry]
 url = "https://github.com/raydium-io/raydium-amm-v3"
