@@ -586,6 +586,7 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
         token_program,
         system_program,
         rent,
+        personal_position.key(),
         with_matedata,
     )?;
 
@@ -920,9 +921,6 @@ pub fn update_position(
     Ok((flipped_lower, flipped_upper))
 }
 
-const METADATA_URI: &str =
-    "https://cloudflare-ipfs.com/ipfs/QmbzJafuKY3B4t25eq9zdKZMgXiMeW4jHLzf6KE6ZmHWn1/02.json";
-
 fn create_nft_with_metadata<'info>(
     payer: &Signer<'info>,
     pool_state_loader: &AccountLoader<'info, PoolState>,
@@ -933,6 +931,7 @@ fn create_nft_with_metadata<'info>(
     token_program: &Program<'info, Token>,
     system_program: &Program<'info, System>,
     rent: &Sysvar<'info, Rent>,
+    personal_position_id: Pubkey,
     with_matedata: bool,
 ) -> Result<()> {
     let pool_state = pool_state_loader.load()?;
@@ -960,7 +959,10 @@ fn create_nft_with_metadata<'info>(
             pool_state_loader.key(),
             String::from("Raydium Concentrated Liquidity"),
             String::from("RCL"),
-            METADATA_URI.to_string(),
+            format!(
+                "https://dynamic-ipfs.raydium.io/clmm/position?id={}",
+                personal_position_id.to_string()
+            ),
             Some(vec![Creator {
                 address: pool_state_loader.key(),
                 verified: true,
