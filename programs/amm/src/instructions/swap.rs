@@ -475,11 +475,10 @@ pub fn swap_internal<'b, 'info>(
     }
     // update tick
     if state.tick != pool_state.tick_current {
+        // update the previous tick to the observation
+        observation_state.update(block_timestamp, pool_state.tick_current);
         pool_state.tick_current = state.tick;
     }
-    // update the previous price to the observation
-    observation_state.update(block_timestamp, pool_state.tick_current);
-
     pool_state.sqrt_price_x64 = state.sqrt_price_x64;
 
     if liquidity_start != state.liquidity {
