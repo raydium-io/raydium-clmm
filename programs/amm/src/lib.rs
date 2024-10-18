@@ -401,7 +401,7 @@ pub mod amm_v3 {
     /// * `amount_0_min` - The minimum amount of token_0 that should be accounted for the burned liquidity
     /// * `amount_1_min` - The minimum amount of token_1 that should be accounted for the burned liquidity
     ///
-    #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
+    // #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
     pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, DecreaseLiquidity<'info>>,
         liquidity: u128,
@@ -420,7 +420,7 @@ pub mod amm_v3 {
     /// * `amount_0_min` - The minimum amount of token_0 that should be accounted for the burned liquidity
     /// * `amount_1_min` - The minimum amount of token_1 that should be accounted for the burned liquidity
     ///
-    #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
+    // #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
     pub fn decrease_liquidity_v2<'a, 'b, 'c: 'info, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, DecreaseLiquidityV2<'info>>,
         liquidity: u128,
@@ -428,6 +428,19 @@ pub mod amm_v3 {
         amount_1_min: u64,
     ) -> Result<()> {
         instructions::decrease_liquidity_v2(ctx, liquidity, amount_0_min, amount_1_min)
+    }
+
+    /// Lock a exist position
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` -  The context of accounts
+    ///
+    #[access_control(is_authorized_for_token(&ctx.accounts.nft_owner, &ctx.accounts.nft_account))]
+    pub fn lock_position<'a, 'b, 'c: 'info, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, LockPosition<'info>>,
+    ) -> Result<()> {
+        instructions::lock_position(ctx)
     }
 
     /// Swaps one token for as much as possible of another token across a single pool
