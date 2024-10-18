@@ -13,6 +13,7 @@ doctest = false
 [features]
 no-entrypoint = []
 no-idl = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 cpi = ["no-entrypoint"]
 default = []
 client = []

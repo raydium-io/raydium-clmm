@@ -78,7 +78,7 @@ pub struct PoolAccounts {
     pool_tick_arrays: Vec<Pubkey>,
 }
 
-fn load_cfg(client_config: &String) -> Result<ClientConfig> {
+fn load_cfg(client_config: &String, opts: &Opts) -> Result<ClientConfig> {
     let mut config = Ini::new();
     let _map = config.load(client_config).unwrap();
     let http_url = config.get("Global", "http_url").unwrap();
@@ -106,15 +106,25 @@ fn load_cfg(client_config: &String) -> Result<ClientConfig> {
     let slippage = config.getfloat("Global", "slippage").unwrap().unwrap();
 
     let mut mint0 = None;
-    let mint0_str = config.get("Pool", "mint0").unwrap();
-    if !mint0_str.is_empty() {
-        mint0 = Some(Pubkey::from_str(&mint0_str).unwrap());
+    if opts.mint0.is_some() {
+        mint0 = opts.mint0;
+    } else {
+        let mint0_str: String = config.get("Pool", "mint0").unwrap();
+        if !mint0_str.is_empty() {
+            mint0 = Some(Pubkey::from_str(&mint0_str).unwrap());
+        }
     }
+
     let mut mint1 = None;
-    let mint1_str = config.get("Pool", "mint1").unwrap();
-    if !mint1_str.is_empty() {
-        mint1 = Some(Pubkey::from_str(&mint1_str).unwrap());
+    if opts.mint1.is_some() {
+        mint1 = opts.mint1;
+    } else {
+        let mint1_str = config.get("Pool", "mint1").unwrap();
+        if !mint1_str.is_empty() {
+            mint1 = Some(Pubkey::from_str(&mint1_str).unwrap());
+        }
     }
+
     let amm_config_index = config.getuint("Pool", "amm_config_index").unwrap().unwrap() as u16;
 
     let (amm_config_key, __bump) = Pubkey::find_program_address(
@@ -131,6 +141,7 @@ fn load_cfg(client_config: &String) -> Result<ClientConfig> {
             mint0 = mint1;
             mint1 = temp_mint;
         }
+
         Some(
             Pubkey::find_program_address(
                 &[
@@ -318,6 +329,11 @@ fn get_nft_account_and_position_by_owner(
 
 #[derive(Debug, Parser)]
 pub struct Opts {
+    #[arg(long, global = true, help = "Mint 0 override")]
+    mint0: Option<Pubkey>,
+    #[arg(long, global = true, help = "Mint 1 override")]
+    mint1: Option<Pubkey>,
+
     #[clap(subcommand)]
     pub command: CommandsName,
 }
@@ -522,9 +538,11 @@ pub enum CommandsName {
 }
 // #[cfg(not(feature = "async"))]
 fn main() -> Result<()> {
-    println!("Starting...");
+    println!("Raydium CLMM Client");
+    let opts = Opts::parse();
     let client_config = "client_config.ini";
-    let pool_config = load_cfg(&client_config.to_string()).unwrap();
+    let pool_config = load_cfg(&client_config.to_string(), &opts).unwrap();
+
     // Admin and cluster params.
     let payer = read_keypair_file(&pool_config.payer_path)?;
     let admin = read_keypair_file(&pool_config.admin_path)?;
@@ -538,7 +556,6 @@ fn main() -> Result<()> {
     let anchor_client = Client::new(url, Rc::new(wallet));
     let program = anchor_client.program(pool_config.raydium_v3_program)?;
 
-    let opts = Opts::parse();
     match opts.command {
         CommandsName::NewMint {
             authority,
