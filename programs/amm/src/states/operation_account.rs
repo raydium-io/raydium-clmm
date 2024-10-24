@@ -212,4 +212,55 @@ mod test {
         operation_state.remove_operation_owner(keys.clone());
         println!("{:?}", operation_state.operation_owners);
     }
+
+    #[test]
+    fn operation_layout_test() {
+        use anchor_lang::Discriminator;
+
+        let bump: u8 = 0x12;
+        let operation_owners: [Pubkey; OPERATION_SIZE_USIZE] =
+            std::array::from_fn(|_| Pubkey::new_unique());
+        let whitelist_mints: [Pubkey; WHITE_MINT_SIZE_USIZE] =
+            std::array::from_fn(|_| Pubkey::new_unique());
+
+        // serialize original data
+        let mut operation_data =
+            [0u8; 8 + 1 + 32 * OPERATION_SIZE_USIZE + 32 * WHITE_MINT_SIZE_USIZE];
+        let mut offset = 0;
+        operation_data[offset..offset + 8].copy_from_slice(&OperationState::discriminator());
+        offset += 8;
+        operation_data[offset..offset + 1].copy_from_slice(&bump.to_le_bytes());
+        offset += 1;
+        for i in 0..OPERATION_SIZE_USIZE {
+            operation_data[offset..offset + 32].copy_from_slice(&operation_owners[i].to_bytes());
+            offset += 32;
+        }
+        for i in 0..WHITE_MINT_SIZE_USIZE {
+            operation_data[offset..offset + 32].copy_from_slice(&whitelist_mints[i].to_bytes());
+            offset += 32;
+        }
+
+        // len check
+        assert_eq!(offset, operation_data.len());
+        assert_eq!(
+            operation_data.len(),
+            core::mem::size_of::<OperationState>() + 8
+        );
+
+        // deserialize original data
+        let unpack_data: &OperationState =
+            bytemuck::from_bytes(&operation_data[8..core::mem::size_of::<OperationState>() + 8]);
+
+        // data check
+        let unpack_bump = unpack_data.bump;
+        assert_eq!(unpack_bump, bump);
+        for i in 0..OPERATION_SIZE_USIZE {
+            let unpack_operation_owners = unpack_data.operation_owners[i];
+            assert_eq!(unpack_operation_owners, operation_owners[i]);
+        }
+        for i in 0..WHITE_MINT_SIZE_USIZE {
+            let unpack_whitelist_mints = unpack_data.whitelist_mints[i];
+            assert_eq!(unpack_whitelist_mints, whitelist_mints[i]);
+        }
+    }
 }

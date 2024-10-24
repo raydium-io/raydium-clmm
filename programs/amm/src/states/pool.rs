@@ -1561,4 +1561,322 @@ pub mod pool_test {
             }
         }
     }
+
+    mod pool_layout_test {
+        use super::*;
+        use anchor_lang::Discriminator;
+        #[test]
+        fn test_pool_layout() {
+            let bump: u8 = 0x12;
+            let amm_config = Pubkey::new_unique();
+            let owner = Pubkey::new_unique();
+            let token_mint_0 = Pubkey::new_unique();
+            let token_mint_1 = Pubkey::new_unique();
+            let token_vault_0 = Pubkey::new_unique();
+            let token_vault_1 = Pubkey::new_unique();
+            let observation_key = Pubkey::new_unique();
+            let mint_decimals_0: u8 = 0x13;
+            let mint_decimals_1: u8 = 0x14;
+            let tick_spacing: u16 = 0x1516;
+            let liquidity: u128 = 0x11002233445566778899aabbccddeeff;
+            let sqrt_price_x64: u128 = 0x11220033445566778899aabbccddeeff;
+            let tick_current: i32 = 0x12345678;
+            let padding3: u16 = 0x1718;
+            let padding4: u16 = 0x191a;
+            let fee_growth_global_0_x64: u128 = 0x11223300445566778899aabbccddeeff;
+            let fee_growth_global_1_x64: u128 = 0x11223344005566778899aabbccddeeff;
+            let protocol_fees_token_0: u64 = 0x123456789abcdef0;
+            let protocol_fees_token_1: u64 = 0x123456789abcde0f;
+            let swap_in_amount_token_0: u128 = 0x11223344550066778899aabbccddeeff;
+            let swap_out_amount_token_1: u128 = 0x11223344556600778899aabbccddeeff;
+            let swap_in_amount_token_1: u128 = 0x11223344556677008899aabbccddeeff;
+            let swap_out_amount_token_0: u128 = 0x11223344556677880099aabbccddeeff;
+            let status: u8 = 0x1b;
+            let padding: [u8; 7] = [0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18];
+            // RewardInfo
+            let reward_state: u8 = 0x1c;
+            let open_time: u64 = 0x123456789abc0def;
+            let end_time: u64 = 0x123456789ab0cdef;
+            let last_update_time: u64 = 0x123456789a0bcdef;
+            let emissions_per_second_x64: u128 = 0x11223344556677889900aabbccddeeff;
+            let reward_total_emissioned: u64 = 0x1234567890abcdef;
+            let reward_claimed: u64 = 0x1234567809abcdef;
+            let token_mint = Pubkey::new_unique();
+            let token_vault = Pubkey::new_unique();
+            let authority = Pubkey::new_unique();
+            let reward_growth_global_x64: u128 = 0x112233445566778899aa00bbccddeeff;
+            let mut reward_info_data = [0u8; RewardInfo::LEN];
+
+            let mut offset = 0;
+            reward_info_data[offset..offset + 1].copy_from_slice(&reward_state.to_le_bytes());
+            offset += 1;
+            reward_info_data[offset..offset + 8].copy_from_slice(&open_time.to_le_bytes());
+            offset += 8;
+            reward_info_data[offset..offset + 8].copy_from_slice(&end_time.to_le_bytes());
+            offset += 8;
+            reward_info_data[offset..offset + 8].copy_from_slice(&last_update_time.to_le_bytes());
+            offset += 8;
+            reward_info_data[offset..offset + 16]
+                .copy_from_slice(&emissions_per_second_x64.to_le_bytes());
+            offset += 16;
+            reward_info_data[offset..offset + 8]
+                .copy_from_slice(&reward_total_emissioned.to_le_bytes());
+            offset += 8;
+            reward_info_data[offset..offset + 8].copy_from_slice(&reward_claimed.to_le_bytes());
+            offset += 8;
+            reward_info_data[offset..offset + 32].copy_from_slice(&token_mint.to_bytes());
+            offset += 32;
+            reward_info_data[offset..offset + 32].copy_from_slice(&token_vault.to_bytes());
+            offset += 32;
+            reward_info_data[offset..offset + 32].copy_from_slice(&authority.to_bytes());
+            offset += 32;
+            reward_info_data[offset..offset + 16]
+                .copy_from_slice(&reward_growth_global_x64.to_le_bytes());
+            let mut reward_info_datas = [0u8; RewardInfo::LEN * REWARD_NUM];
+            let mut offset = 0;
+            for _ in 0..REWARD_NUM {
+                reward_info_datas[offset..offset + RewardInfo::LEN]
+                    .copy_from_slice(&reward_info_data);
+                offset += RewardInfo::LEN;
+            }
+            assert_eq!(offset, reward_info_datas.len());
+            assert_eq!(
+                reward_info_datas.len(),
+                core::mem::size_of::<RewardInfo>() * 3
+            );
+
+            // tick_array_bitmap
+            let mut tick_array_bitmap: [u64; 16] = [0u64; 16];
+            let mut tick_array_bitmap_data = [0u8; 8 * 16];
+            let mut offset = 0;
+            for i in 0..16 {
+                tick_array_bitmap[i] = u64::MAX << i;
+                tick_array_bitmap_data[offset..offset + 8]
+                    .copy_from_slice(&tick_array_bitmap[i].to_le_bytes());
+                offset += 8;
+            }
+            let total_fees_token_0: u64 = 0x1234567809abcdef;
+            let total_fees_token_1: u64 = 0x1234567089abcdef;
+            let total_fees_claimed_token_0: u64 = 0x1234560789abcdef;
+            let total_fees_claimed_token_1: u64 = 0x1234506789abcdef;
+            let fund_fees_token_0: u64 = 0x1234056789abcdef;
+            let fund_fees_token_1: u64 = 0x1230456789abcdef;
+            let pool_open_time: u64 = 0x1203456789abcdef;
+            let recent_epoch: u64 = 0x1023456789abcdef;
+            let mut padding1: [u64; 24] = [0u64; 24];
+            let mut padding1_data = [0u8; 8 * 24];
+            let mut offset = 0;
+            for i in 0..24 {
+                padding1[i] = u64::MAX - i as u64;
+                padding1_data[offset..offset + 8].copy_from_slice(&padding1[i].to_le_bytes());
+                offset += 8;
+            }
+            let mut padding2: [u64; 32] = [0u64; 32];
+            let mut padding2_data = [0u8; 8 * 32];
+            let mut offset = 0;
+            for i in 24..(24 + 32) {
+                padding2[i - 24] = u64::MAX - i as u64;
+                padding2_data[offset..offset + 8].copy_from_slice(&padding2[i - 24].to_le_bytes());
+                offset += 8;
+            }
+            // serialize original data
+            let mut pool_data = [0u8; PoolState::LEN];
+            let mut offset = 0;
+            pool_data[offset..offset + 8].copy_from_slice(&PoolState::discriminator());
+            offset += 8;
+            pool_data[offset..offset + 1].copy_from_slice(&bump.to_le_bytes());
+            offset += 1;
+            pool_data[offset..offset + 32].copy_from_slice(&amm_config.to_bytes());
+            offset += 32;
+            pool_data[offset..offset + 32].copy_from_slice(&owner.to_bytes());
+            offset += 32;
+            pool_data[offset..offset + 32].copy_from_slice(&token_mint_0.to_bytes());
+            offset += 32;
+            pool_data[offset..offset + 32].copy_from_slice(&token_mint_1.to_bytes());
+            offset += 32;
+            pool_data[offset..offset + 32].copy_from_slice(&token_vault_0.to_bytes());
+            offset += 32;
+            pool_data[offset..offset + 32].copy_from_slice(&token_vault_1.to_bytes());
+            offset += 32;
+            pool_data[offset..offset + 32].copy_from_slice(&observation_key.to_bytes());
+            offset += 32;
+            pool_data[offset..offset + 1].copy_from_slice(&mint_decimals_0.to_le_bytes());
+            offset += 1;
+            pool_data[offset..offset + 1].copy_from_slice(&mint_decimals_1.to_le_bytes());
+            offset += 1;
+            pool_data[offset..offset + 2].copy_from_slice(&tick_spacing.to_le_bytes());
+            offset += 2;
+            pool_data[offset..offset + 16].copy_from_slice(&liquidity.to_le_bytes());
+            offset += 16;
+            pool_data[offset..offset + 16].copy_from_slice(&sqrt_price_x64.to_le_bytes());
+            offset += 16;
+            pool_data[offset..offset + 4].copy_from_slice(&tick_current.to_le_bytes());
+            offset += 4;
+            pool_data[offset..offset + 2].copy_from_slice(&padding3.to_le_bytes());
+            offset += 2;
+            pool_data[offset..offset + 2].copy_from_slice(&padding4.to_le_bytes());
+            offset += 2;
+            pool_data[offset..offset + 16].copy_from_slice(&fee_growth_global_0_x64.to_le_bytes());
+            offset += 16;
+            pool_data[offset..offset + 16].copy_from_slice(&fee_growth_global_1_x64.to_le_bytes());
+            offset += 16;
+            pool_data[offset..offset + 8].copy_from_slice(&protocol_fees_token_0.to_le_bytes());
+            offset += 8;
+            pool_data[offset..offset + 8].copy_from_slice(&protocol_fees_token_1.to_le_bytes());
+            offset += 8;
+            pool_data[offset..offset + 16].copy_from_slice(&swap_in_amount_token_0.to_le_bytes());
+            offset += 16;
+            pool_data[offset..offset + 16].copy_from_slice(&swap_out_amount_token_1.to_le_bytes());
+            offset += 16;
+            pool_data[offset..offset + 16].copy_from_slice(&swap_in_amount_token_1.to_le_bytes());
+            offset += 16;
+            pool_data[offset..offset + 16].copy_from_slice(&swap_out_amount_token_0.to_le_bytes());
+            offset += 16;
+            pool_data[offset..offset + 1].copy_from_slice(&status.to_le_bytes());
+            offset += 1;
+            pool_data[offset..offset + 7].copy_from_slice(&padding);
+            offset += 7;
+            pool_data[offset..offset + RewardInfo::LEN * REWARD_NUM]
+                .copy_from_slice(&reward_info_datas);
+            offset += RewardInfo::LEN * REWARD_NUM;
+            pool_data[offset..offset + 8 * 16].copy_from_slice(&tick_array_bitmap_data);
+            offset += 8 * 16;
+            pool_data[offset..offset + 8].copy_from_slice(&total_fees_token_0.to_le_bytes());
+            offset += 8;
+            pool_data[offset..offset + 8]
+                .copy_from_slice(&total_fees_claimed_token_0.to_le_bytes());
+            offset += 8;
+            pool_data[offset..offset + 8].copy_from_slice(&total_fees_token_1.to_le_bytes());
+            offset += 8;
+            pool_data[offset..offset + 8]
+                .copy_from_slice(&total_fees_claimed_token_1.to_le_bytes());
+            offset += 8;
+            pool_data[offset..offset + 8].copy_from_slice(&fund_fees_token_0.to_le_bytes());
+            offset += 8;
+            pool_data[offset..offset + 8].copy_from_slice(&fund_fees_token_1.to_le_bytes());
+            offset += 8;
+            pool_data[offset..offset + 8].copy_from_slice(&pool_open_time.to_le_bytes());
+            offset += 8;
+            pool_data[offset..offset + 8].copy_from_slice(&recent_epoch.to_le_bytes());
+            offset += 8;
+            pool_data[offset..offset + 8 * 24].copy_from_slice(&padding1_data);
+            offset += 8 * 24;
+            pool_data[offset..offset + 8 * 32].copy_from_slice(&padding2_data);
+            offset += 8 * 32;
+
+            // len check
+            assert_eq!(offset, pool_data.len());
+            assert_eq!(pool_data.len(), core::mem::size_of::<PoolState>() + 8);
+
+            // deserialize original data
+            let unpack_data: &PoolState =
+                bytemuck::from_bytes(&pool_data[8..core::mem::size_of::<PoolState>() + 8]);
+
+            // data check
+            let unpack_bump = unpack_data.bump[0];
+            assert_eq!(unpack_bump, bump);
+            let unpack_amm_config = unpack_data.amm_config;
+            assert_eq!(unpack_amm_config, amm_config);
+            let unpack_owner = unpack_data.owner;
+            assert_eq!(unpack_owner, owner);
+            let unpack_token_mint_0 = unpack_data.token_mint_0;
+            assert_eq!(unpack_token_mint_0, token_mint_0);
+            let unpack_token_mint_1 = unpack_data.token_mint_1;
+            assert_eq!(unpack_token_mint_1, token_mint_1);
+            let unpack_token_vault_0 = unpack_data.token_vault_0;
+            assert_eq!(unpack_token_vault_0, token_vault_0);
+            let unpack_token_vault_1 = unpack_data.token_vault_1;
+            assert_eq!(unpack_token_vault_1, token_vault_1);
+            let unpack_observation_key = unpack_data.observation_key;
+            assert_eq!(unpack_observation_key, observation_key);
+            let unpack_mint_decimals_0 = unpack_data.mint_decimals_0;
+            assert_eq!(unpack_mint_decimals_0, mint_decimals_0);
+            let unpack_mint_decimals_1 = unpack_data.mint_decimals_1;
+            assert_eq!(unpack_mint_decimals_1, mint_decimals_1);
+            let unpack_tick_spacing = unpack_data.tick_spacing;
+            assert_eq!(unpack_tick_spacing, tick_spacing);
+            let unpack_liquidity = unpack_data.liquidity;
+            assert_eq!(unpack_liquidity, liquidity);
+            let unpack_sqrt_price_x64 = unpack_data.sqrt_price_x64;
+            assert_eq!(unpack_sqrt_price_x64, sqrt_price_x64);
+            let unpack_tick_current = unpack_data.tick_current;
+            assert_eq!(unpack_tick_current, tick_current);
+            let unpack_padding3 = unpack_data.padding3;
+            assert_eq!(unpack_padding3, padding3);
+            let unpack_padding4 = unpack_data.padding4;
+            assert_eq!(unpack_padding4, padding4);
+            let unpack_fee_growth_global_0_x64 = unpack_data.fee_growth_global_0_x64;
+            assert_eq!(unpack_fee_growth_global_0_x64, fee_growth_global_0_x64);
+            let unpack_fee_growth_global_1_x64 = unpack_data.fee_growth_global_1_x64;
+            assert_eq!(unpack_fee_growth_global_1_x64, fee_growth_global_1_x64);
+            let unpack_protocol_fees_token_0 = unpack_data.protocol_fees_token_0;
+            assert_eq!(unpack_protocol_fees_token_0, protocol_fees_token_0);
+            let unpack_protocol_fees_token_1 = unpack_data.protocol_fees_token_1;
+            assert_eq!(unpack_protocol_fees_token_1, protocol_fees_token_1);
+            let unpack_swap_in_amount_token_0 = unpack_data.swap_in_amount_token_0;
+            assert_eq!(unpack_swap_in_amount_token_0, swap_in_amount_token_0);
+            let unpack_swap_out_amount_token_1 = unpack_data.swap_out_amount_token_1;
+            assert_eq!(unpack_swap_out_amount_token_1, swap_out_amount_token_1);
+            let unpack_swap_in_amount_token_1 = unpack_data.swap_in_amount_token_1;
+            assert_eq!(unpack_swap_in_amount_token_1, swap_in_amount_token_1);
+            let unpack_swap_out_amount_token_0 = unpack_data.swap_out_amount_token_0;
+            assert_eq!(unpack_swap_out_amount_token_0, swap_out_amount_token_0);
+            let unpack_status = unpack_data.status;
+            assert_eq!(unpack_status, status);
+            let unpack_padding = unpack_data.padding;
+            assert_eq!(unpack_padding, padding);
+
+            for reward in unpack_data.reward_infos {
+                let unpack_reward_state = reward.reward_state;
+                assert_eq!(unpack_reward_state, reward_state);
+                let unpack_open_time = reward.open_time;
+                assert_eq!(unpack_open_time, open_time);
+                let unpack_end_time = reward.end_time;
+                assert_eq!(unpack_end_time, end_time);
+                let unpack_last_update_time = reward.last_update_time;
+                assert_eq!(unpack_last_update_time, last_update_time);
+                let unpack_emissions_per_second_x64 = reward.emissions_per_second_x64;
+                assert_eq!(unpack_emissions_per_second_x64, emissions_per_second_x64);
+                let unpack_reward_total_emissioned = reward.reward_total_emissioned;
+                assert_eq!(unpack_reward_total_emissioned, reward_total_emissioned);
+                let unpack_reward_claimed = reward.reward_claimed;
+                assert_eq!(unpack_reward_claimed, reward_claimed);
+                let unpack_token_mint = reward.token_mint;
+                assert_eq!(unpack_token_mint, token_mint);
+                let unpack_token_vault = reward.token_vault;
+                assert_eq!(unpack_token_vault, token_vault);
+                let unpack_authority = reward.authority;
+                assert_eq!(unpack_authority, authority);
+                let unpack_reward_growth_global_x64 = reward.reward_growth_global_x64;
+                assert_eq!(unpack_reward_growth_global_x64, reward_growth_global_x64);
+            }
+
+            let unpack_tick_array_bitmap = unpack_data.tick_array_bitmap;
+            assert_eq!(unpack_tick_array_bitmap, tick_array_bitmap);
+            let unpack_total_fees_token_0 = unpack_data.total_fees_token_0;
+            assert_eq!(unpack_total_fees_token_0, total_fees_token_0);
+            let unpack_total_fees_claimed_token_0 = unpack_data.total_fees_claimed_token_0;
+            assert_eq!(
+                unpack_total_fees_claimed_token_0,
+                total_fees_claimed_token_0
+            );
+            let unpack_total_fees_claimed_token_1 = unpack_data.total_fees_claimed_token_1;
+            assert_eq!(
+                unpack_total_fees_claimed_token_1,
+                total_fees_claimed_token_1
+            );
+            let unpack_fund_fees_token_0 = unpack_data.fund_fees_token_0;
+            assert_eq!(unpack_fund_fees_token_0, fund_fees_token_0);
+            let unpack_fund_fees_token_1 = unpack_data.fund_fees_token_1;
+            assert_eq!(unpack_fund_fees_token_1, fund_fees_token_1);
+            let unpack_open_time = unpack_data.open_time;
+            assert_eq!(unpack_open_time, pool_open_time);
+            let unpack_recent_epoch = unpack_data.recent_epoch;
+            assert_eq!(unpack_recent_epoch, recent_epoch);
+            let unpack_padding1 = unpack_data.padding1;
+            assert_eq!(unpack_padding1, padding1);
+            let unpack_padding2 = unpack_data.padding2;
+            assert_eq!(unpack_padding2, padding2);
+        }
+    }
 }

@@ -1,8 +1,6 @@
 [workspace]
-members = [
-    "programs/*",
-    "client",
-]
+resolver = "2"
+members = ["programs/*", "client"]
 
 [profile.test]
 opt-level = 0

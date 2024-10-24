@@ -1307,4 +1307,127 @@ pub mod tick_array_test {
             assert_eq!(reward_frowth_inside_delta, 500);
         }
     }
+    mod tick_array_layout_test {
+        use super::*;
+        use anchor_lang::Discriminator;
+        #[test]
+        fn test_tick_array_layout() {
+            let pool_id = Pubkey::new_unique();
+            let start_tick_index: i32 = 0x12345678;
+            let initialized_tick_count: u8 = 0x12;
+            let recent_epoch: u64 = 0x123456789abcdef0;
+            let mut padding: [u8; 107] = [0u8; 107];
+            let mut padding_data = [0u8; 107];
+            for i in 0..107 {
+                padding[i] = i as u8;
+                padding_data[i] = i as u8;
+            }
+
+            let tick: i32 = 0x12345678;
+            let liquidity_net: i128 = 0x11002233445566778899aabbccddeeff;
+            let liquidity_gross: u128 = 0x11220033445566778899aabbccddeeff;
+            let fee_growth_outside_0_x64: u128 = 0x11223300445566778899aabbccddeeff;
+            let fee_growth_outside_1_x64: u128 = 0x11223344005566778899aabbccddeeff;
+            let reward_growths_outside_x64: [u128; REWARD_NUM] = [
+                0x11223344550066778899aabbccddeeff,
+                0x11223344556600778899aabbccddeeff,
+                0x11223344556677008899aabbccddeeff,
+            ];
+            let mut tick_padding: [u32; 13] = [0u32; 13];
+            let mut tick_padding_data = [0u8; 4 * 13];
+            let mut offset = 0;
+            for i in 0..13 {
+                tick_padding[i] = u32::MAX - 3 * i as u32;
+                tick_padding_data[offset..offset + 4]
+                    .copy_from_slice(&tick_padding[i].to_le_bytes());
+                offset += 4;
+            }
+
+            let mut tick_data = [0u8; TickState::LEN];
+            let mut offset = 0;
+            tick_data[offset..offset + 4].copy_from_slice(&tick.to_le_bytes());
+            offset += 4;
+            tick_data[offset..offset + 16].copy_from_slice(&liquidity_net.to_le_bytes());
+            offset += 16;
+            tick_data[offset..offset + 16].copy_from_slice(&liquidity_gross.to_le_bytes());
+            offset += 16;
+            tick_data[offset..offset + 16].copy_from_slice(&fee_growth_outside_0_x64.to_le_bytes());
+            offset += 16;
+            tick_data[offset..offset + 16].copy_from_slice(&fee_growth_outside_1_x64.to_le_bytes());
+            offset += 16;
+            for i in 0..REWARD_NUM {
+                tick_data[offset..offset + 16]
+                    .copy_from_slice(&reward_growths_outside_x64[i].to_le_bytes());
+                offset += 16;
+            }
+            tick_data[offset..offset + 4 * 13].copy_from_slice(&tick_padding_data);
+            offset += 4 * 13;
+            assert_eq!(offset, tick_data.len());
+            assert_eq!(tick_data.len(), core::mem::size_of::<TickState>());
+
+            // serialize original data
+            let mut tick_array_data = [0u8; TickArrayState::LEN];
+            let mut offset = 0;
+            tick_array_data[offset..offset + 8].copy_from_slice(&TickArrayState::discriminator());
+            offset += 8;
+            tick_array_data[offset..offset + 32].copy_from_slice(&pool_id.to_bytes());
+            offset += 32;
+            tick_array_data[offset..offset + 4].copy_from_slice(&start_tick_index.to_le_bytes());
+            offset += 4;
+            for _ in 0..TICK_ARRAY_SIZE_USIZE {
+                tick_array_data[offset..offset + TickState::LEN].copy_from_slice(&tick_data);
+                offset += TickState::LEN;
+            }
+            tick_array_data[offset..offset + 1]
+                .copy_from_slice(&initialized_tick_count.to_le_bytes());
+            offset += 1;
+            tick_array_data[offset..offset + 8].copy_from_slice(&recent_epoch.to_le_bytes());
+            offset += 8;
+            tick_array_data[offset..offset + 107].copy_from_slice(&padding);
+            offset += 107;
+
+            // len check
+            assert_eq!(offset, tick_array_data.len());
+            assert_eq!(
+                tick_array_data.len(),
+                core::mem::size_of::<TickArrayState>() + 8
+            );
+
+            // deserialize original data
+            let unpack_data: &TickArrayState = bytemuck::from_bytes(
+                &tick_array_data[8..core::mem::size_of::<TickArrayState>() + 8],
+            );
+
+            // data check
+            let unpack_pool_id = unpack_data.pool_id;
+            assert_eq!(unpack_pool_id, pool_id);
+            let unpack_start_tick_index = unpack_data.start_tick_index;
+            assert_eq!(unpack_start_tick_index, start_tick_index);
+            for tick_item in unpack_data.ticks {
+                let unpack_tick = tick_item.tick;
+                assert_eq!(unpack_tick, tick);
+                let unpack_liquidity_net = tick_item.liquidity_net;
+                assert_eq!(unpack_liquidity_net, liquidity_net);
+                let unpack_liquidity_gross = tick_item.liquidity_gross;
+                assert_eq!(unpack_liquidity_gross, liquidity_gross);
+                let unpack_fee_growth_outside_0_x64 = tick_item.fee_growth_outside_0_x64;
+                assert_eq!(unpack_fee_growth_outside_0_x64, fee_growth_outside_0_x64);
+                let unpack_fee_growth_outside_1_x64 = tick_item.fee_growth_outside_1_x64;
+                assert_eq!(unpack_fee_growth_outside_1_x64, fee_growth_outside_1_x64);
+                let unpack_reward_growths_outside_x64 = tick_item.reward_growths_outside_x64;
+                assert_eq!(
+                    unpack_reward_growths_outside_x64,
+                    reward_growths_outside_x64
+                );
+                let unpack_tick_padding = tick_item.padding;
+                assert_eq!(unpack_tick_padding, tick_padding);
+            }
+            let unpack_initialized_tick_count = unpack_data.initialized_tick_count;
+            assert_eq!(unpack_initialized_tick_count, initialized_tick_count);
+            let unpack_recent_epoch = unpack_data.recent_epoch;
+            assert_eq!(unpack_recent_epoch, recent_epoch);
+            let unpack_padding = unpack_data.padding;
+            assert_eq!(padding, unpack_padding);
+        }
+    }
 }
