@@ -250,6 +250,7 @@ pub fn is_supported_mint(mint_account: &InterfaceAccount<Mint>) -> Result<bool> 
         if e != ExtensionType::TransferFeeConfig
             && e != ExtensionType::MetadataPointer
             && e != ExtensionType::TokenMetadata
+            && e != ExtensionType::InterestBearingConfig
         {
             return Ok(false);
         }
