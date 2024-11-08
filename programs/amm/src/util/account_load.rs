@@ -30,12 +30,12 @@ impl<'info, T: ZeroCopy + Owner> AccountLoad<'info, T> {
                 .with_pubkeys((*acc_info.owner, T::owner())));
         }
         let data: &[u8] = &acc_info.try_borrow_data()?;
-        if data.len() < T::discriminator().len() {
+        if data.len() < T::DISCRIMINATOR.len() {
             return Err(ErrorCode::AccountDiscriminatorNotFound.into());
         }
         // Discriminator must match.
         let disc_bytes = array_ref![data, 0, 8];
-        if disc_bytes != &T::discriminator() {
+        if disc_bytes != &T::DISCRIMINATOR {
             return Err(ErrorCode::AccountDiscriminatorMismatch.into());
         }
 
@@ -75,7 +75,7 @@ impl<'info, T: ZeroCopy + Owner> AccountLoad<'info, T> {
         }
 
         // write discriminator
-        data[..8].copy_from_slice(&T::discriminator());
+        data[..8].copy_from_slice(&T::DISCRIMINATOR);
 
         Ok(RefMut::map(data, |data| {
             bytemuck::from_bytes_mut(&mut data.deref_mut()[8..mem::size_of::<T>() + 8])
@@ -95,12 +95,12 @@ impl<'info, T: ZeroCopy + Owner> AccountLoad<'info, T> {
         }
 
         let data = acc_info.try_borrow_mut_data()?;
-        if data.len() < T::discriminator().len() {
+        if data.len() < T::DISCRIMINATOR.len() {
             return Err(ErrorCode::AccountDiscriminatorNotFound.into());
         }
 
         let disc_bytes = array_ref![data, 0, 8];
-        if disc_bytes != &T::discriminator() {
+        if disc_bytes != &T::DISCRIMINATOR {
             return Err(ErrorCode::AccountDiscriminatorMismatch.into());
         }
 
@@ -112,12 +112,12 @@ impl<'info, T: ZeroCopy + Owner> AccountLoad<'info, T> {
     /// Returns a Ref to the account data structure for reading.
     pub fn load(&self) -> Result<Ref<T>> {
         let data = self.acc_info.try_borrow_data()?;
-        if data.len() < T::discriminator().len() {
+        if data.len() < T::DISCRIMINATOR.len() {
             return Err(ErrorCode::AccountDiscriminatorNotFound.into());
         }
 
         let disc_bytes = array_ref![data, 0, 8];
-        if disc_bytes != &T::discriminator() {
+        if disc_bytes != &T::DISCRIMINATOR {
             return Err(ErrorCode::AccountDiscriminatorMismatch.into());
         }
 
@@ -135,12 +135,12 @@ impl<'info, T: ZeroCopy + Owner> AccountLoad<'info, T> {
         }
 
         let data = self.acc_info.try_borrow_mut_data()?;
-        if data.len() < T::discriminator().len() {
+        if data.len() < T::DISCRIMINATOR.len() {
             return Err(ErrorCode::AccountDiscriminatorNotFound.into());
         }
 
         let disc_bytes = array_ref![data, 0, 8];
-        if disc_bytes != &T::discriminator() {
+        if disc_bytes != &T::DISCRIMINATOR {
             return Err(ErrorCode::AccountDiscriminatorMismatch.into());
         }
 
