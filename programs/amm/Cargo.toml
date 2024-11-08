@@ -25,8 +25,8 @@ paramset = []
 [dependencies]
 anchor-lang = { version = "0.30.1", features = ["init-if-needed"] }
 anchor-spl = { version = "0.30.1", features = ["metadata"] }
-solana-program = "2.0"
-spl-memo = "6"
+solana-program = "~2.0"
+spl-memo = "5.0.0"
 uint = { git = "https://github.com/raydium-io/parity-common", package = "uint" }
 # mpl-token-metadata = { version = "^1.11.0", features = ["no-entrypoint"] }
 bytemuck = { version = "1.4.0", features = ["derive", "min_const_generics"] }

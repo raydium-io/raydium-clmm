@@ -17,5 +17,5 @@ incremental = false
 codegen-units = 1
 
 [patch.crates-io]
-anchor-lang = { git = "https://github.com/coral-xyz/anchor.git", rev = "0109f4a3cf4117570f627e3ae465b6247d504f69" }
-anchor-spl = { git = "https://github.com/coral-xyz/anchor.git", rev = "0109f4a3cf4117570f627e3ae465b6247d504f69" }
+anchor-lang = { git = "https://github.com/coral-xyz/anchor.git", rev = "4cdb0ebe8f613f7dbbd5c4b00571139b2517898f" }
+anchor-spl = { git = "https://github.com/coral-xyz/anchor.git", rev = "4cdb0ebe8f613f7dbbd5c4b00571139b2517898f" }
