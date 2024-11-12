@@ -612,7 +612,7 @@ pub fn handle_program_instruction(
                         amount_0_max: instr.amount_0_max,
                         amount_1_max: instr.amount_1_max,
                         base_flag: instr.base_flag,
-                        with_metadata: instr.with_matedata,
+                        with_metadata: instr.with_metadata,
                     }
                 }
             }

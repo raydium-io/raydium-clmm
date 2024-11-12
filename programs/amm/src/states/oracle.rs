@@ -12,7 +12,7 @@ pub const OBSERVATION_UPDATE_DURATION_DEFAULT: u32 = 15;
 
 /// The element of observations in ObservationState
 #[zero_copy(unsafe)]
-#[repr(packed)]
+#[repr(C, packed)]
 #[derive(Default, Debug)]
 pub struct Observation {
     /// The block timestamp of the observation
@@ -28,7 +28,7 @@ impl Observation {
 }
 
 #[account(zero_copy(unsafe))]
-#[repr(packed)]
+#[repr(C, packed)]
 #[cfg_attr(feature = "client", derive(Debug))]
 pub struct ObservationState {
     /// Whether the ObservationState is initialized
@@ -72,7 +72,7 @@ impl ObservationState {
         Ok(())
     }
 
-    // Writes an oracle observation to the account
+    /// Writes an oracle observation to the account
     ///
     /// # Arguments
     ///

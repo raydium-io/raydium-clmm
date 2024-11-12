@@ -3,19 +3,12 @@ anchor_version = "0.29"
 [features]
 seeds = false
 
-[programs.mainnet]
+[programs.localnet]
 amm_v3 = "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
-
-[programs.devnet]
-amm_v3 = "devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH"
 
 [registry]
 url = "https://github.com/raydium-io/raydium-amm-v3"
 
 [provider]
 cluster = "localnet"
-wallet = "~/.config/solana/id.json" 
-
-[[test.genesis]]
-address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
-program = "./external-programs/spl_token_metadata.so"
+wallet = "~/.config/solana/id.json"

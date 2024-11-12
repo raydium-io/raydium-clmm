@@ -14,7 +14,7 @@ use std::ops::BitXor;
 const EXTENSION_TICKARRAY_BITMAP_SIZE: usize = 14;
 
 #[account(zero_copy(unsafe))]
-#[repr(packed)]
+#[repr(C, packed)]
 #[derive(Debug)]
 pub struct TickArrayBitmapExtension {
     pub pool_id: Pubkey,

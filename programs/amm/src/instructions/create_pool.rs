@@ -28,7 +28,7 @@ pub struct CreatePool<'info> {
     )]
     pub pool_state: AccountLoader<'info, PoolState>,
 
-    /// Token_0 mint, the key must grater then token_1 mint.
+    /// Token_0 mint, the key must be smaller then token_1 mint.
     #[account(
         constraint = token_mint_0.key() < token_mint_1.key(),
         mint::token_program = token_program_0

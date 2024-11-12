@@ -3,11 +3,13 @@ use crate::pool::REWARD_NUM;
 use crate::util::get_recent_epoch;
 use anchor_lang::prelude::*;
 
+use super::POSITION_SEED;
+
 #[account]
 #[derive(Default, Debug)]
 pub struct PersonalPositionState {
     /// Bump to identify PDA
-    pub bump: u8,
+    pub bump: [u8; 1],
 
     /// Mint address of the tokenized position
     pub nft_mint: Pubkey,
@@ -47,6 +49,14 @@ pub struct PersonalPositionState {
 impl PersonalPositionState {
     pub const LEN: usize =
         8 + 1 + 32 + 32 + 4 + 4 + 16 + 16 + 16 + 8 + 8 + PositionRewardInfo::LEN * REWARD_NUM + 64;
+
+    pub fn seeds(&self) -> [&[u8]; 3] {
+        [
+            &POSITION_SEED.as_bytes(),
+            self.nft_mint.as_ref(),
+            self.bump.as_ref(),
+        ]
+    }
 
     pub fn update_rewards(
         &mut self,

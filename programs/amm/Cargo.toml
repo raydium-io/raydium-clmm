@@ -29,6 +29,7 @@ solana-program = "<1.17.0"
 spl-memo = "4.0.0"
 uint = { git = "https://github.com/raydium-io/parity-common", package = "uint" }
 mpl-token-metadata = { version = "^1.11.0", features = ["no-entrypoint"] }
+spl-token-metadata-interface = { version = "=0.2.0" }
 bytemuck = { version = "1.19.0", features = ["derive", "min_const_generics"] }
 arrayref = { version = "0.3.6" }
 solana-security-txt = "1.1.1"
