@@ -121,3 +121,117 @@ pub fn block_timestamp_mock() -> u64 {
         .unwrap()
         .as_secs()
 }
+
+#[cfg(test)]
+pub mod oracle_layout_test {
+    use super::*;
+    use anchor_lang::Discriminator;
+    #[test]
+    fn test_observation_layout() {
+        let initialized = true;
+        let recent_epoch: u64 = 0x123456789abcdef0;
+        let observation_index: u16 = 0x1122;
+        let pool_id: Pubkey = Pubkey::new_unique();
+        let padding: [u64; 4] = [
+            0x123456789abcde0f,
+            0x123456789abcd0ef,
+            0x123456789abc0def,
+            0x123456789ab0cdef,
+        ];
+
+        let mut observation_datas = [0u8; Observation::LEN * OBSERVATION_NUM];
+        let mut observations = [Observation::default(); OBSERVATION_NUM];
+        let mut offset = 0;
+        for i in 0..OBSERVATION_NUM {
+            let index = i + 1;
+            let block_timestamp: u32 = u32::MAX - 3 * index as u32;
+            let tick_cumulative: i64 = i64::MAX - 3 * index as i64;
+            let padding: [u64; 4] = [
+                u64::MAX - index as u64,
+                u64::MAX - 2 * index as u64,
+                u64::MAX - 3 * index as u64,
+                u64::MAX - 4 * index as u64,
+            ];
+            observations[i].block_timestamp = block_timestamp;
+            observations[i].tick_cumulative = tick_cumulative;
+            observations[i].padding = padding;
+            observation_datas[offset..offset + 4].copy_from_slice(&block_timestamp.to_le_bytes());
+            offset += 4;
+            observation_datas[offset..offset + 8].copy_from_slice(&tick_cumulative.to_le_bytes());
+            offset += 8;
+            observation_datas[offset..offset + 8].copy_from_slice(&padding[0].to_le_bytes());
+            offset += 8;
+            observation_datas[offset..offset + 8].copy_from_slice(&padding[1].to_le_bytes());
+            offset += 8;
+            observation_datas[offset..offset + 8].copy_from_slice(&padding[2].to_le_bytes());
+            offset += 8;
+            observation_datas[offset..offset + 8].copy_from_slice(&padding[3].to_le_bytes());
+            offset += 8;
+        }
+
+        // serialize original data
+        let mut observation_state_data = [0u8; ObservationState::LEN];
+        let mut offset = 0;
+        observation_state_data[offset..offset + 8]
+            .copy_from_slice(&ObservationState::discriminator());
+        offset += 8;
+        observation_state_data[offset..offset + 1]
+            .copy_from_slice(&(initialized as u8).to_le_bytes());
+        offset += 1;
+        observation_state_data[offset..offset + 8].copy_from_slice(&recent_epoch.to_le_bytes());
+        offset += 8;
+        observation_state_data[offset..offset + 2]
+            .copy_from_slice(&observation_index.to_le_bytes());
+        offset += 2;
+        observation_state_data[offset..offset + 32].copy_from_slice(&pool_id.to_bytes());
+        offset += 32;
+        observation_state_data[offset..offset + Observation::LEN * OBSERVATION_NUM]
+            .copy_from_slice(&observation_datas);
+        offset += Observation::LEN * OBSERVATION_NUM;
+        observation_state_data[offset..offset + 8].copy_from_slice(&padding[0].to_le_bytes());
+        offset += 8;
+        observation_state_data[offset..offset + 8].copy_from_slice(&padding[1].to_le_bytes());
+        offset += 8;
+        observation_state_data[offset..offset + 8].copy_from_slice(&padding[2].to_le_bytes());
+        offset += 8;
+        observation_state_data[offset..offset + 8].copy_from_slice(&padding[3].to_le_bytes());
+        offset += 8;
+        // len check
+        assert_eq!(offset, observation_state_data.len());
+        assert_eq!(
+            observation_state_data.len(),
+            core::mem::size_of::<ObservationState>() + 8
+        );
+
+        // deserialize original data
+        let unpack_data: &ObservationState = bytemuck::from_bytes(
+            &observation_state_data[8..core::mem::size_of::<ObservationState>() + 8],
+        );
+
+        // data check
+        let unpack_initialized = unpack_data.initialized;
+        assert_eq!(unpack_initialized, initialized);
+        let unpack_recent_epoch = unpack_data.recent_epoch;
+        assert_eq!(unpack_recent_epoch, recent_epoch);
+        let unpack_observation_index = unpack_data.observation_index;
+        assert_eq!(unpack_observation_index, observation_index);
+        let unpack_pool_id = unpack_data.pool_id;
+        assert_eq!(unpack_pool_id, pool_id);
+        let unpack_padding = unpack_data.padding;
+        assert_eq!(unpack_padding, padding);
+        for (observation, unpack_observation) in
+            observations.iter().zip(unpack_data.observations.iter())
+        {
+            let block_timestamp = observation.block_timestamp;
+            let tick_cumulative = observation.tick_cumulative;
+            let padding = observation.padding;
+
+            let unpack_block_timestamp = unpack_observation.block_timestamp;
+            let unpack_tick_cumulative = unpack_observation.tick_cumulative;
+            let unpack_padding = unpack_observation.padding;
+            assert_eq!(block_timestamp, unpack_block_timestamp);
+            assert_eq!(tick_cumulative, unpack_tick_cumulative);
+            assert_eq!(padding, unpack_padding);
+        }
+    }
+}

@@ -594,4 +594,73 @@ pub mod tick_array_bitmap_extension_test {
             .unwrap();
         assert!(next.0 == false);
     }
+
+    #[test]
+    fn bitmap_extension_layout_test() {
+        use anchor_lang::Discriminator;
+
+        let pool_id = Pubkey::new_unique();
+        let mut positive_tick_array_bitmap = [[0u64; 8]; EXTENSION_TICKARRAY_BITMAP_SIZE];
+        let mut negative_tick_array_bitmap = [[0u64; 8]; EXTENSION_TICKARRAY_BITMAP_SIZE];
+
+        // serialize original data
+        let mut bitmap_extension_data = [0u8; 8 + 32 + 64 * EXTENSION_TICKARRAY_BITMAP_SIZE * 2];
+        let mut offset = 0;
+        bitmap_extension_data[offset..offset + 8]
+            .copy_from_slice(&TickArrayBitmapExtension::discriminator());
+        offset += 8;
+        bitmap_extension_data[offset..offset + 32].copy_from_slice(&pool_id.to_bytes());
+        offset += 32;
+
+        let mut init_data = u64::MAX;
+        for i in 0..EXTENSION_TICKARRAY_BITMAP_SIZE {
+            for j in 0..8 {
+                init_data -= 1;
+                positive_tick_array_bitmap[i][j] = init_data;
+                bitmap_extension_data[offset..offset + 8].copy_from_slice(&init_data.to_le_bytes());
+                offset += 8;
+            }
+        }
+        for i in 0..EXTENSION_TICKARRAY_BITMAP_SIZE {
+            for j in 0..8 {
+                init_data -= 1;
+                negative_tick_array_bitmap[i][j] = init_data;
+                bitmap_extension_data[offset..offset + 8].copy_from_slice(&init_data.to_le_bytes());
+                offset += 8;
+            }
+        }
+
+        // len check
+        assert_eq!(offset, bitmap_extension_data.len());
+        assert_eq!(
+            bitmap_extension_data.len(),
+            core::mem::size_of::<TickArrayBitmapExtension>() + 8
+        );
+
+        // deserialize original data
+        let unpack_data: &TickArrayBitmapExtension = bytemuck::from_bytes(
+            &bitmap_extension_data[8..core::mem::size_of::<TickArrayBitmapExtension>() + 8],
+        );
+
+        // data check
+        let unpack_pool_id = unpack_data.pool_id;
+        assert_eq!(unpack_pool_id, pool_id);
+        for i in 0..EXTENSION_TICKARRAY_BITMAP_SIZE {
+            for j in 0..8 {
+                let unpack_positive_tick_array_bitmap =
+                    unpack_data.positive_tick_array_bitmap[i][j];
+                assert_eq!(
+                    unpack_positive_tick_array_bitmap,
+                    positive_tick_array_bitmap[i][j]
+                );
+
+                let unpack_negative_tick_array_bitmap =
+                    unpack_data.negative_tick_array_bitmap[i][j];
+                assert_eq!(
+                    unpack_negative_tick_array_bitmap,
+                    negative_tick_array_bitmap[i][j]
+                );
+            }
+        }
+    }
 }
