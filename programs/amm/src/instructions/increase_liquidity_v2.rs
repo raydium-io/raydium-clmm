@@ -12,7 +12,8 @@ pub struct IncreaseLiquidityV2<'info> {
     /// The token account for nft
     #[account(
         constraint = nft_account.mint == personal_position.nft_mint,
-        token::token_program = token_program,
+        constraint = nft_account.amount == 1,
+        token::authority = nft_owner,
     )]
     pub nft_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
@@ -114,10 +115,10 @@ pub fn increase_liquidity_v2<'a, 'b, 'c: 'info, 'info>(
         &mut ctx.accounts.personal_position,
         &ctx.accounts.tick_array_lower,
         &ctx.accounts.tick_array_upper,
-        &ctx.accounts.token_account_0,
-        &ctx.accounts.token_account_1,
-        &ctx.accounts.token_vault_0,
-        &ctx.accounts.token_vault_1,
+        &ctx.accounts.token_account_0.to_account_info(),
+        &ctx.accounts.token_account_1.to_account_info(),
+        &ctx.accounts.token_vault_0.to_account_info(),
+        &ctx.accounts.token_vault_1.to_account_info(),
         &ctx.accounts.token_program,
         Some(&ctx.accounts.token_program_2022),
         Some(ctx.accounts.vault_0_mint.clone()),

@@ -1,28 +1,25 @@
+use super::get_recent_epoch;
 use crate::error::ErrorCode;
 use crate::states::*;
 use anchor_lang::{
     prelude::*,
     system_program::{create_account, CreateAccount},
 };
-use anchor_spl::{
-    token::{self, Token},
-    token_2022::{
+use anchor_spl::token::{self, Token};
+use anchor_spl::token_2022::{
+    self,
+    spl_token_2022::{
         self,
-        spl_token_2022::{
-            self,
-            extension::{
-                metadata_pointer,
-                transfer_fee::{TransferFeeConfig, MAX_FEE_BASIS_POINTS},
-                BaseStateWithExtensions, ExtensionType, StateWithExtensions,
-            },
+        extension::{
+            metadata_pointer,
+            transfer_fee::{TransferFeeConfig, MAX_FEE_BASIS_POINTS},
+            BaseStateWithExtensions, ExtensionType, StateWithExtensions,
         },
-        Token2022,
     },
-    token_interface::{initialize_mint2, InitializeMint2, Mint, TokenAccount},
+    Token2022,
 };
+use anchor_spl::token_interface::{initialize_mint2, InitializeMint2, Mint};
 use std::collections::HashSet;
-
-use super::get_recent_epoch;
 
 const MINT_WHITELIST: [&'static str; 4] = [
     "HVbpJAQGNpkgBaYBZQBR1t7yFdvaYVp2vCQQfKKEN4tM",
@@ -42,8 +39,8 @@ pub fn invoke_memo_instruction<'info>(
 
 pub fn transfer_from_user_to_pool_vault<'info>(
     signer: &Signer<'info>,
-    from: &InterfaceAccount<'info, TokenAccount>,
-    to_vault: &InterfaceAccount<'info, TokenAccount>,
+    from: &AccountInfo<'info>,
+    to_vault: &AccountInfo<'info>,
     mint: Option<Box<InterfaceAccount<'info, Mint>>>,
     token_program: &AccountInfo<'info>,
     token_program_2022: Option<AccountInfo<'info>>,
@@ -89,8 +86,8 @@ pub fn transfer_from_user_to_pool_vault<'info>(
 
 pub fn transfer_from_pool_vault_to_user<'info>(
     pool_state_loader: &AccountLoader<'info, PoolState>,
-    from_vault: &InterfaceAccount<'info, TokenAccount>,
-    to: &InterfaceAccount<'info, TokenAccount>,
+    from_vault: &AccountInfo<'info>,
+    to: &AccountInfo<'info>,
     mint: Option<Box<InterfaceAccount<'info, Mint>>>,
     token_program: &AccountInfo<'info>,
     token_program_2022: Option<AccountInfo<'info>>,

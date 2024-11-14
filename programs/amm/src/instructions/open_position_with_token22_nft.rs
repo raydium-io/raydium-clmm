@@ -3,21 +3,20 @@ use crate::states::*;
 use crate::util::create_position_nft_mint_with_extensions;
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::{create, AssociatedToken, Create};
-use anchor_spl::metadata::Metadata;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
 
 #[derive(Accounts)]
 #[instruction(tick_lower_index: i32, tick_upper_index: i32,tick_array_lower_start_index:i32,tick_array_upper_start_index:i32)]
-pub struct OpenPositionWithTokenExtensions<'info> {
+pub struct OpenPositionWithToken22Nft<'info> {
     /// Pays to mint the position
     #[account(mut)]
     pub payer: Signer<'info>,
 
-    /// CHECK: Receives the position NFT, initialize in constract
+    /// CHECK: Receives the position NFT
     pub position_nft_owner: UncheckedAccount<'info>,
 
-    /// Unique token mint address
+    /// Unique token mint address, initialize in constract
     #[account(mut)]
     pub position_nft_mint: Signer<'info>,
 
@@ -44,7 +43,7 @@ pub struct OpenPositionWithTokenExtensions<'info> {
     )]
     pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
 
-    /// CHECK:  Account to store data for the position's upper tick
+    /// CHECK:  Account to store data for the position's lower tick
     #[account(
         mut,
         seeds = [
@@ -112,21 +111,21 @@ pub struct OpenPositionWithTokenExtensions<'info> {
     /// Program to create the position manager state account
     pub system_program: Program<'info, System>,
 
-    /// Program to create mint account and mint tokens
+    /// Program to transfer for token account
     pub token_program: Program<'info, Token>,
+
     /// Program to create an ATA for receiving position NFT
     pub associated_token_program: Program<'info, AssociatedToken>,
 
-    /// Program to create NFT metadata
-    /// CHECK: Metadata program address constraint applied
-    pub metadata_program: Program<'info, Metadata>,
-    /// Program to create mint account and mint tokens
+    /// Program to create NFT mint/token account and transfer for token22 account
     pub token_program_2022: Program<'info, Token2022>,
+
     /// The mint of token vault 0
     #[account(
         address = token_vault_0.mint
     )]
     pub vault_0_mint: Box<InterfaceAccount<'info, Mint>>,
+
     /// The mint of token vault 1
     #[account(
         address = token_vault_1.mint
@@ -143,8 +142,8 @@ pub struct OpenPositionWithTokenExtensions<'info> {
     // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
 }
 
-pub fn open_position_with_token_extensions<'a, 'b, 'c: 'info, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, OpenPositionWithTokenExtensions<'info>>,
+pub fn open_position_with_token22_nft<'a, 'b, 'c: 'info, 'info>(
+    ctx: Context<'a, 'b, 'c, 'info, OpenPositionWithToken22Nft<'info>>,
     liquidity: u128,
     amount_0_max: u64,
     amount_1_max: u64,
@@ -189,10 +188,10 @@ pub fn open_position_with_token_extensions<'a, 'b, 'c: 'info, 'info>(
         &ctx.accounts.tick_array_upper,
         &mut ctx.accounts.protocol_position,
         &mut ctx.accounts.personal_position,
-        &ctx.accounts.token_account_0,
-        &ctx.accounts.token_account_1,
-        &ctx.accounts.token_vault_0,
-        &ctx.accounts.token_vault_1,
+        &ctx.accounts.token_account_0.to_account_info(),
+        &ctx.accounts.token_account_1.to_account_info(),
+        &ctx.accounts.token_vault_0.to_account_info(),
+        &ctx.accounts.token_vault_1.to_account_info(),
         &ctx.accounts.rent,
         &ctx.accounts.system_program,
         &ctx.accounts.token_program,

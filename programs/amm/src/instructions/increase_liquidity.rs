@@ -4,8 +4,8 @@ use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
-use anchor_spl::token::Token;
-use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
+use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::token_interface::{Mint, Token2022};
 
 #[derive(Accounts)]
 pub struct IncreaseLiquidity<'info> {
@@ -14,9 +14,11 @@ pub struct IncreaseLiquidity<'info> {
 
     /// The token account for nft
     #[account(
-        constraint = nft_account.mint == personal_position.nft_mint
+        constraint = nft_account.mint == personal_position.nft_mint,
+        constraint = nft_account.amount == 1,
+        token::authority = nft_owner
     )]
-    pub nft_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub nft_account: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     pub pool_state: AccountLoader<'info, PoolState>,
@@ -51,28 +53,28 @@ pub struct IncreaseLiquidity<'info> {
         mut,
         token::mint = token_vault_0.mint
     )]
-    pub token_account_0: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_account_0: Box<Account<'info, TokenAccount>>,
 
     /// The token account spending token_1 to mint the position
     #[account(
         mut,
         token::mint = token_vault_1.mint
     )]
-    pub token_account_1: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_account_1: Box<Account<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_0
     #[account(
         mut,
         constraint = token_vault_0.key() == pool_state.load()?.token_vault_0
     )]
-    pub token_vault_0: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_vault_0: Box<Account<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_1
     #[account(
         mut,
         constraint = token_vault_1.key() == pool_state.load()?.token_vault_1
     )]
-    pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
     /// Program to create mint account and mint tokens
     pub token_program: Program<'info, Token>,
@@ -101,10 +103,10 @@ pub fn increase_liquidity_v1<'a, 'b, 'c: 'info, 'info>(
         &mut ctx.accounts.personal_position,
         &ctx.accounts.tick_array_lower,
         &ctx.accounts.tick_array_upper,
-        &ctx.accounts.token_account_0,
-        &ctx.accounts.token_account_1,
-        &ctx.accounts.token_vault_0,
-        &ctx.accounts.token_vault_1,
+        &ctx.accounts.token_account_0.to_account_info(),
+        &ctx.accounts.token_account_1.to_account_info(),
+        &ctx.accounts.token_vault_0.to_account_info(),
+        &ctx.accounts.token_vault_1.to_account_info(),
         &ctx.accounts.token_program,
         None,
         None,
@@ -124,10 +126,10 @@ pub fn increase_liquidity<'a, 'b, 'c: 'info, 'info>(
     personal_position: &'b mut Box<Account<'info, PersonalPositionState>>,
     tick_array_lower_loader: &'b AccountLoader<'info, TickArrayState>,
     tick_array_upper_loader: &'b AccountLoader<'info, TickArrayState>,
-    token_account_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    token_account_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    token_vault_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    token_vault_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    token_account_0: &'b AccountInfo<'info>,
+    token_account_1: &'b AccountInfo<'info>,
+    token_vault_0: &'b AccountInfo<'info>,
+    token_vault_1: &'b AccountInfo<'info>,
     token_program: &'b Program<'info, Token>,
     token_program_2022: Option<&Program<'info, Token2022>>,
     vault_0_mint: Option<Box<InterfaceAccount<'info, Mint>>>,

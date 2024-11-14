@@ -140,8 +140,8 @@ pub fn initialize_reward(
 
     transfer_from_user_to_pool_vault(
         &ctx.accounts.reward_funder,
-        &ctx.accounts.funder_token_account,
-        &ctx.accounts.reward_token_vault,
+        &ctx.accounts.funder_token_account.to_account_info(),
+        &ctx.accounts.reward_token_vault.to_account_info(),
         Some(ctx.accounts.reward_token_mint.clone()),
         &ctx.accounts.reward_token_program.to_account_info(),
         Some(ctx.accounts.reward_token_program.to_account_info()),

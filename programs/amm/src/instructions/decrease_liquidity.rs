@@ -4,11 +4,11 @@ use crate::error::ErrorCode;
 use crate::states::*;
 use crate::util::{self, transfer_from_pool_vault_to_user};
 use anchor_lang::prelude::*;
-use anchor_spl::token::Token;
-use anchor_spl::token_interface::Mint;
-use anchor_spl::token_interface::{Token2022, TokenAccount};
+use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::token_2022::spl_token_2022;
+use anchor_spl::token_interface::{self, Mint, Token2022};
 use std::cell::RefMut;
-use std::ops::DerefMut;
+use std::ops::Deref;
 
 /// Memo msg for decrease liquidity
 pub const DECREASE_MEMO_MSG: &'static [u8] = b"raydium_decrease";
@@ -20,9 +20,10 @@ pub struct DecreaseLiquidity<'info> {
     /// The token account for the tokenized position
     #[account(
         constraint = nft_account.mint == personal_position.nft_mint,
-        token::token_program = token_program,
+        constraint = nft_account.amount == 1,
+        token::authority = nft_owner
     )]
-    pub nft_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub nft_account: Box<Account<'info, TokenAccount>>,
 
     /// Decrease liquidity for this position
     #[account(mut, constraint = personal_position.pool_id == pool_state.key())]
@@ -49,14 +50,14 @@ pub struct DecreaseLiquidity<'info> {
         mut,
         constraint = token_vault_0.key() == pool_state.load()?.token_vault_0
     )]
-    pub token_vault_0: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_vault_0: Box<Account<'info, TokenAccount>>,
 
     /// Token_1 vault
     #[account(
         mut,
         constraint = token_vault_1.key() == pool_state.load()?.token_vault_1
     )]
-    pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
     /// Stores init state for the lower tick
     #[account(mut, constraint = tick_array_lower.load()?.pool_id == pool_state.key())]
@@ -71,14 +72,14 @@ pub struct DecreaseLiquidity<'info> {
         mut,
         token::mint = token_vault_0.mint
     )]
-    pub recipient_token_account_0: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub recipient_token_account_0: Box<Account<'info, TokenAccount>>,
 
     /// The destination token account for receive amount_1
     #[account(
         mut,
         token::mint = token_vault_1.mint
     )]
-    pub recipient_token_account_1: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub recipient_token_account_1: Box<Account<'info, TokenAccount>>,
 
     /// SPL program to transfer out tokens
     pub token_program: Program<'info, Token>,
@@ -103,12 +104,12 @@ pub fn decrease_liquidity_v1<'a, 'b, 'c: 'info, 'info>(
         &ctx.accounts.pool_state,
         &mut ctx.accounts.protocol_position,
         &mut ctx.accounts.personal_position,
-        &mut ctx.accounts.token_vault_0,
-        &mut ctx.accounts.token_vault_1,
+        &ctx.accounts.token_vault_0.to_account_info(),
+        &ctx.accounts.token_vault_1.to_account_info(),
         &ctx.accounts.tick_array_lower,
         &ctx.accounts.tick_array_upper,
-        &ctx.accounts.recipient_token_account_0,
-        &ctx.accounts.recipient_token_account_1,
+        &ctx.accounts.recipient_token_account_0.to_account_info(),
+        &ctx.accounts.recipient_token_account_1.to_account_info(),
         &ctx.accounts.token_program,
         None,
         None,
@@ -125,12 +126,12 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
     pool_state_loader: &'b AccountLoader<'info, PoolState>,
     protocol_position: &'b mut Box<Account<'info, ProtocolPositionState>>,
     personal_position: &'b mut Box<Account<'info, PersonalPositionState>>,
-    token_vault_0: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
-    token_vault_1: &'b mut Box<InterfaceAccount<'info, TokenAccount>>,
+    token_vault_0: &'b AccountInfo<'info>,
+    token_vault_1: &'b AccountInfo<'info>,
     tick_array_lower_loader: &'b AccountLoader<'info, TickArrayState>,
     tick_array_upper_loader: &'b AccountLoader<'info, TickArrayState>,
-    recipient_token_account_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    recipient_token_account_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    recipient_token_account_0: &'b AccountInfo<'info>,
+    recipient_token_account_1: &'b AccountInfo<'info>,
     token_program: &'b Program<'info, Token>,
     token_program_2022: Option<Program<'info, Token2022>>,
     _memo_program: Option<UncheckedAccount<'info>>,
@@ -251,7 +252,7 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
 
     transfer_from_pool_vault_to_user(
         pool_state_loader,
-        token_vault_0,
+        &token_vault_0.to_account_info(),
         recipient_token_account_0,
         vault_0_mint,
         token_program,
@@ -261,7 +262,7 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
 
     transfer_from_pool_vault_to_user(
         pool_state_loader,
-        token_vault_1,
+        &token_vault_1.to_account_info(),
         recipient_token_account_1,
         vault_1_mint.clone(),
         token_program,
@@ -269,11 +270,7 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
         transfer_amount_1,
     )?;
 
-    check_unclaimed_fees_and_vault(
-        pool_state_loader,
-        token_vault_0.deref_mut(),
-        token_vault_1.deref_mut(),
-    )?;
+    check_unclaimed_fees_and_vault(pool_state_loader, token_vault_0, token_vault_1)?;
 
     let reward_amounts = collect_rewards(
         pool_state_loader,
@@ -485,10 +482,12 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
     let remaining_accounts_len = remaining_accounts.len();
     let mut remaining_accounts = remaining_accounts.iter();
     for i in 0..remaining_accounts_len / reward_group_account_num {
-        let reward_token_vault =
-            InterfaceAccount::<TokenAccount>::try_from(remaining_accounts.next().unwrap())?;
-        let recipient_token_account =
-            InterfaceAccount::<TokenAccount>::try_from(remaining_accounts.next().unwrap())?;
+        let reward_token_vault = InterfaceAccount::<token_interface::TokenAccount>::try_from(
+            remaining_accounts.next().unwrap(),
+        )?;
+        let recipient_token_account = InterfaceAccount::<token_interface::TokenAccount>::try_from(
+            remaining_accounts.next().unwrap(),
+        )?;
 
         let mut reward_vault_mint: Option<Box<InterfaceAccount<Mint>>> = None;
         if need_reward_mint {
@@ -531,8 +530,8 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
 
             transfer_from_pool_vault_to_user(
                 &pool_state_loader,
-                &reward_token_vault,
-                &recipient_token_account,
+                &reward_token_vault.to_account_info(),
+                &recipient_token_account.to_account_info(),
                 reward_vault_mint,
                 &token_program,
                 token_program_2022.clone(),
@@ -566,11 +565,20 @@ fn check_required_accounts_length(
 
 pub fn check_unclaimed_fees_and_vault(
     pool_state_loader: &AccountLoader<PoolState>,
-    token_vault_0: &mut InterfaceAccount<TokenAccount>,
-    token_vault_1: &mut InterfaceAccount<TokenAccount>,
+    token_vault_0: &AccountInfo,
+    token_vault_1: &AccountInfo,
 ) -> Result<()> {
-    token_vault_0.reload()?;
-    token_vault_1.reload()?;
+    let token_vault_0_amount = spl_token_2022::extension::StateWithExtensions::<
+        spl_token_2022::state::Account,
+    >::unpack(token_vault_0.try_borrow_data()?.deref())?
+    .base
+    .amount;
+
+    let token_vault_1_amount = spl_token_2022::extension::StateWithExtensions::<
+        spl_token_2022::state::Account,
+    >::unpack(token_vault_1.try_borrow_data()?.deref())?
+    .base
+    .amount;
 
     let pool_state = &mut pool_state_loader.load_mut()?;
 
@@ -583,8 +591,8 @@ pub fn check_unclaimed_fees_and_vault(
         .checked_sub(pool_state.total_fees_claimed_token_1)
         .unwrap();
 
-    if (unclaimed_fee_token_0 >= token_vault_0.amount && token_vault_0.amount != 0)
-        || (unclaimed_fee_token_1 >= token_vault_1.amount && token_vault_1.amount != 0)
+    if (unclaimed_fee_token_0 >= token_vault_0_amount && token_vault_0_amount != 0)
+        || (unclaimed_fee_token_1 >= token_vault_1_amount && token_vault_1_amount != 0)
     {
         pool_state.set_status_by_bit(PoolStatusBitIndex::CollectFee, PoolStatusBitFlag::Disable);
     }

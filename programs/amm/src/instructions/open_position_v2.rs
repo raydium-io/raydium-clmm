@@ -3,7 +3,7 @@ use crate::states::*;
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::metadata::Metadata;
-use anchor_spl::token::Token;
+use anchor_spl::token::{self, Token};
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
 #[derive(Accounts)]
 #[instruction(tick_lower_index: i32, tick_upper_index: i32,tick_array_lower_start_index:i32,tick_array_upper_start_index:i32)]
@@ -21,20 +21,17 @@ pub struct OpenPositionV2<'info> {
         mint::decimals = 0,
         mint::authority = pool_state.key(),
         payer = payer,
-        mint::token_program = token_program,
     )]
-    pub position_nft_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub position_nft_mint: Box<Account<'info, token::Mint>>,
 
     /// Token account where position NFT will be minted
-    /// This account created in the contract by cpi to avoid large stack variables
     #[account(
         init,
         associated_token::mint = position_nft_mint,
         associated_token::authority = position_nft_owner,
         payer = payer,
-        token::token_program = token_program,
     )]
-    pub position_nft_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub position_nft_account: Box<Account<'info, token::TokenAccount>>,
 
     /// To store metaplex metadata
     /// CHECK: Safety check performed inside function body
@@ -60,7 +57,7 @@ pub struct OpenPositionV2<'info> {
     )]
     pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
 
-    /// CHECK:  Account to store data for the position's upper tick
+    /// CHECK: Account to store data for the position's lower tick
     #[account(
         mut,
         seeds = [
@@ -182,10 +179,10 @@ pub fn open_position_v2<'a, 'b, 'c: 'info, 'info>(
         &ctx.accounts.tick_array_upper,
         &mut ctx.accounts.protocol_position,
         &mut ctx.accounts.personal_position,
-        &ctx.accounts.token_account_0,
-        &ctx.accounts.token_account_1,
-        &ctx.accounts.token_vault_0,
-        &ctx.accounts.token_vault_1,
+        &ctx.accounts.token_account_0.to_account_info(),
+        &ctx.accounts.token_account_1.to_account_info(),
+        &ctx.accounts.token_vault_0.to_account_info(),
+        &ctx.accounts.token_vault_1.to_account_info(),
         &ctx.accounts.rent,
         &ctx.accounts.system_program,
         &ctx.accounts.token_program,

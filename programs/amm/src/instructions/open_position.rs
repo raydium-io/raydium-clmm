@@ -5,19 +5,19 @@ use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program;
-use anchor_lang::system_program::transfer;
-use anchor_lang::system_program::Transfer;
+use anchor_lang::system_program::{transfer, Transfer};
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::metadata::Metadata;
-use anchor_spl::token::Token;
+use anchor_spl::token::{Mint, Token, TokenAccount};
 use anchor_spl::token_2022::spl_token_2022::extension::{
     BaseStateWithExtensions, StateWithExtensions,
 };
+use anchor_spl::token_2022::Token2022;
 use anchor_spl::token_2022::{
     self,
     spl_token_2022::{self, instruction::AuthorityType},
 };
-use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
+use anchor_spl::token_interface;
 use mpl_token_metadata::{instruction::create_metadata_accounts_v3, state::Creator};
 use std::cell::RefMut;
 #[cfg(feature = "enable-log")]
@@ -41,9 +41,8 @@ pub struct OpenPosition<'info> {
         mint::decimals = 0,
         mint::authority = pool_state.key(),
         payer = payer,
-        mint::token_program = token_program,
     )]
-    pub position_nft_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub position_nft_mint: Box<Account<'info, Mint>>,
 
     /// Token account where position NFT will be minted
     /// This account created in the contract by cpi to avoid large stack variables
@@ -52,9 +51,8 @@ pub struct OpenPosition<'info> {
         associated_token::mint = position_nft_mint,
         associated_token::authority = position_nft_owner,
         payer = payer,
-        token::token_program = token_program,
     )]
-    pub position_nft_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub position_nft_account: Box<Account<'info, TokenAccount>>,
 
     /// To store metaplex metadata
     /// CHECK: Safety check performed inside function body
@@ -80,7 +78,7 @@ pub struct OpenPosition<'info> {
     )]
     pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
 
-    /// CHECK: Account to store data for the position's upper tick
+    /// CHECK: Account to store data for the position's lower tick
     #[account(
         mut,
         seeds = [
@@ -119,28 +117,28 @@ pub struct OpenPosition<'info> {
         mut,
         token::mint = token_vault_0.mint
     )]
-    pub token_account_0: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_account_0: Box<Account<'info, TokenAccount>>,
 
     /// The token_1 account deposit token to the pool
     #[account(
         mut,
         token::mint = token_vault_1.mint
     )]
-    pub token_account_1: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_account_1: Box<Account<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_0
     #[account(
         mut,
         constraint = token_vault_0.key() == pool_state.load()?.token_vault_0
     )]
-    pub token_vault_0: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_vault_0: Box<Account<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_1
     #[account(
         mut,
         constraint = token_vault_1.key() == pool_state.load()?.token_vault_1
     )]
-    pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
     /// Sysvar for token mint and ATA creation
     pub rent: Sysvar<'info, Rent>,
@@ -190,10 +188,10 @@ pub fn open_position_v1<'a, 'b, 'c: 'info, 'info>(
         &ctx.accounts.tick_array_upper,
         &mut ctx.accounts.protocol_position,
         &mut ctx.accounts.personal_position,
-        &ctx.accounts.token_account_0,
-        &ctx.accounts.token_account_1,
-        &ctx.accounts.token_vault_0,
-        &ctx.accounts.token_vault_1,
+        &ctx.accounts.token_account_0.to_account_info(),
+        &ctx.accounts.token_account_1.to_account_info(),
+        &ctx.accounts.token_vault_0.to_account_info(),
+        &ctx.accounts.token_vault_1.to_account_info(),
         &ctx.accounts.rent,
         &ctx.accounts.system_program,
         &ctx.accounts.token_program,
@@ -229,18 +227,18 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
     tick_array_upper_loader: &'b UncheckedAccount<'info>,
     protocol_position: &'b mut Box<Account<'info, ProtocolPositionState>>,
     personal_position: &'b mut Box<Account<'info, PersonalPositionState>>,
-    token_account_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    token_account_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    token_vault_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    token_vault_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    token_account_0: &'b AccountInfo<'info>,
+    token_account_1: &'b AccountInfo<'info>,
+    token_vault_0: &'b AccountInfo<'info>,
+    token_vault_1: &'b AccountInfo<'info>,
     rent: &'b Sysvar<'info, Rent>,
     system_program: &'b Program<'info, System>,
     token_program: &'b Program<'info, Token>,
     _associated_token_program: &'b Program<'info, AssociatedToken>,
     metadata_program: Option<&'b Program<'info, Metadata>>,
     token_program_2022: Option<&'b Program<'info, Token2022>>,
-    vault_0_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
-    vault_1_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
+    vault_0_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
+    vault_1_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
 
     remaining_accounts: &'c [AccountInfo<'info>],
     protocol_position_bump: u8,
@@ -403,17 +401,17 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
 /// Add liquidity to an initialized pool
 pub fn add_liquidity<'b, 'c: 'info, 'info>(
     payer: &'b Signer<'info>,
-    token_account_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    token_account_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    token_vault_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    token_vault_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    token_account_0: &'b AccountInfo<'info>,
+    token_account_1: &'b AccountInfo<'info>,
+    token_vault_0: &'b AccountInfo<'info>,
+    token_vault_1: &'b AccountInfo<'info>,
     tick_array_lower_loader: &'b AccountLoad<'info, TickArrayState>,
     tick_array_upper_loader: &'b AccountLoad<'info, TickArrayState>,
     protocol_position: &mut ProtocolPositionState,
     token_program_2022: Option<&Program<'info, Token2022>>,
     token_program: &'b Program<'info, Token>,
-    vault_0_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
-    vault_1_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
+    vault_0_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
+    vault_1_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
     tick_array_bitmap_extension: Option<&'c AccountInfo<'info>>,
     pool_state: &mut RefMut<PoolState>,
     liquidity: &mut u128,

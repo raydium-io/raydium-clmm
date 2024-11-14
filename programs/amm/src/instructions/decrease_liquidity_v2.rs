@@ -13,7 +13,8 @@ pub struct DecreaseLiquidityV2<'info> {
     /// The token account for the tokenized position
     #[account(
         constraint = nft_account.mint == personal_position.nft_mint,
-        token::token_program = token_program,
+        constraint = nft_account.amount == 1,
+        token::authority = nft_owner,
     )]
     pub nft_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
@@ -117,12 +118,12 @@ pub fn decrease_liquidity_v2<'a, 'b, 'c: 'info, 'info>(
         &ctx.accounts.pool_state,
         &mut ctx.accounts.protocol_position,
         &mut ctx.accounts.personal_position,
-        &mut ctx.accounts.token_vault_0,
-        &mut ctx.accounts.token_vault_1,
+        &ctx.accounts.token_vault_0.to_account_info(),
+        &ctx.accounts.token_vault_1.to_account_info(),
         &ctx.accounts.tick_array_lower,
         &ctx.accounts.tick_array_upper,
-        &ctx.accounts.recipient_token_account_0,
-        &ctx.accounts.recipient_token_account_1,
+        &ctx.accounts.recipient_token_account_0.to_account_info(),
+        &ctx.accounts.recipient_token_account_1.to_account_info(),
         &ctx.accounts.token_program,
         Some(ctx.accounts.token_program_2022.clone()),
         Some(ctx.accounts.memo_program.clone()),
