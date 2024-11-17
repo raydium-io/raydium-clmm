@@ -52,4 +52,4 @@ Attention, check your configuration and confirm the environment you want to depl
 An example of calling clmm can be found [here](https://github.com/raydium-io/raydium-cpi-example/tree/master/clmm-cpi)
 
 # License
-The source code is licensed under Apache 2.0.
+The source code is [licensed](https://github.com/raydium-io/raydium-clmm/blob/master/LICENSE) under Apache 2.0.
