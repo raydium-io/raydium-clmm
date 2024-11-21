@@ -4,14 +4,26 @@ pub use create_pool::*;
 pub mod open_position;
 pub use open_position::*;
 
+pub mod open_position_v2;
+pub use open_position_v2::*;
+
+pub mod open_position_with_token22_nft;
+pub use open_position_with_token22_nft::*;
+
 pub mod close_position;
 pub use close_position::*;
 
 pub mod increase_liquidity;
 pub use increase_liquidity::*;
 
+pub mod increase_liquidity_v2;
+pub use increase_liquidity_v2::*;
+
 pub mod decrease_liquidity;
 pub use decrease_liquidity::*;
+
+pub mod decrease_liquidity_v2;
+pub use decrease_liquidity_v2::*;
 
 pub mod swap;
 pub use swap::*;

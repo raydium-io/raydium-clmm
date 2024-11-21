@@ -3293,6 +3293,7 @@ dependencies = [
  "solana-program",
  "solana-security-txt",
  "spl-memo 4.0.0",
+ "spl-token-metadata-interface",
  "uint",
 ]
 

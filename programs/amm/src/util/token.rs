@@ -1,22 +1,25 @@
+use super::get_recent_epoch;
+use crate::error::ErrorCode;
 use crate::states::*;
-use anchor_lang::prelude::*;
-use anchor_spl::{
-    token::{self, Token},
-    token_2022::{
+use anchor_lang::{
+    prelude::*,
+    system_program::{create_account, CreateAccount},
+};
+use anchor_spl::token::{self, Token};
+use anchor_spl::token_2022::{
+    self,
+    spl_token_2022::{
         self,
-        spl_token_2022::{
-            self,
-            extension::{
-                transfer_fee::{TransferFeeConfig, MAX_FEE_BASIS_POINTS},
-                BaseStateWithExtensions, ExtensionType, StateWithExtensions,
-            },
+        extension::{
+            metadata_pointer,
+            transfer_fee::{TransferFeeConfig, MAX_FEE_BASIS_POINTS},
+            BaseStateWithExtensions, ExtensionType, StateWithExtensions,
         },
     },
-    token_interface::{Mint, TokenAccount},
+    Token2022,
 };
+use anchor_spl::token_interface::{initialize_mint2, InitializeMint2, Mint};
 use std::collections::HashSet;
-
-use super::get_recent_epoch;
 
 const MINT_WHITELIST: [&'static str; 4] = [
     "HVbpJAQGNpkgBaYBZQBR1t7yFdvaYVp2vCQQfKKEN4tM",
@@ -36,8 +39,8 @@ pub fn invoke_memo_instruction<'info>(
 
 pub fn transfer_from_user_to_pool_vault<'info>(
     signer: &Signer<'info>,
-    from: &InterfaceAccount<'info, TokenAccount>,
-    to_vault: &InterfaceAccount<'info, TokenAccount>,
+    from: &AccountInfo<'info>,
+    to_vault: &AccountInfo<'info>,
     mint: Option<Box<InterfaceAccount<'info, Mint>>>,
     token_program: &AccountInfo<'info>,
     token_program_2022: Option<AccountInfo<'info>>,
@@ -83,8 +86,8 @@ pub fn transfer_from_user_to_pool_vault<'info>(
 
 pub fn transfer_from_pool_vault_to_user<'info>(
     pool_state_loader: &AccountLoader<'info, PoolState>,
-    from_vault: &InterfaceAccount<'info, TokenAccount>,
-    to: &InterfaceAccount<'info, TokenAccount>,
+    from_vault: &AccountInfo<'info>,
+    to: &AccountInfo<'info>,
     mint: Option<Box<InterfaceAccount<'info, Mint>>>,
     token_program: &AccountInfo<'info>,
     token_program_2022: Option<AccountInfo<'info>>,
@@ -133,21 +136,14 @@ pub fn transfer_from_pool_vault_to_user<'info>(
 pub fn close_spl_account<'a, 'b, 'c, 'info>(
     owner: &AccountInfo<'info>,
     destination: &AccountInfo<'info>,
-    close_account: &InterfaceAccount<'info, TokenAccount>,
-    token_program: &Program<'info, Token>,
-    // token_program_2022: &Program<'info, Token2022>,
+    close_account: &AccountInfo<'info>,
+    token_program: &AccountInfo<'info>,
     signers_seeds: &[&[&[u8]]],
 ) -> Result<()> {
-    let token_program_info = token_program.to_account_info();
-    let close_account_info = close_account.to_account_info();
-    // if close_account_info.owner == token_program_2022.key {
-    //     token_program_info = token_program_2022.to_account_info()
-    // }
-
     token_2022::close_account(CpiContext::new_with_signer(
-        token_program_info,
+        token_program.to_account_info(),
         token_2022::CloseAccount {
-            account: close_account_info,
+            account: close_account.to_account_info(),
             destination: destination.to_account_info(),
             authority: owner.to_account_info(),
         },
@@ -157,18 +153,14 @@ pub fn close_spl_account<'a, 'b, 'c, 'info>(
 
 pub fn burn<'a, 'b, 'c, 'info>(
     owner: &Signer<'info>,
-    mint: &InterfaceAccount<'info, Mint>,
-    burn_account: &InterfaceAccount<'info, TokenAccount>,
-    token_program: &Program<'info, Token>,
-    // token_program_2022: &Program<'info, Token2022>,
+    mint: &AccountInfo<'info>,
+    burn_account: &AccountInfo<'info>,
+    token_program: &AccountInfo<'info>,
     signers_seeds: &[&[&[u8]]],
     amount: u64,
 ) -> Result<()> {
     let mint_info = mint.to_account_info();
     let token_program_info: AccountInfo<'_> = token_program.to_account_info();
-    // if mint_info.owner == token_program_2022.key {
-    //     token_program_info = token_program_2022.to_account_info()
-    // }
     token_2022::burn(
         CpiContext::new_with_signer(
             token_program_info,
@@ -251,9 +243,99 @@ pub fn is_supported_mint(mint_account: &InterfaceAccount<Mint>) -> Result<bool> 
             && e != ExtensionType::MetadataPointer
             && e != ExtensionType::TokenMetadata
             && e != ExtensionType::InterestBearingConfig
+            && e != ExtensionType::MintCloseAuthority
         {
             return Ok(false);
         }
     }
     Ok(true)
+}
+
+pub fn create_position_nft_mint_with_extensions<'info>(
+    payer: &Signer<'info>,
+    position_nft_mint: &AccountInfo<'info>,
+    mint_authority: &AccountInfo<'info>,
+    mint_close_authority: &AccountInfo<'info>,
+    system_program: &Program<'info, System>,
+    token_2022_program: &Program<'info, Token2022>,
+    with_matedata: bool,
+) -> Result<()> {
+    let extensions = if with_matedata {
+        [
+            ExtensionType::MintCloseAuthority,
+            ExtensionType::MetadataPointer,
+        ]
+        .to_vec()
+    } else {
+        [ExtensionType::MintCloseAuthority].to_vec()
+    };
+    let space =
+        ExtensionType::try_calculate_account_len::<spl_token_2022::state::Mint>(&extensions)?;
+
+    let lamports = Rent::get()?.minimum_balance(space);
+
+    // create mint account
+    create_account(
+        CpiContext::new(
+            system_program.to_account_info(),
+            CreateAccount {
+                from: payer.to_account_info(),
+                to: position_nft_mint.to_account_info(),
+            },
+        ),
+        lamports,
+        space as u64,
+        token_2022_program.key,
+    )?;
+
+    // initialize token extensions
+    for e in extensions {
+        match e {
+            ExtensionType::MetadataPointer => {
+                let ix = metadata_pointer::instruction::initialize(
+                    token_2022_program.key,
+                    position_nft_mint.key,
+                    None,
+                    Some(position_nft_mint.key()),
+                )?;
+                solana_program::program::invoke(
+                    &ix,
+                    &[
+                        token_2022_program.to_account_info(),
+                        position_nft_mint.to_account_info(),
+                    ],
+                )?;
+            }
+            ExtensionType::MintCloseAuthority => {
+                let ix = spl_token_2022::instruction::initialize_mint_close_authority(
+                    token_2022_program.key,
+                    position_nft_mint.key,
+                    Some(mint_close_authority.key),
+                )?;
+                solana_program::program::invoke(
+                    &ix,
+                    &[
+                        token_2022_program.to_account_info(),
+                        position_nft_mint.to_account_info(),
+                    ],
+                )?;
+            }
+            _ => {
+                return err!(ErrorCode::NotSupportMint);
+            }
+        }
+    }
+
+    // initialize mint account
+    initialize_mint2(
+        CpiContext::new(
+            token_2022_program.to_account_info(),
+            InitializeMint2 {
+                mint: position_nft_mint.to_account_info(),
+            },
+        ),
+        0,
+        &mint_authority.key(),
+        None,
+    )
 }

@@ -5,11 +5,19 @@ use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program;
+use anchor_lang::system_program::{transfer, Transfer};
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::metadata::Metadata;
-use anchor_spl::token::{self, Token};
-use anchor_spl::token_2022::{self, spl_token_2022::instruction::AuthorityType};
-use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
+use anchor_spl::token::{Mint, Token, TokenAccount};
+use anchor_spl::token_2022::spl_token_2022::extension::{
+    BaseStateWithExtensions, StateWithExtensions,
+};
+use anchor_spl::token_2022::Token2022;
+use anchor_spl::token_2022::{
+    self,
+    spl_token_2022::{self, instruction::AuthorityType},
+};
+use anchor_spl::token_interface;
 use mpl_token_metadata::{instruction::create_metadata_accounts_v3, state::Creator};
 use std::cell::RefMut;
 #[cfg(feature = "enable-log")]
@@ -33,9 +41,8 @@ pub struct OpenPosition<'info> {
         mint::decimals = 0,
         mint::authority = pool_state.key(),
         payer = payer,
-        mint::token_program = token_program,
     )]
-    pub position_nft_mint: Box<InterfaceAccount<'info, Mint>>,
+    pub position_nft_mint: Box<Account<'info, Mint>>,
 
     /// Token account where position NFT will be minted
     /// This account created in the contract by cpi to avoid large stack variables
@@ -44,9 +51,8 @@ pub struct OpenPosition<'info> {
         associated_token::mint = position_nft_mint,
         associated_token::authority = position_nft_owner,
         payer = payer,
-        token::token_program = token_program,
     )]
-    pub position_nft_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub position_nft_account: Box<Account<'info, TokenAccount>>,
 
     /// To store metaplex metadata
     /// CHECK: Safety check performed inside function body
@@ -72,7 +78,7 @@ pub struct OpenPosition<'info> {
     )]
     pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
 
-    /// CHECK: Account to mark the lower tick as initialized
+    /// CHECK: Account to store data for the position's lower tick
     #[account(
         mut,
         seeds = [
@@ -84,7 +90,7 @@ pub struct OpenPosition<'info> {
     )]
     pub tick_array_lower: UncheckedAccount<'info>,
 
-    /// CHECK:Account to store data for the position's upper tick
+    /// CHECK: Account to store data for the position's upper tick
     #[account(
         mut,
         seeds = [
@@ -111,28 +117,28 @@ pub struct OpenPosition<'info> {
         mut,
         token::mint = token_vault_0.mint
     )]
-    pub token_account_0: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_account_0: Box<Account<'info, TokenAccount>>,
 
     /// The token_1 account deposit token to the pool
     #[account(
         mut,
         token::mint = token_vault_1.mint
     )]
-    pub token_account_1: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_account_1: Box<Account<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_0
     #[account(
         mut,
         constraint = token_vault_0.key() == pool_state.load()?.token_vault_0
     )]
-    pub token_vault_0: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_vault_0: Box<Account<'info, TokenAccount>>,
 
     /// The address that holds pool tokens for token_1
     #[account(
         mut,
         constraint = token_vault_1.key() == pool_state.load()?.token_vault_1
     )]
-    pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
     /// Sysvar for token mint and ATA creation
     pub rent: Sysvar<'info, Rent>,
@@ -148,160 +154,6 @@ pub struct OpenPosition<'info> {
     /// Program to create NFT metadata
     /// CHECK: Metadata program address constraint applied
     pub metadata_program: Program<'info, Metadata>,
-    // remaining account
-    // #[account(
-    //     seeds = [
-    //         POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
-    //         pool_state.key().as_ref(),
-    //     ],
-    //     bump
-    // )]
-    // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
-}
-
-#[derive(Accounts)]
-#[instruction(tick_lower_index: i32, tick_upper_index: i32,tick_array_lower_start_index:i32,tick_array_upper_start_index:i32)]
-pub struct OpenPositionV2<'info> {
-    /// Pays to mint the position
-    #[account(mut)]
-    pub payer: Signer<'info>,
-
-    /// CHECK: Receives the position NFT
-    pub position_nft_owner: UncheckedAccount<'info>,
-
-    /// Unique token mint address
-    #[account(
-        init,
-        mint::decimals = 0,
-        mint::authority = pool_state.key(),
-        payer = payer,
-        mint::token_program = token_program,
-    )]
-    pub position_nft_mint: Box<InterfaceAccount<'info, Mint>>,
-
-    /// Token account where position NFT will be minted
-    /// This account created in the contract by cpi to avoid large stack variables
-    #[account(
-        init,
-        associated_token::mint = position_nft_mint,
-        associated_token::authority = position_nft_owner,
-        payer = payer,
-        token::token_program = token_program,
-    )]
-    pub position_nft_account: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// To store metaplex metadata
-    /// CHECK: Safety check performed inside function body
-    #[account(mut)]
-    pub metadata_account: UncheckedAccount<'info>,
-
-    /// Add liquidity for this pool
-    #[account(mut)]
-    pub pool_state: AccountLoader<'info, PoolState>,
-
-    /// Store the information of market marking in range
-    #[account(
-        init_if_needed,
-        seeds = [
-            POSITION_SEED.as_bytes(),
-            pool_state.key().as_ref(),
-            &tick_lower_index.to_be_bytes(),
-            &tick_upper_index.to_be_bytes(),
-        ],
-        bump,
-        payer = payer,
-        space = ProtocolPositionState::LEN
-    )]
-    pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
-
-    /// CHECK: Account to mark the lower tick as initialized
-    #[account(
-        mut,
-        seeds = [
-            TICK_ARRAY_SEED.as_bytes(),
-            pool_state.key().as_ref(),
-            &tick_array_lower_start_index.to_be_bytes(),
-        ],
-        bump,
-    )]
-    pub tick_array_lower: UncheckedAccount<'info>,
-
-    /// CHECK:Account to store data for the position's upper tick
-    #[account(
-        mut,
-        seeds = [
-            TICK_ARRAY_SEED.as_bytes(),
-            pool_state.key().as_ref(),
-            &tick_array_upper_start_index.to_be_bytes(),
-        ],
-        bump,
-    )]
-    pub tick_array_upper: UncheckedAccount<'info>,
-
-    /// personal position state
-    #[account(
-        init,
-        seeds = [POSITION_SEED.as_bytes(), position_nft_mint.key().as_ref()],
-        bump,
-        payer = payer,
-        space = PersonalPositionState::LEN
-    )]
-    pub personal_position: Box<Account<'info, PersonalPositionState>>,
-
-    /// The token_0 account deposit token to the pool
-    #[account(
-        mut,
-        token::mint = token_vault_0.mint
-    )]
-    pub token_account_0: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// The token_1 account deposit token to the pool
-    #[account(
-        mut,
-        token::mint = token_vault_1.mint
-    )]
-    pub token_account_1: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// The address that holds pool tokens for token_0
-    #[account(
-        mut,
-        constraint = token_vault_0.key() == pool_state.load()?.token_vault_0
-    )]
-    pub token_vault_0: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// The address that holds pool tokens for token_1
-    #[account(
-        mut,
-        constraint = token_vault_1.key() == pool_state.load()?.token_vault_1
-    )]
-    pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
-
-    /// Sysvar for token mint and ATA creation
-    pub rent: Sysvar<'info, Rent>,
-
-    /// Program to create the position manager state account
-    pub system_program: Program<'info, System>,
-
-    /// Program to create mint account and mint tokens
-    pub token_program: Program<'info, Token>,
-    /// Program to create an ATA for receiving position NFT
-    pub associated_token_program: Program<'info, AssociatedToken>,
-
-    /// Program to create NFT metadata
-    /// CHECK: Metadata program address constraint applied
-    pub metadata_program: Program<'info, Metadata>,
-    /// Program to create mint account and mint tokens
-    pub token_program_2022: Program<'info, Token2022>,
-    /// The mint of token vault 0
-    #[account(
-        address = token_vault_0.mint
-    )]
-    pub vault_0_mint: Box<InterfaceAccount<'info, Mint>>,
-    /// The mint of token vault 1
-    #[account(
-        address = token_vault_1.mint
-    )]
-    pub vault_1_mint: Box<InterfaceAccount<'info, Mint>>,
     // remaining account
     // #[account(
     //     seeds = [
@@ -322,29 +174,29 @@ pub fn open_position_v1<'a, 'b, 'c: 'info, 'info>(
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
-    with_matedata: bool,
+    with_metadata: bool,
     base_flag: Option<bool>,
 ) -> Result<()> {
     open_position(
         &ctx.accounts.payer,
         &ctx.accounts.position_nft_owner,
-        &ctx.accounts.position_nft_mint,
-        &ctx.accounts.position_nft_account,
-        &ctx.accounts.metadata_account,
+        &ctx.accounts.position_nft_mint.to_account_info(),
+        &ctx.accounts.position_nft_account.to_account_info(),
+        Some(&ctx.accounts.metadata_account),
         &ctx.accounts.pool_state,
         &ctx.accounts.tick_array_lower,
         &ctx.accounts.tick_array_upper,
         &mut ctx.accounts.protocol_position,
         &mut ctx.accounts.personal_position,
-        &ctx.accounts.token_account_0,
-        &ctx.accounts.token_account_1,
-        &ctx.accounts.token_vault_0,
-        &ctx.accounts.token_vault_1,
+        &ctx.accounts.token_account_0.to_account_info(),
+        &ctx.accounts.token_account_1.to_account_info(),
+        &ctx.accounts.token_vault_0.to_account_info(),
+        &ctx.accounts.token_vault_1.to_account_info(),
         &ctx.accounts.rent,
         &ctx.accounts.system_program,
         &ctx.accounts.token_program,
         &ctx.accounts.associated_token_program,
-        &ctx.accounts.metadata_program,
+        Some(&ctx.accounts.metadata_program),
         None,
         None,
         None,
@@ -358,84 +210,35 @@ pub fn open_position_v1<'a, 'b, 'c: 'info, 'info>(
         tick_upper_index,
         tick_array_lower_start_index,
         tick_array_upper_start_index,
-        with_matedata,
+        with_metadata,
         base_flag,
-    )
-}
-
-pub fn open_position_v2<'a, 'b, 'c: 'info, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, OpenPositionV2<'info>>,
-    liquidity: u128,
-    amount_0_max: u64,
-    amount_1_max: u64,
-    tick_lower_index: i32,
-    tick_upper_index: i32,
-    tick_array_lower_start_index: i32,
-    tick_array_upper_start_index: i32,
-    with_matedata: bool,
-    base_flag: Option<bool>,
-) -> Result<()> {
-    open_position(
-        &ctx.accounts.payer,
-        &ctx.accounts.position_nft_owner,
-        &ctx.accounts.position_nft_mint,
-        &ctx.accounts.position_nft_account,
-        &ctx.accounts.metadata_account,
-        &ctx.accounts.pool_state,
-        &ctx.accounts.tick_array_lower,
-        &ctx.accounts.tick_array_upper,
-        &mut ctx.accounts.protocol_position,
-        &mut ctx.accounts.personal_position,
-        &ctx.accounts.token_account_0,
-        &ctx.accounts.token_account_1,
-        &ctx.accounts.token_vault_0,
-        &ctx.accounts.token_vault_1,
-        &ctx.accounts.rent,
-        &ctx.accounts.system_program,
-        &ctx.accounts.token_program,
-        &ctx.accounts.associated_token_program,
-        &ctx.accounts.metadata_program,
-        Some(ctx.accounts.token_program_2022.clone()),
-        Some(ctx.accounts.vault_0_mint.clone()),
-        Some(ctx.accounts.vault_1_mint.clone()),
-        &ctx.remaining_accounts,
-        ctx.bumps.protocol_position,
-        ctx.bumps.personal_position,
-        liquidity,
-        amount_0_max,
-        amount_1_max,
-        tick_lower_index,
-        tick_upper_index,
-        tick_array_lower_start_index,
-        tick_array_upper_start_index,
-        with_matedata,
-        base_flag,
+        false,
     )
 }
 
 pub fn open_position<'a, 'b, 'c: 'info, 'info>(
     payer: &'b Signer<'info>,
     position_nft_owner: &'b UncheckedAccount<'info>,
-    position_nft_mint: &'b Box<InterfaceAccount<'info, Mint>>,
-    position_nft_account: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    metadata_account: &'b UncheckedAccount<'info>,
+    position_nft_mint: &'b AccountInfo<'info>,
+    position_nft_account: &'b AccountInfo<'info>,
+    metadata_account: Option<&'b UncheckedAccount<'info>>,
     pool_state_loader: &'b AccountLoader<'info, PoolState>,
     tick_array_lower_loader: &'b UncheckedAccount<'info>,
     tick_array_upper_loader: &'b UncheckedAccount<'info>,
     protocol_position: &'b mut Box<Account<'info, ProtocolPositionState>>,
     personal_position: &'b mut Box<Account<'info, PersonalPositionState>>,
-    token_account_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    token_account_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    token_vault_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    token_vault_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    token_account_0: &'b AccountInfo<'info>,
+    token_account_1: &'b AccountInfo<'info>,
+    token_vault_0: &'b AccountInfo<'info>,
+    token_vault_1: &'b AccountInfo<'info>,
     rent: &'b Sysvar<'info, Rent>,
     system_program: &'b Program<'info, System>,
     token_program: &'b Program<'info, Token>,
     _associated_token_program: &'b Program<'info, AssociatedToken>,
-    metadata_program: &'b Program<'info, Metadata>,
-    token_program_2022: Option<Program<'info, Token2022>>,
-    vault_0_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
-    vault_1_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
+    metadata_program: Option<&'b Program<'info, Metadata>>,
+    token_program_2022: Option<&'b Program<'info, Token2022>>,
+    vault_0_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
+    vault_1_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
 
     remaining_accounts: &'c [AccountInfo<'info>],
     protocol_position_bump: u8,
@@ -447,8 +250,9 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
-    with_matedata: bool,
+    with_metadata: bool,
     base_flag: Option<bool>,
+    use_metadata_extension: bool,
 ) -> Result<()> {
     let mut liquidity = liquidity;
     {
@@ -548,7 +352,7 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
         )?;
 
         // let personal_position = &mut personal_position;
-        personal_position.bump = personal_position_bump;
+        personal_position.bump = [personal_position_bump];
         personal_position.nft_mint = position_nft_mint.key();
         personal_position.pool_id = pool_state_loader.key();
         personal_position.tick_lower_index = tick_lower_index;
@@ -576,37 +380,38 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
             deposit_amount_1_transfer_fee: amount_1_transfer_fee
         });
     }
-    create_nft_with_metadata(
+
+    mint_nft_and_remove_mint_authority(
         payer,
         pool_state_loader,
+        personal_position,
         position_nft_mint,
         position_nft_account,
         metadata_account,
         metadata_program,
         token_program,
+        token_program_2022,
         system_program,
         rent,
-        personal_position.key(),
-        with_matedata,
-    )?;
-
-    Ok(())
+        with_metadata,
+        use_metadata_extension,
+    )
 }
 
 /// Add liquidity to an initialized pool
 pub fn add_liquidity<'b, 'c: 'info, 'info>(
     payer: &'b Signer<'info>,
-    token_account_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    token_account_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    token_vault_0: &'b Box<InterfaceAccount<'info, TokenAccount>>,
-    token_vault_1: &'b Box<InterfaceAccount<'info, TokenAccount>>,
+    token_account_0: &'b AccountInfo<'info>,
+    token_account_1: &'b AccountInfo<'info>,
+    token_vault_0: &'b AccountInfo<'info>,
+    token_vault_1: &'b AccountInfo<'info>,
     tick_array_lower_loader: &'b AccountLoad<'info, TickArrayState>,
     tick_array_upper_loader: &'b AccountLoad<'info, TickArrayState>,
     protocol_position: &mut ProtocolPositionState,
-    token_program_2022: Option<Program<'info, Token2022>>,
+    token_program_2022: Option<&Program<'info, Token2022>>,
     token_program: &'b Program<'info, Token>,
-    vault_0_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
-    vault_1_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
+    vault_0_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
+    vault_1_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
     tick_array_bitmap_extension: Option<&'c AccountInfo<'info>>,
     pool_state: &mut RefMut<PoolState>,
     liquidity: &mut u128,
@@ -921,86 +726,210 @@ pub fn update_position(
     Ok((flipped_lower, flipped_upper))
 }
 
-fn create_nft_with_metadata<'info>(
+fn mint_nft_and_remove_mint_authority<'info>(
     payer: &Signer<'info>,
     pool_state_loader: &AccountLoader<'info, PoolState>,
-    position_nft_mint: &Box<InterfaceAccount<'info, Mint>>,
-    position_nft_account: &Box<InterfaceAccount<'info, TokenAccount>>,
-    metadata_account: &UncheckedAccount<'info>,
-    metadata_program: &Program<'info, Metadata>,
+    personal_position: &Account<'info, PersonalPositionState>,
+    position_nft_mint: &AccountInfo<'info>,
+    position_nft_account: &AccountInfo<'info>,
+    metadata_account: Option<&UncheckedAccount<'info>>,
+    metadata_program: Option<&Program<'info, Metadata>>,
     token_program: &Program<'info, Token>,
+    token_program_2022: Option<&Program<'info, Token2022>>,
     system_program: &Program<'info, System>,
     rent: &Sysvar<'info, Rent>,
-    personal_position_id: Pubkey,
-    with_matedata: bool,
+    with_metadata: bool,
+    use_metadata_extension: bool,
 ) -> Result<()> {
+    let pool_state_info = pool_state_loader.to_account_info();
+    let position_nft_mint_info = position_nft_mint.to_account_info();
     let pool_state = pool_state_loader.load()?;
     let seeds = pool_state.seeds();
+
+    let token_program_info = if position_nft_mint_info.owner == token_program.key {
+        token_program.to_account_info()
+    } else {
+        token_program_2022.unwrap().to_account_info()
+    };
+
+    if with_metadata {
+        let (name, symbol, uri) = get_metadata_data(personal_position.key());
+        if use_metadata_extension {
+            initialize_token_metadata_extension(
+                payer,
+                &position_nft_mint_info,
+                &pool_state_info,
+                &personal_position.to_account_info(),
+                token_program_2022.unwrap(),
+                name,
+                symbol,
+                uri,
+                &[&seeds],
+            )?;
+        } else {
+            initialize_metadata_account(
+                payer,
+                &pool_state_info,
+                &position_nft_mint_info,
+                metadata_account.unwrap(),
+                metadata_program.unwrap(),
+                system_program,
+                rent,
+                name,
+                symbol,
+                uri,
+                &[&seeds],
+            )?;
+        }
+    }
     // Mint the NFT
-    token::mint_to(
+    token_2022::mint_to(
         CpiContext::new_with_signer(
-            token_program.to_account_info(),
-            token::MintTo {
-                mint: position_nft_mint.to_account_info(),
+            token_program_info.to_account_info(),
+            token_2022::MintTo {
+                mint: position_nft_mint_info.clone(),
                 to: position_nft_account.to_account_info(),
-                authority: pool_state_loader.to_account_info(),
+                authority: pool_state_info.clone(),
             },
             &[&seeds],
         ),
         1,
     )?;
-    if with_matedata {
-        let create_metadata_ix = create_metadata_accounts_v3(
-            metadata_program.key(),
-            metadata_account.key(),
-            position_nft_mint.key(),
-            pool_state_loader.key(),
-            payer.key(),
-            pool_state_loader.key(),
-            String::from("Raydium Concentrated Liquidity"),
-            String::from("RCL"),
-            format!(
-                "https://dynamic-ipfs.raydium.io/clmm/position?id={}",
-                personal_position_id.to_string()
-            ),
-            Some(vec![Creator {
-                address: pool_state_loader.key(),
-                verified: true,
-                share: 100,
-            }]),
-            0,
-            true,
-            false,
-            None,
-            None,
-            None,
-        );
-        solana_program::program::invoke_signed(
-            &create_metadata_ix,
-            &[
-                metadata_account.to_account_info(),
-                position_nft_mint.to_account_info(),
-                payer.to_account_info(),
-                pool_state_loader.to_account_info(),
-                system_program.to_account_info(),
-                rent.to_account_info(),
-            ],
-            &[&seeds],
-        )?;
-    }
+
     // Disable minting
     token_2022::set_authority(
         CpiContext::new_with_signer(
-            token_program.to_account_info(),
+            token_program_info.to_account_info(),
             token_2022::SetAuthority {
                 current_authority: pool_state_loader.to_account_info(),
-                account_or_mint: position_nft_mint.to_account_info(),
+                account_or_mint: position_nft_mint_info,
             },
             &[&seeds],
         ),
         AuthorityType::MintTokens,
         None,
+    )
+}
+
+fn get_metadata_data(personal_position_id: Pubkey) -> (String, String, String) {
+    return (
+        String::from("Raydium Concentrated Liquidity"),
+        String::from("RCL"),
+        format!(
+            "https://dynamic-ipfs.raydium.io/clmm/position?id={}",
+            personal_position_id.to_string()
+        ),
+    );
+}
+
+fn initialize_metadata_account<'info>(
+    payer: &Signer<'info>,
+    authority: &AccountInfo<'info>,
+    position_nft_mint: &AccountInfo<'info>,
+    metadata_account: &UncheckedAccount<'info>,
+    metadata_program: &Program<'info, Metadata>,
+    system_program: &Program<'info, System>,
+    rent: &Sysvar<'info, Rent>,
+    name: String,
+    symbol: String,
+    uri: String,
+    signers_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    let create_metadata_ix = create_metadata_accounts_v3(
+        metadata_program.key(),
+        metadata_account.key(),
+        position_nft_mint.key(),
+        authority.key(),
+        payer.key(),
+        authority.key(),
+        name,
+        symbol,
+        uri,
+        Some(vec![Creator {
+            address: authority.key(),
+            verified: true,
+            share: 100,
+        }]),
+        0,
+        true,
+        false,
+        None,
+        None,
+        None,
+    );
+    solana_program::program::invoke_signed(
+        &create_metadata_ix,
+        &[
+            metadata_account.to_account_info(),
+            position_nft_mint.to_account_info(),
+            payer.to_account_info(),
+            authority.to_account_info(),
+            system_program.to_account_info(),
+            rent.to_account_info(),
+        ],
+        signers_seeds,
     )?;
+
+    Ok(())
+}
+
+pub fn initialize_token_metadata_extension<'info>(
+    payer: &Signer<'info>,
+    position_nft_mint: &AccountInfo<'info>,
+    mint_authority: &AccountInfo<'info>,
+    metadata_update_authority: &AccountInfo<'info>,
+    token_2022_program: &Program<'info, Token2022>,
+    name: String,
+    symbol: String,
+    uri: String,
+    signers_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    let metadata = spl_token_metadata_interface::state::TokenMetadata {
+        name,
+        symbol,
+        uri,
+        ..Default::default()
+    };
+
+    let mint_data = position_nft_mint.try_borrow_data()?;
+    let mint_state_unpacked =
+        StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+    let new_account_len = mint_state_unpacked
+        .try_get_new_account_len::<spl_token_metadata_interface::state::TokenMetadata>(&metadata)?;
+    let new_rent_exempt_lamports = Rent::get()?.minimum_balance(new_account_len);
+    let additional_lamports = new_rent_exempt_lamports.saturating_sub(position_nft_mint.lamports());
+    // CPI call will borrow the account data
+    drop(mint_data);
+
+    let cpi_context = CpiContext::new(
+        token_2022_program.to_account_info(),
+        Transfer {
+            from: payer.to_account_info(),
+            to: position_nft_mint.to_account_info(),
+        },
+    );
+    transfer(cpi_context, additional_lamports)?;
+
+    solana_program::program::invoke_signed(
+        &spl_token_metadata_interface::instruction::initialize(
+            token_2022_program.key,
+            position_nft_mint.key,
+            metadata_update_authority.key,
+            position_nft_mint.key,
+            &mint_authority.key(),
+            metadata.name,
+            metadata.symbol,
+            metadata.uri,
+        ),
+        &[
+            position_nft_mint.to_account_info(),
+            mint_authority.to_account_info(),
+            metadata_update_authority.to_account_info(),
+            token_2022_program.to_account_info(),
+        ],
+        signers_seeds,
+    )?;
+
     Ok(())
 }
 

@@ -2,8 +2,8 @@ use crate::error::ErrorCode;
 use crate::states::*;
 use crate::util::{burn, close_spl_account};
 use anchor_lang::prelude::*;
-use anchor_spl::token::Token;
-use anchor_spl::token_interface::{Mint, TokenAccount};
+use anchor_spl::token_2022::spl_token_2022;
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
 #[derive(Accounts)]
 pub struct ClosePosition<'info> {
@@ -11,7 +11,7 @@ pub struct ClosePosition<'info> {
     #[account(mut)]
     pub nft_owner: Signer<'info>,
 
-    /// Unique token mint address
+    /// Mint address bound to the personal position.
     #[account(
       mut,
       address = personal_position.nft_mint,
@@ -19,22 +19,16 @@ pub struct ClosePosition<'info> {
     )]
     pub position_nft_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    /// Token account where position NFT will be minted
+    /// User token account where position NFT be minted to
     #[account(
         mut,
-        associated_token::mint = position_nft_mint,
-        associated_token::authority = nft_owner,
+        token::mint = position_nft_mint,
+        token::authority = nft_owner,
         constraint = position_nft_account.amount == 1,
         token::token_program = token_program,
     )]
     pub position_nft_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
-    /// To store metaplex metadata
-    /// CHECK: Safety check performed inside function body
-    // #[account(mut)]
-    // pub metadata_account: UncheckedAccount<'info>,
-
-    /// Metadata for the tokenized position
     #[account(
         mut, 
         seeds = [POSITION_SEED.as_bytes(), position_nft_mint.key().as_ref()],
@@ -43,12 +37,11 @@ pub struct ClosePosition<'info> {
     )]
     pub personal_position: Box<Account<'info, PersonalPositionState>>,
 
-    /// Program to create the position manager state account
+    /// System program to close the position state account
     pub system_program: Program<'info, System>,
-    /// Program to create mint account and mint tokens
-    pub token_program: Program<'info, Token>,
-    // /// Reserved for upgrade
-    // pub token_program_2022: Program<'info, Token2022>,
+
+    /// Token/Token2022 program to close token/mint account
+    pub token_program: Interface<'info, TokenInterface>,
 }
 
 pub fn close_position<'a, 'b, 'c, 'info>(
@@ -78,24 +71,36 @@ pub fn close_position<'a, 'b, 'c, 'info>(
         }
     }
 
+    let token_program = ctx.accounts.token_program.to_account_info();
+    let position_nft_mint = ctx.accounts.position_nft_mint.to_account_info();
+    let personal_nft_account = ctx.accounts.position_nft_account.to_account_info();
     burn(
         &ctx.accounts.nft_owner,
-        &ctx.accounts.position_nft_mint,
-        &ctx.accounts.position_nft_account,
-        &ctx.accounts.token_program,
-        // &ctx.accounts.token_program_2022,
+        &position_nft_mint,
+        &personal_nft_account,
+        &token_program,
         &[],
         1,
     )?;
 
+    // close use nft token account
     close_spl_account(
         &ctx.accounts.nft_owner,
         &ctx.accounts.nft_owner,
-        &ctx.accounts.position_nft_account,
-        &ctx.accounts.token_program,
-        // &ctx.accounts.token_program_2022,
+        &personal_nft_account,
+        &token_program,
         &[],
     )?;
 
+    if *position_nft_mint.owner == spl_token_2022::id() {
+        // close nft mint account
+        close_spl_account(
+            &ctx.accounts.personal_position.to_account_info(),
+            &ctx.accounts.nft_owner,
+            &position_nft_mint,
+            &token_program,
+            &[&ctx.accounts.personal_position.seeds()],
+        )?;
+    }
     Ok(())
 }

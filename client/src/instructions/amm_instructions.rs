@@ -212,7 +212,7 @@ pub fn open_position_instr(
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
-    with_matedata: bool,
+    with_metadata: bool,
 ) -> Result<Vec<Instruction>> {
     let payer = read_keypair_file(&config.payer_path)?;
     let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
@@ -293,7 +293,7 @@ pub fn open_position_instr(
             tick_upper_index,
             tick_array_lower_start_index,
             tick_array_upper_start_index,
-            with_matedata,
+            with_metadata,
             base_flag: None,
         })
         .instructions()?;

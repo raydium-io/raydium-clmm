@@ -223,8 +223,8 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         //  x -> y, deposit x token from user to pool vault.
         transfer_from_user_to_pool_vault(
             &ctx.payer,
-            &token_account_0,
-            &vault_0,
+            &token_account_0.to_account_info(),
+            &vault_0.to_account_info(),
             Some(vault_0_mint),
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
@@ -237,8 +237,8 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         // x -> y，transfer y token from pool vault to user.
         transfer_from_pool_vault_to_user(
             &ctx.pool_state,
-            &vault_1,
-            &token_account_1,
+            &vault_1.to_account_info(),
+            &token_account_1.to_account_info(),
             Some(vault_1_mint),
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
@@ -261,8 +261,8 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         );
         transfer_from_user_to_pool_vault(
             &ctx.payer,
-            &token_account_1,
-            &vault_1,
+            &token_account_1.to_account_info(),
+            &vault_1.to_account_info(),
             Some(vault_1_mint),
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
@@ -274,8 +274,8 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         }
         transfer_from_pool_vault_to_user(
             &ctx.pool_state,
-            &vault_0,
-            &token_account_0,
+            &vault_0.to_account_info(),
+            &token_account_0.to_account_info(),
             Some(vault_0_mint),
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),

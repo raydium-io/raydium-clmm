@@ -4,9 +4,7 @@ use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
-use anchor_spl::token_interface::Mint;
-use anchor_spl::token_interface::Token2022;
-use anchor_spl::token_interface::TokenAccount;
+use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
 #[derive(Accounts)]
 pub struct CollectFundFee<'info> {
     /// Only admin or fund_owner can collect fee now
@@ -79,8 +77,8 @@ pub fn collect_fund_fee(
     }
     transfer_from_pool_vault_to_user(
         &ctx.accounts.pool_state,
-        &ctx.accounts.token_vault_0,
-        &ctx.accounts.recipient_token_account_0,
+        &ctx.accounts.token_vault_0.to_account_info(),
+        &ctx.accounts.recipient_token_account_0.to_account_info(),
         Some(ctx.accounts.vault_0_mint.clone()),
         &ctx.accounts.token_program,
         Some(ctx.accounts.token_program_2022.to_account_info()),
@@ -89,8 +87,8 @@ pub fn collect_fund_fee(
 
     transfer_from_pool_vault_to_user(
         &ctx.accounts.pool_state,
-        &ctx.accounts.token_vault_1,
-        &ctx.accounts.recipient_token_account_1,
+        &ctx.accounts.token_vault_1.to_account_info(),
+        &ctx.accounts.recipient_token_account_1.to_account_info(),
         Some(ctx.accounts.vault_1_mint.clone()),
         &ctx.accounts.token_program,
         Some(ctx.accounts.token_program_2022.to_account_info()),
@@ -99,8 +97,8 @@ pub fn collect_fund_fee(
 
     check_unclaimed_fees_and_vault(
         &ctx.accounts.pool_state,
-        &mut ctx.accounts.token_vault_0,
-        &mut ctx.accounts.token_vault_1,
+        &ctx.accounts.token_vault_0.to_account_info(),
+        &ctx.accounts.token_vault_1.to_account_info(),
     )?;
 
     emit!(CollectProtocolFeeEvent {

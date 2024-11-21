@@ -5,8 +5,7 @@ use crate::libraries::{
 use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
-use anchor_spl::token::Token;
-use anchor_spl::token_interface::TokenAccount;
+use anchor_spl::token::{Token, TokenAccount};
 use std::cell::RefMut;
 use std::collections::VecDeque;
 #[cfg(feature = "enable-log")]
@@ -27,32 +26,20 @@ pub struct SwapSingle<'info> {
     pub pool_state: AccountLoader<'info, PoolState>,
 
     /// The user token account for input token
-    #[account(
-        mut,
-        token::token_program = token_program,
-    )]
-    pub input_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut)]
+    pub input_token_account: Box<Account<'info, TokenAccount>>,
 
     /// The user token account for output token
-    #[account(
-        mut,
-        token::token_program = token_program,
-    )]
-    pub output_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut)]
+    pub output_token_account: Box<Account<'info, TokenAccount>>,
 
     /// The vault token account for input token
-    #[account(
-        mut,
-        token::token_program = token_program,
-    )]
-    pub input_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut)]
+    pub input_vault: Box<Account<'info, TokenAccount>>,
 
     /// The vault token account for output token
-    #[account(
-        mut,
-        token::token_program = token_program,
-    )]
-    pub output_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    #[account(mut)]
+    pub output_vault: Box<Account<'info, TokenAccount>>,
 
     /// The program account for the most recent oracle observation
     #[account(mut, address = pool_state.load()?.observation_key)]
@@ -70,16 +57,16 @@ pub struct SwapAccounts<'b, 'info> {
     pub signer: Signer<'info>,
 
     /// The user token account for input token
-    pub input_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub input_token_account: Box<Account<'info, TokenAccount>>,
 
     /// The user token account for output token
-    pub output_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub output_token_account: Box<Account<'info, TokenAccount>>,
 
     /// The vault token account for input token
-    pub input_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub input_vault: Box<Account<'info, TokenAccount>>,
 
     /// The vault token account for output token
-    pub output_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub output_vault: Box<Account<'info, TokenAccount>>,
 
     /// SPL program for token transfers
     pub token_program: Program<'info, Token>,
@@ -667,8 +654,8 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
         //  x -> y, deposit x token from user to pool vault.
         transfer_from_user_to_pool_vault(
             &ctx.signer,
-            &token_account_0,
-            &vault_0,
+            &token_account_0.to_account_info(),
+            &vault_0.to_account_info(),
             None,
             &ctx.token_program,
             None,
@@ -681,8 +668,8 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
         // x -> y，transfer y token from pool vault to user.
         transfer_from_pool_vault_to_user(
             &ctx.pool_state,
-            &vault_1,
-            &token_account_1,
+            &vault_1.to_account_info(),
+            &token_account_1.to_account_info(),
             None,
             &ctx.token_program,
             None,
@@ -691,8 +678,8 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
     } else {
         transfer_from_user_to_pool_vault(
             &ctx.signer,
-            &token_account_1,
-            &vault_1,
+            &token_account_1.to_account_info(),
+            &vault_1.to_account_info(),
             None,
             &ctx.token_program,
             None,
@@ -704,8 +691,8 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
         }
         transfer_from_pool_vault_to_user(
             &ctx.pool_state,
-            &vault_0,
-            &token_account_0,
+            &vault_0.to_account_info(),
+            &token_account_0.to_account_info(),
             None,
             &ctx.token_program,
             None,
