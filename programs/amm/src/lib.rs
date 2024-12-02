@@ -309,6 +309,7 @@ pub mod amm_v3 {
     /// * `liquidity` - The liquidity to be added, if zero, and the base_flage is specified, calculate liquidity base amount_0_max or amount_1_max according base_flag, otherwise open position with zero liquidity
     /// * `amount_0_max` - The max amount of token_0 to spend, which serves as a slippage check
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
+    /// * `with_metadata` - The flag indicating whether to create NFT mint metadata
     /// * `base_flag` - if the liquidity specified as zero, true: calculate liquidity base amount_0_max otherwise base amount_1_max
     ///
     pub fn open_position_v2<'a, 'b, 'c: 'info, 'info>(
@@ -349,6 +350,7 @@ pub mod amm_v3 {
     /// * `liquidity` - The liquidity to be added, if zero, and the base_flage is specified, calculate liquidity base amount_0_max or amount_1_max according base_flag, otherwise open position with zero liquidity
     /// * `amount_0_max` - The max amount of token_0 to spend, which serves as a slippage check
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
+    /// * `with_metadata` - The flag indicating whether to create NFT mint metadata
     /// * `base_flag` - if the liquidity specified as zero, true: calculate liquidity base amount_0_max otherwise base amount_1_max
     ///
     pub fn open_position_with_token22_nft<'a, 'b, 'c: 'info, 'info>(

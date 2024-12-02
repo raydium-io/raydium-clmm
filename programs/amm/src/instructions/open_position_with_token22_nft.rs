@@ -151,7 +151,7 @@ pub fn open_position_with_token22_nft<'a, 'b, 'c: 'info, 'info>(
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
-    with_matedata: bool,
+    with_metadata: bool,
     base_flag: Option<bool>,
 ) -> Result<()> {
     create_position_nft_mint_with_extensions(
@@ -161,7 +161,7 @@ pub fn open_position_with_token22_nft<'a, 'b, 'c: 'info, 'info>(
         &ctx.accounts.personal_position.to_account_info(),
         &ctx.accounts.system_program,
         &ctx.accounts.token_program_2022,
-        with_matedata,
+        with_metadata,
     )?;
 
     // create user position nft account
@@ -210,7 +210,7 @@ pub fn open_position_with_token22_nft<'a, 'b, 'c: 'info, 'info>(
         tick_upper_index,
         tick_array_lower_start_index,
         tick_array_upper_start_index,
-        with_matedata,
+        with_metadata,
         base_flag,
         true,
     )

@@ -165,7 +165,7 @@ pub fn open_position_v2<'a, 'b, 'c: 'info, 'info>(
     tick_upper_index: i32,
     tick_array_lower_start_index: i32,
     tick_array_upper_start_index: i32,
-    with_matedata: bool,
+    with_metadata: bool,
     base_flag: Option<bool>,
 ) -> Result<()> {
     open_position(
@@ -201,7 +201,7 @@ pub fn open_position_v2<'a, 'b, 'c: 'info, 'info>(
         tick_upper_index,
         tick_array_lower_start_index,
         tick_array_upper_start_index,
-        with_matedata,
+        with_metadata,
         base_flag,
         false,
     )
