@@ -107,12 +107,12 @@ pub fn get_pool_mints_transfer_fee(
         TransferFeeInfo {
             mint: token_mint_0,
             owner: mint0_account.owner,
-            transfer_fee: get_transfer_fee(&mint0_state, pre_fee_amount_0, epoch),
+            transfer_fee: get_transfer_fee(&mint0_state, epoch, pre_fee_amount_0),
         },
         TransferFeeInfo {
             mint: token_mint_1,
             owner: mint1_account.owner,
-            transfer_fee: get_transfer_fee(&mint1_state, pre_fee_amount_1, epoch),
+            transfer_fee: get_transfer_fee(&mint1_state, epoch, pre_fee_amount_1),
         },
     )
 }
