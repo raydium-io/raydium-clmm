@@ -44,7 +44,7 @@ use raydium_amm_v3::{
 };
 use spl_associated_token_account::get_associated_token_address;
 use spl_token_2022::{
-    extension::StateWithExtensionsMut,
+    extension::StateWithExtensions,
     state::Mint,
     state::{Account, AccountState},
 };
@@ -250,25 +250,47 @@ fn load_cur_and_next_five_tick_array(
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct TokenInfo {
+struct PositionNftTokenInfo {
     key: Pubkey,
+    program: Pubkey,
+    position: Pubkey,
     mint: Pubkey,
     amount: u64,
     decimals: u8,
 }
-fn get_nft_account_and_position_by_owner(
+fn get_all_nft_and_position_by_owner(
     client: &RpcClient,
     owner: &Pubkey,
     raydium_amm_v3_program: &Pubkey,
-) -> (Vec<TokenInfo>, Vec<Pubkey>) {
+) -> Vec<PositionNftTokenInfo> {
+    let mut spl_nfts = get_nft_account_and_position_by_owner(
+        client,
+        owner,
+        spl_token::id(),
+        raydium_amm_v3_program,
+    );
+    let spl_2022_nfts = get_nft_account_and_position_by_owner(
+        client,
+        owner,
+        spl_token_2022::id(),
+        raydium_amm_v3_program,
+    );
+    spl_nfts.extend(spl_2022_nfts);
+    spl_nfts
+}
+fn get_nft_account_and_position_by_owner(
+    client: &RpcClient,
+    owner: &Pubkey,
+    token_program: Pubkey,
+    raydium_amm_v3_program: &Pubkey,
+) -> Vec<PositionNftTokenInfo> {
     let all_tokens = client
-        .get_token_accounts_by_owner(owner, TokenAccountsFilter::ProgramId(spl_token::id()))
+        .get_token_accounts_by_owner(owner, TokenAccountsFilter::ProgramId(token_program))
         .unwrap();
-    let mut nft_account = Vec::new();
-    let mut user_position_account = Vec::new();
+    let mut position_nft_accounts = Vec::new();
     for keyed_account in all_tokens {
         if let UiAccountData::Json(parsed_account) = keyed_account.account.data {
-            if parsed_account.program == "spl-token" {
+            if parsed_account.program == "spl-token" || parsed_account.program == "spl-token-2022" {
                 if let Ok(TokenAccountType::Account(ui_token_account)) =
                     serde_json::from_value(parsed_account.parsed)
                 {
@@ -301,19 +323,20 @@ fn get_nft_account_and_position_by_owner(
                             ],
                             &raydium_amm_v3_program,
                         );
-                        nft_account.push(TokenInfo {
+                        position_nft_accounts.push(PositionNftTokenInfo {
                             key: token_account,
+                            program: token_program,
+                            position: position_pda,
                             mint: token,
                             amount: token_amount,
                             decimals: ui_token_account.token_amount.decimals,
                         });
-                        user_position_account.push(position_pda);
                     }
                 }
             }
         }
     }
-    (nft_account, user_position_account)
+    position_nft_accounts
 }
 
 #[derive(Debug, Parser)]
@@ -1130,11 +1153,15 @@ fn main() -> Result<()> {
                     pool.tick_spacing.into(),
                 );
             // load position
-            let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(
+            let position_nft_infos = get_all_nft_and_position_by_owner(
                 &rpc_client,
                 &payer.pubkey(),
                 &pool_config.raydium_v3_program,
             );
+            let positions: Vec<Pubkey> = position_nft_infos
+                .iter()
+                .map(|item| item.position)
+                .collect();
             let rsps = rpc_client.get_multiple_accounts(&positions)?;
             let mut user_positions = Vec::new();
             for rsp in rsps {
@@ -1171,7 +1198,7 @@ fn main() -> Result<()> {
                 let request_inits_instr =
                     ComputeBudgetInstruction::set_compute_unit_limit(1400_000u32);
                 instructions.push(request_inits_instr);
-                let open_position_instr = open_position_instr(
+                let open_position_instr = open_position_with_token22_nft_instr(
                     &pool_config.clone(),
                     pool_config.pool_id_account.unwrap(),
                     pool.token_vault_0,
@@ -1180,13 +1207,15 @@ fn main() -> Result<()> {
                     pool.token_mint_1,
                     nft_mint.pubkey(),
                     payer.pubkey(),
-                    spl_associated_token_account::get_associated_token_address(
+                    spl_associated_token_account::get_associated_token_address_with_program_id(
                         &payer.pubkey(),
                         &pool_config.mint0.unwrap(),
+                        &transfer_fee.0.owner,
                     ),
-                    spl_associated_token_account::get_associated_token_address(
+                    spl_associated_token_account::get_associated_token_address_with_program_id(
                         &payer.pubkey(),
                         &pool_config.mint1.unwrap(),
+                        &transfer_fee.1.owner,
                     ),
                     remaining_accounts,
                     liquidity,
@@ -1226,11 +1255,15 @@ fn main() -> Result<()> {
                 program.account(pool_config.pool_id_account.unwrap())?;
 
             // load position
-            let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(
+            let position_nft_infos = get_all_nft_and_position_by_owner(
                 &rpc_client,
                 &payer.pubkey(),
                 &pool_config.raydium_v3_program,
             );
+            let positions: Vec<Pubkey> = position_nft_infos
+                .iter()
+                .map(|item| item.position)
+                .collect();
             let rsps = rpc_client.get_multiple_accounts(&positions)?;
             let mut user_positions = Vec::new();
             for rsp in rsps {
@@ -1356,13 +1389,15 @@ fn main() -> Result<()> {
                     pool.token_mint_0,
                     pool.token_mint_1,
                     find_position.nft_mint,
-                    spl_associated_token_account::get_associated_token_address(
+                    spl_associated_token_account::get_associated_token_address_with_program_id(
                         &payer.pubkey(),
                         &pool_config.mint0.unwrap(),
+                        &transfer_fee.0.owner,
                     ),
-                    spl_associated_token_account::get_associated_token_address(
+                    spl_associated_token_account::get_associated_token_address_with_program_id(
                         &payer.pubkey(),
                         &pool_config.mint1.unwrap(),
+                        &transfer_fee.0.owner,
                     ),
                     remaining_accounts,
                     liquidity,
@@ -1410,11 +1445,15 @@ fn main() -> Result<()> {
                     pool.tick_spacing.into(),
                 );
             // load position
-            let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(
+            let position_nft_infos = get_all_nft_and_position_by_owner(
                 &rpc_client,
                 &payer.pubkey(),
                 &pool_config.raydium_v3_program,
             );
+            let positions: Vec<Pubkey> = position_nft_infos
+                .iter()
+                .map(|item| item.position)
+                .collect();
             let rsps = rpc_client.get_multiple_accounts(&positions)?;
             let mut user_positions = Vec::new();
             for rsp in rsps {
@@ -1502,13 +1541,15 @@ fn main() -> Result<()> {
                     pool.token_mint_0,
                     pool.token_mint_1,
                     find_position.nft_mint,
-                    spl_associated_token_account::get_associated_token_address(
+                    spl_associated_token_account::get_associated_token_address_with_program_id(
                         &payer.pubkey(),
                         &pool_config.mint0.unwrap(),
+                        &transfer_fee.0.owner,
                     ),
-                    spl_associated_token_account::get_associated_token_address(
+                    spl_associated_token_account::get_associated_token_address_with_program_id(
                         &payer.pubkey(),
                         &pool_config.mint1.unwrap(),
+                        &transfer_fee.1.owner,
                     ),
                     remaining_accounts,
                     liquidity,
@@ -1572,10 +1613,10 @@ fn main() -> Result<()> {
             let [user_input_account, user_output_account, amm_config_account, pool_account, tickarray_bitmap_extension_account] =
                 array_ref![rsps, 0, 5];
             let user_input_state =
-                spl_token::state::Account::unpack(&user_input_account.as_ref().unwrap().data)
+                StateWithExtensions::<Account>::unpack(&user_input_account.as_ref().unwrap().data)
                     .unwrap();
             let user_output_state =
-                spl_token::state::Account::unpack(&user_output_account.as_ref().unwrap().data)
+                StateWithExtensions::<Account>::unpack(&user_output_account.as_ref().unwrap().data)
                     .unwrap();
             let amm_config_state = deserialize_anchor_account::<raydium_amm_v3::states::AmmConfig>(
                 amm_config_account.as_ref().unwrap(),
@@ -1587,8 +1628,8 @@ fn main() -> Result<()> {
                 deserialize_anchor_account::<raydium_amm_v3::states::TickArrayBitmapExtension>(
                     tickarray_bitmap_extension_account.as_ref().unwrap(),
                 )?;
-            let zero_for_one = user_input_state.mint == pool_state.token_mint_0
-                && user_output_state.mint == pool_state.token_mint_1;
+            let zero_for_one = user_input_state.base.mint == pool_state.token_mint_0
+                && user_output_state.base.mint == pool_state.token_mint_1;
             // load tick_arrays
             let mut tick_arrays = load_cur_and_next_five_tick_array(
                 &rpc_client,
@@ -1736,16 +1777,15 @@ fn main() -> Result<()> {
             let [user_input_account, user_output_account, amm_config_account, pool_account, tickarray_bitmap_extension_account, mint0_account, mint1_account] =
                 array_ref![rsps, 0, 7];
 
-            let mut user_input_token_data = user_input_account.clone().unwrap().data;
-            let user_input_state =
-                StateWithExtensionsMut::<Account>::unpack(&mut user_input_token_data)?;
-            let mut user_output_token_data = user_output_account.clone().unwrap().data;
+            let user_input_token_data = user_input_account.clone().unwrap().data;
+            let user_input_state = StateWithExtensions::<Account>::unpack(&user_input_token_data)?;
+            let user_output_token_data = user_output_account.clone().unwrap().data;
             let user_output_state =
-                StateWithExtensionsMut::<Account>::unpack(&mut user_output_token_data)?;
-            let mut mint0_data = mint0_account.clone().unwrap().data;
-            let mint0_state = StateWithExtensionsMut::<Mint>::unpack(&mut mint0_data)?;
-            let mut mint1_data = mint1_account.clone().unwrap().data;
-            let mint1_state = StateWithExtensionsMut::<Mint>::unpack(&mut mint1_data)?;
+                StateWithExtensions::<Account>::unpack(&user_output_token_data)?;
+            let mint0_data = mint0_account.clone().unwrap().data;
+            let mint0_state = StateWithExtensions::<Mint>::unpack(&mint0_data)?;
+            let mint1_data = mint1_account.clone().unwrap().data;
+            let mint1_state = StateWithExtensions::<Mint>::unpack(&mint1_data)?;
             let amm_config_state = deserialize_anchor_account::<raydium_amm_v3::states::AmmConfig>(
                 amm_config_account.as_ref().unwrap(),
             )?;
@@ -1902,11 +1942,15 @@ fn main() -> Result<()> {
         }
         CommandsName::PPositionByOwner { user_wallet } => {
             // load position
-            let (_nft_tokens, positions) = get_nft_account_and_position_by_owner(
+            let position_nft_infos = get_all_nft_and_position_by_owner(
                 &rpc_client,
                 &user_wallet,
                 &pool_config.raydium_v3_program,
             );
+            let positions: Vec<Pubkey> = position_nft_infos
+                .iter()
+                .map(|item| item.position)
+                .collect();
             let rsps = rpc_client.get_multiple_accounts(&positions)?;
             let mut user_positions = Vec::new();
             for rsp in rsps {
@@ -1968,15 +2012,15 @@ fn main() -> Result<()> {
             println!("mint0:{}, mint1:{}", token_mint_0, token_mint_1);
         }
         CommandsName::PMint { mint } => {
-            let mint_data = &mut rpc_client.get_account_data(&mint)?;
-            let mint_state = StateWithExtensionsMut::<Mint>::unpack(mint_data)?;
+            let mint_data = &rpc_client.get_account_data(&mint)?;
+            let mint_state = StateWithExtensions::<Mint>::unpack(mint_data)?;
             println!("mint_state:{:?}", mint_state);
             let extensions = get_account_extensions(&mint_state);
             println!("mint_extensions:{:#?}", extensions);
         }
         CommandsName::PToken { token } => {
-            let token_data = &mut rpc_client.get_account_data(&token)?;
-            let token_state = StateWithExtensionsMut::<Account>::unpack(token_data)?;
+            let token_data = &rpc_client.get_account_data(&token)?;
+            let token_state = StateWithExtensions::<Account>::unpack(token_data)?;
             println!("token_state:{:?}", token_state);
             let extensions = get_account_extensions(&token_state);
             println!("token_extensions:{:#?}", extensions);

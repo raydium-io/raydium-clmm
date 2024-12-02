@@ -17,7 +17,7 @@ use spl_token_2022::{
         non_transferable::{NonTransferable, NonTransferableAccount},
         permanent_delegate::PermanentDelegate,
         transfer_fee::{TransferFeeAmount, TransferFeeConfig, MAX_FEE_BASIS_POINTS},
-        BaseState, BaseStateWithExtensions, ExtensionType, StateWithExtensionsMut,
+        BaseState, BaseStateWithExtensions, ExtensionType, StateWithExtensions,
     },
     state::Mint,
 };
@@ -71,10 +71,10 @@ pub fn get_pool_mints_inverse_fee(
     let load_accounts = vec![token_mint_0, token_mint_1];
     let rsps = rpc_client.get_multiple_accounts(&load_accounts).unwrap();
     let epoch = rpc_client.get_epoch_info().unwrap().epoch;
-    let mut mint0_account = rsps[0].clone().ok_or("load mint0 rps error!").unwrap();
-    let mut mint1_account = rsps[1].clone().ok_or("load mint0 rps error!").unwrap();
-    let mint0_state = StateWithExtensionsMut::<Mint>::unpack(&mut mint0_account.data).unwrap();
-    let mint1_state = StateWithExtensionsMut::<Mint>::unpack(&mut mint1_account.data).unwrap();
+    let mint0_account = rsps[0].clone().ok_or("load mint0 rps error!").unwrap();
+    let mint1_account = rsps[1].clone().ok_or("load mint0 rps error!").unwrap();
+    let mint0_state = StateWithExtensions::<Mint>::unpack(&mint0_account.data).unwrap();
+    let mint1_state = StateWithExtensions::<Mint>::unpack(&mint1_account.data).unwrap();
     (
         TransferFeeInfo {
             mint: token_mint_0,
@@ -99,10 +99,10 @@ pub fn get_pool_mints_transfer_fee(
     let load_accounts = vec![token_mint_0, token_mint_1];
     let rsps = rpc_client.get_multiple_accounts(&load_accounts).unwrap();
     let epoch = rpc_client.get_epoch_info().unwrap().epoch;
-    let mut mint0_account = rsps[0].clone().ok_or("load mint0 rps error!").unwrap();
-    let mut mint1_account = rsps[1].clone().ok_or("load mint0 rps error!").unwrap();
-    let mint0_state = StateWithExtensionsMut::<Mint>::unpack(&mut mint0_account.data).unwrap();
-    let mint1_state = StateWithExtensionsMut::<Mint>::unpack(&mut mint1_account.data).unwrap();
+    let mint0_account = rsps[0].clone().ok_or("load mint0 rps error!").unwrap();
+    let mint1_account = rsps[1].clone().ok_or("load mint0 rps error!").unwrap();
+    let mint0_state = StateWithExtensions::<Mint>::unpack(&mint0_account.data).unwrap();
+    let mint1_state = StateWithExtensions::<Mint>::unpack(&mint1_account.data).unwrap();
     (
         TransferFeeInfo {
             mint: token_mint_0,
@@ -119,7 +119,7 @@ pub fn get_pool_mints_transfer_fee(
 
 /// Calculate the fee for output amount
 pub fn get_transfer_inverse_fee<'data, S: BaseState>(
-    account_state: &StateWithExtensionsMut<'data, S>,
+    account_state: &StateWithExtensions<'data, S>,
     epoch: u64,
     post_fee_amount: u64,
 ) -> u64 {
@@ -140,7 +140,7 @@ pub fn get_transfer_inverse_fee<'data, S: BaseState>(
 
 /// Calculate the fee for input amount
 pub fn get_transfer_fee<'data, S: BaseState>(
-    account_state: &StateWithExtensionsMut<'data, S>,
+    account_state: &StateWithExtensions<'data, S>,
     epoch: u64,
     pre_fee_amount: u64,
 ) -> u64 {
@@ -155,7 +155,7 @@ pub fn get_transfer_fee<'data, S: BaseState>(
 }
 
 pub fn get_account_extensions<'data, S: BaseState>(
-    account_state: &StateWithExtensionsMut<'data, S>,
+    account_state: &StateWithExtensions<'data, S>,
 ) -> Vec<ExtensionStruct> {
     let mut extensions: Vec<ExtensionStruct> = Vec::new();
     let extension_types = account_state.get_extension_types().unwrap();
