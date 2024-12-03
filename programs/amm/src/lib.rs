@@ -21,9 +21,9 @@ solana_security_txt::security_txt! {
 }
 
 #[cfg(feature = "testnet")]
-declare_id!("3RSWhwCHPj4cxRm3SPBwmzuJAXVWt1YHBfYr7MgP2jxK");
+declare_id!("8ZyF28dyVvevYtdDUSRQGgbHtMV8cYZw53oY4c4ZvkgJ");
 #[cfg(not(feature = "testnet"))]
-declare_id!("3RSWhwCHPj4cxRm3SPBwmzuJAXVWt1YHBfYr7MgP2jxK");
+declare_id!("8ZyF28dyVvevYtdDUSRQGgbHtMV8cYZw53oY4c4ZvkgJ");
 
 pub mod admin {
     use anchor_lang::prelude::declare_id;
