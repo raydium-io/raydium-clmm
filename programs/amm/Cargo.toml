@@ -19,7 +19,7 @@ client = []
 no-log-ix-name = []
 init_if_needed = []
 enable-log = []
-devnet = []
+testnet = []
 paramset = []
 
 [dependencies]
