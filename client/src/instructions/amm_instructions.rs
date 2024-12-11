@@ -512,6 +512,7 @@ pub fn swap_instr(
     user_input_token: Pubkey,
     user_out_put_token: Pubkey,
     tick_array: Pubkey,
+    event_authority: Pubkey,
     remaining_accounts: Vec<AccountMeta>,
     amount: u64,
     other_amount_threshold: u64,
@@ -536,6 +537,8 @@ pub fn swap_instr(
             tick_array,
             observation_state,
             token_program: spl_token::id(),
+            event_authority,
+            program: program.id(),
         })
         .accounts(remaining_accounts)
         .args(raydium_instruction::Swap {
@@ -559,6 +562,7 @@ pub fn swap_v2_instr(
     user_out_put_token: Pubkey,
     input_vault_mint: Pubkey,
     output_vault_mint: Pubkey,
+    event_authority: Pubkey,
     remaining_accounts: Vec<AccountMeta>,
     amount: u64,
     other_amount_threshold: u64,
@@ -586,6 +590,8 @@ pub fn swap_v2_instr(
             memo_program: spl_memo::id(),
             input_vault_mint,
             output_vault_mint,
+            event_authority,
+            program: program.id(),
         })
         .accounts(remaining_accounts)
         .args(raydium_instruction::SwapV2 {

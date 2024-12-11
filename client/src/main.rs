@@ -1669,6 +1669,13 @@ fn main() -> Result<()> {
             let mut instructions = Vec::new();
             let request_inits_instr = ComputeBudgetInstruction::set_compute_unit_limit(1400_000u32);
             instructions.push(request_inits_instr);
+
+            let event_authority = Pubkey::find_program_address(
+                &["__event_authority".as_bytes()],
+                &pool_config.raydium_v3_program,
+            )
+            .0;
+
             let swap_instr = swap_instr(
                 &pool_config.clone(),
                 pool_state.amm_config,
@@ -1687,6 +1694,7 @@ fn main() -> Result<()> {
                 input_token,
                 output_token,
                 current_or_next_tick_array_key,
+                event_authority,
                 remaining_accounts,
                 amount,
                 other_amount_threshold,
@@ -1847,6 +1855,13 @@ fn main() -> Result<()> {
             let mut instructions = Vec::new();
             let request_inits_instr = ComputeBudgetInstruction::set_compute_unit_limit(1400_000u32);
             instructions.push(request_inits_instr);
+
+            let event_authority = Pubkey::find_program_address(
+                &["__event_authority".as_bytes()],
+                &pool_config.raydium_v3_program,
+            )
+            .0;
+
             let swap_instr = swap_v2_instr(
                 &pool_config.clone(),
                 pool_state.amm_config,
@@ -1874,6 +1889,7 @@ fn main() -> Result<()> {
                 } else {
                     pool_state.token_mint_0
                 },
+                event_authority,
                 remaining_accounts,
                 amount,
                 other_amount_threshold,
