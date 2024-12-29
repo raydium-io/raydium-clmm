@@ -810,7 +810,7 @@ pub fn swap<'a, 'b, 'c: 'info, 'info>(
 pub fn swap_on_swap_state(
     amm_config: &AmmConfig,
     pool_state: &PoolState,
-    updated_reward_infos: &[RewardInfo; REWARD_NUM],
+    _updated_reward_infos: &[RewardInfo; REWARD_NUM],
     mut state: SwapState,
     mut tick_array_states: VecDeque<&TickArrayState>,
     tickarray_bitmap_extension: &Option<TickArrayBitmapExtension>,
@@ -819,6 +819,11 @@ pub fn swap_on_swap_state(
     zero_for_one: bool,
     is_base_input: bool,
 ) -> Result<(SwapState, u64, u64)> {
+    require!(amount_specified != 0, ErrorCode::ZeroAmountSpecified);
+    if !pool_state.get_status_by_bit(PoolStatusBitIndex::Swap) {
+        return err!(ErrorCode::NotApproved);
+    }
+
     let mut tick_array_current = tick_array_states
         .pop_front()
         .ok_or(ErrorCode::InvalidTickArrayBoundary)?;
