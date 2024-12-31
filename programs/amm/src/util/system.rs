@@ -55,12 +55,12 @@ pub fn create_or_allocate_account<'a>(
     Ok(())
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "client")))]
 pub fn get_recent_epoch() -> Result<u64> {
     Ok(Clock::get()?.epoch)
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "client"))]
 pub fn get_recent_epoch() -> Result<u64> {
     use std::time::{SystemTime, UNIX_EPOCH};
     Ok(SystemTime::now()
