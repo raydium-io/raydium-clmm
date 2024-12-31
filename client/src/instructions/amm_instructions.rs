@@ -409,6 +409,7 @@ pub fn increase_liquidity_instr(
     token_mint_0: Pubkey,
     token_mint_1: Pubkey,
     nft_mint_key: Pubkey,
+    nft_token_key: Pubkey,
     user_token_account_0: Pubkey,
     user_token_account_1: Pubkey,
     remaining_accounts: Vec<AccountMeta>,
@@ -425,8 +426,6 @@ pub fn increase_liquidity_instr(
     // Client.
     let client = Client::new(url, Rc::new(payer));
     let program = client.program(config.raydium_v3_program)?;
-    let nft_ata_token_account =
-        spl_associated_token_account::get_associated_token_address(&program.payer(), &nft_mint_key);
     let (tick_array_lower, __bump) = Pubkey::find_program_address(
         &[
             TICK_ARRAY_SEED.as_bytes(),
@@ -461,7 +460,7 @@ pub fn increase_liquidity_instr(
         .request()
         .accounts(raydium_accounts::IncreaseLiquidityV2 {
             nft_owner: program.payer(),
-            nft_account: nft_ata_token_account,
+            nft_account: nft_token_key,
             pool_state: pool_account_key,
             protocol_position: protocol_position_key,
             personal_position: personal_position_key,
@@ -495,6 +494,7 @@ pub fn decrease_liquidity_instr(
     token_mint_0: Pubkey,
     token_mint_1: Pubkey,
     nft_mint_key: Pubkey,
+    nft_token_key: Pubkey,
     user_token_account_0: Pubkey,
     user_token_account_1: Pubkey,
     remaining_accounts: Vec<AccountMeta>,
@@ -511,8 +511,6 @@ pub fn decrease_liquidity_instr(
     // Client.
     let client = Client::new(url, Rc::new(payer));
     let program = client.program(config.raydium_v3_program)?;
-    let nft_ata_token_account =
-        spl_associated_token_account::get_associated_token_address(&program.payer(), &nft_mint_key);
     let (personal_position_key, __bump) = Pubkey::find_program_address(
         &[POSITION_SEED.as_bytes(), nft_mint_key.to_bytes().as_ref()],
         &program.id(),
@@ -546,7 +544,7 @@ pub fn decrease_liquidity_instr(
         .request()
         .accounts(raydium_accounts::DecreaseLiquidityV2 {
             nft_owner: program.payer(),
-            nft_account: nft_ata_token_account,
+            nft_account: nft_token_key,
             personal_position: personal_position_key,
             pool_state: pool_account_key,
             protocol_position: protocol_position_key,
@@ -575,14 +573,14 @@ pub fn decrease_liquidity_instr(
 pub fn close_personal_position_instr(
     config: &ClientConfig,
     nft_mint_key: Pubkey,
+    nft_token_key: Pubkey,
+    nft_token_program: Pubkey,
 ) -> Result<Vec<Instruction>> {
     let payer = read_keypair_file(&config.payer_path)?;
     let url = Cluster::Custom(config.http_url.clone(), config.ws_url.clone());
     // Client.
     let client = Client::new(url, Rc::new(payer));
     let program = client.program(config.raydium_v3_program)?;
-    let nft_ata_token_account =
-        spl_associated_token_account::get_associated_token_address(&program.payer(), &nft_mint_key);
     let (personal_position_key, __bump) = Pubkey::find_program_address(
         &[POSITION_SEED.as_bytes(), nft_mint_key.to_bytes().as_ref()],
         &program.id(),
@@ -592,10 +590,10 @@ pub fn close_personal_position_instr(
         .accounts(raydium_accounts::ClosePosition {
             nft_owner: program.payer(),
             position_nft_mint: nft_mint_key,
-            position_nft_account: nft_ata_token_account,
+            position_nft_account: nft_token_key,
             personal_position: personal_position_key,
             system_program: system_program::id(),
-            token_program: spl_token::id(),
+            token_program: nft_token_program,
         })
         .args(raydium_instruction::ClosePosition)
         .instructions()?;

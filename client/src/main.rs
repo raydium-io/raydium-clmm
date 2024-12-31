@@ -1374,6 +1374,10 @@ fn main() -> Result<()> {
             if find_position.nft_mint != Pubkey::default()
                 && find_position.pool_id == pool_config.pool_id_account.unwrap()
             {
+                let user_nft_token_info = position_nft_infos
+                    .iter()
+                    .find(|&nft_info| nft_info.mint == find_position.nft_mint)
+                    .unwrap();
                 // personal position exist
                 let mut remaining_accounts = Vec::new();
                 remaining_accounts.push(AccountMeta::new_readonly(
@@ -1389,6 +1393,7 @@ fn main() -> Result<()> {
                     pool.token_mint_0,
                     pool.token_mint_1,
                     find_position.nft_mint,
+                    user_nft_token_info.key,
                     spl_associated_token_account::get_associated_token_address_with_program_id(
                         &payer.pubkey(),
                         &pool_config.mint0.unwrap(),
@@ -1480,6 +1485,10 @@ fn main() -> Result<()> {
             if find_position.nft_mint != Pubkey::default()
                 && find_position.pool_id == pool_config.pool_id_account.unwrap()
             {
+                let user_nft_token_info = position_nft_infos
+                    .iter()
+                    .find(|&nft_info| nft_info.mint == find_position.nft_mint)
+                    .unwrap();
                 let mut reward_vault_with_user_vault: Vec<Pubkey> = Vec::new();
                 for item in pool.reward_infos.into_iter() {
                     if item.token_mint != Pubkey::default() {
@@ -1541,6 +1550,7 @@ fn main() -> Result<()> {
                     pool.token_mint_0,
                     pool.token_mint_1,
                     find_position.nft_mint,
+                    user_nft_token_info.key,
                     spl_associated_token_account::get_associated_token_address_with_program_id(
                         &payer.pubkey(),
                         &pool_config.mint0.unwrap(),
@@ -1564,6 +1574,8 @@ fn main() -> Result<()> {
                     let close_position_instr = close_personal_position_instr(
                         &pool_config.clone(),
                         find_position.nft_mint,
+                        user_nft_token_info.key,
+                        user_nft_token_info.program,
                     )?;
                     decrease_instr.extend(close_position_instr);
                 }
