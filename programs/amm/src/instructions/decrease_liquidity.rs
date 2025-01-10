@@ -14,7 +14,7 @@ use std::ops::Deref;
 pub const DECREASE_MEMO_MSG: &'static [u8] = b"raydium_decrease";
 #[derive(Accounts)]
 pub struct DecreaseLiquidity<'info> {
-    /// The position owner or delegated authority
+    /// The position owner
     pub nft_owner: Signer<'info>,
 
     /// The token account for the tokenized position

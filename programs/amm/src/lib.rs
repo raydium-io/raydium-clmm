@@ -99,7 +99,25 @@ pub mod amm_v3 {
         sqrt_price_x64: u128,
         open_time: u64,
     ) -> Result<()> {
-        instructions::create_pool(ctx, sqrt_price_x64, open_time)
+        instructions::create_pool_v2(ctx, sqrt_price_x64, open_time, None)
+    }
+
+    /// Creates a pool with the given nonce ken pair and the initial price
+    /// pool is pda generate by the given nonce
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx`- The context of accounts
+    /// * `sqrt_price_x64` - the initial sqrt price (amount_token_1 / amount_token_0) of the pool as a Q64.64
+    /// * `nonce` - the seed of generate pool address, can't be 0
+    ///
+    pub fn create_pool_v2(
+        ctx: Context<CreatePool>,
+        sqrt_price_x64: u128,
+        open_time: u64,
+        nonce: u8,
+    ) -> Result<()> {
+        instructions::create_pool_v2(ctx, sqrt_price_x64, open_time, Some(nonce))
     }
 
     /// Update pool status for given vaule

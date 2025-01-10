@@ -112,8 +112,10 @@ pub struct PoolState {
     /// bit3, 1: disable collect reward, 0: normal
     /// bit4, 1: disable swap, 0: normal
     pub status: u8,
+    /// nonce for calculate address
+    pub nonce: [u8; 1],
     /// Leave blank for future use
-    pub padding: [u8; 7],
+    pub padding: [u8; 6],
 
     pub reward_infos: [RewardInfo; REWARD_NUM],
 
@@ -165,14 +167,27 @@ impl PoolState {
         + 8 * 16
         + 512;
 
-    pub fn seeds(&self) -> [&[u8]; 5] {
-        [
-            &POOL_SEED.as_bytes(),
-            self.amm_config.as_ref(),
-            self.token_mint_0.as_ref(),
-            self.token_mint_1.as_ref(),
-            self.bump.as_ref(),
-        ]
+    pub fn seeds(&self) -> Vec<&[u8]> {
+        if self.nonce[0] == 0 {
+            [
+                &POOL_SEED.as_bytes(),
+                self.amm_config.as_ref(),
+                self.token_mint_0.as_ref(),
+                self.token_mint_1.as_ref(),
+                self.bump.as_ref(),
+            ]
+            .to_vec()
+        } else {
+            [
+                &POOL_SEED.as_bytes(),
+                self.amm_config.as_ref(),
+                self.token_mint_0.as_ref(),
+                self.token_mint_1.as_ref(),
+                self.nonce.as_ref(),
+                self.bump.as_ref(),
+            ]
+            .to_vec()
+        }
     }
 
     pub fn key(&self) -> Pubkey {
@@ -181,6 +196,7 @@ impl PoolState {
 
     pub fn initialize(
         &mut self,
+        nonce: Option<u8>,
         bump: u8,
         sqrt_price_x64: u128,
         open_time: u64,
@@ -218,7 +234,8 @@ impl PoolState {
         self.swap_in_amount_token_1 = 0;
         self.swap_out_amount_token_0 = 0;
         self.status = 0;
-        self.padding = [0; 7];
+        self.nonce = [if nonce.is_some() { nonce.unwrap() } else { 0 }];
+        self.padding = [0; 6];
         self.tick_array_bitmap = [0; 16];
         self.total_fees_token_0 = 0;
         self.total_fees_claimed_token_0 = 0;
@@ -1592,7 +1609,8 @@ pub mod pool_test {
             let swap_in_amount_token_1: u128 = 0x11223344556677008899aabbccddeeff;
             let swap_out_amount_token_0: u128 = 0x11223344556677880099aabbccddeeff;
             let status: u8 = 0x1b;
-            let padding: [u8; 7] = [0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18];
+            let nonce: u8 = 0x12;
+            let padding: [u8; 6] = [0x13, 0x14, 0x15, 0x16, 0x17, 0x18];
             // RewardInfo
             let reward_state: u8 = 0x1c;
             let open_time: u64 = 0x123456789abc0def;
@@ -1734,8 +1752,10 @@ pub mod pool_test {
             offset += 16;
             pool_data[offset..offset + 1].copy_from_slice(&status.to_le_bytes());
             offset += 1;
-            pool_data[offset..offset + 7].copy_from_slice(&padding);
-            offset += 7;
+            pool_data[offset..offset + 1].copy_from_slice(&nonce.to_le_bytes());
+            offset += 1;
+            pool_data[offset..offset + 6].copy_from_slice(&padding);
+            offset += 6;
             pool_data[offset..offset + RewardInfo::LEN * REWARD_NUM]
                 .copy_from_slice(&reward_info_datas);
             offset += RewardInfo::LEN * REWARD_NUM;
@@ -1823,6 +1843,8 @@ pub mod pool_test {
             assert_eq!(unpack_swap_out_amount_token_0, swap_out_amount_token_0);
             let unpack_status = unpack_data.status;
             assert_eq!(unpack_status, status);
+            let unpack_nonce = unpack_data.nonce[0];
+            assert_eq!(unpack_nonce, nonce);
             let unpack_padding = unpack_data.padding;
             assert_eq!(unpack_padding, padding);
 

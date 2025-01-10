@@ -7,7 +7,7 @@ use anchor_spl::token_interface::{Token2022, TokenAccount};
 
 #[derive(Accounts)]
 pub struct DecreaseLiquidityV2<'info> {
-    /// The position owner or delegated authority
+    /// The position owner
     pub nft_owner: Signer<'info>,
 
     /// The token account for the tokenized position
