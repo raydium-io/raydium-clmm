@@ -109,12 +109,14 @@ pub struct CreatePool<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, _open_time: u64) -> Result<()> {
+pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u64) -> Result<()> {
     if !(util::is_supported_mint(&ctx.accounts.token_mint_0).unwrap()
         && util::is_supported_mint(&ctx.accounts.token_mint_1).unwrap())
     {
         return err!(ErrorCode::NotSupportMint);
     }
+    let block_timestamp = solana_program::clock::Clock::get()?.unix_timestamp as u64;
+    require_gt!(block_timestamp, open_time);
     let pool_id = ctx.accounts.pool_state.key();
     let mut pool_state = ctx.accounts.pool_state.load_init()?;
 

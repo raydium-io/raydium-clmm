@@ -93,7 +93,7 @@ pub mod amm_v3 {
     ///
     /// * `ctx`- The context of accounts
     /// * `sqrt_price_x64` - the initial sqrt price (amount_token_1 / amount_token_0) of the pool as a Q64.64
-    /// Note: The open_time is an invalid parameter for now.
+    /// Note: The open_time must be smaller than the current block_timestamp on chain.
     pub fn create_pool(
         ctx: Context<CreatePool>,
         sqrt_price_x64: u128,
