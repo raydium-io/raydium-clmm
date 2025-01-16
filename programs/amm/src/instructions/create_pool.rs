@@ -109,7 +109,7 @@ pub struct CreatePool<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u64) -> Result<()> {
+pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, _open_time: u64) -> Result<()> {
     if !(util::is_supported_mint(&ctx.accounts.token_mint_0).unwrap()
         && util::is_supported_mint(&ctx.accounts.token_mint_1).unwrap())
     {
@@ -135,7 +135,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u6
     pool_state.initialize(
         bump,
         sqrt_price_x64,
-        open_time,
+        0,
         tick,
         ctx.accounts.pool_creator.key(),
         ctx.accounts.token_vault_0.key(),

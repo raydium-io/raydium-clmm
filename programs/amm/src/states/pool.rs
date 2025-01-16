@@ -131,6 +131,7 @@ pub struct PoolState {
     pub fund_fees_token_1: u64,
 
     // The timestamp allowed for swap in the pool.
+    // Note: The open_time is disabled for now.
     pub open_time: u64,
     // account recent update epoch
     pub recent_epoch: u64,
