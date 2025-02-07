@@ -21,12 +21,13 @@ use anchor_spl::token_2022::{
 use anchor_spl::token_interface::{initialize_mint2, InitializeMint2, Mint};
 use std::collections::HashSet;
 
-const MINT_WHITELIST: [&'static str; 5] = [
+const MINT_WHITELIST: [&'static str; 6] = [
     "HVbpJAQGNpkgBaYBZQBR1t7yFdvaYVp2vCQQfKKEN4tM",
     "Crn4x1Y2HUKko7ox2EZMT6N2t2ZyH7eKtwkBGVnhEq1g",
     "FrBfWJ4qE5sCzKm3k3JaAtqZcXUh4LvJygDeketsrsH4",
     "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
     "DAUDev5e4Go36o7d9LEXSKD4YeQ3tHri9oPTXWxh5YqU",
+    "AUSD1jCcCyPLybk1YnvPWsHQSrZ46dxwoMniN4N2UEB9",
 ];
 
 pub fn invoke_memo_instruction<'info>(
