@@ -1,8 +1,8 @@
 use crate::error::ErrorCode;
 use crate::libraries::{fixed_point_64, full_math::MulDiv, U256};
 use crate::states::pool::{reward_period_limit, PoolState, REWARD_NUM};
-use crate::states::*;
 use crate::util::transfer_from_user_to_pool_vault;
+use crate::{states::*, util};
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
@@ -107,6 +107,11 @@ pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
         require_keys_eq!(reward_token_vault.mint, authority_token_account.mint);
         require_keys_eq!(reward_token_vault.key(), reward_info.token_vault);
 
+        let transfer_fee: u64 =
+            util::get_transfer_inverse_fee(Box::new(reward_vault_mint.clone()), reward_amount)
+                .unwrap();
+        let reward_amount_with_transfer_fee = reward_amount.checked_add(transfer_fee).unwrap();
+
         transfer_from_user_to_pool_vault(
             &ctx.accounts.authority,
             &authority_token_account.to_account_info(),
@@ -114,7 +119,7 @@ pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
             Some(Box::new(reward_vault_mint)),
             &ctx.accounts.token_program,
             Some(ctx.accounts.token_program_2022.to_account_info()),
-            reward_amount,
+            reward_amount_with_transfer_fee,
         )?;
     }
 

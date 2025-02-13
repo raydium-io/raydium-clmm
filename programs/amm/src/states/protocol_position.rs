@@ -62,6 +62,9 @@ impl ProtocolPositionState {
         fee_growth_inside_1_x64: u128,
         reward_growths_inside: [u128; REWARD_NUM],
     ) -> Result<()> {
+        if self.liquidity == 0 && liquidity_delta == 0 {
+            return Ok(());
+        }
         require!(
             tick_lower_index >= tick_math::MIN_TICK && tick_lower_index <= tick_math::MAX_TICK,
             ErrorCode::TickLowerOverflow
@@ -70,13 +73,6 @@ impl ProtocolPositionState {
             tick_upper_index >= tick_math::MIN_TICK && tick_upper_index <= tick_math::MAX_TICK,
             ErrorCode::TickUpperOverflow
         );
-        let liquidity_next = if liquidity_delta == 0 {
-            require_gt!(self.liquidity, 0, ErrorCode::InvaildLiquidity);
-            self.liquidity
-        } else {
-            liquidity_math::add_delta(self.liquidity, liquidity_delta)?
-        };
-
         // calculate accumulated Fees
         let tokens_owed_0 =
             U128::from(fee_growth_inside_0_x64.saturating_sub(self.fee_growth_inside_0_last_x64))
@@ -89,10 +85,8 @@ impl ProtocolPositionState {
                 .unwrap()
                 .to_underflow_u64();
 
-        // Update the position
-        if liquidity_delta != 0 {
-            self.liquidity = liquidity_next;
-        }
+        // Update the position liquidity
+        self.liquidity = liquidity_math::add_delta(self.liquidity, liquidity_delta)?;
         self.fee_growth_inside_0_last_x64 = fee_growth_inside_0_x64;
         self.fee_growth_inside_1_last_x64 = fee_growth_inside_1_x64;
         self.tick_lower_index = tick_lower_index;
