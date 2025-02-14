@@ -26,7 +26,7 @@ const MINT_WHITELIST: [&'static str; 6] = [
     "Crn4x1Y2HUKko7ox2EZMT6N2t2ZyH7eKtwkBGVnhEq1g",
     "FrBfWJ4qE5sCzKm3k3JaAtqZcXUh4LvJygDeketsrsH4",
     "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
-    "DAUDev5e4Go36o7d9LEXSKD4YeQ3tHri9oPTXWxh5YqU",
+    "DAUcJBg4jSpVoEzASxYzdqHMUN8vuTpQyG2TvDcCHfZg",
     "AUSD1jCcCyPLybk1YnvPWsHQSrZ46dxwoMniN4N2UEB9",
 ];
 
