@@ -40,7 +40,7 @@ impl TickArrayState {
         )
         .0
     }
-    /// Load a TickArrayState of type AccountLoader from tickarray account info, if tickarray account is not exist, then create it.
+    /// Load a TickArrayState of type AccountLoader from tickarray account info, if tickarray account does not exist, then create it.
     pub fn get_or_create_tick_array<'info>(
         payer: AccountInfo<'info>,
         tick_array_account_info: AccountInfo<'info>,

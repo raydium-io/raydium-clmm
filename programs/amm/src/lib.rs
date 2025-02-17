@@ -38,15 +38,15 @@ pub mod amm_v3 {
 
     use super::*;
 
-    // The configuation of AMM protocol, include trade fee and protocol fee
+    // The configuration of AMM protocol, include trade fee and protocol fee
     /// # Arguments
     ///
     /// * `ctx`- The accounts needed by instruction.
     /// * `index` - The index of amm config, there may be multiple config.
     /// * `tick_spacing` - The tickspacing binding with config, cannot be changed.
     /// * `trade_fee_rate` - Trade fee rate, can be changed.
-    /// * `protocol_fee_rate` - The rate of protocol fee within tarde fee.
-    /// * `fund_fee_rate` - The rate of fund fee within tarde fee.
+    /// * `protocol_fee_rate` - The rate of protocol fee within trade fee.
+    /// * `fund_fee_rate` - The rate of fund fee within trade fee.
     ///
     pub fn create_amm_config(
         ctx: Context<CreateAmmConfig>,
@@ -81,7 +81,7 @@ pub mod amm_v3 {
     /// * `fund_fee_rate`- The new fund fee rate of amm config, be set when `param` is 2
     /// * `new_owner`- The config's new owner, be set when `param` is 3
     /// * `new_fund_owner`- The config's new fund owner, be set when `param` is 4
-    /// * `param`- The vaule can be 0 | 1 | 2 | 3 | 4, otherwise will report a error
+    /// * `param`- The value can be 0 | 1 | 2 | 3 | 4, otherwise will report a error
     ///
     pub fn update_amm_config(ctx: Context<UpdateAmmConfig>, param: u8, value: u32) -> Result<()> {
         instructions::update_amm_config(ctx, param, value)
@@ -102,12 +102,12 @@ pub mod amm_v3 {
         instructions::create_pool(ctx, sqrt_price_x64, open_time)
     }
 
-    /// Update pool status for given vaule
+    /// Update pool status for given value
     ///
     /// # Arguments
     ///
     /// * `ctx`- The context of accounts
-    /// * `status` - The vaule of status
+    /// * `status` - The value of status
     ///
     pub fn update_pool_status(ctx: Context<UpdatePoolStatus>, status: u8) -> Result<()> {
         instructions::update_pool_status(ctx, status)
@@ -128,7 +128,7 @@ pub mod amm_v3 {
     /// # Arguments
     ///
     /// * `ctx`- The context of accounts
-    /// * `param`- The vaule can be 0 | 1 | 2 | 3, otherwise will report a error
+    /// * `param`- The value can be 0 | 1 | 2 | 3, otherwise will report a error
     /// * `keys`- update operation owner when the `param` is 0
     ///           remove operation owner when the `param` is 1
     ///           update whitelist mint when the `param` is 2
@@ -199,7 +199,7 @@ pub mod amm_v3 {
         instructions::update_reward_infos(ctx)
     }
 
-    /// Restset reward param, start a new reward cycle or extend the current cycle.
+    /// Reset reward param, start a new reward cycle or extend the current cycle.
     ///
     /// # Arguments
     ///
@@ -306,7 +306,7 @@ pub mod amm_v3 {
     /// * `tick_upper_index` - The upper boundary of market
     /// * `tick_array_lower_start_index` - The start index of tick array which include tick low
     /// * `tick_array_upper_start_index` - The start index of tick array which include tick upper
-    /// * `liquidity` - The liquidity to be added, if zero, and the base_flage is specified, calculate liquidity base amount_0_max or amount_1_max according base_flag, otherwise open position with zero liquidity
+    /// * `liquidity` - The liquidity to be added, if zero, and the base_flag is specified, calculate liquidity base amount_0_max or amount_1_max according base_flag, otherwise open position with zero liquidity
     /// * `amount_0_max` - The max amount of token_0 to spend, which serves as a slippage check
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
     /// * `with_metadata` - The flag indicating whether to create NFT mint metadata
@@ -347,7 +347,7 @@ pub mod amm_v3 {
     /// * `tick_upper_index` - The upper boundary of market
     /// * `tick_array_lower_start_index` - The start index of tick array which include tick low
     /// * `tick_array_upper_start_index` - The start index of tick array which include tick upper
-    /// * `liquidity` - The liquidity to be added, if zero, and the base_flage is specified, calculate liquidity base amount_0_max or amount_1_max according base_flag, otherwise open position with zero liquidity
+    /// * `liquidity` - The liquidity to be added, if zero, and the base_flag is specified, calculate liquidity base amount_0_max or amount_1_max according base_flag, otherwise open position with zero liquidity
     /// * `amount_0_max` - The max amount of token_0 to spend, which serves as a slippage check
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
     /// * `with_metadata` - The flag indicating whether to create NFT mint metadata
