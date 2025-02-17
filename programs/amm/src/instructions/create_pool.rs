@@ -107,11 +107,39 @@ pub struct CreatePool<'info> {
     pub system_program: Program<'info, System>,
     /// Sysvar for program account
     pub rent: Sysvar<'info, Rent>,
+    // remaining account
+    // #[account(
+    //     seeds = [
+    //     SUPPORT_MINT_SEED.as_bytes(),
+    //     token_mint_0.key().as_ref(),
+    // ],
+    //     bump
+    // )]
+    // pub support_mint0_associated: Account<'info, SupportMintAssociated>,
+
+    // #[account(
+    //     seeds = [
+    //     SUPPORT_MINT_SEED.as_bytes(),
+    //     token_mint_1.key().as_ref(),
+    // ],
+    //     bump
+    // )]
+    // pub support_mint1_associated: Account<'info, SupportMintAssociated>,
 }
 
 pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u64) -> Result<()> {
-    if !(util::is_supported_mint(&ctx.accounts.token_mint_0).unwrap()
-        && util::is_supported_mint(&ctx.accounts.token_mint_1).unwrap())
+    let mint0_associated_is_initialized = util::support_mint_associated_is_initialized(
+        &ctx.remaining_accounts,
+        &ctx.accounts.token_mint_0,
+    )?;
+    let mint1_associated_is_initialized = util::support_mint_associated_is_initialized(
+        &ctx.remaining_accounts,
+        &ctx.accounts.token_mint_1,
+    )?;
+    if !(util::is_supported_mint(&ctx.accounts.token_mint_0, mint0_associated_is_initialized)
+        .unwrap()
+        && util::is_supported_mint(&ctx.accounts.token_mint_1, mint1_associated_is_initialized)
+            .unwrap())
     {
         return err!(ErrorCode::NotSupportMint);
     }

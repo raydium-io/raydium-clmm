@@ -57,6 +57,15 @@ pub struct InitializeReward<'info> {
     pub reward_token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
+    // remaining account
+    // #[account(
+    //     seeds = [
+    //     SUPPORT_MINT_SEED.as_bytes(),
+    //     reward_token_mint.key().as_ref(),
+    // ],
+    //     bump
+    // )]
+    // pub support_mint_account: Account<'info, SupportMint>,
 }
 
 #[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Debug, PartialEq)]
@@ -92,7 +101,16 @@ pub fn initialize_reward(
     ctx: Context<InitializeReward>,
     param: InitializeRewardParam,
 ) -> Result<()> {
-    if !util::is_supported_mint(&ctx.accounts.reward_token_mint).unwrap() {
+    let mint_associated_is_initialized = util::support_mint_associated_is_initialized(
+        &ctx.remaining_accounts,
+        &ctx.accounts.reward_token_mint,
+    )?;
+    if !util::is_supported_mint(
+        &ctx.accounts.reward_token_mint,
+        mint_associated_is_initialized,
+    )
+    .unwrap()
+    {
         return err!(ErrorCode::NotSupportMint);
     }
     let operation_state = ctx.accounts.operation_state.load()?;
