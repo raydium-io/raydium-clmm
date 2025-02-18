@@ -70,6 +70,11 @@ pub mod amm_v3 {
         )
     }
 
+    /// Create support token22 mint account which can create pool and send rewards with ignoring the not support extensions.
+    pub fn create_support_mint_associated(ctx: Context<CreateSupportMintAssociated>) -> Result<()> {
+        instructions::create_support_mint_associated(ctx)
+    }
+
     /// Updates the owner of the amm config
     /// Must be called by the current owner or admin
     ///
