@@ -298,7 +298,7 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
                 )?
             };
 
-        // check if protocol position is initilized
+        // check if protocol position is initialized
         let protocol_position = protocol_position.deref_mut();
         if protocol_position.pool_id == Pubkey::default() {
             protocol_position.bump = protocol_position_bump;
