@@ -76,7 +76,7 @@ pub struct SwapSingleV2<'info> {
 }
 
 /// Performs a single exact input/output swap
-/// if is_base_input = true, return vaule is the max_amount_out, otherwise is min_amount_in
+/// if is_base_input = true, return value is the max_amount_out, otherwise is min_amount_in
 pub fn exact_internal_v2<'c: 'info, 'info>(
     ctx: &mut SwapSingleV2<'info>,
     remaining_accounts: &'c [AccountInfo<'info>],
@@ -96,7 +96,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
     let input_balance_before = ctx.input_token_account.amount;
     let output_balance_before = ctx.output_token_account.amount;
 
-    // calculate specified amount because the amount includes thransfer_fee as input and without thransfer_fee as output
+    // calculate specified amount because the amount includes transfer_fee as input and without transfer_fee as output
     let amount_calculate_specified = if is_base_input {
         let transfer_fee =
             util::get_transfer_fee(ctx.input_vault_mint.clone(), amount_specified).unwrap();

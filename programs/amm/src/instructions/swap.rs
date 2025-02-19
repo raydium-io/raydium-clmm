@@ -548,7 +548,7 @@ pub fn swap_internal<'b, 'info>(
 }
 
 /// Performs a single exact input/output swap
-/// if is_base_input = true, return vaule is the max_amount_out, otherwise is min_amount_in
+/// if is_base_input = true, return value is the max_amount_out, otherwise is min_amount_in
 pub fn exact_internal<'b, 'c: 'info, 'info>(
     ctx: &mut SwapAccounts<'b, 'info>,
     remaining_accounts: &'c [AccountInfo<'info>],

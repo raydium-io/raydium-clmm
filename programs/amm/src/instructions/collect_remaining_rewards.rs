@@ -12,7 +12,7 @@ pub const COLLECT_REMAINING_MEMO_MSG: &'static [u8] = b"raydium_collect_remainin
 
 #[derive(Accounts)]
 pub struct CollectRemainingRewards<'info> {
-    /// The founder who init reward info in berfore
+    /// The founder who init reward info previously
     pub reward_funder: Signer<'info>,
     /// The funder's reward token account
     #[account(mut)]

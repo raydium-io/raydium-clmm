@@ -16,11 +16,11 @@ pub struct OpenPositionWithToken22Nft<'info> {
     /// CHECK: Receives the position NFT
     pub position_nft_owner: UncheckedAccount<'info>,
 
-    /// Unique token mint address, initialize in constract
+    /// Unique token mint address, initialize in contract
     #[account(mut)]
     pub position_nft_mint: Signer<'info>,
 
-    /// CHECK: ATA address where position NFT will be minted, initialize in constract
+    /// CHECK: ATA address where position NFT will be minted, initialize in contract
     #[account(mut)]
     pub position_nft_account: UncheckedAccount<'info>,
 
