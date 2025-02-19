@@ -207,7 +207,7 @@ pub mod amm_v3 {
     /// * `reward_index` - The index of reward token in the pool.
     /// * `emissions_per_second_x64` - The per second emission reward, when extend the current cycle,
     ///    new value can't be less than old value
-    /// * `open_time` - reward open timestamp, must be set when state a new cycle
+    /// * `open_time` - reward open timestamp, must be set when starting a new cycle
     /// * `end_time` - reward end timestamp
     ///
     pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
@@ -392,7 +392,7 @@ pub mod amm_v3 {
     }
 
     /// #[deprecated(note = "Use `increase_liquidity_v2` instead.")]
-    /// Increases liquidity with a exist position, with amount paid by `payer`
+    /// Increases liquidity for an existing position, with amount paid by `payer`
     ///
     /// # Arguments
     ///
@@ -411,7 +411,7 @@ pub mod amm_v3 {
         instructions::increase_liquidity_v1(ctx, liquidity, amount_0_max, amount_1_max, None)
     }
 
-    /// Increases liquidity with a exist position, with amount paid by `payer`, support Token2022
+    /// Increases liquidity for an existing position, with amount paid by `payer`, support Token2022
     ///
     /// # Arguments
     ///
@@ -435,7 +435,7 @@ pub mod amm_v3 {
     }
 
     /// #[deprecated(note = "Use `decrease_liquidity_v2` instead.")]
-    /// Decreases liquidity with a exist position
+    /// Decreases liquidity for an existing position
     ///
     /// # Arguments
     ///
@@ -453,7 +453,7 @@ pub mod amm_v3 {
         instructions::decrease_liquidity_v1(ctx, liquidity, amount_0_min, amount_1_min)
     }
 
-    /// Decreases liquidity with a exist position, support Token2022
+    /// Decreases liquidity for an existing position, support Token2022
     ///
     /// # Arguments
     ///
