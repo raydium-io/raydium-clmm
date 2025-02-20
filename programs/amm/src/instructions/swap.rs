@@ -198,19 +198,22 @@ pub fn swap_internal<'b, 'info>(
         ErrorCode::InvalidFirstTickArrayAccount
     );
 
+
+    let (dynamic_trade_fee_rate, dynamic_protocol_fee_rate, dynamic_fund_fee_rate) = calculate_dynamic_fee(amm_config)?;
+
     // continue swapping as long as we haven't used the entire input/output and haven't
     // reached the price limit
     while state.amount_specified_remaining != 0 && state.sqrt_price_x64 != sqrt_price_limit_x64 {
         #[cfg(feature = "enable-log")]
         msg!(
-            "while begin, is_base_input:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{},state_liquidity:{},state.protocol_fee:{}, protocol_fee_rate:{}",
+            "while begin, is_base_input:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{},state_liquidity:{},state.protocol_fee:{}, dynamic_protocol_fee_rate:{}",
             is_base_input,
             state.fee_growth_global_x64,
             state.sqrt_price_x64,
             state.tick,
             state.liquidity,
             state.protocol_fee,
-            amm_config.protocol_fee_rate
+            dynamic_protocol_fee_rate
         );
         // Save these three pieces of information for PriceChangeEvent
         // let tick_before = state.tick;
@@ -302,7 +305,7 @@ pub fn swap_internal<'b, 'info>(
             target_price,
             state.liquidity,
             state.amount_specified_remaining,
-            amm_config.trade_fee_rate,
+            dynamic_trade_fee_rate,
             is_base_input,
             zero_for_one,
             block_timestamp,
@@ -346,9 +349,9 @@ pub fn swap_internal<'b, 'info>(
 
         let step_fee_amount = step.fee_amount;
         // if the protocol fee is on, calculate how much is owed, decrement fee_amount, and increment protocol_fee
-        if amm_config.protocol_fee_rate > 0 {
+        if dynamic_protocol_fee_rate > 0 {
             let delta = U128::from(step_fee_amount)
-                .checked_mul(amm_config.protocol_fee_rate.into())
+                .checked_mul(dynamic_protocol_fee_rate.into())
                 .unwrap()
                 .checked_div(FEE_RATE_DENOMINATOR_VALUE.into())
                 .unwrap()
@@ -357,9 +360,9 @@ pub fn swap_internal<'b, 'info>(
             state.protocol_fee = state.protocol_fee.checked_add(delta).unwrap();
         }
         // if the fund fee is on, calculate how much is owed, decrement fee_amount, and increment fund_fee
-        if amm_config.fund_fee_rate > 0 {
+        if dynamic_fund_fee_rate > 0 {
             let delta = U128::from(step_fee_amount)
-                .checked_mul(amm_config.fund_fee_rate.into())
+                .checked_mul(dynamic_protocol_fee_rate.into())
                 .unwrap()
                 .checked_div(FEE_RATE_DENOMINATOR_VALUE.into())
                 .unwrap()
@@ -435,7 +438,7 @@ pub fn swap_internal<'b, 'info>(
 
         #[cfg(feature = "enable-log")]
         msg!(
-            "end, is_base_input:{},step_amount_in:{}, step_amount_out:{}, step_fee_amount:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{}, state_liquidity:{},state.protocol_fee:{}, protocol_fee_rate:{}, state.fund_fee:{}, fund_fee_rate:{}",
+            "end, is_base_input:{},step_amount_in:{}, step_amount_out:{}, step_fee_amount:{},fee_growth_global_x32:{}, state_sqrt_price_x64:{}, state_tick:{}, state_liquidity:{},state.protocol_fee:{}, dynamic_protocol_fee_rate:{}, state.fund_fee:{}, dynamic_fund_fee_rate:{}",
             is_base_input,
             step.amount_in,
             step.amount_out,
@@ -445,9 +448,9 @@ pub fn swap_internal<'b, 'info>(
             state.tick,
             state.liquidity,
             state.protocol_fee,
-            amm_config.protocol_fee_rate,
+            dynamic_protocol_fee_rate,
             state.fund_fee,
-            amm_config.fund_fee_rate,
+            dynamic_fund_fee_rate,
         );
         // emit!(PriceChangeEvent {
         //     pool_state: pool_state.key(),
@@ -556,7 +559,7 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
 ) -> Result<u64> {
-    let block_timestamp = solana_program::clock::Clock::get()?.unix_timestamp as u64;
+    let block_timestamp = solana_program::clock::Clock::get()?.unix_timestamp;
 
     let amount_0;
     let amount_1;
@@ -571,7 +574,7 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
         let pool_state = &mut ctx.pool_state.load_mut()?;
         zero_for_one = ctx.input_vault.mint == pool_state.token_mint_0;
 
-        require_gt!(block_timestamp, pool_state.open_time);
+        require_gt!(block_timestamp, pool_state.creation_time);
 
         require!(
             if zero_for_one {

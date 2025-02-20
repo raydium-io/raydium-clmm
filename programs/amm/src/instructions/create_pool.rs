@@ -143,8 +143,8 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u6
     {
         return err!(ErrorCode::NotSupportMint);
     }
-    let block_timestamp = solana_program::clock::Clock::get()?.unix_timestamp as u64;
-    require_gt!(block_timestamp, open_time);
+    let block_timestamp = solana_program::clock::Clock::get()?.unix_timestamp;
+    require_gt!(block_timestamp as u64, open_time);
     let pool_id = ctx.accounts.pool_state.key();
     let mut pool_state = ctx.accounts.pool_state.load_init()?;
 
@@ -165,7 +165,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u6
     pool_state.initialize(
         bump,
         sqrt_price_x64,
-        0,
+        block_timestamp,
         tick,
         ctx.accounts.pool_creator.key(),
         ctx.accounts.token_vault_0.key(),

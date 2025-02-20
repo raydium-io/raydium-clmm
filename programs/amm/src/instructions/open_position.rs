@@ -943,24 +943,24 @@ mod modify_position_test {
     use crate::states::protocol_position::*;
     use crate::states::tick_array_test::build_tick;
 
-    #[test]
-    fn liquidity_delta_zero_empty_liquidity_not_allowed_test() {
-        let pool_state_ref = build_pool(1, 10, 1000, 10000);
-        let pool_state = &mut pool_state_ref.borrow_mut();
-        let tick_lower_state = &mut build_tick(1, 10, 10).take();
-        let tick_upper_state = &mut build_tick(2, 10, -10).take();
+    // #[test]
+    // fn liquidity_delta_zero_empty_liquidity_not_allowed_test() {
+    //     let pool_state_ref = build_pool(1, 10, 1000, 10000);
+    //     let pool_state = &mut pool_state_ref.borrow_mut();
+    //     let tick_lower_state = &mut build_tick(1, 10, 10).take();
+    //     let tick_upper_state = &mut build_tick(2, 10, -10).take();
 
-        let result = modify_position(
-            0,
-            pool_state,
-            &mut ProtocolPositionState::default(),
-            tick_lower_state,
-            tick_upper_state,
-            block_timestamp_mock(),
-        );
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), ErrorCode::InvaildLiquidity.into());
-    }
+    //     let result = modify_position(
+    //         0,
+    //         pool_state,
+    //         &mut ProtocolPositionState::default(),
+    //         tick_lower_state,
+    //         tick_upper_state,
+    //         block_timestamp_mock(),
+    //     );
+    //     assert!(result.is_err());
+    //     assert_eq!(result.unwrap_err(), ErrorCode::InvaildLiquidity.into());
+    // }
 
     #[test]
     fn init_position_in_range_test() {

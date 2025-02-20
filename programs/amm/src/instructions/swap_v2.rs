@@ -86,7 +86,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
 ) -> Result<u64> {
     // invoke_memo_instruction(SWAP_MEMO_MSG, ctx.memo_program.to_account_info())?;
 
-    let block_timestamp = solana_program::clock::Clock::get()?.unix_timestamp as u64;
+    let block_timestamp = solana_program::clock::Clock::get()?.unix_timestamp;
 
     let amount_0;
     let amount_1;
@@ -113,7 +113,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         let pool_state = &mut ctx.pool_state.load_mut()?;
         zero_for_one = ctx.input_vault.mint == pool_state.token_mint_0;
 
-        require_gt!(block_timestamp, pool_state.open_time);
+        require_gt!(block_timestamp, pool_state.creation_time);
 
         require!(
             if zero_for_one {

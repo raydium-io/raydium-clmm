@@ -130,9 +130,7 @@ pub struct PoolState {
     pub fund_fees_token_0: u64,
     pub fund_fees_token_1: u64,
 
-    // The timestamp allowed for swap in the pool.
-    // Note: The open_time is disabled for now.
-    pub open_time: u64,
+    pub creation_time: i64,
     // account recent update epoch
     pub recent_epoch: u64,
 
@@ -184,7 +182,7 @@ impl PoolState {
         &mut self,
         bump: u8,
         sqrt_price_x64: u128,
-        open_time: u64,
+        creation_time: i64,
         tick: i32,
         pool_creator: Pubkey,
         token_vault_0: Pubkey,
@@ -227,7 +225,7 @@ impl PoolState {
         self.total_fees_claimed_token_1 = 0;
         self.fund_fees_token_0 = 0;
         self.fund_fees_token_1 = 0;
-        self.open_time = open_time;
+        self.creation_time = creation_time;
         self.recent_epoch = get_recent_epoch()?;
         self.padding1 = [0; 24];
         self.padding2 = [0; 32];
