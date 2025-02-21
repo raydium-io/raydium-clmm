@@ -146,6 +146,12 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
     //     let memp_program = accounts.memo_program.as_ref().unwrap().to_account_info();
     //     invoke_memo_instruction(DECREASE_MEMO_MSG, memp_program)?;
     // }
+
+    // If locked forever, can't withdraw liquidity
+    require!(
+        !(personal_position.locked_forever && liquidity > 0),
+        ErrorCode::LiquidityLockedForever
+    );
     assert!(liquidity <= personal_position.liquidity);
     let liquidity_before;
     let pool_sqrt_price_x64;

@@ -42,7 +42,9 @@ pub struct PersonalPositionState {
     pub reward_infos: [PositionRewardInfo; REWARD_NUM],
     // account update recent epoch
     pub recent_epoch: u64,
-    // Unused bytes for future upgrades.
+
+    pub locked_forever: bool,
+    pub _reserved: [u8; 7],
     pub padding: [u64; 7],
 }
 
@@ -190,6 +192,14 @@ pub struct DecreaseLiquidityEvent {
     pub transfer_fee_0: u64,
     /// The amount of token_1 transfer fee
     pub transfer_fee_1: u64,
+}
+
+/// Emitted when the liquidity is locked forever.
+#[event]
+#[cfg_attr(feature = "client", derive(Debug))]
+pub struct LiquidityLockedForeverEvent {
+    /// The ID of the token for which liquidity was decreased
+    pub position_nft_mint: Pubkey,
 }
 
 /// Emitted when liquidity decreased or increase.

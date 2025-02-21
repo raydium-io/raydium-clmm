@@ -366,6 +366,7 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
         // update rewards, must update before update liquidity
         personal_position.update_rewards(protocol_position.reward_growth_inside, false)?;
         personal_position.liquidity = liquidity;
+        personal_position.locked_forever = false;
 
         emit!(CreatePersonalPositionEvent {
             pool_state: pool_state_loader.key(),
