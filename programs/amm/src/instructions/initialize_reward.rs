@@ -151,6 +151,7 @@ pub fn initialize_reward(
         param.end_time,
         param.emissions_per_second_x64,
         &ctx.accounts.reward_token_mint.key(),
+        ctx.accounts.reward_token_mint.freeze_authority,
         &ctx.accounts.reward_token_vault.key(),
         &ctx.accounts.reward_funder.key(),
         &operation_state,

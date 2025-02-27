@@ -9,6 +9,7 @@ use crate::states::*;
 use crate::util::get_recent_epoch;
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::Mint;
+use solana_program::program_option::COption;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
 use std::ops::{BitAnd, BitOr, BitXor};
@@ -242,6 +243,7 @@ impl PoolState {
         end_time: u64,
         reward_per_second_x64: u128,
         token_mint: &Pubkey,
+        token_mint_freeze_authority: COption<Pubkey>,
         token_vault: &Pubkey,
         authority: &Pubkey,
         operation_state: &OperationState,
@@ -267,19 +269,41 @@ impl PoolState {
             ErrorCode::RewardTokenAlreadyInUse
         );
         let whitelist_mints = operation_state.whitelist_mints.to_vec();
-        // The current init token is the penult.
+        if lowest_index == REWARD_NUM - 3 {
+            // The current init token is the first.
+            // If the first reward is neither token_mint_0 nor token_mint_1, and is not in whitelist_mints, then this token_mint cannot have freeze_authority.
+            if *token_mint != self.token_mint_0
+                && *token_mint != self.token_mint_1
+                && !whitelist_mints.contains(token_mint)
+            {
+                require!(
+                    token_mint_freeze_authority.is_none(),
+                    ErrorCode::ExceptRewardMint
+                );
+            }
+        }
         if lowest_index == REWARD_NUM - 2 {
-            // If token_mint_0 or token_mint_1 is not contains in the initialized rewards token,
-            // the current init reward token mint must be token_mint_0 or token_mint_1
+            // The current init token is the penult.
             if !reward_mints.contains(&self.token_mint_0)
                 && !reward_mints.contains(&self.token_mint_1)
             {
+                // If token_mint_0 or token_mint_1 is not contained in the initialized rewards token,
+                // the current init reward token mint must be token_mint_0 or token_mint_1 or one of the whitelist_mints.
                 require!(
                     *token_mint == self.token_mint_0
                         || *token_mint == self.token_mint_1
                         || whitelist_mints.contains(token_mint),
-                    ErrorCode::ExceptPoolVaultMint
+                    ErrorCode::ExceptRewardMint
                 );
+            } else {
+                // If token_mint_0 or token_mint_1 is contained in the initialized rewards token,
+                // the current init reward token mint is not in one of the whitelist_mints, then this token_mint cannot have freeze_authority.
+                if !whitelist_mints.contains(token_mint) {
+                    require!(
+                        token_mint_freeze_authority.is_none(),
+                        ErrorCode::ExceptRewardMint
+                    );
+                }
             }
         } else if lowest_index == REWARD_NUM - 1 {
             // the last reward token must be controled by the admin
@@ -1022,6 +1046,7 @@ pub mod pool_test {
                     1666069200,
                     10,
                     &Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+                    COption::None,
                     &Pubkey::default(),
                     &Pubkey::default(),
                     &operation_state,
