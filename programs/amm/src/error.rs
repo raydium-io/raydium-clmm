@@ -79,7 +79,7 @@ pub enum ErrorCode {
     #[msg("The init reward token already in use")]
     RewardTokenAlreadyInUse,
     #[msg("The reward tokens must contain one of pool vault mint except the last reward")]
-    ExceptPoolVaultMint,
+    ExceptRewardMint,
     #[msg("Invalid reward init param")]
     InvalidRewardInitParam,
     #[msg("Invalid collect reward desired amount")]
