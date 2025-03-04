@@ -57,3 +57,6 @@ pub use create_customizable_pool::*;
 
 pub mod create_permissioned_pool;
 pub use create_permissioned_pool::*;
+
+pub mod update_personal_rewards;
+pub use update_personal_rewards::*;
