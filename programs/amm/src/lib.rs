@@ -204,6 +204,16 @@ pub mod amm_v3 {
         instructions::update_reward_infos(ctx)
     }
 
+    /// Update personal rewards
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    ///
+    pub fn update_personal_rewards(ctx: Context<UpdatePersonalRewards>) -> Result<()> {
+        instructions::update_personal_rewards(ctx)
+    }
+
     /// Reset reward param, start a new reward cycle or extend the current cycle.
     ///
     /// # Arguments

@@ -48,3 +48,6 @@ pub use collect_remaining_rewards::*;
 
 pub mod admin;
 pub use admin::*;
+
+pub mod update_personal_rewards;
+pub use update_personal_rewards::*;
