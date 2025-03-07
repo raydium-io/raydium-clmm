@@ -7,8 +7,8 @@ seeds = false
 amm_v3 = "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
 
 [registry]
-url = "https://github.com/raydium-io/raydium-amm-v3"
+url = "https://github.com/aipool-tee"
 
 [provider]
 cluster = "localnet"
-wallet = "~/.config/solana/id.json"
+wallet = "~/.config/solana/aipool-prod.json"

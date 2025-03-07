@@ -198,8 +198,8 @@ pub fn swap_internal<'b, 'info>(
         ErrorCode::InvalidFirstTickArrayAccount
     );
 
-
-    let (dynamic_trade_fee_rate, dynamic_protocol_fee_rate, dynamic_fund_fee_rate) = calculate_dynamic_fee(amm_config)?;
+    let (dynamic_trade_fee_rate, dynamic_protocol_fee_rate, dynamic_fund_fee_rate) =
+        calculate_dynamic_fee(amm_config)?;
 
     // continue swapping as long as we haven't used the entire input/output and haven't
     // reached the price limit

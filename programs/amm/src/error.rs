@@ -109,5 +109,5 @@ pub enum ErrorCode {
     #[msg("Liquidity is locked forever, can't withdraw")]
     LiquidityLockedForever,
     #[msg("NFT already locked")]
-    AlreadyLocked
+    AlreadyLocked,
 }

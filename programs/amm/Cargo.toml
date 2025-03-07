@@ -1,13 +1,13 @@
 [package]
-name = "raydium-amm-v3"
+name = "bifido-amm"
 version = "0.1.0"
-description = "Anchor client and source for Raydium concentrated liquidity AMM"
+description = "Anchor client and source for bifido concentrated liquidity AMM"
 edition = "2021"
-keywords = ["solana", "anchor", "raydium"]
+keywords = ["solana", "anchor", "bifido"]
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "raydium_amm_v3"
+name = "bifido_amm"
 doctest = false
 
 [features]
