@@ -45,7 +45,7 @@ pub struct PersonalPositionState {
 
     pub locked_forever: bool,
     pub _reserved: [u8; 7],
-    pub padding: [u64; 7],
+    pub padding: [u64; 6],
 }
 
 impl PersonalPositionState {
