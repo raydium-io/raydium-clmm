@@ -1,6 +1,7 @@
 
 .anchor
 .DS_Store
+.idea
 target
 KeyPairs
 *.json
