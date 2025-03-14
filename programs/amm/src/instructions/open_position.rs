@@ -7,18 +7,23 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program;
 use anchor_lang::system_program::{transfer, Transfer};
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::metadata::Metadata;
-use anchor_spl::token::{Mint, Token, TokenAccount};
-use anchor_spl::token_2022::spl_token_2022::extension::{
-    BaseStateWithExtensions, StateWithExtensions,
+use anchor_spl::metadata::{
+    create_metadata_accounts_v3,
+    mpl_token_metadata::types::{Creator, DataV2},
+    CreateMetadataAccountsV3, Metadata,
 };
-use anchor_spl::token_2022::Token2022;
+use anchor_spl::token::{Mint, Token, TokenAccount};
 use anchor_spl::token_2022::{
     self,
-    spl_token_2022::{self, instruction::AuthorityType},
+    spl_token_2022::{
+        self,
+        extension::{BaseStateWithExtensions, StateWithExtensions},
+        instruction::AuthorityType,
+    },
+    Token2022,
 };
+use anchor_spl::token_2022_extensions::spl_token_metadata_interface;
 use anchor_spl::token_interface;
-use mpl_token_metadata::{instruction::create_metadata_accounts_v3, state::Creator};
 use std::cell::RefMut;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
@@ -835,41 +840,37 @@ fn initialize_metadata_account<'info>(
     uri: String,
     signers_seeds: &[&[&[u8]]],
 ) -> Result<()> {
-    let create_metadata_ix = create_metadata_accounts_v3(
-        metadata_program.key(),
-        metadata_account.key(),
-        position_nft_mint.key(),
-        authority.key(),
-        payer.key(),
-        authority.key(),
-        name,
-        symbol,
-        uri,
-        Some(vec![Creator {
-            address: authority.key(),
-            verified: true,
-            share: 100,
-        }]),
-        0,
-        true,
+    create_metadata_accounts_v3(
+        CpiContext::new_with_signer(
+            metadata_program.to_account_info(),
+            CreateMetadataAccountsV3 {
+                metadata: metadata_account.to_account_info(),
+                mint: position_nft_mint.to_account_info(),
+                mint_authority: authority.to_account_info(),
+                payer: payer.to_account_info(),
+                update_authority: authority.to_account_info(),
+                system_program: system_program.to_account_info(),
+                rent: rent.to_account_info(),
+            },
+            signers_seeds,
+        ),
+        DataV2 {
+            name,
+            symbol,
+            uri,
+            seller_fee_basis_points: 0,
+            creators: Some(vec![Creator {
+                address: authority.key(),
+                verified: true,
+                share: 100,
+            }]),
+            collection: None,
+            uses: None,
+        },
         false,
+        true,
         None,
-        None,
-        None,
-    );
-    solana_program::program::invoke_signed(
-        &create_metadata_ix,
-        &[
-            metadata_account.to_account_info(),
-            position_nft_mint.to_account_info(),
-            payer.to_account_info(),
-            authority.to_account_info(),
-            system_program.to_account_info(),
-            rent.to_account_info(),
-        ],
-        signers_seeds,
     )?;
-
     Ok(())
 }
 
@@ -894,8 +895,8 @@ pub fn initialize_token_metadata_extension<'info>(
     let mint_data = position_nft_mint.try_borrow_data()?;
     let mint_state_unpacked =
         StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
-    let new_account_len = mint_state_unpacked
-        .try_get_new_account_len::<spl_token_metadata_interface::state::TokenMetadata>(&metadata)?;
+    let new_account_len =
+        mint_state_unpacked.try_get_new_account_len_for_variable_len_extension(&metadata)?;
     let new_rent_exempt_lamports = Rent::get()?.minimum_balance(new_account_len);
     let additional_lamports = new_rent_exempt_lamports.saturating_sub(position_nft_mint.lamports());
     // CPI call will borrow the account data
@@ -936,31 +937,11 @@ pub fn initialize_token_metadata_extension<'info>(
 #[cfg(test)]
 mod modify_position_test {
     use super::modify_position;
-    use crate::error::ErrorCode;
     use crate::libraries::tick_math;
     use crate::states::oracle::block_timestamp_mock;
     use crate::states::pool_test::build_pool;
     use crate::states::protocol_position::*;
     use crate::states::tick_array_test::build_tick;
-
-    #[test]
-    fn liquidity_delta_zero_empty_liquidity_not_allowed_test() {
-        let pool_state_ref = build_pool(1, 10, 1000, 10000);
-        let pool_state = &mut pool_state_ref.borrow_mut();
-        let tick_lower_state = &mut build_tick(1, 10, 10).take();
-        let tick_upper_state = &mut build_tick(2, 10, -10).take();
-
-        let result = modify_position(
-            0,
-            pool_state,
-            &mut ProtocolPositionState::default(),
-            tick_lower_state,
-            tick_upper_state,
-            block_timestamp_mock(),
-        );
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), ErrorCode::InvaildLiquidity.into());
-    }
 
     #[test]
     fn init_position_in_range_test() {

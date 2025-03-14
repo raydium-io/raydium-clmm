@@ -2,6 +2,7 @@ use crate::error::ErrorCode;
 use crate::states::*;
 use crate::swap_v2::{exact_internal_v2, SwapSingleV2};
 use anchor_lang::prelude::*;
+use anchor_spl::memo::Memo;
 use anchor_spl::{
     token::Token,
     token_interface::{Mint, Token2022, TokenAccount},
@@ -25,11 +26,8 @@ pub struct SwapRouterBaseIn<'info> {
     /// SPL program 2022 for token transfers
     pub token_program_2022: Program<'info, Token2022>,
 
-    /// CHECK:
-    // #[account(
-    //     address = spl_memo::id()
-    // )]
-    pub memo_program: UncheckedAccount<'info>,
+    /// Memo program
+    pub memo_program: Program<'info, Memo>,
 }
 
 pub fn swap_router_base_in<'a, 'b, 'c: 'info, 'info>(

@@ -6,7 +6,8 @@ use crate::libraries::tick_math;
 use crate::swap::swap_internal;
 use crate::util::*;
 use crate::{states::*, util};
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, solana_program};
+use anchor_spl::memo::Memo;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
 
@@ -51,11 +52,8 @@ pub struct SwapSingleV2<'info> {
     /// SPL program 2022 for token transfers
     pub token_program_2022: Program<'info, Token2022>,
 
-    /// CHECK:
-    #[account(
-        address = spl_memo::id()
-    )]
-    pub memo_program: UncheckedAccount<'info>,
+    /// Memo program
+    pub memo_program: Program<'info, Memo>,
 
     /// The mint of token vault 0
     #[account(

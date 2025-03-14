@@ -1368,7 +1368,7 @@ pub mod tick_array_test {
             // serialize original data
             let mut tick_array_data = [0u8; TickArrayState::LEN];
             let mut offset = 0;
-            tick_array_data[offset..offset + 8].copy_from_slice(&TickArrayState::discriminator());
+            tick_array_data[offset..offset + 8].copy_from_slice(&TickArrayState::DISCRIMINATOR);
             offset += 8;
             tick_array_data[offset..offset + 32].copy_from_slice(&pool_id.to_bytes());
             offset += 32;

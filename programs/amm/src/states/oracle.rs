@@ -173,7 +173,7 @@ pub mod oracle_layout_test {
         let mut observation_state_data = [0u8; ObservationState::LEN];
         let mut offset = 0;
         observation_state_data[offset..offset + 8]
-            .copy_from_slice(&ObservationState::discriminator());
+            .copy_from_slice(&ObservationState::DISCRIMINATOR);
         offset += 8;
         observation_state_data[offset..offset + 1]
             .copy_from_slice(&(initialized as u8).to_le_bytes());

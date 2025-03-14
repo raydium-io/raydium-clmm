@@ -8,8 +8,8 @@ use crate::libraries::{
 use crate::states::*;
 use crate::util::get_recent_epoch;
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program_option::COption;
 use anchor_spl::token_interface::Mint;
-use solana_program::program_option::COption;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
 use std::ops::{BitAnd, BitOr, BitXor};
@@ -681,11 +681,9 @@ impl RewardInfo {
 #[cfg_attr(feature = "client", derive(Debug))]
 pub struct PoolCreatedEvent {
     /// The first token of the pool by address sort order
-    #[index]
     pub token_mint_0: Pubkey,
 
     /// The second token of the pool by address sort order
-    #[index]
     pub token_mint_1: Pubkey,
 
     /// The minimum number of ticks between initialized ticks
@@ -711,7 +709,6 @@ pub struct PoolCreatedEvent {
 #[cfg_attr(feature = "client", derive(Debug))]
 pub struct CollectProtocolFeeEvent {
     /// The pool whose protocol fee is collected
-    #[index]
     pub pool_state: Pubkey,
 
     /// The address that receives the collected token_0 protocol fees
@@ -732,21 +729,17 @@ pub struct CollectProtocolFeeEvent {
 #[cfg_attr(feature = "client", derive(Debug))]
 pub struct SwapEvent {
     /// The pool for which token_0 and token_1 were swapped
-    #[index]
     pub pool_state: Pubkey,
 
     /// The address that initiated the swap call, and that received the callback
-    #[index]
     pub sender: Pubkey,
 
     /// The payer token account in zero for one swaps, or the recipient token account
     /// in one for zero swaps
-    #[index]
     pub token_account_0: Pubkey,
 
     /// The payer token account in one for zero swaps, or the recipient token account
     /// in zero for one swaps
-    #[index]
     pub token_account_1: Pubkey,
 
     /// The real delta amount of the token_0 of the pool or user
@@ -779,7 +772,6 @@ pub struct SwapEvent {
 #[cfg_attr(feature = "client", derive(Debug))]
 pub struct LiquidityChangeEvent {
     /// The pool for swap
-    #[index]
     pub pool_state: Pubkey,
 
     /// The tick of the pool
@@ -803,7 +795,7 @@ pub struct LiquidityChangeEvent {
 // #[cfg_attr(feature = "client", derive(Debug))]
 // pub struct PriceChangeEvent {
 //     /// The pool for swap
-//     #[index]
+//
 //     pub pool_state: Pubkey,
 
 //     /// The tick of the pool before price change
@@ -1708,7 +1700,7 @@ pub mod pool_test {
             // serialize original data
             let mut pool_data = [0u8; PoolState::LEN];
             let mut offset = 0;
-            pool_data[offset..offset + 8].copy_from_slice(&PoolState::discriminator());
+            pool_data[offset..offset + 8].copy_from_slice(&PoolState::DISCRIMINATOR);
             offset += 8;
             pool_data[offset..offset + 1].copy_from_slice(&bump.to_le_bytes());
             offset += 1;

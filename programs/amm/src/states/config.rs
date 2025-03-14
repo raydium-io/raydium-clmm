@@ -49,7 +49,6 @@ impl AmmConfig {
 #[cfg_attr(feature = "client", derive(Debug))]
 pub struct ConfigChangeEvent {
     pub index: u16,
-    #[index]
     pub owner: Pubkey,
     pub protocol_fee_rate: u32,
     pub trade_fee_rate: u32,

@@ -607,7 +607,7 @@ pub mod tick_array_bitmap_extension_test {
         let mut bitmap_extension_data = [0u8; 8 + 32 + 64 * EXTENSION_TICKARRAY_BITMAP_SIZE * 2];
         let mut offset = 0;
         bitmap_extension_data[offset..offset + 8]
-            .copy_from_slice(&TickArrayBitmapExtension::discriminator());
+            .copy_from_slice(&TickArrayBitmapExtension::DISCRIMINATOR);
         offset += 8;
         bitmap_extension_data[offset..offset + 32].copy_from_slice(&pool_id.to_bytes());
         offset += 32;

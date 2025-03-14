@@ -111,7 +111,6 @@ impl PositionRewardInfo {
 #[cfg_attr(feature = "client", derive(Debug))]
 pub struct CreatePersonalPositionEvent {
     /// The pool for which liquidity was added
-    #[index]
     pub pool_state: Pubkey,
 
     /// The address that create the position
@@ -121,11 +120,9 @@ pub struct CreatePersonalPositionEvent {
     pub nft_owner: Pubkey,
 
     /// The lower tick of the position
-    #[index]
     pub tick_lower_index: i32,
 
     /// The upper tick of the position
-    #[index]
     pub tick_upper_index: i32,
 
     /// The amount of liquidity minted to the position range
@@ -149,7 +146,6 @@ pub struct CreatePersonalPositionEvent {
 #[cfg_attr(feature = "client", derive(Debug))]
 pub struct IncreaseLiquidityEvent {
     /// The ID of the token for which liquidity was increased
-    #[index]
     pub position_nft_mint: Pubkey,
 
     /// The amount by which liquidity for the NFT position was increased
@@ -221,7 +217,6 @@ pub struct LiquidityCalculateEvent {
 #[cfg_attr(feature = "client", derive(Debug))]
 pub struct CollectPersonalFeeEvent {
     /// The ID of the token for which underlying tokens were collected
-    #[index]
     pub position_nft_mint: Pubkey,
 
     /// The token account that received the collected token_0 tokens
