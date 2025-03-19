@@ -5,7 +5,6 @@ use anyhow::{format_err, Result};
 use arrayref::array_ref;
 use clap::Parser;
 use configparser::ini::Ini;
-use rand::rngs::OsRng;
 use solana_account_decoder::{
     parse_token::{TokenAccountType, UiAccountState},
     UiAccountData, UiAccountEncoding,
@@ -641,7 +640,7 @@ fn main() -> Result<()> {
                 });
             }
 
-            let mint = Keypair::generate(&mut OsRng);
+            let mint = Keypair::new();
             let create_and_init_instr = create_and_init_mint_instr(
                 &pool_config.clone(),
                 token_program,
@@ -669,7 +668,7 @@ fn main() -> Result<()> {
             not_ata,
         } => {
             let mut signers = vec![&payer];
-            let auxiliary_token_keypair = Keypair::generate(&mut OsRng);
+            let auxiliary_token_keypair = Keypair::new();
             let create_ata_instr = if not_ata {
                 signers.push(&auxiliary_token_keypair);
                 create_and_init_auxiliary_token(
@@ -1187,7 +1186,7 @@ fn main() -> Result<()> {
             if find_position.nft_mint == Pubkey::default() {
                 // personal position not exist
                 // new nft mint
-                let nft_mint = Keypair::generate(&mut OsRng);
+                let nft_mint = Keypair::new();
                 let mut remaining_accounts = Vec::new();
                 remaining_accounts.push(AccountMeta::new(
                     pool_config.tickarray_bitmap_extension.unwrap(),
@@ -2130,6 +2129,7 @@ fn main() -> Result<()> {
                         ..RpcAccountInfoConfig::default()
                     },
                     with_context: Some(false),
+                    sort_results: None,
                 },
             )?;
 
@@ -2188,6 +2188,7 @@ fn main() -> Result<()> {
                         ..RpcAccountInfoConfig::default()
                     },
                     with_context: Some(false),
+                    sort_results: None,
                 },
             )?;
 
@@ -2225,6 +2226,7 @@ fn main() -> Result<()> {
                         ..RpcAccountInfoConfig::default()
                     },
                     with_context: Some(false),
+                    sort_results: None,
                 },
             )?;
 

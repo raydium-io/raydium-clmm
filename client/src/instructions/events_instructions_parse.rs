@@ -123,13 +123,14 @@ pub fn handle_program_log(
             // not log event
             return Ok((None, false));
         }
-        let borsh_bytes = match anchor_lang::__private::base64::decode(log) {
-            Ok(borsh_bytes) => borsh_bytes,
-            _ => {
-                println!("Could not base64 decode log: {}", log);
-                return Ok((None, false));
-            }
-        };
+        let borsh_bytes =
+            match base64::Engine::decode(&base64::engine::general_purpose::STANDARD, log) {
+                Ok(borsh_bytes) => borsh_bytes,
+                _ => {
+                    println!("Could not base64 decode log: {}", log);
+                    return Ok((None, false));
+                }
+            };
 
         let mut slice: &[u8] = &borsh_bytes[..];
         let disc: [u8; 8] = {
@@ -138,7 +139,7 @@ pub fn handle_program_log(
             slice = &slice[8..];
             disc
         };
-        match disc {
+        match &disc[..] {
             ConfigChangeEvent::DISCRIMINATOR => {
                 println!("{:#?}", decode_event::<ConfigChangeEvent>(&mut slice)?);
             }
@@ -317,7 +318,10 @@ pub fn handle_program_instruction(
             data = hex::decode(instr_data).unwrap();
         }
         InstructionDecodeType::Base64 => {
-            let borsh_bytes = match anchor_lang::__private::base64::decode(instr_data) {
+            let borsh_bytes = match base64::Engine::decode(
+                &base64::engine::general_purpose::STANDARD,
+                instr_data,
+            ) {
                 Ok(borsh_bytes) => borsh_bytes,
                 _ => {
                     println!("Could not base64 decode instruction: {}", instr_data);
@@ -347,7 +351,7 @@ pub fn handle_program_instruction(
     };
     // println!("{:?}", disc);
 
-    match disc {
+    match &disc[..] {
         instruction::CreateAmmConfig::DISCRIMINATOR => {
             let ix = decode_instruction::<instruction::CreateAmmConfig>(&mut ix_data).unwrap();
             #[derive(Debug)]
