@@ -308,7 +308,7 @@ impl PoolState {
         } else if lowest_index == REWARD_NUM - 1 {
             // the last reward token must be controled by the admin
             require!(
-                *authority == crate::admin::id()
+                *authority == crate::admin::ID
                     || operation_state.validate_operation_owner(*authority),
                 ErrorCode::NotApproved
             );

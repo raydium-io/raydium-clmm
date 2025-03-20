@@ -9,7 +9,7 @@ pub struct CreateAmmConfig<'info> {
     /// Address to be set as protocol owner.
     #[account(
         mut,
-        address = crate::admin::id() @ ErrorCode::NotApproved
+        address = crate::admin::ID @ ErrorCode::NotApproved
     )]
     pub owner: Signer<'info>,
 

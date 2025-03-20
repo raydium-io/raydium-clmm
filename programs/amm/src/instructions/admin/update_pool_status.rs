@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 #[derive(Accounts)]
 pub struct UpdatePoolStatus<'info> {
     #[account(
-        address = crate::admin::id()
+        address = crate::admin::ID
     )]
     pub authority: Signer<'info>,
 
