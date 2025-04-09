@@ -21,7 +21,7 @@ solana_security_txt::security_txt! {
 }
 
 #[cfg(feature = "devnet")]
-declare_id!("AiPoo243ak4USxgVQEqFzU3gER8vyAknips9QQCfcNVP");
+declare_id!("At5SoePZbxEcss5MXuf7iSYuhaso1mWaQP92fREkRkq6");
 #[cfg(not(feature = "devnet"))]
 declare_id!("AiPoo243ak4USxgVQEqFzU3gER8vyAknips9QQCfcNVP");
 
@@ -30,7 +30,7 @@ pub mod admin {
     #[cfg(feature = "devnet")]
     declare_id!("8kvqgxQG77pv6RvEou8f2kHSWi3rtx8F7MksXUqNLGmn");
     #[cfg(not(feature = "devnet"))]
-    declare_id!("8kvqgxQG77pv6RvEou8f2kHSWi3rtx8F7MksXUqNLGmn");
+    declare_id!("26jWitfbhcoSekDwQVffowob6Qe4cHZRgxEgEN66xqE7");
 }
 
 #[program]
