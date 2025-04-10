@@ -199,7 +199,7 @@ pub fn swap_internal<'b, 'info>(
     );
 
     let (dynamic_trade_fee_rate, dynamic_protocol_fee_rate, dynamic_fund_fee_rate) =
-        amm_config.calculate_dynamic_fee()?;
+    pool_state.calculate_dynamic_fee(amm_config)?;
 
     // continue swapping as long as we haven't used the entire input/output and haven't
     // reached the price limit
