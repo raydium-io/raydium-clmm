@@ -433,7 +433,7 @@ impl PoolState {
     pub fn get_tick_array_offset(&self, tick_array_start_index: i32) -> Result<usize> {
         require!(
             TickArrayState::check_is_valid_start_index(tick_array_start_index, self.tick_spacing),
-            ErrorCode::InvaildTickIndex
+            ErrorCode::InvalidTickIndex
         );
         let tick_array_offset_in_bitmap = tick_array_start_index
             / TickArrayState::tick_count(self.tick_spacing)
@@ -521,7 +521,7 @@ impl PoolState {
                     last_tick_array_start_index,
                     self.tick_spacing,
                     zero_for_one,
-                );
+                )?;
             if is_found {
                 return Ok(Some(start_index));
             }
