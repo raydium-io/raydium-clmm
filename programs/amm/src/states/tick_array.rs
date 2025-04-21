@@ -51,7 +51,7 @@ impl TickArrayState {
     ) -> Result<AccountLoad<'info, TickArrayState>> {
         require!(
             TickArrayState::check_is_valid_start_index(tick_array_start_index, tick_spacing),
-            ErrorCode::InvaildTickIndex
+            ErrorCode::InvalidTickIndex
         );
 
         let tick_array_state = if tick_array_account_info.owner == &system_program::ID {
@@ -290,7 +290,7 @@ impl TickState {
 
     pub fn initialize(&mut self, tick: i32, tick_spacing: u16) -> Result<()> {
         if TickState::check_is_out_of_boundary(tick) {
-            return err!(ErrorCode::InvaildTickIndex);
+            return err!(ErrorCode::InvalidTickIndex);
         }
         require!(
             tick % i32::from(tick_spacing) == 0,
@@ -512,7 +512,7 @@ pub fn check_tick_array_start_index(
 pub fn check_ticks_order(tick_lower_index: i32, tick_upper_index: i32) -> Result<()> {
     require!(
         tick_lower_index < tick_upper_index,
-        ErrorCode::TickInvaildOrder
+        ErrorCode::TickInvalidOrder
     );
     Ok(())
 }

@@ -49,7 +49,7 @@ pub fn check_current_tick_array_is_initialized(
     tick_spacing: u16,
 ) -> Result<(bool, i32)> {
     if TickState::check_is_out_of_boundary(tick_current) {
-        return err!(ErrorCode::InvaildTickIndex);
+        return err!(ErrorCode::InvalidTickIndex);
     }
     let multiplier = i32::from(tick_spacing) * TICK_ARRAY_SIZE;
     let mut compressed = tick_current / multiplier + 512;

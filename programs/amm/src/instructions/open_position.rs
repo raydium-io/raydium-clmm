@@ -959,7 +959,7 @@ mod modify_position_test {
             block_timestamp_mock(),
         );
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), ErrorCode::InvaildLiquidity.into());
+        assert_eq!(result.unwrap_err(), ErrorCode::InvalidLiquidity.into());
     }
 
     #[test]
