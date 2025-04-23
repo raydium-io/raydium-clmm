@@ -55,14 +55,16 @@ impl TickArrayBitmapExtension {
     fn get_bitmap_offset(tick_index: i32, tick_spacing: u16) -> Result<usize> {
         require!(
             TickArrayState::check_is_valid_start_index(tick_index, tick_spacing),
-            ErrorCode::InvaildTickIndex
+            ErrorCode::InvalidTickIndex
         );
         Self::check_extension_boundary(tick_index, tick_spacing)?;
         let ticks_in_one_bitmap = max_tick_in_tickarray_bitmap(tick_spacing);
-        let mut offset = tick_index.abs() / ticks_in_one_bitmap - 1;
-        if tick_index < 0 && tick_index.abs() % ticks_in_one_bitmap == 0 {
-            offset -= 1;
-        }
+        // Calculate the distance from the start of the *first* extension bitmap.
+        let magnitude_offset = tick_index.abs() - ticks_in_one_bitmap;
+        let offset = magnitude_offset / ticks_in_one_bitmap;
+    
+        // --- Add Bounds Check ---
+        require!(offset < EXTENSION_TICKARRAY_BITMAP_SIZE as i32, ErrorCode::InvalidTickIndex);
         Ok(offset as usize)
     }
 

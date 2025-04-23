@@ -17,18 +17,18 @@ pub enum ErrorCode {
     ZeroMintAmount,
 
     #[msg("Tick out of range")]
-    InvaildTickIndex,
+    InvalidTickIndex,
     #[msg("The lower tick must be below the upper tick")]
-    TickInvaildOrder,
+    TickInvalidOrder,
     #[msg("The tick must be greater, or equal to the minimum tick(-443636)")]
     TickLowerOverflow,
     #[msg("The tick must be lesser than, or equal to the maximum tick(443636)")]
     TickUpperOverflow,
     #[msg("tick % tick_spacing must be zero")]
     TickAndSpacingNotMatch,
-    #[msg("Invaild tick array account")]
+    #[msg("Invalid tick array account")]
     InvalidTickArray,
-    #[msg("Invaild tick array boundary")]
+    #[msg("Invalid tick array boundary")]
     InvalidTickArrayBoundary,
 
     #[msg("Square root price limit overflow")]
@@ -43,8 +43,8 @@ pub enum ErrorCode {
     // Liquidity Add
     #[msg("Liquidity add delta L must be greater, or equal to before")]
     LiquidityAddValueErr,
-    #[msg("Invaild liquidity when update position")]
-    InvaildLiquidity,
+    #[msg("Invalid liquidity when update position")]
+    InvalidLiquidity,
     #[msg("Both token amount must not be zero while supply liquidity")]
     ForbidBothZeroForSupplyLiquidity,
     #[msg("Liquidity insufficient")]
@@ -68,7 +68,7 @@ pub enum ErrorCode {
     TooSmallInputOrOutputAmount,
     #[msg("Not enought tick array account")]
     NotEnoughTickArrayAccount,
-    #[msg("Invaild first tick array account")]
+    #[msg("Invalid first tick array account")]
     InvalidFirstTickArrayAccount,
 
     /// reward errors

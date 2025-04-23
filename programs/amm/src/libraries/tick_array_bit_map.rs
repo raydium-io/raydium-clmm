@@ -1,17 +1,19 @@
-///! Helper functions to get most and least significant non-zero bits
 use super::big_num::U1024;
 use crate::error::ErrorCode;
 use crate::states::tick_array::{TickArrayState, TickState, TICK_ARRAY_SIZE};
 use anchor_lang::prelude::*;
 
 pub const TICK_ARRAY_BITMAP_SIZE: i32 = 512;
+pub const TOTAL_BITMAP_SIZE: usize = 1024;
 
 pub type TickArryBitmap = [u64; 8];
 
+/// Returns the maximum tick representable in the tick array bitmap
 pub fn max_tick_in_tickarray_bitmap(tick_spacing: u16) -> i32 {
     i32::from(tick_spacing) * TICK_ARRAY_SIZE * TICK_ARRAY_BITMAP_SIZE
 }
 
+/// Gets the min and max tick boundaries for a bitmap containing the given tick array
 pub fn get_bitmap_tick_boundary(tick_array_start_index: i32, tick_spacing: u16) -> (i32, i32) {
     let ticks_in_one_bitmap: i32 = max_tick_in_tickarray_bitmap(tick_spacing);
     let mut m = tick_array_start_index.abs() / ticks_in_one_bitmap;
@@ -42,93 +44,242 @@ pub fn least_significant_bit(x: U1024) -> Option<u16> {
     }
 }
 
+/// Helper function to calculate bit position (0-1023) for a given tick array start index
+fn calculate_bit_pos(tick_array_start_index: i32, tick_spacing: u16) -> Result<usize> {
+    // Ensure input is a valid start index (implicitly checks divisibility)
+    // Note: If calling code already validated, this might be redundant, but safer.
+    if !TickArrayState::check_is_valid_start_index(tick_array_start_index, tick_spacing) {
+         msg!("Input tick {} is not a valid start index for tick spacing {}",
+             tick_array_start_index, tick_spacing);
+        return err!(ErrorCode::InvalidTickIndex);
+    }
+
+    let multiplier = i32::from(tick_spacing) * TICK_ARRAY_SIZE;
+    // Direct calculation: division result + offset gives 0-1023 index
+    let compressed = tick_array_start_index / multiplier + 512;
+
+    // Ensure calculated bit position is within valid range [0, 1023]
+    if !(0..TOTAL_BITMAP_SIZE as i32).contains(&compressed) {
+        msg!("Calculated bit position {} out of range [0, {}] for tick {}",
+             compressed, TOTAL_BITMAP_SIZE - 1, tick_array_start_index);
+        // This case should ideally not happen if tick boundaries are enforced elsewhere,
+        // but provides safety.
+        return err!(ErrorCode::InvalidTickIndex);
+    }
+
+    Ok(compressed as usize)
+}
+
+/// Finds the tick array start index corresponding to a given bit position
+fn find_tick_for_bit_pos(bit_pos: usize, tick_spacing: u16) -> i32 {
+    let multiplier = i32::from(tick_spacing) * TICK_ARRAY_SIZE;
+    (bit_pos as i32 - 512) * multiplier
+}
+
 /// Given a tick, calculate whether the tickarray it belongs to has been initialized.
+/// Returns (is_initialized, tick_array_start_index)
 pub fn check_current_tick_array_is_initialized(
     bit_map: U1024,
     tick_current: i32,
     tick_spacing: u16,
 ) -> Result<(bool, i32)> {
     if TickState::check_is_out_of_boundary(tick_current) {
-        return err!(ErrorCode::InvaildTickIndex);
+        return err!(ErrorCode::InvalidTickIndex);
     }
-    let multiplier = i32::from(tick_spacing) * TICK_ARRAY_SIZE;
-    let mut compressed = tick_current / multiplier + 512;
-    if tick_current < 0 && tick_current % multiplier != 0 {
-        // round towards negative infinity
-        compressed -= 1;
-    }
-    let bit_pos = compressed.abs();
-    // set current bit
-    let mask = U1024::one() << bit_pos.try_into().unwrap();
-    let masked = bit_map & mask;
-    // check the current bit whether initialized
-    let initialized = masked != U1024::default();
-    if initialized {
-        return Ok((true, (compressed - 512) * multiplier));
-    }
-    // the current bit is not initialized
-    return Ok((false, (compressed - 512) * multiplier));
+    
+    // Find the start index of the array containing this tick
+    let tick_array_start_index = TickArrayState::get_array_start_index(tick_current, tick_spacing);
+    
+    // Calculate bit position for this tick array
+    let bit_pos = match calculate_bit_pos(tick_array_start_index, tick_spacing) {
+        Ok(pos) => pos,
+        Err(e) => return Err(e),
+    };
+    
+    // Check if the bit is set in the bitmap
+    let mask = U1024::one() << bit_pos;
+    let initialized = (bit_map & mask) != U1024::default();
+    
+    Ok((initialized, tick_array_start_index))
 }
 
+/// Checks if a bit is set in the bitmap at the specified position
+fn is_bit_set(bitmap: &U1024, bit_pos: usize) -> bool {
+    if bit_pos >= TOTAL_BITMAP_SIZE {
+        return false;
+    }
+    
+    let word_idx = bit_pos / 64;
+    let bit_in_word = bit_pos % 64;
+    (bitmap.0[word_idx] & (1u64 << bit_in_word)) != 0
+}
+
+/// Creates a mask covering all bits below the specified position
+fn create_lower_mask(bit_pos: usize) -> U1024 {
+    // Early return for edge cases
+    if bit_pos == 0 {
+        return U1024::default(); // Empty mask
+    }
+    if bit_pos >= TOTAL_BITMAP_SIZE {
+        return U1024::max_value(); // All bits set
+    }
+    
+    let mut mask = U1024::default();
+    
+    // Set all complete words
+    let word_idx = bit_pos / 64;
+    for i in 0..word_idx {
+        mask.0[i] = u64::MAX;
+    }
+    
+    // Set bits in the partial word
+    let bit_in_word = bit_pos % 64;
+    if bit_in_word > 0 {
+        mask.0[word_idx] = (1u64 << bit_in_word) - 1;
+    }
+    
+    mask
+}
+
+/// Creates a mask covering all bits above the specified position
+fn create_upper_mask(bit_pos: usize) -> U1024 {
+    // Early return for edge cases
+    if bit_pos >= TOTAL_BITMAP_SIZE - 1 {
+        return U1024::default(); // Empty mask
+    }
+    
+    let mut mask = U1024::default();
+    
+    // Set all complete words above
+    let word_idx = bit_pos / 64;
+    for i in (word_idx + 1)..16 {
+        mask.0[i] = u64::MAX;
+    }
+    
+    // Set bits in the partial word
+    let bit_in_word = bit_pos % 64;
+    if bit_in_word < 63 {
+        mask.0[word_idx] = !((1u64 << (bit_in_word + 1)) - 1);
+    }
+    
+    mask
+}
+
+/// Validates tick array start index compatibility with tick spacing
+///
+/// For high tick spacings (≥15), only checks if the index is a multiple of the 
+/// tick array size * tick spacing. For lower tick spacings, uses the standard validation.
+fn validate_tick_array_start_index(tick_array_start_index: i32, tick_spacing: u16) -> bool {
+    let multiplier = i32::from(tick_spacing) * TICK_ARRAY_SIZE;
+    
+    // Basic divisibility check that works for all tick spacings
+    if tick_array_start_index % multiplier != 0 {
+        return false;
+    }
+    
+    // For small tick spacings, use the standard validation logic which includes
+    // additional checks beyond just divisibility
+    if tick_spacing < 15 {
+        return TickArrayState::check_is_valid_start_index(tick_array_start_index, tick_spacing);
+    }
+    
+    // For high tick spacings, divisibility is the only requirement
+    true
+}
+
+/// Finds the next initialized tick array start index in the bitmap
+/// 
+/// # Parameters
+/// - `bit_map`: The bitmap representing initialized tick arrays
+/// - `last_tick_array_start_index`: The current tick array start index
+/// - `tick_spacing`: The tick spacing of the pool
+/// - `zero_for_one`: Direction (true = searching downward, false = searching upward)
+/// 
+/// # Returns
+/// - (found, next_start_index): where found is true if an initialized array was found
 pub fn next_initialized_tick_array_start_index(
     bit_map: U1024,
     last_tick_array_start_index: i32,
     tick_spacing: u16,
     zero_for_one: bool,
 ) -> (bool, i32) {
-    assert!(TickArrayState::check_is_valid_start_index(
-        last_tick_array_start_index,
-        tick_spacing
-    ));
+    // Validate the start index
+    if !validate_tick_array_start_index(last_tick_array_start_index, tick_spacing) {
+        msg!("Invalid tick array start index: {} for tick spacing: {}", 
+             last_tick_array_start_index, tick_spacing);
+        return (false, last_tick_array_start_index);
+    }
+    
+    // Calculate boundaries
     let tick_boundary = max_tick_in_tickarray_bitmap(tick_spacing);
-    let next_tick_array_start_index = if zero_for_one {
-        last_tick_array_start_index - TickArrayState::tick_count(tick_spacing)
-    } else {
-        last_tick_array_start_index + TickArrayState::tick_count(tick_spacing)
-    };
-
-    if next_tick_array_start_index < -tick_boundary || next_tick_array_start_index >= tick_boundary
-    {
+    let max_valid_tick = tick_boundary - TickArrayState::tick_count(tick_spacing);
+    
+    // Check if we're beyond the representable range
+    if last_tick_array_start_index < -tick_boundary || last_tick_array_start_index >= tick_boundary {
         return (false, last_tick_array_start_index);
     }
 
-    let multiplier = i32::from(tick_spacing) * TICK_ARRAY_SIZE;
-    let mut compressed = next_tick_array_start_index / multiplier + 512;
-    if next_tick_array_start_index < 0 && next_tick_array_start_index % multiplier != 0 {
-        // round towards negative infinity
-        compressed -= 1;
-    }
-    let bit_pos = compressed.abs();
-
+    // Get bit position for the current tick array
+    let current_bit_pos = match calculate_bit_pos(last_tick_array_start_index, tick_spacing) {
+        Ok(pos) => pos,
+        Err(_) => {
+            // Fallback to boundary if calculation fails
+            return (false, if zero_for_one { -tick_boundary } else { max_valid_tick });
+        }
+    };
+    
+    // Handle search based on direction
     if zero_for_one {
-        // tick from upper to lower
-        // find from highter bits to lower bits
-        let offset_bit_map = bit_map << (1024 - bit_pos - 1).try_into().unwrap();
-        let next_bit = most_significant_bit(offset_bit_map);
-        if next_bit.is_some() {
-            let next_array_start_index =
-                (bit_pos - i32::from(next_bit.unwrap()) - 512) * multiplier;
-            (true, next_array_start_index)
-        } else {
-            // not found til to the end
-            (false, -tick_boundary)
+        // DOWNWARD SEARCH (from high to low bits)
+        
+        // First, handle special cases
+        
+        // Case 1: At bit 1023 (max valid tick) check if it's set
+        if current_bit_pos == TOTAL_BITMAP_SIZE - 1 && is_bit_set(&bit_map, TOTAL_BITMAP_SIZE - 1) {
+            return (true, last_tick_array_start_index);
         }
+        
+        // Case 2: At bit 0 (min valid tick) we can't go lower
+        if current_bit_pos == 0 {
+            return (false, -tick_boundary);
+        }
+        
+        // Standard search - apply mask and find MSB
+        let mask = create_lower_mask(current_bit_pos);
+        let search_area = bit_map & mask;
+        
+        if search_area.is_zero() {
+            return (false, -tick_boundary);
+        }
+        
+        // Find highest set bit in the masked area
+        let msb_idx = most_significant_bit(search_area)
+            .map(|lz| TOTAL_BITMAP_SIZE - 1 - usize::from(lz))
+            .unwrap_or(0);
+            
+        (true, find_tick_for_bit_pos(msb_idx, tick_spacing))
     } else {
-        // tick from lower to upper
-        // find from lower bits to highter bits
-        let offset_bit_map = bit_map >> (bit_pos).try_into().unwrap();
-        let next_bit = least_significant_bit(offset_bit_map);
-        if next_bit.is_some() {
-            let next_array_start_index =
-                (bit_pos + i32::from(next_bit.unwrap()) - 512) * multiplier;
-            (true, next_array_start_index)
-        } else {
-            // not found til to the end
-            (
-                false,
-                tick_boundary - TickArrayState::tick_count(tick_spacing),
-            )
+        // UPWARD SEARCH (from low to high bits)
+        
+        // Case: At or beyond max bit position
+        if current_bit_pos >= TOTAL_BITMAP_SIZE - 1 {
+            return (false, max_valid_tick);
         }
+        
+        // Standard search - apply mask and find LSB
+        let mask = create_upper_mask(current_bit_pos);
+        let search_area = bit_map & mask;
+        
+        if search_area.is_zero() {
+            return (false, max_valid_tick);
+        }
+        
+        // Find lowest set bit in the masked area
+        let lsb_idx = least_significant_bit(search_area)
+            .map(usize::from)
+            .unwrap_or(0);
+            
+        (true, find_tick_for_bit_pos(lsb_idx, tick_spacing))
     }
 }
 
