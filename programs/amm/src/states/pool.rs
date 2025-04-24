@@ -521,7 +521,7 @@ impl PoolState {
                     last_tick_array_start_index,
                     self.tick_spacing,
                     zero_for_one,
-                )?;
+                );
             if is_found {
                 return Ok(Some(start_index));
             }
