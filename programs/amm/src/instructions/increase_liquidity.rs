@@ -146,9 +146,13 @@ pub fn increase_liquidity<'a, 'b, 'c: 'info, 'info>(
         !(personal_position.locked_forever && liquidity > 0),
         ErrorCode::LiquidityLockedForever
     );
-
+    
     let mut liquidity = liquidity;
     let pool_state = &mut pool_state_loader.load_mut()?;
+    require!(
+        pool_state.remove_liquidity_timestamp <= Clock::get()?.unix_timestamp ,
+        ErrorCode::PoolUnwinding
+    );
     if !pool_state.get_status_by_bit(PoolStatusBitIndex::OpenPositionOrIncreaseLiquidity) {
         return err!(ErrorCode::NotApproved);
     }

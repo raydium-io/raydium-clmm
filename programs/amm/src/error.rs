@@ -110,4 +110,6 @@ pub enum ErrorCode {
     LiquidityLockedForever,
     #[msg("NFT already locked")]
     AlreadyLocked,
+    #[msg("Pool is unwinding, can't modify any position")]
+    PoolUnwinding,
 }

@@ -6,7 +6,7 @@ use crate::libraries::{
     tick_array_bit_map, tick_math,
 };
 use crate::states::*;
-use crate::util::get_recent_epoch;
+use crate::util::{get_recent_epoch};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::Mint;
 #[cfg(feature = "enable-log")]
@@ -134,8 +134,11 @@ pub struct PoolState {
     // account recent update epoch
     pub recent_epoch: u64,
 
+    // time when liquidity can be removed
+    pub remove_liquidity_timestamp: i64,
+
     // Unused bytes for future upgrades.
-    pub padding1: [u64; 24],
+    pub padding1: [u64; 23],
     pub padding2: [u64; 32],
 }
 
@@ -227,7 +230,7 @@ impl PoolState {
         self.fund_fees_token_1 = 0;
         self.creation_time = creation_time;
         self.recent_epoch = get_recent_epoch()?;
-        self.padding1 = [0; 24];
+        self.padding1 = [0; 23];
         self.padding2 = [0; 32];
         self.observation_key = observation_state_key;
 

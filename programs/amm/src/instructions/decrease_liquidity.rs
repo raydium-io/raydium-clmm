@@ -161,6 +161,10 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
     let remaining_collect_accounts = &mut Vec::new();
     {
         let pool_state = pool_state_loader.load()?;
+        require!(
+            pool_state.remove_liquidity_timestamp <= Clock::get()?.unix_timestamp ,
+            ErrorCode::PoolUnwinding
+        );
         if !pool_state.get_status_by_bit(PoolStatusBitIndex::DecreaseLiquidity)
             && !pool_state.get_status_by_bit(PoolStatusBitIndex::CollectFee)
             && !pool_state.get_status_by_bit(PoolStatusBitIndex::CollectReward)
