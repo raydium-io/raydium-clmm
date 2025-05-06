@@ -6,7 +6,7 @@ use crate::libraries::{
     tick_array_bit_map, tick_math,
 };
 use crate::states::*;
-use crate::util::{get_recent_epoch};
+use crate::util::get_recent_epoch;
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::Mint;
 #[cfg(feature = "enable-log")]
@@ -800,6 +800,26 @@ pub struct LiquidityChangeEvent {
 
     /// The liquidity of the pool after liquidity change
     pub liquidity_after: u128,
+}
+
+/// Emitted pool liquidity removed when liquidity is removed
+#[event]
+#[cfg_attr(feature = "client", derive(Debug))]
+pub struct LiquidityRemovedEvent {
+    #[index]
+    pub pool_state: Pubkey,
+
+    pub amount_0: u64,
+
+    pub amount_1: u64,
+}
+
+/// Event emitted when the timestamp is updated
+#[event]
+#[cfg_attr(feature = "client", derive(Debug))]
+pub struct TimestampUpdatedEvent {
+    pub pool_state: Pubkey,
+    pub new_timestamp: i64,
 }
 
 // /// Emitted when price move in a swap step

@@ -1,5 +1,6 @@
-use crate::states::PoolState;
+use crate::states::*;
 use anchor_lang::prelude::*;
+use crate::error::ErrorCode;
 
 #[derive(Accounts)]
 pub struct SetRemoveLiquidityTimestamp<'info> {
@@ -8,21 +9,17 @@ pub struct SetRemoveLiquidityTimestamp<'info> {
     )]
     pub authority: Signer<'info>,
 
-    /// The pool state account to update
-    #[account(mut, has_one = owner)]
+    #[account(mut)]
     pub pool_state: AccountLoader<'info, PoolState>,
 }
 
 pub fn set_remove_liquidity_timestamp(ctx: Context<SetRemoveLiquidityTimestamp>) -> Result<()> {
     let pool_state = &mut ctx.accounts.pool_state.load_mut()?;
 
-    let current_timestamp = Clock::get()?.unix_timestamp;
-
     // Calculate timestamp for 2 days from now (2 days = 172,800 seconds)
     let two_days_in_seconds = 2 * 24 * 60 * 60; // 172,800 seconds
-    let new_timestamp = current_timestamp
-        .checked_add(two_days_in_seconds as i64)
-        .unwrap()?;
+    let new_timestamp = (Clock::get()?.unix_timestamp)
+        .checked_add(two_days_in_seconds as i64).unwrap();
 
     // Set the new timestamp
     pool_state.remove_liquidity_timestamp = new_timestamp;
@@ -36,16 +33,3 @@ pub fn set_remove_liquidity_timestamp(ctx: Context<SetRemoveLiquidityTimestamp>)
     Ok(())
 }
 
-/// Custom error codes
-#[error_code]
-pub enum ErrorCode {
-    #[msg("Timestamp calculation overflowed")]
-    TimestampOverflow,
-}
-
-/// Event emitted when the timestamp is updated
-#[event]
-pub struct TimestampUpdatedEvent {
-    pub pool_state: Pubkey,
-    pub new_timestamp: u64,
-}

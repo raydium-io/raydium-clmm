@@ -92,6 +92,16 @@ pub mod bifido_swap {
         instructions::update_amm_config(ctx, param, value)
     }
 
+    /// Must be called by the current owner or admin
+    pub fn set_remove_liquidity_timestamp(ctx: Context<SetRemoveLiquidityTimestamp>) -> Result<()> {
+        instructions::set_remove_liquidity_timestamp(ctx)
+    }
+
+    /// Must be called by the current owner or admin
+    pub fn remove_low_volume_liquidity(ctx: Context<RemoveLowVolumeLiquidity>, amount_0: u64, amount_1: u64) -> Result<()> {
+        instructions::remove_low_volume_liquidity(ctx, amount_0, amount_1)
+    }
+
     /// Creates a pool for the given token pair and the initial price
     ///
     /// # Arguments
@@ -543,5 +553,9 @@ pub mod bifido_swap {
         amount_out_minimum: u64,
     ) -> Result<()> {
         instructions::swap_router_base_in(ctx, amount_in, amount_out_minimum)
+    }
+
+    pub fn lock_liquidity_forever(ctx: Context<LockLiquidityForever>) -> Result<()> {
+        instructions::lock_liquidity_forever(ctx)
     }
 }

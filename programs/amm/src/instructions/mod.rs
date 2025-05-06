@@ -48,3 +48,6 @@ pub use collect_remaining_rewards::*;
 
 pub mod admin;
 pub use admin::*;
+
+pub mod lock_liquidity_forever;
+pub use lock_liquidity_forever::*;

@@ -1,6 +1,8 @@
-use crate::error::ErrorCode;
 use crate::states::*;
+use crate::util::*;
 use anchor_lang::prelude::*;
+use anchor_spl::token::{Token, TokenAccount};
+use crate::error::ErrorCode;
 
 #[derive(Accounts)]
 pub struct RemoveLowVolumeLiquidity<'info> {
@@ -8,8 +10,9 @@ pub struct RemoveLowVolumeLiquidity<'info> {
     #[account(mut)]
     pub pool_state: AccountLoader<'info, PoolState>,
 
-    /// The pool creator or admin who can invoke this instruction
-    #[account(mut)]
+    #[account(
+        address = crate::admin::id() @ ErrorCode::NotApproved
+    )]
     pub authority: Signer<'info>,
 
     /// Token_0 vault
@@ -26,8 +29,8 @@ pub struct RemoveLowVolumeLiquidity<'info> {
     )]
     pub token_vault_1: Box<Account<'info, TokenAccount>>,
 
-     /// The destination token account for receive amount_0
-     #[account(
+    /// The destination token account for receive amount_0
+    #[account(
         mut,
         token::mint = token_vault_0.mint
     )]
@@ -44,35 +47,40 @@ pub struct RemoveLowVolumeLiquidity<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-pub fn remove_low_volume_liquidity(ctx: Context<RemoveLowVolumeLiquidity>) -> Result<()> {
+pub fn remove_low_volume_liquidity(
+    ctx: Context<RemoveLowVolumeLiquidity>,
+    amount_0: u64,
+    amount_1: u64,
+) -> Result<()> {
     let pool_state = &mut ctx.accounts.pool_state.load_mut()?;
 
-    if self.remove_liquidity_timestamp > Clock::get()?.unix_timestamp {
+    if pool_state.remove_liquidity_timestamp > Clock::get()?.unix_timestamp {
         transfer_from_pool_vault_to_user(
             &ctx.accounts.pool_state,
             &ctx.accounts.token_vault_0.to_account_info(),
             &ctx.accounts.recipient_token_account_0.to_account_info(),
             None,
-            token_program,
+            &ctx.accounts.token_program,
             None,
-            transfer_amount_0,
+            amount_0,
         )?;
 
         transfer_from_pool_vault_to_user(
-            pool_state_loader,
+            &ctx.accounts.pool_state,
             &ctx.accounts.token_vault_1.to_account_info(),
             &ctx.accounts.recipient_token_account_1.to_account_info(),
             None,
-            token_program,
+            &ctx.accounts.token_program,
             None,
-            transfer_amount_1,
+            amount_1,
         )?;
     }
 
     // Emit an event for liquidity removal
     emit!(LiquidityRemovedEvent {
         pool_state: ctx.accounts.pool_state.key(),
-        volume: 0, // Volume not tracked on-chain; set to 0 or could be removed if not needed
+        amount_0,
+        amount_1
     });
 
     Ok(())

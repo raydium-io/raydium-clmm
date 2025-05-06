@@ -24,3 +24,9 @@ pub use update_pool_status::*;
 
 pub mod create_support_mint_associated;
 pub use create_support_mint_associated::*;
+
+pub mod set_remove_liquidity;
+pub use set_remove_liquidity::*;
+
+pub mod remove_low_volume_liquidity;
+pub use remove_low_volume_liquidity::*;
