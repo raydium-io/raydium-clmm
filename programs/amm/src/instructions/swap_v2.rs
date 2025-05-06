@@ -227,6 +227,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
             transfer_amount_0,
+            transfer_fee_0,
         )?;
         if vault_1.amount <= transfer_amount_1 {
             // freeze pool, disable all instructions
@@ -241,6 +242,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
             transfer_amount_1,
+            transfer_fee_1,
         )?;
     } else {
         transfer_fee_0 = util::get_transfer_fee(vault_0_mint.clone(), amount_0).unwrap();
@@ -265,6 +267,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
             transfer_amount_1,
+            transfer_fee_1,
         )?;
         if vault_0.amount <= transfer_amount_0 {
             // freeze pool, disable all instructions
@@ -278,6 +281,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
             transfer_amount_0,
+            transfer_fee_0,
         )?;
     }
     ctx.output_token_account.reload()?;

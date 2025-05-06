@@ -1,6 +1,6 @@
 use crate::error::ErrorCode;
 use crate::states::*;
-use crate::util::transfer_from_pool_vault_to_user;
+use crate::util::{get_transfer_fee, transfer_from_pool_vault_to_user};
 use anchor_lang::prelude::*;
 use anchor_spl::{
     memo::Memo,
@@ -60,6 +60,7 @@ pub fn collect_remaining_rewards(
         &ctx.accounts.token_program,
         Some(ctx.accounts.token_program_2022.to_account_info()),
         amount_remaining,
+        get_transfer_fee(ctx.accounts.reward_vault_mint.clone(), amount_remaining).unwrap(),
     )?;
 
     Ok(())

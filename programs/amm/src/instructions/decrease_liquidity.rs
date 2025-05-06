@@ -254,10 +254,15 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
         pool_state_loader,
         &token_vault_0.to_account_info(),
         recipient_token_account_0,
-        vault_0_mint,
+        vault_0_mint.clone(),
         token_program,
         token_2022_program_opt.clone(),
         transfer_amount_0,
+        if vault_0_mint.is_some() {
+            util::get_transfer_fee(vault_0_mint.unwrap(), transfer_amount_0).unwrap()
+        } else {
+            0
+        },
     )?;
 
     transfer_from_pool_vault_to_user(
@@ -268,6 +273,11 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
         token_program,
         token_2022_program_opt.clone(),
         transfer_amount_1,
+        if vault_1_mint.is_some() {
+            util::get_transfer_fee(vault_1_mint.unwrap(), transfer_amount_1).unwrap()
+        } else {
+            0
+        },
     )?;
 
     check_unclaimed_fees_and_vault(pool_state_loader, token_vault_0, token_vault_1)?;
@@ -532,10 +542,16 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
                 &pool_state_loader,
                 &reward_token_vault.to_account_info(),
                 &recipient_token_account.to_account_info(),
-                reward_vault_mint,
+                reward_vault_mint.clone(),
                 &token_program,
                 token_program_2022.clone(),
                 transfer_amount,
+                if reward_vault_mint.is_none() {
+                    0
+                } else {
+                    util::get_transfer_fee(reward_vault_mint.unwrap().clone(), transfer_amount)
+                        .unwrap()
+                },
             )?;
         }
         reward_amounts[i] = transfer_amount
