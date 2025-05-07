@@ -258,11 +258,7 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
         token_program,
         token_2022_program_opt.clone(),
         transfer_amount_0,
-        if vault_0_mint.is_some() {
-            util::get_transfer_fee(vault_0_mint.unwrap(), transfer_amount_0).unwrap()
-        } else {
-            0
-        },
+        transfer_fee_0,
     )?;
 
     transfer_from_pool_vault_to_user(
@@ -273,11 +269,7 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
         token_program,
         token_2022_program_opt.clone(),
         transfer_amount_1,
-        if vault_1_mint.is_some() {
-            util::get_transfer_fee(vault_1_mint.unwrap(), transfer_amount_1).unwrap()
-        } else {
-            0
-        },
+        transfer_fee_1,
     )?;
 
     check_unclaimed_fees_and_vault(pool_state_loader, token_vault_0, token_vault_1)?;

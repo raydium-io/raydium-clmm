@@ -238,9 +238,16 @@ pub fn get_transfer_inverse_fee(
         if u16::from(transfer_fee.transfer_fee_basis_points) == MAX_FEE_BASIS_POINTS {
             u64::from(transfer_fee.maximum_fee)
         } else {
-            transfer_fee_config
+            let transfer_fee = transfer_fee_config
                 .calculate_inverse_epoch_fee(epoch, post_fee_amount)
-                .unwrap()
+                .unwrap();
+            let transfer_fee_for_check = transfer_fee_config
+                .calculate_epoch_fee(epoch, post_fee_amount.checked_add(transfer_fee).unwrap())
+                .unwrap();
+            if transfer_fee != transfer_fee_for_check {
+                return err!(ErrorCode::TransferFeeCalculateNotMatch);
+            }
+            transfer_fee
         }
     } else {
         0

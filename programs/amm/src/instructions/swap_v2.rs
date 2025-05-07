@@ -95,15 +95,15 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
     let output_balance_before = ctx.output_token_account.amount;
 
     // calculate specified amount because the amount includes transfer_fee as input and without transfer_fee as output
-    let amount_calculate_specified = if is_base_input {
+    let (amount_calculate_specified, transfer_fee) = if is_base_input {
         let transfer_fee =
             util::get_transfer_fee(ctx.input_vault_mint.clone(), amount_specified).unwrap();
-        amount_specified - transfer_fee
+        (amount_specified - transfer_fee, transfer_fee)
     } else {
         let transfer_fee =
             util::get_transfer_inverse_fee(ctx.output_vault_mint.clone(), amount_specified)
                 .unwrap();
-        amount_specified + transfer_fee
+        (amount_specified + transfer_fee, transfer_fee)
     };
 
     {
@@ -204,7 +204,11 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
     let transfer_amount_0;
     let transfer_amount_1;
     if zero_for_one {
-        transfer_fee_0 = util::get_transfer_inverse_fee(vault_0_mint.clone(), amount_0).unwrap();
+        transfer_fee_0 = if is_base_input && amount_0 == amount_calculate_specified {
+            transfer_fee
+        } else {
+            util::get_transfer_inverse_fee(vault_0_mint.clone(), amount_0).unwrap()
+        };
         transfer_fee_1 = util::get_transfer_fee(vault_1_mint.clone(), amount_1).unwrap();
 
         amount_0_without_fee = amount_0;
@@ -246,7 +250,11 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         )?;
     } else {
         transfer_fee_0 = util::get_transfer_fee(vault_0_mint.clone(), amount_0).unwrap();
-        transfer_fee_1 = util::get_transfer_inverse_fee(vault_1_mint.clone(), amount_1).unwrap();
+        transfer_fee_1 = if is_base_input && amount_1 == amount_calculate_specified {
+            transfer_fee
+        } else {
+            util::get_transfer_inverse_fee(vault_1_mint.clone(), amount_1).unwrap()
+        };
 
         amount_0_without_fee = amount_0.checked_sub(transfer_fee_0).unwrap();
         amount_1_without_fee = amount_1;

@@ -103,6 +103,8 @@ pub enum ErrorCode {
     InsufficientLiquidityForDirection,
     #[msg("Max token overflow")]
     MaxTokenOverflow,
-    #[msg("calculate overflow")]
+    #[msg("Calculate overflow")]
     CalculateOverflow,
+    #[msg("TransferFee calculate not match")]
+    TransferFeeCalculateNotMatch,
 }
