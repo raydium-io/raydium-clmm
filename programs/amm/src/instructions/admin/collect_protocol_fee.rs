@@ -93,7 +93,6 @@ pub fn collect_protocol_fee(
         &ctx.accounts.token_program,
         Some(ctx.accounts.token_program_2022.to_account_info()),
         amount_0,
-        get_transfer_fee(ctx.accounts.vault_0_mint.clone(), amount_0).unwrap(),
     )?;
 
     transfer_from_pool_vault_to_user(
@@ -104,7 +103,6 @@ pub fn collect_protocol_fee(
         &ctx.accounts.token_program,
         Some(ctx.accounts.token_program_2022.to_account_info()),
         amount_1,
-        get_transfer_fee(ctx.accounts.vault_1_mint.clone(), amount_1).unwrap(),
     )?;
 
     check_unclaimed_fees_and_vault(

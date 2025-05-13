@@ -20,7 +20,6 @@ use anchor_spl::token_2022::{
     },
     Token2022,
 };
-use anchor_spl::token_2022_extensions::{transfer_checked_with_fee, TransferCheckedWithFee};
 use anchor_spl::token_interface::{initialize_mint2, InitializeMint2, Mint};
 use std::collections::HashSet;
 
@@ -50,7 +49,6 @@ pub fn transfer_from_user_to_pool_vault<'info>(
     token_program: &AccountInfo<'info>,
     token_program_2022: Option<AccountInfo<'info>>,
     amount: u64,
-    transfer_fee: u64,
 ) -> Result<()> {
     if amount == 0 {
         return Ok(());
@@ -62,37 +60,19 @@ pub fn transfer_from_user_to_pool_vault<'info>(
             if from_token_info.owner == token_program_2022.key {
                 token_program_info = token_program_2022.to_account_info()
             }
-            if token_program_info.key() == Token2022::id() {
-                transfer_checked_with_fee(
-                    CpiContext::new(
-                        token_program_info.clone(),
-                        TransferCheckedWithFee {
-                            token_program_id: token_program_info,
-                            source: from_token_info,
-                            mint: mint.to_account_info(),
-                            destination: to_vault.to_account_info(),
-                            authority: signer.to_account_info(),
-                        },
-                    ),
-                    amount,
-                    mint.decimals,
-                    transfer_fee,
-                )
-            } else {
-                token_2022::transfer_checked(
-                    CpiContext::new(
-                        token_program_info,
-                        token_2022::TransferChecked {
-                            from: from_token_info,
-                            to: to_vault.to_account_info(),
-                            authority: signer.to_account_info(),
-                            mint: mint.to_account_info(),
-                        },
-                    ),
-                    amount,
-                    mint.decimals,
-                )
-            }
+            token_2022::transfer_checked(
+                CpiContext::new(
+                    token_program_info,
+                    token_2022::TransferChecked {
+                        from: from_token_info,
+                        to: to_vault.to_account_info(),
+                        authority: signer.to_account_info(),
+                        mint: mint.to_account_info(),
+                    },
+                ),
+                amount,
+                mint.decimals,
+            )
         }
         _ => token::transfer(
             CpiContext::new(
@@ -116,7 +96,6 @@ pub fn transfer_from_pool_vault_to_user<'info>(
     token_program: &AccountInfo<'info>,
     token_program_2022: Option<AccountInfo<'info>>,
     amount: u64,
-    transfer_fee: u64,
 ) -> Result<()> {
     if amount == 0 {
         return Ok(());
@@ -128,39 +107,20 @@ pub fn transfer_from_pool_vault_to_user<'info>(
             if from_vault_info.owner == token_program_2022.key {
                 token_program_info = token_program_2022.to_account_info()
             }
-            if token_program_info.key() == Token2022::id() {
-                transfer_checked_with_fee(
-                    CpiContext::new_with_signer(
-                        token_program_info.clone(),
-                        TransferCheckedWithFee {
-                            token_program_id: token_program_info,
-                            source: from_vault_info,
-                            mint: mint.to_account_info(),
-                            destination: to.to_account_info(),
-                            authority: pool_state_loader.to_account_info(),
-                        },
-                        &[&pool_state_loader.load()?.seeds()],
-                    ),
-                    amount,
-                    mint.decimals,
-                    transfer_fee,
-                )
-            } else {
-                token_2022::transfer_checked(
-                    CpiContext::new_with_signer(
-                        token_program_info,
-                        token_2022::TransferChecked {
-                            from: from_vault_info,
-                            to: to.to_account_info(),
-                            authority: pool_state_loader.to_account_info(),
-                            mint: mint.to_account_info(),
-                        },
-                        &[&pool_state_loader.load()?.seeds()],
-                    ),
-                    amount,
-                    mint.decimals,
-                )
-            }
+            token_2022::transfer_checked(
+                CpiContext::new_with_signer(
+                    token_program_info,
+                    token_2022::TransferChecked {
+                        from: from_vault_info,
+                        to: to.to_account_info(),
+                        authority: pool_state_loader.to_account_info(),
+                        mint: mint.to_account_info(),
+                    },
+                    &[&pool_state_loader.load()?.seeds()],
+                ),
+                amount,
+                mint.decimals,
+            )
         }
         _ => token::transfer(
             CpiContext::new_with_signer(

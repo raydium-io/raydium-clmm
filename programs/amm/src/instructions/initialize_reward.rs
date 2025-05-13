@@ -163,7 +163,6 @@ pub fn initialize_reward(
         &ctx.accounts.reward_token_program.to_account_info(),
         Some(ctx.accounts.reward_token_program.to_account_info()),
         reward_amount_with_transfer_fee,
-        transfer_fee,
     )?;
 
     Ok(())

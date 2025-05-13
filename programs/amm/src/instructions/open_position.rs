@@ -589,7 +589,6 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
         &token_program,
         token_2022_program_opt.clone(),
         amount_0 + amount_0_transfer_fee,
-        amount_0_transfer_fee,
     )?;
     transfer_from_user_to_pool_vault(
         payer,
@@ -599,7 +598,6 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
         &token_program,
         token_2022_program_opt.clone(),
         amount_1 + amount_1_transfer_fee,
-        amount_1_transfer_fee,
     )?;
     emit!(LiquidityChangeEvent {
         pool_state: pool_state.key(),
