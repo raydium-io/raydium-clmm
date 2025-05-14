@@ -55,7 +55,7 @@ impl TickArrayBitmapExtension {
     fn get_bitmap_offset(tick_index: i32, tick_spacing: u16) -> Result<usize> {
         require!(
             TickArrayState::check_is_valid_start_index(tick_index, tick_spacing),
-            ErrorCode::InvaildTickIndex
+            ErrorCode::InvalidTickIndex
         );
         Self::check_extension_boundary(tick_index, tick_spacing)?;
         let ticks_in_one_bitmap = max_tick_in_tickarray_bitmap(tick_spacing);
@@ -229,7 +229,7 @@ pub mod tick_array_bitmap_extension_test {
     use std::str::FromStr;
 
     use super::*;
-    use crate::tick_array::TICK_ARRAY_SIZE;
+    use crate::{libraries::MAX_TICK, tick_array::TICK_ARRAY_SIZE};
 
     pub fn flip_tick_array_bit_helper(
         tick_array_bitmap_extension: &mut TickArrayBitmapExtension,
@@ -313,6 +313,18 @@ pub mod tick_array_bitmap_extension_test {
         .unwrap();
         assert!(offset == 13);
 
+        let mut result = TickArrayBitmapExtension::get_bitmap_offset(
+            tick_spacing * TICK_ARRAY_SIZE * 7394,
+            tick_spacing_u16,
+        );
+        assert!(result.is_err());
+
+        result = TickArrayBitmapExtension::get_bitmap_offset(
+            -tick_spacing * TICK_ARRAY_SIZE * 512,
+            tick_spacing_u16,
+        );
+        assert!(result.is_err());
+
         let mut offset = TickArrayBitmapExtension::get_bitmap_offset(
             -tick_spacing * TICK_ARRAY_SIZE * 513,
             tick_spacing_u16,
@@ -340,6 +352,11 @@ pub mod tick_array_bitmap_extension_test {
         )
         .unwrap();
         assert!(offset == 13);
+        result = TickArrayBitmapExtension::get_bitmap_offset(
+            -tick_spacing * TICK_ARRAY_SIZE * 7395,
+            tick_spacing_u16,
+        );
+        assert!(result.is_err());
     }
 
     #[test]
@@ -596,6 +613,46 @@ pub mod tick_array_bitmap_extension_test {
     }
 
     #[test]
+    fn next_initialized_tick_array_with_all_initialized_bit_test() {
+        let tick_array_bitmap_extension = &mut TickArrayBitmapExtension::default();
+        tick_array_bitmap_extension.negative_tick_array_bitmap =
+            [[u64::max_value(); 8]; EXTENSION_TICKARRAY_BITMAP_SIZE];
+        tick_array_bitmap_extension.positive_tick_array_bitmap =
+            [[u64::max_value(); 8]; EXTENSION_TICKARRAY_BITMAP_SIZE];
+
+        for tick_spacing in [1, 10, 60] {
+            let tick_boundary = max_tick_in_tickarray_bitmap(tick_spacing);
+            let mut start_index = tick_boundary;
+            let mut expect_index;
+            let loop_count = (TickArrayState::get_array_start_index(MAX_TICK, tick_spacing)
+                - start_index)
+                / (i32::from(tick_spacing) * TICK_ARRAY_SIZE);
+            for _i in 0..loop_count {
+                expect_index = start_index + i32::from(tick_spacing) * TICK_ARRAY_SIZE;
+                let (is_found, array_start_index) = tick_array_bitmap_extension
+                    .next_initialized_tick_array_from_one_bitmap(start_index, tick_spacing, false)
+                    .unwrap();
+
+                assert_eq!(is_found, true);
+                assert_eq!(array_start_index, expect_index);
+                start_index = array_start_index;
+            }
+
+            start_index = -tick_boundary;
+            for _i in 0..loop_count {
+                expect_index = start_index - i32::from(tick_spacing) * TICK_ARRAY_SIZE;
+                let (is_found, array_start_index) = tick_array_bitmap_extension
+                    .next_initialized_tick_array_from_one_bitmap(start_index, tick_spacing, true)
+                    .unwrap();
+
+                assert_eq!(is_found, true);
+                assert_eq!(array_start_index, expect_index);
+                start_index = array_start_index;
+            }
+        }
+    }
+
+    #[test]
     fn bitmap_extension_layout_test() {
         use anchor_lang::Discriminator;
 
@@ -607,7 +664,7 @@ pub mod tick_array_bitmap_extension_test {
         let mut bitmap_extension_data = [0u8; 8 + 32 + 64 * EXTENSION_TICKARRAY_BITMAP_SIZE * 2];
         let mut offset = 0;
         bitmap_extension_data[offset..offset + 8]
-            .copy_from_slice(&TickArrayBitmapExtension::discriminator());
+            .copy_from_slice(&TickArrayBitmapExtension::DISCRIMINATOR);
         offset += 8;
         bitmap_extension_data[offset..offset + 32].copy_from_slice(&pool_id.to_bytes());
         offset += 32;

@@ -9,7 +9,7 @@ pub struct CreateSupportMintAssociated<'info> {
     /// Address to be set as protocol owner.
     #[account(
         mut,
-        address = crate::admin::id() @ ErrorCode::NotApproved
+        address = crate::admin::ID @ ErrorCode::NotApproved
     )]
     pub owner: Signer<'info>,
     /// Support token mint

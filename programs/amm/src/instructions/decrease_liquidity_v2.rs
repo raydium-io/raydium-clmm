@@ -1,10 +1,10 @@
 use super::decrease_liquidity::decrease_liquidity;
 use crate::states::*;
 use anchor_lang::prelude::*;
+use anchor_spl::memo::spl_memo;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::Mint;
 use anchor_spl::token_interface::{Token2022, TokenAccount};
-
 #[derive(Accounts)]
 pub struct DecreaseLiquidityV2<'info> {
     /// The position owner or delegated authority

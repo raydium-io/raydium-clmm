@@ -43,13 +43,15 @@ pub fn least_significant_bit(x: U1024) -> Option<u16> {
 }
 
 /// Given a tick, calculate whether the tickarray it belongs to has been initialized.
+/// Note: The caller of the function should ensure that tick_current is within the range represented by bit_map.
+/// Currently, this function is only called when `bit_map = pool.tick_array_bitmap`.
 pub fn check_current_tick_array_is_initialized(
     bit_map: U1024,
     tick_current: i32,
     tick_spacing: u16,
 ) -> Result<(bool, i32)> {
     if TickState::check_is_out_of_boundary(tick_current) {
-        return err!(ErrorCode::InvaildTickIndex);
+        return err!(ErrorCode::InvalidTickIndex);
     }
     let multiplier = i32::from(tick_spacing) * TICK_ARRAY_SIZE;
     let mut compressed = tick_current / multiplier + 512;
@@ -70,6 +72,7 @@ pub fn check_current_tick_array_is_initialized(
     return Ok((false, (compressed - 512) * multiplier));
 }
 
+/// The function is only called when `bit_map = pool.tick_array_bitmap`.
 pub fn next_initialized_tick_array_start_index(
     bit_map: U1024,
     last_tick_array_start_index: i32,
@@ -99,7 +102,6 @@ pub fn next_initialized_tick_array_start_index(
         compressed -= 1;
     }
     let bit_pos = compressed.abs();
-
     if zero_for_one {
         // tick from upper to lower
         // find from highter bits to lower bits
@@ -135,7 +137,10 @@ pub fn next_initialized_tick_array_start_index(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{libraries::tick_math, states::TickArrayState};
+    use crate::{
+        libraries::{tick_math, MAX_TICK},
+        states::TickArrayState,
+    };
 
     #[test]
     fn test_check_current_tick_array_is_initialized() {
@@ -372,6 +377,56 @@ mod test {
         );
         assert!(is_found == false);
         assert!(array_start_index == tick_array_start_index);
+    }
+
+    #[test]
+    fn next_initialized_tick_array_with_all_initialized_bit_test() {
+        let bit_map = U1024::max_value();
+        for tick_spacing in [1, 10, 60] {
+            let mut tick_boundary = max_tick_in_tickarray_bitmap(tick_spacing);
+            if tick_boundary > MAX_TICK {
+                tick_boundary = MAX_TICK;
+            }
+            let (min, max) = (
+                TickArrayState::get_array_start_index(-tick_boundary, tick_spacing),
+                TickArrayState::get_array_start_index(tick_boundary, tick_spacing),
+            );
+            let mut start_index = min;
+            let mut expect_index;
+
+            let loop_count = (max - start_index) / (i32::from(tick_spacing) * TICK_ARRAY_SIZE);
+
+            for i in 0..loop_count {
+                expect_index = start_index + i32::from(tick_spacing) * TICK_ARRAY_SIZE;
+                let (is_found, array_start_index) = next_initialized_tick_array_start_index(
+                    bit_map,
+                    start_index,
+                    tick_spacing as u16,
+                    false,
+                );
+
+                if i < loop_count - 1 {
+                    if is_found == false {
+                        println!("start_index:{}", start_index)
+                    }
+                    assert_eq!(is_found, true);
+                    assert_eq!(array_start_index, expect_index);
+                    start_index = array_start_index;
+                } else {
+                    if tick_spacing == 60 {
+                        assert_eq!(is_found, true);
+                        assert_eq!(array_start_index, expect_index);
+                    } else {
+                        assert_eq!(is_found, false);
+                        assert_eq!(array_start_index, start_index);
+                        assert_eq!(
+                            array_start_index,
+                            max - i32::from(tick_spacing) * TICK_ARRAY_SIZE
+                        )
+                    }
+                }
+            }
+        }
     }
 
     #[test]
