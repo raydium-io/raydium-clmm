@@ -285,10 +285,15 @@ pub fn is_supported_mint(
     let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
     let extensions = mint.get_extension_types()?;
     for e in extensions {
+        let e_type_number: u16 = e.into();
         if e != ExtensionType::TransferFeeConfig
             && e != ExtensionType::MetadataPointer
             && e != ExtensionType::TokenMetadata
             && e != ExtensionType::InterestBearingConfig
+            && e != ExtensionType::DefaultAccountState
+            && e != ExtensionType::ImmutableOwner
+            && e != ExtensionType::PermanentDelegate
+            && e_type_number != 25 // ExtensionType::ScaledUi from token_2022 v.7.0.0
         {
             return Ok(false);
         }
