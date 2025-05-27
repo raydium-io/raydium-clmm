@@ -5,6 +5,9 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::metadata::Metadata;
 use anchor_spl::token::{self, Token};
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
+use crate::error::ErrorCode;
+use crate::util::is_superstate_token;
+
 #[derive(Accounts)]
 #[instruction(tick_lower_index: i32, tick_upper_index: i32,tick_array_lower_start_index:i32,tick_array_upper_start_index:i32)]
 pub struct OpenPositionV2<'info> {
@@ -168,6 +171,13 @@ pub fn open_position_v2<'a, 'b, 'c: 'info, 'info>(
     with_metadata: bool,
     base_flag: Option<bool>,
 ) -> Result<()> {
+
+    let is_superstate_mint_for_vault = is_superstate_token(&ctx.accounts.vault_0_mint) || is_superstate_token(&ctx.accounts.vault_1_mint);
+
+    if is_superstate_mint_for_vault {
+        return err!(ErrorCode::NotSupportMint)
+    }
+
     open_position(
         &ctx.accounts.payer,
         &ctx.accounts.position_nft_owner,

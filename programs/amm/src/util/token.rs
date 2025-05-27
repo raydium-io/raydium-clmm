@@ -22,6 +22,7 @@ use anchor_spl::token_2022::{
 };
 use anchor_spl::token_interface::{initialize_mint2, InitializeMint2, Mint};
 use std::collections::HashSet;
+use anchor_lang::solana_program::program_option::COption;
 
 const MINT_WHITELIST: [&'static str; 6] = [
     "HVbpJAQGNpkgBaYBZQBR1t7yFdvaYVp2vCQQfKKEN4tM",
@@ -30,6 +31,11 @@ const MINT_WHITELIST: [&'static str; 6] = [
     "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
     "DAUcJBg4jSpVoEzASxYzdqHMUN8vuTpQyG2TvDcCHfZg",
     "AUSD1jCcCyPLybk1YnvPWsHQSrZ46dxwoMniN4N2UEB9",
+];
+
+const SUPERSTATE_ALLOWLIST: &[Pubkey; 1] = &[
+    Pubkey::from_str_const("Fdq29GdM8sZtbL9xrLLKwFEo3GuGHo6C2r4VKEWATqQW") // devnet 
+    // TODO - add mainnet
 ];
 
 pub fn invoke_memo_instruction<'info>(
@@ -309,8 +315,9 @@ pub fn create_position_nft_mint_with_extensions<'info>(
     system_program: &Program<'info, System>,
     token_2022_program: &Program<'info, Token2022>,
     with_matedata: bool,
+    is_superstate_mint_for_vault: bool,
 ) -> Result<()> {
-    let extensions = if with_matedata {
+    let mut extensions = if with_matedata {
         [
             ExtensionType::MintCloseAuthority,
             ExtensionType::MetadataPointer,
@@ -319,6 +326,11 @@ pub fn create_position_nft_mint_with_extensions<'info>(
     } else {
         [ExtensionType::MintCloseAuthority].to_vec()
     };
+
+    if is_superstate_mint_for_vault {
+        extensions.push(ExtensionType::NonTransferable)
+    }
+
     let space =
         ExtensionType::try_calculate_account_len::<spl_token_2022::state::Mint>(&extensions)?;
 
@@ -370,6 +382,19 @@ pub fn create_position_nft_mint_with_extensions<'info>(
                     ],
                 )?;
             }
+            ExtensionType::NonTransferable => {
+                let ix = spl_token_2022::instruction::initialize_non_transferable_mint(
+                    token_2022_program.key,
+                    position_nft_mint.key,
+                )?;
+                solana_program::program::invoke(
+                    &ix,
+                    &[
+                        token_2022_program.to_account_info(),
+                        position_nft_mint.to_account_info(),
+                    ],
+                )?;
+            }
             _ => {
                 return err!(ErrorCode::NotSupportMint);
             }
@@ -388,4 +413,14 @@ pub fn create_position_nft_mint_with_extensions<'info>(
         &mint_authority.key(),
         None,
     )
+}
+
+pub fn is_superstate_token(
+    mint_account: &InterfaceAccount<Mint>
+) -> bool {
+    if let COption::Some(freeze_authority) = mint_account.freeze_authority {
+        SUPERSTATE_ALLOWLIST.contains(&freeze_authority)
+    } else {
+        false
+    }
 }

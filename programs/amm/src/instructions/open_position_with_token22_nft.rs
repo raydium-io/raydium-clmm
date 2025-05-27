@@ -1,6 +1,6 @@
 use super::open_position::open_position;
 use crate::states::*;
-use crate::util::create_position_nft_mint_with_extensions;
+use crate::util::{create_position_nft_mint_with_extensions, is_superstate_token};
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::{create, AssociatedToken, Create};
 use anchor_spl::token::Token;
@@ -154,6 +154,9 @@ pub fn open_position_with_token22_nft<'a, 'b, 'c: 'info, 'info>(
     with_metadata: bool,
     base_flag: Option<bool>,
 ) -> Result<()> {
+    
+    let is_superstate_freeze_authority_for_vault = is_superstate_token(&ctx.accounts.vault_0_mint) || is_superstate_token(&ctx.accounts.vault_1_mint);
+    
     create_position_nft_mint_with_extensions(
         &ctx.accounts.payer,
         &ctx.accounts.position_nft_mint,
@@ -162,6 +165,7 @@ pub fn open_position_with_token22_nft<'a, 'b, 'c: 'info, 'info>(
         &ctx.accounts.system_program,
         &ctx.accounts.token_program_2022,
         with_metadata,
+        is_superstate_freeze_authority_for_vault,
     )?;
 
     // create user position nft account
