@@ -31,8 +31,8 @@ const MINT_WHITELIST: [&'static str; 6] = [
 ];
 
 const SUPERSTATE_ALLOWLIST: &[Pubkey; 2] = &[
-    Pubkey::from_str_const("Fdq29GdM8sZtbL9xrLLKwFEo3GuGHo6C2r4VKEWATqQW"), // devnet 
-    Pubkey::from_str_const("HFkKyweJDUuGer5KaCst5qZSYD5aapKaD7xzdNaoRtfA") // mainnet
+    Pubkey::from_str_const("3TRuL3MFvzHaUfQAb6EsSAbQhWdhmYrKxEiViVkdQfXu"), // devnet 
+    Pubkey::from_str_const("2Yq4T3mPNfjtEyTxSbRjRKqLf1pwbTasuCQrWe6QpM7x") // mainnet
 ];
 
 pub fn invoke_memo_instruction<'info>(
