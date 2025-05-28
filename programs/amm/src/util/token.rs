@@ -284,11 +284,17 @@ pub fn is_supported_mint(
     if mint_associated_is_initialized {
         return Ok(true);
     }
+
+    if is_superstate_token(mint_account) {
+        // Supports ScaledUiConfig, which does not work with StateWithExtensions::<spl_token_2022::state::Mint>::unpack
+        // To avoid having to resort to other tricks, this is simpler.
+        return Ok(true);
+    }
+
     let mint_data = mint_info.try_borrow_data()?;
     let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
     let extensions = mint.get_extension_types()?;
     for e in extensions {
-        let e_type_number: u16 = e.into();
         if e != ExtensionType::TransferFeeConfig
             && e != ExtensionType::MetadataPointer
             && e != ExtensionType::TokenMetadata
@@ -296,7 +302,6 @@ pub fn is_supported_mint(
             && e != ExtensionType::DefaultAccountState
             && e != ExtensionType::ImmutableOwner
             && e != ExtensionType::PermanentDelegate
-            && e_type_number != 25 // ExtensionType::ScaledUi from token_2022 v.7.0.0
         {
             return Ok(false);
         }
@@ -422,7 +427,7 @@ pub fn create_pool_vault_token_account<'info>(
     token_2022_program: &Interface<'info, TokenInterface>,
 ) -> Result<()> {
     
-    let immutable_owner_required = is_superstate_token(token_mint);
+    let immutable_owner_required = true;//is_superstate_token(token_mint);
 
     let space = if immutable_owner_required {
         ExtensionType::try_calculate_account_len::<spl_token_2022::state::Account>(&[ImmutableOwner])?
