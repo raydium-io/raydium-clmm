@@ -30,10 +30,13 @@ const MINT_WHITELIST: [&'static str; 6] = [
     "AUSD1jCcCyPLybk1YnvPWsHQSrZ46dxwoMniN4N2UEB9",
 ];
 
-const SUPERSTATE_ALLOWLIST: &[Pubkey; 2] = &[
-    Pubkey::from_str_const("3TRuL3MFvzHaUfQAb6EsSAbQhWdhmYrKxEiViVkdQfXu"), // devnet 
-    Pubkey::from_str_const("2Yq4T3mPNfjtEyTxSbRjRKqLf1pwbTasuCQrWe6QpM7x") // mainnet
-];
+pub mod superstate_allowlist {
+    use super::{pubkey, Pubkey};
+    #[cfg(feature = "devnet")]
+    pub const ID: Pubkey = pubkey!("3TRuL3MFvzHaUfQAb6EsSAbQhWdhmYrKxEiViVkdQfXu");
+    #[cfg(not(feature = "devnet"))]
+    pub const ID: Pubkey = pubkey!("2Yq4T3mPNfjtEyTxSbRjRKqLf1pwbTasuCQrWe6QpM7x");
+}
 
 pub fn invoke_memo_instruction<'info>(
     memo_msg: &[u8],
@@ -299,9 +302,6 @@ pub fn is_supported_mint(
             && e != ExtensionType::MetadataPointer
             && e != ExtensionType::TokenMetadata
             && e != ExtensionType::InterestBearingConfig
-            && e != ExtensionType::DefaultAccountState
-            && e != ExtensionType::ImmutableOwner
-            && e != ExtensionType::PermanentDelegate
         {
             return Ok(false);
         }
@@ -427,7 +427,7 @@ pub fn create_pool_vault_token_account<'info>(
     token_2022_program: &Interface<'info, TokenInterface>,
 ) -> Result<()> {
     
-    let immutable_owner_required = true;//is_superstate_token(token_mint);
+    let immutable_owner_required = is_superstate_token(token_mint);
 
     let space = if immutable_owner_required {
         ExtensionType::try_calculate_account_len::<spl_token_2022::state::Account>(&[ImmutableOwner])?
@@ -488,7 +488,7 @@ pub fn is_superstate_token(
     mint_account: &InterfaceAccount<Mint>
 ) -> bool {
     if let COption::Some(freeze_authority) = mint_account.freeze_authority {
-        SUPERSTATE_ALLOWLIST.contains(&freeze_authority)
+        superstate_allowlist::ID == freeze_authority
     } else {
         false
     }
