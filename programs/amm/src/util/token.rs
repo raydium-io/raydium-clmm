@@ -290,7 +290,7 @@ pub fn is_supported_mint(
 
     if is_superstate_token(mint_account) {
         // Supports ScaledUiConfig, which does not work with StateWithExtensions::<spl_token_2022::state::Mint>::unpack
-        // To avoid having to resort to other tricks, this is simpler.
+        // To avoid having to resort to other tricks (or upgrading library dependencies), this is simpler.
         return Ok(true);
     }
 

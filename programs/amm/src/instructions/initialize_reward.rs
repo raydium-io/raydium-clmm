@@ -38,7 +38,7 @@ pub struct InitializeReward<'info> {
     /// Reward mint
     pub reward_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    /// A pda, reward vault
+    /// A pda, reward vault, initialized in contract.
     #[account(
         mut,
         seeds =[
