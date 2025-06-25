@@ -175,14 +175,14 @@ pub fn swap_internal<'b, 'info>(
     // check observation account is owned by the pool
     require_keys_eq!(observation_state.pool_id, pool_state.key());
 
-    let (mut is_match_pool_current_tick_array, first_vaild_tick_array_start_index) =
+    let (mut is_match_pool_current_tick_array, first_valid_tick_array_start_index) =
         pool_state.get_first_initialized_tick_array(&tickarray_bitmap_extension, zero_for_one)?;
-    let mut current_vaild_tick_array_start_index = first_vaild_tick_array_start_index;
+    let mut current_valid_tick_array_start_index = first_valid_tick_array_start_index;
 
     let mut tick_array_current = tick_array_states.pop_front().unwrap();
     // find the first active tick array account
     for _ in 0..tick_array_states.len() {
-        if tick_array_current.start_tick_index == current_vaild_tick_array_start_index {
+        if tick_array_current.start_tick_index == current_valid_tick_array_start_index {
             break;
         }
         tick_array_current = tick_array_states
@@ -194,7 +194,7 @@ pub fn swap_internal<'b, 'info>(
     // check first tick array account is correct
     require_eq!(
         tick_array_current.start_tick_index,
-        current_vaild_tick_array_start_index,
+        current_valid_tick_array_start_index,
         ErrorCode::InvalidFirstTickArrayAccount
     );
 
@@ -243,7 +243,7 @@ pub fn swap_internal<'b, 'info>(
             let next_initialized_tickarray_index = pool_state
                 .next_initialized_tick_array_start_index(
                     &tickarray_bitmap_extension,
-                    current_vaild_tick_array_start_index,
+                    current_valid_tick_array_start_index,
                     zero_for_one,
                 )?;
             if next_initialized_tickarray_index.is_none() {
@@ -257,7 +257,7 @@ pub fn swap_internal<'b, 'info>(
                 // check the tick_array account is owned by the pool
                 require_keys_eq!(tick_array_current.pool_id, pool_state.key());
             }
-            current_vaild_tick_array_start_index = next_initialized_tickarray_index.unwrap();
+            current_valid_tick_array_start_index = next_initialized_tickarray_index.unwrap();
 
             let first_initialized_tick = tick_array_current.first_initialized_tick(zero_for_one)?;
             next_initialized_tick = Box::new(*first_initialized_tick);
