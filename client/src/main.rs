@@ -194,7 +194,7 @@ fn load_cur_and_next_five_tick_array(
     tickarray_bitmap_extension: &TickArrayBitmapExtension,
     zero_for_one: bool,
 ) -> VecDeque<TickArrayState> {
-    let (_, mut current_valid_tick_array_start_index) = pool_state
+    let (_, mut current_vaild_tick_array_start_index) = pool_state
         .get_first_initialized_tick_array(&Some(*tickarray_bitmap_extension), zero_for_one)
         .unwrap();
     let mut tick_array_keys = Vec::new();
@@ -203,7 +203,7 @@ fn load_cur_and_next_five_tick_array(
             &[
                 raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
                 pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
-                &current_valid_tick_array_start_index.to_be_bytes(),
+                &current_vaild_tick_array_start_index.to_be_bytes(),
             ],
             &pool_config.raydium_v3_program,
         )
@@ -214,20 +214,20 @@ fn load_cur_and_next_five_tick_array(
         let next_tick_array_index = pool_state
             .next_initialized_tick_array_start_index(
                 &Some(*tickarray_bitmap_extension),
-                current_valid_tick_array_start_index,
+                current_vaild_tick_array_start_index,
                 zero_for_one,
             )
             .unwrap();
         if next_tick_array_index.is_none() {
             break;
         }
-        current_valid_tick_array_start_index = next_tick_array_index.unwrap();
+        current_vaild_tick_array_start_index = next_tick_array_index.unwrap();
         tick_array_keys.push(
             Pubkey::find_program_address(
                 &[
                     raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
                     pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
-                    &current_valid_tick_array_start_index.to_be_bytes(),
+                    &current_vaild_tick_array_start_index.to_be_bytes(),
                 ],
                 &pool_config.raydium_v3_program,
             )

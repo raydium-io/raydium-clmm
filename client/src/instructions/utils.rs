@@ -318,7 +318,7 @@ pub fn get_out_put_amount_and_remaining_accounts(
     tickarray_bitmap_extension: &TickArrayBitmapExtension,
     tick_arrays: &mut VecDeque<TickArrayState>,
 ) -> Result<(u64, VecDeque<i32>), &'static str> {
-    let (is_pool_current_tick_array, current_valid_tick_array_start_index) = pool_state
+    let (is_pool_current_tick_array, current_vaild_tick_array_start_index) = pool_state
         .get_first_initialized_tick_array(&Some(*tickarray_bitmap_extension), zero_for_one)
         .unwrap();
 
@@ -328,7 +328,7 @@ pub fn get_out_put_amount_and_remaining_accounts(
         is_pool_current_tick_array,
         pool_config.trade_fee_rate,
         input_amount,
-        current_valid_tick_array_start_index,
+        current_vaild_tick_array_start_index,
         sqrt_price_limit_x64.unwrap_or(0),
         pool_state,
         tickarray_bitmap_extension,
@@ -345,7 +345,7 @@ fn swap_compute(
     is_pool_current_tick_array: bool,
     fee: u32,
     amount_specified: u64,
-    current_valid_tick_array_start_index: i32,
+    current_vaild_tick_array_start_index: i32,
     sqrt_price_limit_x64: u128,
     pool_state: &PoolState,
     tickarray_bitmap_extension: &TickArrayBitmapExtension,
@@ -389,7 +389,7 @@ fn swap_compute(
     };
 
     let mut tick_array_current = tick_arrays.pop_front().unwrap();
-    if tick_array_current.start_tick_index != current_valid_tick_array_start_index {
+    if tick_array_current.start_tick_index != current_vaild_tick_array_start_index {
         return Result::Err("tick array start tick index does not match");
     }
     let mut tick_array_start_index_vec = VecDeque::new();
@@ -425,18 +425,18 @@ fn swap_compute(
             }
         };
         if !next_initialized_tick.is_initialized() {
-            let current_valid_tick_array_start_index = pool_state
+            let current_vaild_tick_array_start_index = pool_state
                 .next_initialized_tick_array_start_index(
                     &Some(*tickarray_bitmap_extension),
-                    current_valid_tick_array_start_index,
+                    current_vaild_tick_array_start_index,
                     zero_for_one,
                 )
                 .unwrap();
             tick_array_current = tick_arrays.pop_front().unwrap();
-            if current_valid_tick_array_start_index.is_none() {
+            if current_vaild_tick_array_start_index.is_none() {
                 return Result::Err("tick array start tick index out of range limit");
             }
-            if tick_array_current.start_tick_index != current_valid_tick_array_start_index.unwrap()
+            if tick_array_current.start_tick_index != current_vaild_tick_array_start_index.unwrap()
             {
                 return Result::Err("tick array start tick index does not match");
             }
