@@ -269,6 +269,7 @@ impl PoolState {
             ErrorCode::RewardTokenAlreadyInUse
         );
         let whitelist_mints = operation_state.whitelist_mints.to_vec();
+
         if lowest_index == REWARD_NUM - 3 {
             // The current init token is the first.
             // If the first reward is neither token_mint_0 nor token_mint_1, and is not in whitelist_mints, then this token_mint cannot have freeze_authority.
@@ -281,13 +282,12 @@ impl PoolState {
                     ErrorCode::ExceptRewardMint
                 );
             }
-        }
-        if lowest_index == REWARD_NUM - 2 {
+        } else if lowest_index == REWARD_NUM - 2 {
             // The current init token is the penult.
             if !reward_mints.contains(&self.token_mint_0)
                 && !reward_mints.contains(&self.token_mint_1)
             {
-                // If token_mint_0 or token_mint_1 is not contained in the initialized rewards token,
+                // If both token_mint_0 and token_mint_1 are not contained in the initialized rewards token,
                 // the current init reward token mint must be token_mint_0 or token_mint_1 or one of the whitelist_mints.
                 require!(
                     *token_mint == self.token_mint_0
@@ -297,8 +297,11 @@ impl PoolState {
                 );
             } else {
                 // If token_mint_0 or token_mint_1 is contained in the initialized rewards token,
-                // the current init reward token mint is not in one of the whitelist_mints, then this token_mint cannot have freeze_authority.
-                if !whitelist_mints.contains(token_mint) {
+                // the current init reward token mint is neither token_mint_0 nor token_mint_1, and is not in whitelist_mints, then this token_mint cannot have freeze_authority.
+                if *token_mint != self.token_mint_0
+                    && *token_mint != self.token_mint_1
+                    && !whitelist_mints.contains(token_mint)
+                {
                     require!(
                         token_mint_freeze_authority.is_none(),
                         ErrorCode::ExceptRewardMint
