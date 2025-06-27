@@ -541,6 +541,9 @@ pub enum CommandsName {
     DecodeTxLog {
         tx_id: String,
     },
+    GetSupportmintPda {
+        mint: Pubkey,
+    },
 }
 // #[cfg(not(feature = "async"))]
 fn main() -> Result<()> {
@@ -562,6 +565,17 @@ fn main() -> Result<()> {
 
     let opts = Opts::parse();
     match opts.command {
+        CommandsName::GetSupportmintPda { mint } => {
+            let pda = Pubkey::find_program_address(
+                &[
+                    raydium_amm_v3::states::SUPPORT_MINT_SEED.as_bytes(),
+                    mint.to_bytes().as_ref(),
+                ],
+                &program.id(),
+            )
+            .0;
+            println!("{}", pda);
+        }
         CommandsName::NewMint {
             authority,
             decimals,
