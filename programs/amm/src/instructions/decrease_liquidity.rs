@@ -5,8 +5,8 @@ use crate::states::*;
 use crate::util::{self, transfer_from_pool_vault_to_user};
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
-use anchor_spl::token_2022::spl_token_2022;
 use anchor_spl::token_interface::{self, Mint, Token2022};
+use spl_token_2022;
 use std::cell::RefMut;
 use std::ops::Deref;
 
