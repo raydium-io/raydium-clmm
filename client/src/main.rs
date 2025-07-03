@@ -5,7 +5,6 @@ use anyhow::{format_err, Result};
 use arrayref::array_ref;
 use clap::Parser;
 use configparser::ini::Ini;
-use rand::rngs::OsRng;
 use solana_account_decoder::{
     parse_token::{TokenAccountType, UiAccountState},
     UiAccountData, UiAccountEncoding,
@@ -195,7 +194,7 @@ fn load_cur_and_next_five_tick_array(
     tickarray_bitmap_extension: &TickArrayBitmapExtension,
     zero_for_one: bool,
 ) -> VecDeque<TickArrayState> {
-    let (_, mut current_vaild_tick_array_start_index) = pool_state
+    let (_, mut current_valid_tick_array_start_index) = pool_state
         .get_first_initialized_tick_array(&Some(*tickarray_bitmap_extension), zero_for_one)
         .unwrap();
     let mut tick_array_keys = Vec::new();
@@ -204,7 +203,7 @@ fn load_cur_and_next_five_tick_array(
             &[
                 raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
                 pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
-                &current_vaild_tick_array_start_index.to_be_bytes(),
+                &current_valid_tick_array_start_index.to_be_bytes(),
             ],
             &pool_config.raydium_v3_program,
         )
@@ -215,20 +214,20 @@ fn load_cur_and_next_five_tick_array(
         let next_tick_array_index = pool_state
             .next_initialized_tick_array_start_index(
                 &Some(*tickarray_bitmap_extension),
-                current_vaild_tick_array_start_index,
+                current_valid_tick_array_start_index,
                 zero_for_one,
             )
             .unwrap();
         if next_tick_array_index.is_none() {
             break;
         }
-        current_vaild_tick_array_start_index = next_tick_array_index.unwrap();
+        current_valid_tick_array_start_index = next_tick_array_index.unwrap();
         tick_array_keys.push(
             Pubkey::find_program_address(
                 &[
                     raydium_amm_v3::states::TICK_ARRAY_SEED.as_bytes(),
                     pool_config.pool_id_account.unwrap().to_bytes().as_ref(),
-                    &current_vaild_tick_array_start_index.to_be_bytes(),
+                    &current_valid_tick_array_start_index.to_be_bytes(),
                 ],
                 &pool_config.raydium_v3_program,
             )
@@ -542,6 +541,9 @@ pub enum CommandsName {
     DecodeTxLog {
         tx_id: String,
     },
+    GetSupportmintPda {
+        mint: Pubkey,
+    },
 }
 // #[cfg(not(feature = "async"))]
 fn main() -> Result<()> {
@@ -563,6 +565,17 @@ fn main() -> Result<()> {
 
     let opts = Opts::parse();
     match opts.command {
+        CommandsName::GetSupportmintPda { mint } => {
+            let pda = Pubkey::find_program_address(
+                &[
+                    raydium_amm_v3::states::SUPPORT_MINT_SEED.as_bytes(),
+                    mint.to_bytes().as_ref(),
+                ],
+                &program.id(),
+            )
+            .0;
+            println!("{}", pda);
+        }
         CommandsName::NewMint {
             authority,
             decimals,
@@ -641,7 +654,7 @@ fn main() -> Result<()> {
                 });
             }
 
-            let mint = Keypair::generate(&mut OsRng);
+            let mint = Keypair::new();
             let create_and_init_instr = create_and_init_mint_instr(
                 &pool_config.clone(),
                 token_program,
@@ -669,7 +682,7 @@ fn main() -> Result<()> {
             not_ata,
         } => {
             let mut signers = vec![&payer];
-            let auxiliary_token_keypair = Keypair::generate(&mut OsRng);
+            let auxiliary_token_keypair = Keypair::new();
             let create_ata_instr = if not_ata {
                 signers.push(&auxiliary_token_keypair);
                 create_and_init_auxiliary_token(
@@ -1187,7 +1200,7 @@ fn main() -> Result<()> {
             if find_position.nft_mint == Pubkey::default() {
                 // personal position not exist
                 // new nft mint
-                let nft_mint = Keypair::generate(&mut OsRng);
+                let nft_mint = Keypair::new();
                 let mut remaining_accounts = Vec::new();
                 remaining_accounts.push(AccountMeta::new(
                     pool_config.tickarray_bitmap_extension.unwrap(),
@@ -2130,6 +2143,7 @@ fn main() -> Result<()> {
                         ..RpcAccountInfoConfig::default()
                     },
                     with_context: Some(false),
+                    sort_results: None,
                 },
             )?;
 
@@ -2188,6 +2202,7 @@ fn main() -> Result<()> {
                         ..RpcAccountInfoConfig::default()
                     },
                     with_context: Some(false),
+                    sort_results: None,
                 },
             )?;
 
@@ -2225,6 +2240,7 @@ fn main() -> Result<()> {
                         ..RpcAccountInfoConfig::default()
                     },
                     with_context: Some(false),
+                    sort_results: None,
                 },
             )?;
 

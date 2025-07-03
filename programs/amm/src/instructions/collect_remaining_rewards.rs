@@ -3,6 +3,7 @@ use crate::states::*;
 use crate::util::transfer_from_pool_vault_to_user;
 use anchor_lang::prelude::*;
 use anchor_spl::{
+    memo::Memo,
     token::{self, Token},
     token_interface::{Mint, Token2022, TokenAccount},
 };
@@ -12,7 +13,7 @@ pub const COLLECT_REMAINING_MEMO_MSG: &'static [u8] = b"raydium_collect_remainin
 
 #[derive(Accounts)]
 pub struct CollectRemainingRewards<'info> {
-    /// The founder who init reward info in berfore
+    /// The founder who init reward info previously
     pub reward_funder: Signer<'info>,
     /// The funder's reward token account
     #[account(mut)]
@@ -33,11 +34,7 @@ pub struct CollectRemainingRewards<'info> {
     pub token_program_2022: Program<'info, Token2022>,
 
     /// memo program
-    /// CHECK:
-    #[account(
-        address = spl_memo::id()
-    )]
-    pub memo_program: UncheckedAccount<'info>,
+    pub memo_program: Program<'info, Memo>,
 }
 
 pub fn collect_remaining_rewards(

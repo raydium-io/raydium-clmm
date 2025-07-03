@@ -8,6 +8,7 @@ use crate::libraries::{
 use crate::states::*;
 use crate::util::get_recent_epoch;
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program_option::COption;
 use anchor_spl::token_interface::Mint;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
@@ -243,6 +244,7 @@ impl PoolState {
         end_time: u64,
         reward_per_second_x64: u128,
         token_mint: &Pubkey,
+        token_mint_freeze_authority: COption<Pubkey>,
         token_vault: &Pubkey,
         authority: &Pubkey,
         operation_state: &OperationState,
@@ -268,24 +270,49 @@ impl PoolState {
             ErrorCode::RewardTokenAlreadyInUse
         );
         let whitelist_mints = operation_state.whitelist_mints.to_vec();
-        // The current init token is the penult.
-        if lowest_index == REWARD_NUM - 2 {
-            // If token_mint_0 or token_mint_1 is not contains in the initialized rewards token,
-            // the current init reward token mint must be token_mint_0 or token_mint_1
+
+        if lowest_index == REWARD_NUM - 3 {
+            // The current init token is the first.
+            // If the first reward is neither token_mint_0 nor token_mint_1, and is not in whitelist_mints, then this token_mint cannot have freeze_authority.
+            if *token_mint != self.token_mint_0
+                && *token_mint != self.token_mint_1
+                && !whitelist_mints.contains(token_mint)
+            {
+                require!(
+                    token_mint_freeze_authority.is_none(),
+                    ErrorCode::ExceptRewardMint
+                );
+            }
+        } else if lowest_index == REWARD_NUM - 2 {
+            // The current init token is the penult.
             if !reward_mints.contains(&self.token_mint_0)
                 && !reward_mints.contains(&self.token_mint_1)
             {
+                // If both token_mint_0 and token_mint_1 are not contained in the initialized rewards token,
+                // the current init reward token mint must be token_mint_0 or token_mint_1 or one of the whitelist_mints.
                 require!(
                     *token_mint == self.token_mint_0
                         || *token_mint == self.token_mint_1
                         || whitelist_mints.contains(token_mint),
-                    ErrorCode::ExceptPoolVaultMint
+                    ErrorCode::ExceptRewardMint
                 );
+            } else {
+                // If token_mint_0 or token_mint_1 is contained in the initialized rewards token,
+                // the current init reward token mint is neither token_mint_0 nor token_mint_1, and is not in whitelist_mints, then this token_mint cannot have freeze_authority.
+                if *token_mint != self.token_mint_0
+                    && *token_mint != self.token_mint_1
+                    && !whitelist_mints.contains(token_mint)
+                {
+                    require!(
+                        token_mint_freeze_authority.is_none(),
+                        ErrorCode::ExceptRewardMint
+                    );
+                }
             }
         } else if lowest_index == REWARD_NUM - 1 {
             // the last reward token must be controled by the admin
             require!(
-                *authority == crate::admin::id()
+                *authority == crate::admin::ID
                     || operation_state.validate_operation_owner(*authority),
                 ErrorCode::NotApproved
             );
@@ -410,7 +437,7 @@ impl PoolState {
     pub fn get_tick_array_offset(&self, tick_array_start_index: i32) -> Result<usize> {
         require!(
             TickArrayState::check_is_valid_start_index(tick_array_start_index, self.tick_spacing),
-            ErrorCode::InvaildTickIndex
+            ErrorCode::InvalidTickIndex
         );
         let tick_array_offset_in_bitmap = tick_array_start_index
             / TickArrayState::tick_count(self.tick_spacing)
@@ -685,11 +712,9 @@ impl RewardInfo {
 #[cfg_attr(feature = "client", derive(Debug))]
 pub struct PoolCreatedEvent {
     /// The first token of the pool by address sort order
-    #[index]
     pub token_mint_0: Pubkey,
 
     /// The second token of the pool by address sort order
-    #[index]
     pub token_mint_1: Pubkey,
 
     /// The minimum number of ticks between initialized ticks
@@ -715,7 +740,6 @@ pub struct PoolCreatedEvent {
 #[cfg_attr(feature = "client", derive(Debug))]
 pub struct CollectProtocolFeeEvent {
     /// The pool whose protocol fee is collected
-    #[index]
     pub pool_state: Pubkey,
 
     /// The address that receives the collected token_0 protocol fees
@@ -736,21 +760,17 @@ pub struct CollectProtocolFeeEvent {
 #[cfg_attr(feature = "client", derive(Debug))]
 pub struct SwapEvent {
     /// The pool for which token_0 and token_1 were swapped
-    #[index]
     pub pool_state: Pubkey,
 
     /// The address that initiated the swap call, and that received the callback
-    #[index]
     pub sender: Pubkey,
 
     /// The payer token account in zero for one swaps, or the recipient token account
     /// in one for zero swaps
-    #[index]
     pub token_account_0: Pubkey,
 
     /// The payer token account in one for zero swaps, or the recipient token account
     /// in zero for one swaps
-    #[index]
     pub token_account_1: Pubkey,
 
     /// The real delta amount of the token_0 of the pool or user
@@ -783,7 +803,6 @@ pub struct SwapEvent {
 #[cfg_attr(feature = "client", derive(Debug))]
 pub struct LiquidityChangeEvent {
     /// The pool for swap
-    #[index]
     pub pool_state: Pubkey,
 
     /// The tick of the pool
@@ -806,7 +825,6 @@ pub struct LiquidityChangeEvent {
 #[event]
 #[cfg_attr(feature = "client", derive(Debug))]
 pub struct LiquidityRemovedEvent {
-    #[index]
     pub pool_state: Pubkey,
 
     pub amount_0: u64,
@@ -827,7 +845,7 @@ pub struct TimestampUpdatedEvent {
 // #[cfg_attr(feature = "client", derive(Debug))]
 // pub struct PriceChangeEvent {
 //     /// The pool for swap
-//     #[index]
+//
 //     pub pool_state: Pubkey,
 
 //     /// The tick of the pool before price change
@@ -1070,6 +1088,7 @@ pub mod pool_test {
                     1666069200,
                     10,
                     &Pubkey::from_str("So11111111111111111111111111111111111111112").unwrap(),
+                    COption::None,
                     &Pubkey::default(),
                     &Pubkey::default(),
                     &operation_state,
@@ -1731,7 +1750,7 @@ pub mod pool_test {
             // serialize original data
             let mut pool_data = [0u8; PoolState::LEN];
             let mut offset = 0;
-            pool_data[offset..offset + 8].copy_from_slice(&PoolState::discriminator());
+            pool_data[offset..offset + 8].copy_from_slice(&PoolState::DISCRIMINATOR);
             offset += 8;
             pool_data[offset..offset + 1].copy_from_slice(&bump.to_le_bytes());
             offset += 1;

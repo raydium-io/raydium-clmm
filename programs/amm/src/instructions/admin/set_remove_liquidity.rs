@@ -5,7 +5,7 @@ use crate::error::ErrorCode;
 #[derive(Accounts)]
 pub struct SetRemoveLiquidityTimestamp<'info> {
     #[account(
-        address = crate::admin::id() @ ErrorCode::NotApproved
+        address = crate::admin::ID @ ErrorCode::NotApproved
     )]
     pub authority: Signer<'info>,
 

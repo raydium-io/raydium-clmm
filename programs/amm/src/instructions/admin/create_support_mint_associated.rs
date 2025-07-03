@@ -4,12 +4,20 @@ use anchor_lang::prelude::*;
 use anchor_spl::{token_2022, token_interface::Mint};
 use std::ops::DerefMut;
 
+pub mod create_support_mint_associated_owner {
+    use super::{pubkey, Pubkey};
+    #[cfg(feature = "devnet")]
+    pub const ID: Pubkey = pubkey!("rayf3nEbb3bnfN6RDGFpqPbjc5uUa3tRUzu6UVYrRx5");
+    #[cfg(not(feature = "devnet"))]
+    pub const ID: Pubkey = pubkey!("RayVyjyJQz9vAi126A4sGexKnSU1XeZaHTRcM1mZMPY");
+}
+
 #[derive(Accounts)]
 pub struct CreateSupportMintAssociated<'info> {
     /// Address to be set as protocol owner.
     #[account(
         mut,
-        address = crate::admin::id() @ ErrorCode::NotApproved
+        constraint = (owner.key() == crate::admin::ID || owner.key() == crate::create_support_mint_associated_owner::ID) @ ErrorCode::NotApproved
     )]
     pub owner: Signer<'info>,
     /// Support token mint

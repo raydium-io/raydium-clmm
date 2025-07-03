@@ -9,28 +9,17 @@ use core as core_;
 use instructions::*;
 use states::*;
 
-#[cfg(not(feature = "no-entrypoint"))]
-solana_security_txt::security_txt! {
-    name: "raydium-clmm",
-    project_url: "https://raydium.io",
-    contacts: "link:https://immunefi.com/bounty/raydium",
-    policy: "https://immunefi.com/bounty/raydium",
-    source_code: "https://github.com/raydium-io/raydium-clmm",
-    preferred_languages: "en",
-    auditors: "https://github.com/raydium-io/raydium-docs/blob/master/audit/OtterSec%20Q3%202022/Raydium%20concentrated%20liquidity%20(CLMM)%20program.pdf"
-}
-
 #[cfg(feature = "devnet")]
 declare_id!("At5SoePZbxEcss5MXuf7iSYuhaso1mWaQP92fREkRkq6");
 #[cfg(not(feature = "devnet"))]
 declare_id!("AiPoogP4YkDPse5fvP7nTWwR7i61x7LLq7knuyg6Pue1");
 
 pub mod admin {
-    use anchor_lang::prelude::declare_id;
+    use super::{pubkey, Pubkey};
     #[cfg(feature = "devnet")]
-    declare_id!("8kvqgxQG77pv6RvEou8f2kHSWi3rtx8F7MksXUqNLGmn");
+    pub const ID: Pubkey = pubkey!("8kvqgxQG77pv6RvEou8f2kHSWi3rtx8F7MksXUqNLGmn");
     #[cfg(not(feature = "devnet"))]
-    declare_id!("26jWitfbhcoSekDwQVffowob6Qe4cHZRgxEgEN66xqE7");
+    pub const ID: Pubkey = pubkey!("26jWitfbhcoSekDwQVffowob6Qe4cHZRgxEgEN66xqE7");
 }
 
 #[program]
@@ -38,15 +27,15 @@ pub mod bifido_swap {
 
     use super::*;
 
-    // The configuation of AMM protocol, include trade fee and protocol fee
+    // The configuration of AMM protocol, include trade fee and protocol fee
     /// # Arguments
     ///
     /// * `ctx`- The accounts needed by instruction.
     /// * `index` - The index of amm config, there may be multiple config.
     /// * `tick_spacing` - The tickspacing binding with config, cannot be changed.
     /// * `trade_fee_rate` - Trade fee rate, can be changed.
-    /// * `protocol_fee_rate` - The rate of protocol fee within tarde fee.
-    /// * `fund_fee_rate` - The rate of fund fee within tarde fee.
+    /// * `protocol_fee_rate` - The rate of protocol fee within trade fee.
+    /// * `fund_fee_rate` - The rate of fund fee within trade fee.
     ///
     pub fn create_amm_config(
         ctx: Context<CreateAmmConfig>,
@@ -86,7 +75,7 @@ pub mod bifido_swap {
     /// * `fund_fee_rate`- The new fund fee rate of amm config, be set when `param` is 2
     /// * `new_owner`- The config's new owner, be set when `param` is 3
     /// * `new_fund_owner`- The config's new fund owner, be set when `param` is 4
-    /// * `param`- The vaule can be 0 | 1 | 2 | 3 | 4, otherwise will report a error
+    /// * `param`- The value can be 0 | 1 | 2 | 3 | 4, otherwise will report a error
     ///
     pub fn update_amm_config(ctx: Context<UpdateAmmConfig>, param: u8, value: u32) -> Result<()> {
         instructions::update_amm_config(ctx, param, value)
@@ -98,7 +87,11 @@ pub mod bifido_swap {
     }
 
     /// Must be called by the current owner or admin
-    pub fn remove_low_volume_liquidity(ctx: Context<RemoveLowVolumeLiquidity>, amount_0: u64, amount_1: u64) -> Result<()> {
+    pub fn remove_low_volume_liquidity(
+        ctx: Context<RemoveLowVolumeLiquidity>,
+        amount_0: u64,
+        amount_1: u64,
+    ) -> Result<()> {
         instructions::remove_low_volume_liquidity(ctx, amount_0, amount_1)
     }
 
@@ -117,12 +110,12 @@ pub mod bifido_swap {
         instructions::create_pool(ctx, sqrt_price_x64, open_time)
     }
 
-    /// Update pool status for given vaule
+    /// Update pool status for given value
     ///
     /// # Arguments
     ///
     /// * `ctx`- The context of accounts
-    /// * `status` - The vaule of status
+    /// * `status` - The value of status
     ///
     pub fn update_pool_status(ctx: Context<UpdatePoolStatus>, status: u8) -> Result<()> {
         instructions::update_pool_status(ctx, status)
@@ -143,7 +136,7 @@ pub mod bifido_swap {
     /// # Arguments
     ///
     /// * `ctx`- The context of accounts
-    /// * `param`- The vaule can be 0 | 1 | 2 | 3, otherwise will report a error
+    /// * `param`- The value can be 0 | 1 | 2 | 3, otherwise will report a error
     /// * `keys`- update operation owner when the `param` is 0
     ///           remove operation owner when the `param` is 1
     ///           update whitelist mint when the `param` is 2
@@ -214,7 +207,7 @@ pub mod bifido_swap {
         instructions::update_reward_infos(ctx)
     }
 
-    /// Restset reward param, start a new reward cycle or extend the current cycle.
+    /// Reset reward param, start a new reward cycle or extend the current cycle.
     ///
     /// # Arguments
     ///
@@ -222,7 +215,7 @@ pub mod bifido_swap {
     /// * `reward_index` - The index of reward token in the pool.
     /// * `emissions_per_second_x64` - The per second emission reward, when extend the current cycle,
     ///    new value can't be less than old value
-    /// * `open_time` - reward open timestamp, must be set when state a new cycle
+    /// * `open_time` - reward open timestamp, must be set when starting a new cycle
     /// * `end_time` - reward end timestamp
     ///
     pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
@@ -321,7 +314,7 @@ pub mod bifido_swap {
     /// * `tick_upper_index` - The upper boundary of market
     /// * `tick_array_lower_start_index` - The start index of tick array which include tick low
     /// * `tick_array_upper_start_index` - The start index of tick array which include tick upper
-    /// * `liquidity` - The liquidity to be added, if zero, and the base_flage is specified, calculate liquidity base amount_0_max or amount_1_max according base_flag, otherwise open position with zero liquidity
+    /// * `liquidity` - The liquidity to be added, if zero, and the base_flag is specified, calculate liquidity base amount_0_max or amount_1_max according base_flag, otherwise open position with zero liquidity
     /// * `amount_0_max` - The max amount of token_0 to spend, which serves as a slippage check
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
     /// * `with_metadata` - The flag indicating whether to create NFT mint metadata
@@ -362,7 +355,7 @@ pub mod bifido_swap {
     /// * `tick_upper_index` - The upper boundary of market
     /// * `tick_array_lower_start_index` - The start index of tick array which include tick low
     /// * `tick_array_upper_start_index` - The start index of tick array which include tick upper
-    /// * `liquidity` - The liquidity to be added, if zero, and the base_flage is specified, calculate liquidity base amount_0_max or amount_1_max according base_flag, otherwise open position with zero liquidity
+    /// * `liquidity` - The liquidity to be added, if zero, and the base_flag is specified, calculate liquidity base amount_0_max or amount_1_max according base_flag, otherwise open position with zero liquidity
     /// * `amount_0_max` - The max amount of token_0 to spend, which serves as a slippage check
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
     /// * `with_metadata` - The flag indicating whether to create NFT mint metadata
@@ -407,7 +400,7 @@ pub mod bifido_swap {
     }
 
     /// #[deprecated(note = "Use `increase_liquidity_v2` instead.")]
-    /// Increases liquidity with a exist position, with amount paid by `payer`
+    /// Increases liquidity for an existing position, with amount paid by `payer`
     ///
     /// # Arguments
     ///
@@ -426,7 +419,7 @@ pub mod bifido_swap {
         instructions::increase_liquidity_v1(ctx, liquidity, amount_0_max, amount_1_max, None)
     }
 
-    /// Increases liquidity with a exist position, with amount paid by `payer`, support Token2022
+    /// Increases liquidity for an existing position, with amount paid by `payer`, support Token2022
     ///
     /// # Arguments
     ///
@@ -450,7 +443,7 @@ pub mod bifido_swap {
     }
 
     /// #[deprecated(note = "Use `decrease_liquidity_v2` instead.")]
-    /// Decreases liquidity with a exist position
+    /// Decreases liquidity for an existing position
     ///
     /// # Arguments
     ///
@@ -468,7 +461,7 @@ pub mod bifido_swap {
         instructions::decrease_liquidity_v1(ctx, liquidity, amount_0_min, amount_1_min)
     }
 
-    /// Decreases liquidity with a exist position, support Token2022
+    /// Decreases liquidity for an existing position, support Token2022
     ///
     /// # Arguments
     ///

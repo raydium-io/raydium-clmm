@@ -1,24 +1,26 @@
-use super::get_recent_epoch;
+use super::{create_or_allocate_account, get_recent_epoch};
 use crate::error::ErrorCode;
 use crate::states::*;
 use anchor_lang::{
     prelude::*,
+    solana_program,
     system_program::{create_account, CreateAccount},
 };
+use anchor_spl::memo::spl_memo;
 use anchor_spl::token::{self, Token};
 use anchor_spl::token_2022::{
-    self,
-    spl_token_2022::{
-        self,
-        extension::{
-            metadata_pointer,
-            transfer_fee::{TransferFeeConfig, MAX_FEE_BASIS_POINTS},
-            BaseStateWithExtensions, ExtensionType, StateWithExtensions,
-        },
-    },
+    self, get_account_data_size, GetAccountDataSize, InitializeAccount3, InitializeImmutableOwner,
     Token2022,
 };
-use anchor_spl::token_interface::{initialize_mint2, InitializeMint2, Mint};
+use anchor_spl::token_interface::{initialize_mint2, InitializeMint2, Mint, TokenInterface};
+use spl_token_2022::{
+    self,
+    extension::{
+        metadata_pointer,
+        transfer_fee::{TransferFeeConfig, MAX_FEE_BASIS_POINTS},
+        BaseStateWithExtensions, ExtensionType, StateWithExtensions,
+    },
+};
 use std::collections::HashSet;
 
 const MINT_WHITELIST: [&'static str; 6] = [
@@ -196,9 +198,16 @@ pub fn get_transfer_inverse_fee(
         if u16::from(transfer_fee.transfer_fee_basis_points) == MAX_FEE_BASIS_POINTS {
             u64::from(transfer_fee.maximum_fee)
         } else {
-            transfer_fee_config
+            let transfer_fee = transfer_fee_config
                 .calculate_inverse_epoch_fee(epoch, post_fee_amount)
-                .unwrap()
+                .unwrap();
+            let transfer_fee_for_check = transfer_fee_config
+                .calculate_epoch_fee(epoch, post_fee_amount.checked_add(transfer_fee).unwrap())
+                .unwrap();
+            if transfer_fee != transfer_fee_for_check {
+                return err!(ErrorCode::TransferFeeCalculateNotMatch);
+            }
+            transfer_fee
         }
     } else {
         0
@@ -280,6 +289,7 @@ pub fn is_supported_mint(
             && e != ExtensionType::MetadataPointer
             && e != ExtensionType::TokenMetadata
             && e != ExtensionType::InterestBearingConfig
+            && e != ExtensionType::ScaledUiAmount
         {
             return Ok(false);
         }
@@ -374,4 +384,62 @@ pub fn create_position_nft_mint_with_extensions<'info>(
         &mint_authority.key(),
         None,
     )
+}
+
+pub fn create_token_vault_account<'info>(
+    payer: &Signer<'info>,
+    pool_state: &AccountInfo<'info>,
+    token_account: &AccountInfo<'info>,
+    token_mint: &InterfaceAccount<'info, Mint>,
+    system_program: &Program<'info, System>,
+    token_2022_program: &Interface<'info, TokenInterface>,
+    signer_seeds: &[&[u8]],
+) -> Result<()> {
+    let immutable_owner_required = false;
+    // support both spl_token_program & token_program_2022
+    let space = get_account_data_size(
+        CpiContext::new(
+            token_2022_program.to_account_info(),
+            GetAccountDataSize {
+                mint: token_mint.to_account_info(),
+            },
+        ),
+        if immutable_owner_required {
+            &[anchor_spl::token_2022::spl_token_2022::extension::ExtensionType::ImmutableOwner]
+        } else {
+            &[]
+        },
+    )?;
+
+    // create account with or without lamports
+    create_or_allocate_account(
+        token_2022_program.key,
+        payer.to_account_info(),
+        system_program.to_account_info(),
+        token_account.to_account_info(),
+        signer_seeds,
+        space.try_into().unwrap(),
+    )?;
+
+    // Call initializeImmutableOwner
+    if immutable_owner_required {
+        token_2022::initialize_immutable_owner(CpiContext::new(
+            token_2022_program.to_account_info(),
+            InitializeImmutableOwner {
+                account: token_account.to_account_info(),
+            },
+        ))?;
+    }
+
+    // Call initializeAccount3
+    token_2022::initialize_account3(CpiContext::new(
+        token_2022_program.to_account_info(),
+        InitializeAccount3 {
+            account: token_account.to_account_info(),
+            mint: token_mint.to_account_info(),
+            authority: pool_state.to_account_info(),
+        },
+    ))?;
+
+    Ok(())
 }

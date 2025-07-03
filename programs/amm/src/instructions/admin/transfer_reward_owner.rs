@@ -5,7 +5,7 @@ use anchor_lang::prelude::*;
 pub struct TransferRewardOwner<'info> {
     /// Address to be set as operation account owner.
     #[account(
-        address = crate::admin::id() @ ErrorCode::NotApproved
+        address = crate::admin::ID @ ErrorCode::NotApproved
     )]
     pub authority: Signer<'info>,
 

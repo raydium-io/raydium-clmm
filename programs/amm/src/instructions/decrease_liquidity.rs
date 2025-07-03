@@ -5,8 +5,8 @@ use crate::states::*;
 use crate::util::{self, transfer_from_pool_vault_to_user};
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
-use anchor_spl::token_2022::spl_token_2022;
 use anchor_spl::token_interface::{self, Mint, Token2022};
+use spl_token_2022;
 use std::cell::RefMut;
 use std::ops::Deref;
 
@@ -264,7 +264,7 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
         pool_state_loader,
         &token_vault_0.to_account_info(),
         recipient_token_account_0,
-        vault_0_mint,
+        vault_0_mint.clone(),
         token_program,
         token_2022_program_opt.clone(),
         transfer_amount_0,
@@ -542,7 +542,7 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
                 &pool_state_loader,
                 &reward_token_vault.to_account_info(),
                 &recipient_token_account.to_account_info(),
-                reward_vault_mint,
+                reward_vault_mint.clone(),
                 &token_program,
                 token_program_2022.clone(),
                 transfer_amount,

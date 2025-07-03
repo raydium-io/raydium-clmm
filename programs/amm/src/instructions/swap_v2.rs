@@ -6,7 +6,8 @@ use crate::libraries::tick_math;
 use crate::swap::swap_internal;
 use crate::util::*;
 use crate::{states::*, util};
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, solana_program};
+use anchor_spl::memo::Memo;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
 
@@ -51,11 +52,8 @@ pub struct SwapSingleV2<'info> {
     /// SPL program 2022 for token transfers
     pub token_program_2022: Program<'info, Token2022>,
 
-    /// CHECK:
-    #[account(
-        address = spl_memo::id()
-    )]
-    pub memo_program: UncheckedAccount<'info>,
+    /// Memo program
+    pub memo_program: Program<'info, Memo>,
 
     /// The mint of token vault 0
     #[account(
@@ -69,14 +67,14 @@ pub struct SwapSingleV2<'info> {
     )]
     pub output_vault_mint: Box<InterfaceAccount<'info, Mint>>,
     // remaining accounts
-    // tickarray_bitmap_extension: must add account if need regardless the sequence
+    // tickarray_bitmap_extension: must add account if need
     // tick_array_account_1
     // tick_array_account_2
     // tick_array_account_...
 }
 
 /// Performs a single exact input/output swap
-/// if is_base_input = true, return vaule is the max_amount_out, otherwise is min_amount_in
+/// if is_base_input = true, return value is the max_amount_out, otherwise is min_amount_in
 pub fn exact_internal_v2<'c: 'info, 'info>(
     ctx: &mut SwapSingleV2<'info>,
     remaining_accounts: &'c [AccountInfo<'info>],
@@ -96,16 +94,16 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
     let input_balance_before = ctx.input_token_account.amount;
     let output_balance_before = ctx.output_token_account.amount;
 
-    // calculate specified amount because the amount includes thransfer_fee as input and without thransfer_fee as output
-    let amount_calculate_specified = if is_base_input {
+    // calculate specified amount because the amount includes transfer_fee as input and without transfer_fee as output
+    let (amount_calculate_specified, transfer_fee) = if is_base_input {
         let transfer_fee =
             util::get_transfer_fee(ctx.input_vault_mint.clone(), amount_specified).unwrap();
-        amount_specified - transfer_fee
+        (amount_specified - transfer_fee, transfer_fee)
     } else {
         let transfer_fee =
             util::get_transfer_inverse_fee(ctx.output_vault_mint.clone(), amount_specified)
                 .unwrap();
-        amount_specified + transfer_fee
+        (amount_specified + transfer_fee, transfer_fee)
     };
 
     {
@@ -138,6 +136,9 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
                         .deref()),
                 );
                 continue;
+            }
+            if account_info.data_len() != TickArrayState::LEN {
+                break;
             }
             tick_array_states.push_back(AccountLoad::load_data_mut(account_info)?);
         }
@@ -206,7 +207,11 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
     let transfer_amount_0;
     let transfer_amount_1;
     if zero_for_one {
-        transfer_fee_0 = util::get_transfer_inverse_fee(vault_0_mint.clone(), amount_0).unwrap();
+        transfer_fee_0 = if is_base_input && amount_0 == amount_calculate_specified {
+            transfer_fee
+        } else {
+            util::get_transfer_inverse_fee(vault_0_mint.clone(), amount_0).unwrap()
+        };
         transfer_fee_1 = util::get_transfer_fee(vault_1_mint.clone(), amount_1).unwrap();
 
         amount_0_without_fee = amount_0;
@@ -246,7 +251,11 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         )?;
     } else {
         transfer_fee_0 = util::get_transfer_fee(vault_0_mint.clone(), amount_0).unwrap();
-        transfer_fee_1 = util::get_transfer_inverse_fee(vault_1_mint.clone(), amount_1).unwrap();
+        transfer_fee_1 = if is_base_input && amount_1 == amount_calculate_specified {
+            transfer_fee
+        } else {
+            util::get_transfer_inverse_fee(vault_1_mint.clone(), amount_1).unwrap()
+        };
 
         amount_0_without_fee = amount_0.checked_sub(transfer_fee_0).unwrap();
         amount_1_without_fee = amount_1;

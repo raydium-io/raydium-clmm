@@ -1,6 +1,6 @@
 use crate::error::ErrorCode;
 use crate::libraries::{fixed_point_64, full_math::MulDiv, U256};
-use crate::util::transfer_from_user_to_pool_vault;
+use crate::util::{create_token_vault_account, transfer_from_user_to_pool_vault};
 use crate::{states::*, util};
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
@@ -38,21 +38,17 @@ pub struct InitializeReward<'info> {
     /// Reward mint
     pub reward_token_mint: Box<InterfaceAccount<'info, Mint>>,
 
-    /// A pda, reward vault
+    /// CHECK: A pda, reward vault, initialized in contract.
     #[account(
-        init,
+        mut,
         seeds =[
             POOL_REWARD_VAULT_SEED.as_bytes(),
             pool_state.key().as_ref(),
             reward_token_mint.key().as_ref(),
         ],
         bump,
-        payer = reward_funder,
-        token::mint = reward_token_mint,
-        token::authority = pool_state,
-        token::token_program = reward_token_program,
     )]
-    pub reward_token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub reward_token_vault: UncheckedAccount<'info>,
 
     pub reward_token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
@@ -113,9 +109,26 @@ pub fn initialize_reward(
     {
         return err!(ErrorCode::NotSupportMint);
     }
+
+    // init reward token vault
+    create_token_vault_account(
+        &ctx.accounts.reward_funder,
+        &ctx.accounts.pool_state.to_account_info(),
+        &ctx.accounts.reward_token_vault.to_account_info(),
+        &ctx.accounts.reward_token_mint,
+        &ctx.accounts.system_program,
+        &ctx.accounts.reward_token_program,
+        &[
+            POOL_REWARD_VAULT_SEED.as_bytes(),
+            ctx.accounts.pool_state.key().as_ref(),
+            ctx.accounts.reward_token_mint.key().as_ref(),
+            &[ctx.bumps.reward_token_vault][..],
+        ],
+    )?;
+
     let operation_state = ctx.accounts.operation_state.load()?;
     require!(
-        ctx.accounts.reward_funder.key() == crate::admin::id()
+        ctx.accounts.reward_funder.key() == crate::admin::ID
             || ctx.accounts.reward_funder.key() == ctx.accounts.pool_state.load()?.owner
             || operation_state.validate_operation_owner(ctx.accounts.reward_funder.key()),
         ErrorCode::NotApproved
@@ -134,12 +147,10 @@ pub fn initialize_reward(
         )
         .unwrap()
         .as_u64();
-    let reward_amount_with_transfer_fee = reward_amount
-        .checked_add(
-            util::get_transfer_inverse_fee(ctx.accounts.reward_token_mint.clone(), reward_amount)
-                .unwrap(),
-        )
-        .unwrap();
+    let transfer_fee =
+        util::get_transfer_inverse_fee(ctx.accounts.reward_token_mint.clone(), reward_amount)
+            .unwrap();
+    let reward_amount_with_transfer_fee = reward_amount.checked_add(transfer_fee).unwrap();
     require_gte!(
         ctx.accounts.funder_token_account.amount,
         reward_amount_with_transfer_fee
@@ -151,6 +162,7 @@ pub fn initialize_reward(
         param.end_time,
         param.emissions_per_second_x64,
         &ctx.accounts.reward_token_mint.key(),
+        ctx.accounts.reward_token_mint.freeze_authority,
         &ctx.accounts.reward_token_vault.key(),
         &ctx.accounts.reward_funder.key(),
         &operation_state,

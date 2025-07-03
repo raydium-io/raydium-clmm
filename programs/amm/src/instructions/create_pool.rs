@@ -1,8 +1,9 @@
 use crate::error::ErrorCode;
 use crate::states::*;
+use crate::util::create_token_vault_account;
 use crate::{libraries::tick_math, util};
-use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
+use anchor_lang::{prelude::*, solana_program};
+use anchor_spl::token_interface::{Mint, TokenInterface};
 // use solana_program::{program::invoke_signed, system_instruction};
 #[derive(Accounts)]
 pub struct CreatePool<'info> {
@@ -41,37 +42,29 @@ pub struct CreatePool<'info> {
     )]
     pub token_mint_1: Box<InterfaceAccount<'info, Mint>>,
 
-    /// Token_0 vault for the pool
+    /// CHECK: Token_0 vault for the pool, initialized in contract
     #[account(
-        init,
+        mut,
         seeds =[
             POOL_VAULT_SEED.as_bytes(),
             pool_state.key().as_ref(),
             token_mint_0.key().as_ref(),
         ],
         bump,
-        payer = pool_creator,
-        token::mint = token_mint_0,
-        token::authority = pool_state,
-        token::token_program = token_program_0,
     )]
-    pub token_vault_0: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_vault_0: UncheckedAccount<'info>,
 
-    /// Token_1 vault for the pool
+    /// CHECK: Token_1 vault for the pool, initialized in contract
     #[account(
-        init,
+        mut,
         seeds =[
             POOL_VAULT_SEED.as_bytes(),
             pool_state.key().as_ref(),
             token_mint_1.key().as_ref(),
         ],
         bump,
-        payer = pool_creator,
-        token::mint = token_mint_1,
-        token::authority = pool_state,
-        token::token_program = token_program_1,
     )]
-    pub token_vault_1: Box<InterfaceAccount<'info, TokenAccount>>,
+    pub token_vault_1: UncheckedAccount<'info>,
 
     /// Initialize an account to store oracle observations
     #[account(
@@ -155,6 +148,38 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u6
         sqrt_price_x64,
         tick
     );
+
+    // init token vault accounts
+    create_token_vault_account(
+        &ctx.accounts.pool_creator,
+        &ctx.accounts.pool_state.to_account_info(),
+        &ctx.accounts.token_vault_0,
+        &ctx.accounts.token_mint_0,
+        &ctx.accounts.system_program,
+        &ctx.accounts.token_program_0,
+        &[
+            POOL_VAULT_SEED.as_bytes(),
+            ctx.accounts.pool_state.key().as_ref(),
+            ctx.accounts.token_mint_0.key().as_ref(),
+            &[ctx.bumps.token_vault_0][..],
+        ],
+    )?;
+
+    create_token_vault_account(
+        &ctx.accounts.pool_creator,
+        &ctx.accounts.pool_state.to_account_info(),
+        &ctx.accounts.token_vault_1,
+        &ctx.accounts.token_mint_1,
+        &ctx.accounts.system_program,
+        &ctx.accounts.token_program_1,
+        &[
+            POOL_VAULT_SEED.as_bytes(),
+            ctx.accounts.pool_state.key().as_ref(),
+            ctx.accounts.token_mint_1.key().as_ref(),
+            &[ctx.bumps.token_vault_1][..],
+        ],
+    )?;
+
     // init observation
     ctx.accounts
         .observation_state
