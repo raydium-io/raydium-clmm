@@ -16,6 +16,3 @@ opt-level = 3
 incremental = false
 codegen-units = 1
 
-[patch.crates-io]
-anchor-lang = { git = "https://github.com/coral-xyz/anchor.git", rev = "16e166cae1b92e1e096794e2213c5bceb9df2288" }
-anchor-spl = { git = "https://github.com/coral-xyz/anchor.git", rev = "16e166cae1b92e1e096794e2213c5bceb9df2288" }
