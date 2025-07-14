@@ -24,7 +24,6 @@ use std::cell::RefMut;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
 use std::ops::Deref;
-use std::ops::DerefMut;
 
 #[derive(Accounts)]
 #[instruction(tick_lower_index: i32, tick_upper_index: i32,tick_array_lower_start_index:i32,tick_array_upper_start_index:i32)]
@@ -64,20 +63,8 @@ pub struct OpenPosition<'info> {
     #[account(mut)]
     pub pool_state: AccountLoader<'info, PoolState>,
 
-    /// Store the information of market marking in range
-    #[account(
-        init_if_needed,
-        seeds = [
-            POSITION_SEED.as_bytes(),
-            pool_state.key().as_ref(),
-            &tick_lower_index.to_be_bytes(),
-            &tick_upper_index.to_be_bytes(),
-        ],
-        bump,
-        payer = payer,
-        space = ProtocolPositionState::LEN
-    )]
-    pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
+    /// CHECK: Deprecated: protocol_position is deprecated and kept for compatibility.
+    pub protocol_position: UncheckedAccount<'info>,
 
     /// CHECK: Account to store data for the position's lower tick
     #[account(
@@ -187,7 +174,6 @@ pub fn open_position_v1<'a, 'b, 'c: 'info, 'info>(
         &ctx.accounts.pool_state,
         &ctx.accounts.tick_array_lower,
         &ctx.accounts.tick_array_upper,
-        &mut ctx.accounts.protocol_position,
         &mut ctx.accounts.personal_position,
         &ctx.accounts.token_account_0.to_account_info(),
         &ctx.accounts.token_account_1.to_account_info(),
@@ -202,7 +188,6 @@ pub fn open_position_v1<'a, 'b, 'c: 'info, 'info>(
         None,
         None,
         &ctx.remaining_accounts,
-        ctx.bumps.protocol_position,
         ctx.bumps.personal_position,
         liquidity,
         amount_0_max,
@@ -226,7 +211,6 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
     pool_state_loader: &'b AccountLoader<'info, PoolState>,
     tick_array_lower_loader: &'b UncheckedAccount<'info>,
     tick_array_upper_loader: &'b UncheckedAccount<'info>,
-    protocol_position: &'b mut Box<Account<'info, ProtocolPositionState>>,
     personal_position: &'b mut Box<Account<'info, PersonalPositionState>>,
     token_account_0: &'b AccountInfo<'info>,
     token_account_1: &'b AccountInfo<'info>,
@@ -242,7 +226,6 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
     vault_1_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
 
     remaining_accounts: &'c [AccountInfo<'info>],
-    protocol_position_bump: u8,
     personal_position_bump: u8,
     liquidity: u128,
     amount_0_max: u64,
@@ -298,30 +281,31 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
                     pool_state.tick_spacing,
                 )?
             };
-
-        // check if protocol position is initialized
-        let protocol_position = protocol_position.deref_mut();
-        if protocol_position.pool_id == Pubkey::default() {
-            protocol_position.bump = protocol_position_bump;
-            protocol_position.pool_id = pool_state_loader.key();
-            protocol_position.tick_lower_index = tick_lower_index;
-            protocol_position.tick_upper_index = tick_upper_index;
-            tick_array_lower_loader
-                .load_mut()?
-                .get_tick_state_mut(tick_lower_index, pool_state.tick_spacing)?
-                .tick = tick_lower_index;
-            tick_array_upper_loader
-                .load_mut()?
-                .get_tick_state_mut(tick_upper_index, pool_state.tick_spacing)?
-                .tick = tick_upper_index;
-        }
+        // if tickarray is new created, wu must initialize tickState.tick.
+        tick_array_lower_loader
+            .load_mut()?
+            .get_tick_state_mut(tick_lower_index, pool_state.tick_spacing)?
+            .tick = tick_lower_index;
+        tick_array_upper_loader
+            .load_mut()?
+            .get_tick_state_mut(tick_upper_index, pool_state.tick_spacing)?
+            .tick = tick_upper_index;
 
         let use_tickarray_bitmap_extension = pool_state.is_overflow_default_tickarray_bitmap(vec![
             tick_array_lower_start_index,
             tick_array_upper_start_index,
         ]);
 
-        let (amount_0, amount_1, amount_0_transfer_fee, amount_1_transfer_fee) = add_liquidity(
+        let LiquidityChangeResult {
+            amount_0,
+            amount_1,
+            amount_0_transfer_fee,
+            amount_1_transfer_fee,
+            fee_growth_inside_0_x64,
+            fee_growth_inside_1_x64,
+            reward_growths_inside,
+            ..
+        } = add_liquidity(
             payer,
             token_account_0,
             token_account_1,
@@ -329,7 +313,6 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
             token_vault_1,
             &tick_array_lower_loader,
             &tick_array_upper_loader,
-            protocol_position,
             token_program_2022,
             token_program,
             vault_0_mint,
@@ -352,21 +335,18 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
             base_flag,
         )?;
 
-        // let personal_position = &mut personal_position;
-        personal_position.bump = [personal_position_bump];
-        personal_position.nft_mint = position_nft_mint.key();
-        personal_position.pool_id = pool_state_loader.key();
-        personal_position.tick_lower_index = tick_lower_index;
-        personal_position.tick_upper_index = tick_upper_index;
-
-        personal_position.fee_growth_inside_0_last_x64 =
-            protocol_position.fee_growth_inside_0_last_x64;
-        personal_position.fee_growth_inside_1_last_x64 =
-            protocol_position.fee_growth_inside_1_last_x64;
-
-        // update rewards, must update before update liquidity
-        personal_position.update_rewards(protocol_position.reward_growth_inside, false)?;
-        personal_position.liquidity = liquidity;
+        personal_position.initialize(
+            personal_position_bump,
+            position_nft_mint.key(),
+            pool_state_loader.key(),
+            tick_lower_index,
+            tick_upper_index,
+            liquidity,
+            fee_growth_inside_0_x64,
+            fee_growth_inside_1_x64,
+            reward_growths_inside,
+            get_recent_epoch()?,
+        )?;
 
         emit!(CreatePersonalPositionEvent {
             pool_state: pool_state_loader.key(),
@@ -399,6 +379,19 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
     )
 }
 
+#[derive(Default)]
+pub struct LiquidityChangeResult {
+    pub amount_0: u64,
+    pub amount_1: u64,
+    pub amount_0_transfer_fee: u64,
+    pub amount_1_transfer_fee: u64,
+    pub tick_lower_flipped: bool,
+    pub tick_upper_flipped: bool,
+    pub fee_growth_inside_0_x64: u128,
+    pub fee_growth_inside_1_x64: u128,
+    pub reward_growths_inside: [u128; 3],
+}
+
 /// Add liquidity to an initialized pool
 pub fn add_liquidity<'b, 'c: 'info, 'info>(
     payer: &'b Signer<'info>,
@@ -408,7 +401,6 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
     token_vault_1: &'b AccountInfo<'info>,
     tick_array_lower_loader: &'b AccountLoad<'info, TickArrayState>,
     tick_array_upper_loader: &'b AccountLoad<'info, TickArrayState>,
-    protocol_position: &mut ProtocolPositionState,
     token_program_2022: Option<&Program<'info, Token2022>>,
     token_program: &'b Program<'info, Token>,
     vault_0_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
@@ -421,11 +413,11 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
     tick_lower_index: i32,
     tick_upper_index: i32,
     base_flag: Option<bool>,
-) -> Result<(u64, u64, u64, u64)> {
+) -> Result<LiquidityChangeResult> {
     if *liquidity == 0 {
         if base_flag.is_none() {
             // when establishing a new position , liquidity allows for further additions
-            return Ok((0, 0, 0, 0));
+            return Ok(LiquidityChangeResult::default());
         }
         if base_flag.unwrap() {
             // must deduct transfer fee before calculate liquidity
@@ -484,10 +476,9 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
         tick_upper_state.tick = tick_upper_index;
     }
     let clock = Clock::get()?;
-    let (amount_0, amount_1, flip_tick_lower, flip_tick_upper) = modify_position(
+    let mut result = modify_position(
         i128::try_from(*liquidity).unwrap(),
         pool_state,
-        protocol_position,
         &mut tick_lower_state,
         &mut tick_upper_state,
         clock.unix_timestamp as u64,
@@ -505,7 +496,7 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
         tick_upper_state,
     )?;
 
-    if flip_tick_lower {
+    if result.tick_lower_flipped {
         let mut tick_array_lower = tick_array_lower_loader.load_mut()?;
         let before_init_tick_count = tick_array_lower.initialized_tick_count;
         tick_array_lower.update_initialized_tick_count(true)?;
@@ -517,7 +508,7 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
             )?;
         }
     }
-    if flip_tick_upper {
+    if result.tick_upper_flipped {
         let mut tick_array_upper = tick_array_upper_loader.load_mut()?;
         let before_init_tick_count = tick_array_upper.initialized_tick_count;
         tick_array_upper.update_initialized_tick_count(true)?;
@@ -529,6 +520,9 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
             )?;
         }
     }
+
+    let amount_0 = result.amount_0;
+    let amount_1 = result.amount_1;
     require!(
         amount_0 > 0 || amount_1 > 0,
         ErrorCode::ForbidBothZeroForSupplyLiquidity
@@ -539,10 +533,12 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
     if vault_0_mint.is_some() {
         amount_0_transfer_fee =
             get_transfer_inverse_fee(vault_0_mint.clone().unwrap(), amount_0).unwrap();
+        result.amount_0_transfer_fee = amount_0_transfer_fee;
     };
     if vault_1_mint.is_some() {
         amount_1_transfer_fee =
             get_transfer_inverse_fee(vault_1_mint.clone().unwrap(), amount_1).unwrap();
+        result.amount_1_transfer_fee = amount_1_transfer_fee;
     }
     emit!(LiquidityCalculateEvent {
         pool_liquidity: liquidity_before,
@@ -603,61 +599,16 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
         liquidity_before: liquidity_before,
         liquidity_after: pool_state.liquidity,
     });
-    Ok((
-        amount_0,
-        amount_1,
-        amount_0_transfer_fee,
-        amount_1_transfer_fee,
-    ))
+    Ok(result)
 }
 
 pub fn modify_position(
     liquidity_delta: i128,
     pool_state: &mut RefMut<PoolState>,
-    protocol_position_state: &mut ProtocolPositionState,
     tick_lower_state: &mut TickState,
     tick_upper_state: &mut TickState,
     timestamp: u64,
-) -> Result<(u64, u64, bool, bool)> {
-    let (flip_tick_lower, flip_tick_upper) = update_position(
-        liquidity_delta,
-        pool_state,
-        protocol_position_state,
-        tick_lower_state,
-        tick_upper_state,
-        timestamp,
-    )?;
-    let mut amount_0 = 0;
-    let mut amount_1 = 0;
-
-    if liquidity_delta != 0 {
-        (amount_0, amount_1) = liquidity_math::get_delta_amounts_signed(
-            pool_state.tick_current,
-            pool_state.sqrt_price_x64,
-            tick_lower_state.tick,
-            tick_upper_state.tick,
-            liquidity_delta,
-        )?;
-        if pool_state.tick_current >= tick_lower_state.tick
-            && pool_state.tick_current < tick_upper_state.tick
-        {
-            pool_state.liquidity =
-                liquidity_math::add_delta(pool_state.liquidity, liquidity_delta)?;
-        }
-    }
-
-    Ok((amount_0, amount_1, flip_tick_lower, flip_tick_upper))
-}
-
-/// Updates a position with the given liquidity delta and tick
-pub fn update_position(
-    liquidity_delta: i128,
-    pool_state: &mut RefMut<PoolState>,
-    protocol_position_state: &mut ProtocolPositionState,
-    tick_lower_state: &mut TickState,
-    tick_upper_state: &mut TickState,
-    timestamp: u64,
-) -> Result<(bool, bool)> {
+) -> Result<LiquidityChangeResult> {
     let updated_reward_infos = pool_state.update_reward_infos(timestamp)?;
 
     let mut flipped_lower = false;
@@ -707,14 +658,6 @@ pub fn update_position(
         &updated_reward_infos,
     );
 
-    protocol_position_state.update(
-        tick_lower_state.tick,
-        tick_upper_state.tick,
-        liquidity_delta,
-        fee_growth_inside_0_x64,
-        fee_growth_inside_1_x64,
-        reward_growths_inside,
-    )?;
     if liquidity_delta < 0 {
         if flipped_lower {
             tick_lower_state.clear();
@@ -723,7 +666,37 @@ pub fn update_position(
             tick_upper_state.clear();
         }
     }
-    Ok((flipped_lower, flipped_upper))
+
+    let mut amount_0 = 0;
+    let mut amount_1 = 0;
+
+    if liquidity_delta != 0 {
+        (amount_0, amount_1) = liquidity_math::get_delta_amounts_signed(
+            pool_state.tick_current,
+            pool_state.sqrt_price_x64,
+            tick_lower_state.tick,
+            tick_upper_state.tick,
+            liquidity_delta,
+        )?;
+        if pool_state.tick_current >= tick_lower_state.tick
+            && pool_state.tick_current < tick_upper_state.tick
+        {
+            pool_state.liquidity =
+                liquidity_math::add_delta(pool_state.liquidity, liquidity_delta)?;
+        }
+    }
+
+    Ok(LiquidityChangeResult {
+        amount_0: amount_0,
+        amount_1: amount_1,
+        amount_0_transfer_fee: 0,
+        amount_1_transfer_fee: 0,
+        tick_lower_flipped: flipped_lower,
+        tick_upper_flipped: flipped_upper,
+        fee_growth_inside_0_x64: fee_growth_inside_0_x64,
+        fee_growth_inside_1_x64: fee_growth_inside_1_x64,
+        reward_growths_inside: reward_growths_inside,
+    })
 }
 
 fn mint_nft_and_remove_mint_authority<'info>(
@@ -932,10 +905,10 @@ pub fn initialize_token_metadata_extension<'info>(
 #[cfg(test)]
 mod modify_position_test {
     use super::modify_position;
+    use crate::instructions::LiquidityChangeResult;
     use crate::libraries::tick_math;
     use crate::states::oracle::block_timestamp_mock;
     use crate::states::pool_test::build_pool;
-    use crate::states::protocol_position::*;
     use crate::states::tick_array_test::build_tick;
 
     #[test]
@@ -956,11 +929,15 @@ mod modify_position_test {
         let tick_upper_state = &mut build_tick(tick_upper_index, 0, 0).take();
 
         let liquidity_delta = 10000;
-        let protocol_position = &mut ProtocolPositionState::default();
-        let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = modify_position(
+        let LiquidityChangeResult {
+            amount_0: amount_0_int,
+            amount_1: amount_1_int,
+            tick_lower_flipped: flip_tick_lower,
+            tick_upper_flipped: flip_tick_upper,
+            ..
+        } = modify_position(
             liquidity_delta,
             pool_state,
-            protocol_position,
             tick_lower_state,
             tick_upper_state,
             block_timestamp_mock(),
@@ -987,22 +964,6 @@ mod modify_position_test {
         assert!(tick_lower_state.fee_growth_outside_1_x64 == pool_state.fee_growth_global_1_x64);
         assert!(tick_upper_state.fee_growth_outside_0_x64 == 0);
         assert!(tick_upper_state.fee_growth_outside_1_x64 == 0);
-
-        // check protocol position
-        let fee_growth_inside_0_last_x64 = pool_state.fee_growth_global_0_x64
-            - tick_lower_state.fee_growth_outside_0_x64
-            - tick_upper_state.fee_growth_outside_0_x64;
-        let fee_growth_inside_1_last_x64 = pool_state.fee_growth_global_1_x64
-            - tick_lower_state.fee_growth_outside_1_x64
-            - tick_upper_state.fee_growth_outside_1_x64;
-        assert!(protocol_position.fee_growth_inside_0_last_x64 == fee_growth_inside_0_last_x64);
-        assert!(protocol_position.fee_growth_inside_1_last_x64 == fee_growth_inside_1_last_x64);
-        assert!(protocol_position.token_fees_owed_0 == 0);
-        assert!(protocol_position.token_fees_owed_1 == 0);
-        assert!(protocol_position.tick_lower_index == tick_lower_index);
-        assert!(protocol_position.tick_upper_index == tick_upper_index);
-
-        // check protocol position state
     }
 
     #[test]
@@ -1023,11 +984,15 @@ mod modify_position_test {
         let tick_upper_state = &mut build_tick(tick_upper_index, 0, 0).take();
 
         let liquidity_delta = 10000;
-        let protocol_position = &mut ProtocolPositionState::default();
-        let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = modify_position(
+        let LiquidityChangeResult {
+            amount_0: amount_0_int,
+            amount_1: amount_1_int,
+            tick_lower_flipped: flip_tick_lower,
+            tick_upper_flipped: flip_tick_upper,
+            ..
+        } = modify_position(
             liquidity_delta,
             pool_state,
-            protocol_position,
             tick_lower_state,
             tick_upper_state,
             block_timestamp_mock(),
@@ -1054,20 +1019,6 @@ mod modify_position_test {
         assert!(tick_lower_state.fee_growth_outside_1_x64 == pool_state.fee_growth_global_1_x64);
         assert!(tick_upper_state.fee_growth_outside_0_x64 == pool_state.fee_growth_global_0_x64);
         assert!(tick_upper_state.fee_growth_outside_1_x64 == pool_state.fee_growth_global_1_x64);
-
-        // check protocol position
-        let fee_growth_inside_0_last_x64 = pool_state.fee_growth_global_0_x64
-            - tick_lower_state.fee_growth_outside_0_x64
-            - (pool_state.fee_growth_global_0_x64 - tick_upper_state.fee_growth_outside_0_x64);
-        let fee_growth_inside_1_last_x64 = pool_state.fee_growth_global_1_x64
-            - tick_lower_state.fee_growth_outside_1_x64
-            - (pool_state.fee_growth_global_1_x64 - tick_upper_state.fee_growth_outside_1_x64);
-        assert!(protocol_position.fee_growth_inside_0_last_x64 == fee_growth_inside_0_last_x64);
-        assert!(protocol_position.fee_growth_inside_1_last_x64 == fee_growth_inside_1_last_x64);
-        assert!(protocol_position.token_fees_owed_0 == 0);
-        assert!(protocol_position.token_fees_owed_1 == 0);
-        assert!(protocol_position.tick_lower_index == tick_lower_index);
-        assert!(protocol_position.tick_upper_index == tick_upper_index);
     }
 
     #[test]
@@ -1088,11 +1039,15 @@ mod modify_position_test {
         let tick_upper_state = &mut build_tick(tick_upper_index, 0, 0).take();
 
         let liquidity_delta = 10000;
-        let protocol_position = &mut ProtocolPositionState::default();
-        let (amount_0_int, amount_1_int, flip_tick_lower, flip_tick_upper) = modify_position(
+        let LiquidityChangeResult {
+            amount_0: amount_0_int,
+            amount_1: amount_1_int,
+            tick_lower_flipped: flip_tick_lower,
+            tick_upper_flipped: flip_tick_upper,
+            ..
+        } = modify_position(
             liquidity_delta,
             pool_state,
-            protocol_position,
             tick_lower_state,
             tick_upper_state,
             block_timestamp_mock(),
@@ -1119,21 +1074,5 @@ mod modify_position_test {
         assert!(tick_lower_state.fee_growth_outside_1_x64 == 0);
         assert!(tick_upper_state.fee_growth_outside_0_x64 == 0);
         assert!(tick_upper_state.fee_growth_outside_1_x64 == 0);
-
-        // check protocol position
-        let fee_growth_inside_0_last_x64 = pool_state.fee_growth_global_0_x64
-            - (pool_state.fee_growth_global_0_x64 - tick_lower_state.fee_growth_outside_0_x64)
-            - tick_upper_state.fee_growth_outside_0_x64;
-        let fee_growth_inside_1_last_x64 = pool_state.fee_growth_global_1_x64
-            - (pool_state.fee_growth_global_1_x64 - tick_lower_state.fee_growth_outside_1_x64)
-            - tick_upper_state.fee_growth_outside_1_x64;
-        assert!(protocol_position.fee_growth_inside_0_last_x64 == fee_growth_inside_0_last_x64);
-        assert!(protocol_position.fee_growth_inside_1_last_x64 == fee_growth_inside_1_last_x64);
-        assert!(protocol_position.token_fees_owed_0 == 0);
-        assert!(protocol_position.token_fees_owed_1 == 0);
-        assert!(protocol_position.tick_lower_index == tick_lower_index);
-        assert!(protocol_position.tick_upper_index == tick_upper_index);
-
-        // check protocol position state
     }
 }

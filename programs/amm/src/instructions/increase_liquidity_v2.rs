@@ -20,18 +20,8 @@ pub struct IncreaseLiquidityV2<'info> {
     #[account(mut)]
     pub pool_state: AccountLoader<'info, PoolState>,
 
-    #[account(
-        mut,
-        seeds = [
-            POSITION_SEED.as_bytes(),
-            pool_state.key().as_ref(),
-            &personal_position.tick_lower_index.to_be_bytes(),
-            &personal_position.tick_upper_index.to_be_bytes(),
-        ],
-        bump,
-        constraint = protocol_position.pool_id == pool_state.key(),
-    )]
-    pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
+    /// CHECK: Deprecated: protocol_position is deprecated and kept for compatibility.
+    pub protocol_position: UncheckedAccount<'info>,
 
     /// Increase liquidity for this position
     #[account(mut, constraint = personal_position.pool_id == pool_state.key())]
@@ -111,7 +101,6 @@ pub fn increase_liquidity_v2<'a, 'b, 'c: 'info, 'info>(
     increase_liquidity(
         &ctx.accounts.nft_owner,
         &ctx.accounts.pool_state,
-        &mut ctx.accounts.protocol_position,
         &mut ctx.accounts.personal_position,
         &ctx.accounts.tick_array_lower,
         &ctx.accounts.tick_array_upper,
