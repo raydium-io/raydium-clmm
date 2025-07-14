@@ -473,14 +473,19 @@ pub fn is_superstate_token(mint_account: &InterfaceAccount<Mint>) -> bool {
             } else {
                 false
             };
-        let is_immutable_owner = mint_state
-            .get_extension::<spl_token_2022::extension::immutable_owner::ImmutableOwner>()
-            .is_ok();
+
+        let maybe_permanent_delegate = if let Some(permanent_delegate) =
+            spl_token_2022::extension::permanent_delegate::get_permanent_delegate(&mint_state)
+        {
+            permanent_delegate == superstate_allowlist::ID
+        } else {
+            false
+        };
 
         superstate_allowlist::ID == freeze_authority
             && *mint_account_info.owner == spl_token_2022::ID
             && default_account_state_freeze
-            && is_immutable_owner
+            && maybe_permanent_delegate
     } else {
         false
     }
