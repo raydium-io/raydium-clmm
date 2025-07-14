@@ -58,9 +58,10 @@ pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
 
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;
 
-    if !admin_operator {
-        require_keys_eq!(ctx.accounts.authority.key(), pool_state.owner);
-    }
+    require_keys_eq!(
+        ctx.accounts.authority.key(),
+        pool_state.reward_infos[reward_index as usize].authority
+    );
 
     pool_state.update_reward_infos(current_timestamp)?;
 
