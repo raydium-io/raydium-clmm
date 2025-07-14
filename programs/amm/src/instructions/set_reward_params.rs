@@ -50,8 +50,9 @@ pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
     require_gt!(emissions_per_second_x64, 0);
     let operation_state = ctx.accounts.operation_state.load()?;
     let admin_keys = operation_state.operation_owners.to_vec();
+    require_neq!(ctx.accounts.authority.key(), Pubkey::default());
     let admin_operator = admin_keys.contains(&ctx.accounts.authority.key())
-        && ctx.accounts.authority.key() != Pubkey::default();
+        || ctx.accounts.authority.key() == crate::admin::ID;
 
     let current_timestamp = u64::try_from(Clock::get()?.unix_timestamp).unwrap();
     require_gt!(open_time, current_timestamp);
@@ -59,7 +60,10 @@ pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;
 
     if !admin_operator {
-        require_keys_eq!(ctx.accounts.authority.key(), pool_state.owner);
+        require_keys_eq!(
+            ctx.accounts.authority.key(),
+            pool_state.reward_infos[reward_index as usize].authority
+        );
     }
 
     pool_state.update_reward_infos(current_timestamp)?;

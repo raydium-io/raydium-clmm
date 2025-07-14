@@ -22,6 +22,7 @@ pub struct CollectRemainingRewards<'info> {
     #[account(mut)]
     pub pool_state: AccountLoader<'info, PoolState>,
     /// Reward vault transfer remaining token to founder token account
+    #[account(mut)]
     pub reward_token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
     /// The mint of reward token vault
     #[account(
@@ -84,7 +85,7 @@ fn get_remaining_reward_amount(
         reward_info.end_time,
         ErrorCode::NotApproved
     );
-    require_keys_eq!(reward_funder.key(), pool_state.owner);
+    require_keys_eq!(reward_funder.key(), reward_info.authority);
     require_keys_eq!(reward_token_vault.key(), reward_info.token_vault);
 
     let amount_remaining = reward_token_vault
