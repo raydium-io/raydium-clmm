@@ -1,9 +1,9 @@
+use super::POSITION_SEED;
+use crate::error::ErrorCode;
 use crate::instructions::calculate_latest_token_fees;
 use crate::libraries::{big_num::U256, fixed_point_64, full_math::MulDiv};
 use crate::pool::REWARD_NUM;
 use anchor_lang::prelude::*;
-
-use super::POSITION_SEED;
 
 #[account]
 #[derive(Default, Debug)]
@@ -87,7 +87,46 @@ impl PersonalPositionState {
         Ok(())
     }
 
-    pub fn update_fee_and_reward(
+    pub fn increase_liquidity(
+        &mut self,
+        liquidity_delta: u128,
+        fee_growth_inside_0_x64_latest: u128,
+        fee_growth_inside_1_x64_latest: u128,
+        reward_growths_inside_latest: [u128; REWARD_NUM],
+        recent_epoch: u64,
+    ) -> Result<()> {
+        self.update_fee_and_reward(
+            fee_growth_inside_0_x64_latest,
+            fee_growth_inside_1_x64_latest,
+            reward_growths_inside_latest,
+            recent_epoch,
+        )?;
+        self.liquidity
+            .checked_add(liquidity_delta)
+            .ok_or(ErrorCode::CalculateOverflow)?;
+        Ok(())
+    }
+
+    pub fn decrease_liquidity(
+        &mut self,
+        liquidity_delta: u128,
+        fee_growth_inside_0_x64_latest: u128,
+        fee_growth_inside_1_x64_latest: u128,
+        reward_growths_inside_latest: [u128; REWARD_NUM],
+        recent_epoch: u64,
+    ) -> Result<()> {
+        self.update_fee_and_reward(
+            fee_growth_inside_0_x64_latest,
+            fee_growth_inside_1_x64_latest,
+            reward_growths_inside_latest,
+            recent_epoch,
+        )?;
+        self.liquidity
+            .checked_sub(liquidity_delta)
+            .ok_or(ErrorCode::CalculateOverflow)?;
+        Ok(())
+    }
+    fn update_fee_and_reward(
         &mut self,
         fee_growth_inside_0_x64_latest: u128,
         fee_growth_inside_1_x64_latest: u128,

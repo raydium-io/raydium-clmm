@@ -165,8 +165,6 @@ pub fn open_position_v2<'a, 'b, 'c: 'info, 'info>(
         &ctx.accounts.pool_state,
         &ctx.accounts.tick_array_lower,
         &ctx.accounts.tick_array_upper,
-        // Deprecated: protocol_position is deprecated and kept for compatibility.
-        // &mut ctx.accounts.protocol_position,
         &mut ctx.accounts.personal_position,
         &ctx.accounts.token_account_0.to_account_info(),
         &ctx.accounts.token_account_1.to_account_info(),
@@ -181,7 +179,6 @@ pub fn open_position_v2<'a, 'b, 'c: 'info, 'info>(
         Some(ctx.accounts.vault_0_mint.clone()),
         Some(ctx.accounts.vault_1_mint.clone()),
         &ctx.remaining_accounts,
-        // ctx.bumps.protocol_position, // This bump is no longer used
         ctx.bumps.personal_position,
         liquidity,
         amount_0_max,

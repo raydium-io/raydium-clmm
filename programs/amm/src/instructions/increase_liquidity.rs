@@ -180,13 +180,13 @@ pub fn increase_liquidity<'a, 'b, 'c: 'info, 'info>(
         base_flag,
     )?;
 
-    personal_position.update_fee_and_reward(
+    personal_position.increase_liquidity(
+        liquidity,
         fee_growth_inside_0_x64_latest,
         fee_growth_inside_1_x64_latest,
         reward_growths_inside_latest,
         get_recent_epoch()?,
     )?;
-    personal_position.liquidity = personal_position.liquidity.checked_add(liquidity).unwrap();
     emit!(IncreaseLiquidityEvent {
         position_nft_mint: personal_position.nft_mint,
         liquidity,

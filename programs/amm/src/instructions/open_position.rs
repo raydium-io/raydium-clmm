@@ -281,15 +281,6 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
                     pool_state.tick_spacing,
                 )?
             };
-        // if tickarray is new created, wu must initialize tickState.tick.
-        tick_array_lower_loader
-            .load_mut()?
-            .get_tick_state_mut(tick_lower_index, pool_state.tick_spacing)?
-            .tick = tick_lower_index;
-        tick_array_upper_loader
-            .load_mut()?
-            .get_tick_state_mut(tick_upper_index, pool_state.tick_spacing)?
-            .tick = tick_upper_index;
 
         let use_tickarray_bitmap_extension = pool_state.is_overflow_default_tickarray_bitmap(vec![
             tick_array_lower_start_index,
@@ -469,6 +460,7 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
     let mut tick_upper_state = *tick_array_upper_loader
         .load_mut()?
         .get_tick_state_mut(tick_upper_index, pool_state.tick_spacing)?;
+    // If the tickState is not initialized, assign a value to tickState.tick here
     if tick_lower_state.tick == 0 {
         tick_lower_state.tick = tick_lower_index;
     }

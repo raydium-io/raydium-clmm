@@ -316,13 +316,13 @@ pub fn decrease_liquidity_and_update_position<'a, 'b, 'c: 'info, 'info>(
             liquidity,
         )?;
 
-        personal_position.update_fee_and_reward(
+        personal_position.decrease_liquidity(
+            liquidity,
             fee_growth_inside_0_x64_latest,
             fee_growth_inside_1_x64_latest,
             reward_growths_inside_latest,
             get_recent_epoch()?,
         )?;
-        personal_position.liquidity = personal_position.liquidity.checked_sub(liquidity).unwrap();
         decrease_amount_0 = amount_0;
         decrease_amount_1 = amount_1;
     }
