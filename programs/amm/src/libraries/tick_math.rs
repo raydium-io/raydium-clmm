@@ -164,13 +164,13 @@ pub fn get_tick_at_sqrt_price(sqrt_price_x64: u128) -> Result<i32, anchor_lang::
     // 14 bit refinement gives an error margin of 2^-14 / log2 (√1.0001) = 0.8461 < 1
     // Since tick is a decimal, an error under 1 is acceptable
 
-    // Change of base rule: multiply with 2^16 / log2 (√1.0001)
+    // Change of base rule: multiply with 2^32 / log2 (√1.0001)
     let log_sqrt_10001_x64 = log2p_x32 * 59543866431248i128;
 
     // tick - 0.01
     let tick_low = ((log_sqrt_10001_x64 - 184467440737095516i128) >> 64) as i32;
 
-    // tick + (2^-14 / log2(√1.001)) + 0.01
+    // tick + (2^-14 / log2(√1.0001)) + 0.01
     let tick_high = ((log_sqrt_10001_x64 + 15793534762490258745i128) >> 64) as i32;
 
     Ok(if tick_low == tick_high {
