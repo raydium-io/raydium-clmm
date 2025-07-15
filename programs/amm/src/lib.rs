@@ -544,4 +544,17 @@ pub mod amm_v3 {
     ) -> Result<()> {
         instructions::swap_router_base_in(ctx, amount_in, amount_out_minimum)
     }
+
+    /// The CLMM protocol decides to discard the protocol position account, which can reduce users' opening costs.
+    /// After the original protocol position account is closed, the gas fee will be refunded to the user who created it.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    ///
+    pub fn close_protocol_position<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, CloseProtocolPosition<'info>>,
+    ) -> Result<()> {
+        instructions::close_protocol_position(ctx)
+    }
 }
