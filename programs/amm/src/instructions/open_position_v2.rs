@@ -42,20 +42,8 @@ pub struct OpenPositionV2<'info> {
     #[account(mut)]
     pub pool_state: AccountLoader<'info, PoolState>,
 
-    /// Store the information of market marking in range
-    #[account(
-        init_if_needed,
-        seeds = [
-            POSITION_SEED.as_bytes(),
-            pool_state.key().as_ref(),
-            &tick_lower_index.to_be_bytes(),
-            &tick_upper_index.to_be_bytes(),
-        ],
-        bump,
-        payer = payer,
-        space = ProtocolPositionState::LEN
-    )]
-    pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
+    /// CHECK: Deprecated: protocol_position is deprecated and kept for compatibility.
+    pub protocol_position: UncheckedAccount<'info>,
 
     /// CHECK: Account to store data for the position's lower tick
     #[account(
@@ -177,7 +165,6 @@ pub fn open_position_v2<'a, 'b, 'c: 'info, 'info>(
         &ctx.accounts.pool_state,
         &ctx.accounts.tick_array_lower,
         &ctx.accounts.tick_array_upper,
-        &mut ctx.accounts.protocol_position,
         &mut ctx.accounts.personal_position,
         &ctx.accounts.token_account_0.to_account_info(),
         &ctx.accounts.token_account_1.to_account_info(),
@@ -192,7 +179,6 @@ pub fn open_position_v2<'a, 'b, 'c: 'info, 'info>(
         Some(ctx.accounts.vault_0_mint.clone()),
         Some(ctx.accounts.vault_1_mint.clone()),
         &ctx.remaining_accounts,
-        ctx.bumps.protocol_position,
         ctx.bumps.personal_position,
         liquidity,
         amount_0_max,

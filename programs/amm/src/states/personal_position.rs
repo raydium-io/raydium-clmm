@@ -1,9 +1,9 @@
+use super::POSITION_SEED;
+use crate::error::ErrorCode;
+use crate::instructions::calculate_latest_token_fees;
 use crate::libraries::{big_num::U256, fixed_point_64, full_math::MulDiv};
 use crate::pool::REWARD_NUM;
-use crate::util::get_recent_epoch;
 use anchor_lang::prelude::*;
-
-use super::POSITION_SEED;
 
 #[account]
 #[derive(Default, Debug)]
@@ -58,10 +58,110 @@ impl PersonalPositionState {
         ]
     }
 
-    pub fn update_rewards(
+    pub fn initialize(
+        &mut self,
+        bump: u8,
+        nft_mint: Pubkey,
+        pool_id: Pubkey,
+        tick_lower_index: i32,
+        tick_upper_index: i32,
+        liquidity: u128,
+        fee_growth_inside_0_x64: u128,
+        fee_growth_inside_1_x64: u128,
+        reward_growths_inside: [u128; REWARD_NUM],
+        recent_epoch: u64,
+    ) -> Result<()> {
+        self.bump = [bump];
+        self.nft_mint = nft_mint;
+        self.pool_id = pool_id;
+        self.tick_lower_index = tick_lower_index;
+        self.tick_upper_index = tick_upper_index;
+        self.fee_growth_inside_0_last_x64 = fee_growth_inside_0_x64;
+        self.fee_growth_inside_1_last_x64 = fee_growth_inside_1_x64;
+        self.token_fees_owed_0 = 0;
+        self.token_fees_owed_1 = 0;
+        // update rewards, must update before update liquidity
+        self.update_rewards(reward_growths_inside, false, recent_epoch)?;
+        self.liquidity = liquidity;
+        self.padding = [0; 7];
+        Ok(())
+    }
+
+    pub fn increase_liquidity(
+        &mut self,
+        liquidity_delta: u128,
+        fee_growth_inside_0_x64_latest: u128,
+        fee_growth_inside_1_x64_latest: u128,
+        reward_growths_inside_latest: [u128; REWARD_NUM],
+        recent_epoch: u64,
+    ) -> Result<()> {
+        self.update_fee_and_reward(
+            fee_growth_inside_0_x64_latest,
+            fee_growth_inside_1_x64_latest,
+            reward_growths_inside_latest,
+            recent_epoch,
+        )?;
+        self.liquidity = self
+            .liquidity
+            .checked_add(liquidity_delta)
+            .ok_or(ErrorCode::CalculateOverflow)?;
+        Ok(())
+    }
+
+    pub fn decrease_liquidity(
+        &mut self,
+        liquidity_delta: u128,
+        fee_growth_inside_0_x64_latest: u128,
+        fee_growth_inside_1_x64_latest: u128,
+        reward_growths_inside_latest: [u128; REWARD_NUM],
+        recent_epoch: u64,
+    ) -> Result<()> {
+        self.update_fee_and_reward(
+            fee_growth_inside_0_x64_latest,
+            fee_growth_inside_1_x64_latest,
+            reward_growths_inside_latest,
+            recent_epoch,
+        )?;
+        self.liquidity = self
+            .liquidity
+            .checked_sub(liquidity_delta)
+            .ok_or(ErrorCode::CalculateOverflow)?;
+        Ok(())
+    }
+    fn update_fee_and_reward(
+        &mut self,
+        fee_growth_inside_0_x64_latest: u128,
+        fee_growth_inside_1_x64_latest: u128,
+        reward_growths_inside_latest: [u128; REWARD_NUM],
+        recent_epoch: u64,
+    ) -> Result<()> {
+        self.token_fees_owed_0 = calculate_latest_token_fees(
+            self.token_fees_owed_0,
+            self.fee_growth_inside_0_last_x64,
+            fee_growth_inside_0_x64_latest,
+            self.liquidity,
+        );
+        self.token_fees_owed_1 = calculate_latest_token_fees(
+            self.token_fees_owed_1,
+            self.fee_growth_inside_1_last_x64,
+            fee_growth_inside_1_x64_latest,
+            self.liquidity,
+        );
+
+        self.fee_growth_inside_0_last_x64 = fee_growth_inside_0_x64_latest;
+        self.fee_growth_inside_1_last_x64 = fee_growth_inside_1_x64_latest;
+
+        // update rewards, must update before increase liquidity
+        self.update_rewards(reward_growths_inside_latest, true, recent_epoch)?;
+
+        Ok(())
+    }
+
+    fn update_rewards(
         &mut self,
         reward_growths_inside: [u128; REWARD_NUM],
         add_delta: bool,
+        recent_epoch: u64,
     ) -> Result<()> {
         for i in 0..REWARD_NUM {
             let reward_growth_inside = reward_growths_inside[i];
@@ -90,7 +190,7 @@ impl PersonalPositionState {
             }
             self.reward_infos[i].growth_inside_last_x64 = reward_growth_inside;
         }
-        self.recent_epoch = get_recent_epoch()?;
+        self.recent_epoch = recent_epoch;
         Ok(())
     }
 }
