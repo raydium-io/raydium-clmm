@@ -101,7 +101,8 @@ impl PersonalPositionState {
             reward_growths_inside_latest,
             recent_epoch,
         )?;
-        self.liquidity
+        self.liquidity = self
+            .liquidity
             .checked_add(liquidity_delta)
             .ok_or(ErrorCode::CalculateOverflow)?;
         Ok(())
@@ -121,7 +122,8 @@ impl PersonalPositionState {
             reward_growths_inside_latest,
             recent_epoch,
         )?;
-        self.liquidity
+        self.liquidity = self
+            .liquidity
             .checked_sub(liquidity_delta)
             .ok_or(ErrorCode::CalculateOverflow)?;
         Ok(())
