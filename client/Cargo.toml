@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 mpl-token-metadata = { version = "5.1.0" }
-anchor-client = "0.31.0"
-anchor-lang = "0.31.0"
+anchor-client = "0.31.1"
+anchor-lang = "0.31.1"
 raydium-amm-v3 = { path = "../programs/amm", features = [
     "no-entrypoint",
     "client",
