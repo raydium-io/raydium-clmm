@@ -1,5 +1,6 @@
 use super::add_liquidity;
 use crate::error::ErrorCode;
+use crate::instructions::LiquidityChangeResult;
 use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::states::*;
 use crate::util::*;
@@ -23,18 +24,8 @@ pub struct IncreaseLiquidity<'info> {
     #[account(mut)]
     pub pool_state: AccountLoader<'info, PoolState>,
 
-    #[account(
-        mut,
-        seeds = [
-            POSITION_SEED.as_bytes(),
-            pool_state.key().as_ref(),
-            &personal_position.tick_lower_index.to_be_bytes(),
-            &personal_position.tick_upper_index.to_be_bytes(),
-        ],
-        bump,
-        constraint = protocol_position.pool_id == pool_state.key(),
-    )]
-    pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
+    /// CHECK: Deprecated: protocol_position is deprecated and kept for compatibility.
+    pub protocol_position: UncheckedAccount<'info>,
 
     /// Increase liquidity for this position
     #[account(mut, constraint = personal_position.pool_id == pool_state.key())]
@@ -99,7 +90,6 @@ pub fn increase_liquidity_v1<'a, 'b, 'c: 'info, 'info>(
     increase_liquidity(
         &ctx.accounts.nft_owner,
         &ctx.accounts.pool_state,
-        &mut ctx.accounts.protocol_position,
         &mut ctx.accounts.personal_position,
         &ctx.accounts.tick_array_lower,
         &ctx.accounts.tick_array_upper,
@@ -122,7 +112,6 @@ pub fn increase_liquidity_v1<'a, 'b, 'c: 'info, 'info>(
 pub fn increase_liquidity<'a, 'b, 'c: 'info, 'info>(
     nft_owner: &'b Signer<'info>,
     pool_state_loader: &'b AccountLoader<'info, PoolState>,
-    protocol_position: &'b mut Box<Account<'info, ProtocolPositionState>>,
     personal_position: &'b mut Box<Account<'info, PersonalPositionState>>,
     tick_array_lower_loader: &'b AccountLoader<'info, TickArrayState>,
     tick_array_upper_loader: &'b AccountLoader<'info, TickArrayState>,
@@ -152,7 +141,16 @@ pub fn increase_liquidity<'a, 'b, 'c: 'info, 'info>(
     let use_tickarray_bitmap_extension =
         pool_state.is_overflow_default_tickarray_bitmap(vec![tick_lower, tick_upper]);
 
-    let (amount_0, amount_1, amount_0_transfer_fee, amount_1_transfer_fee) = add_liquidity(
+    let LiquidityChangeResult {
+        amount_0,
+        amount_1,
+        amount_0_transfer_fee,
+        amount_1_transfer_fee,
+        fee_growth_inside_0_x64: fee_growth_inside_0_x64_latest,
+        fee_growth_inside_1_x64: fee_growth_inside_1_x64_latest,
+        reward_growths_inside: reward_growths_inside_latest,
+        ..
+    } = add_liquidity(
         &nft_owner,
         token_account_0,
         token_account_1,
@@ -160,7 +158,6 @@ pub fn increase_liquidity<'a, 'b, 'c: 'info, 'info>(
         token_vault_1,
         &AccountLoad::<TickArrayState>::try_from(&tick_array_lower_loader.to_account_info())?,
         &AccountLoad::<TickArrayState>::try_from(&tick_array_upper_loader.to_account_info())?,
-        protocol_position,
         token_program_2022,
         token_program,
         vault_0_mint,
@@ -183,26 +180,13 @@ pub fn increase_liquidity<'a, 'b, 'c: 'info, 'info>(
         base_flag,
     )?;
 
-    personal_position.token_fees_owed_0 = calculate_latest_token_fees(
-        personal_position.token_fees_owed_0,
-        personal_position.fee_growth_inside_0_last_x64,
-        protocol_position.fee_growth_inside_0_last_x64,
-        personal_position.liquidity,
-    );
-    personal_position.token_fees_owed_1 = calculate_latest_token_fees(
-        personal_position.token_fees_owed_1,
-        personal_position.fee_growth_inside_1_last_x64,
-        protocol_position.fee_growth_inside_1_last_x64,
-        personal_position.liquidity,
-    );
-
-    personal_position.fee_growth_inside_0_last_x64 = protocol_position.fee_growth_inside_0_last_x64;
-    personal_position.fee_growth_inside_1_last_x64 = protocol_position.fee_growth_inside_1_last_x64;
-
-    // update rewards, must update before increase liquidity
-    personal_position.update_rewards(protocol_position.reward_growth_inside, true)?;
-    personal_position.liquidity = personal_position.liquidity.checked_add(liquidity).unwrap();
-
+    personal_position.increase_liquidity(
+        liquidity,
+        fee_growth_inside_0_x64_latest,
+        fee_growth_inside_1_x64_latest,
+        reward_growths_inside_latest,
+        get_recent_epoch()?,
+    )?;
     emit!(IncreaseLiquidityEvent {
         position_nft_mint: personal_position.nft_mint,
         liquidity,

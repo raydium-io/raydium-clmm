@@ -21,14 +21,14 @@ solana_security_txt::security_txt! {
 }
 
 #[cfg(feature = "devnet")]
-declare_id!("devi51mZmdwUJGU9hjN27vEz64Gps7uUefqxg27EAtH");
+declare_id!("DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH");
 #[cfg(not(feature = "devnet"))]
 declare_id!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 
 pub mod admin {
     use super::{pubkey, Pubkey};
     #[cfg(feature = "devnet")]
-    pub const ID: Pubkey = pubkey!("adMCyoCgfkg7bQiJ9aBJ59H3BXLY3r5LNLfPpQfMzBe");
+    pub const ID: Pubkey = pubkey!("DRayqG9RXYi8WHgWEmRQGrUWRWbhjYWYkCRJDd6JBBak");
     #[cfg(not(feature = "devnet"))]
     pub const ID: Pubkey = pubkey!("GThUX1Atko4tqhN2NaiTazWSeFWMuiUvfFnyJyUghFMJ");
 }
@@ -543,5 +543,18 @@ pub mod amm_v3 {
         amount_out_minimum: u64,
     ) -> Result<()> {
         instructions::swap_router_base_in(ctx, amount_in, amount_out_minimum)
+    }
+
+    /// The CLMM protocol decides to discard the protocol position account, which can reduce users' opening costs.
+    /// After the original protocol position account is closed, the gas fee will be refunded to the user who created it.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    ///
+    pub fn close_protocol_position<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, CloseProtocolPosition<'info>>,
+    ) -> Result<()> {
+        instructions::close_protocol_position(ctx)
     }
 }

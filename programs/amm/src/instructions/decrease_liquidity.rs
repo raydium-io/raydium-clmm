@@ -1,7 +1,8 @@
-use super::calculate_latest_token_fees;
 use super::modify_position;
 use crate::error::ErrorCode;
+use crate::instructions::LiquidityChangeResult;
 use crate::states::*;
+use crate::util::get_recent_epoch;
 use crate::util::{self, transfer_from_pool_vault_to_user};
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Token, TokenAccount};
@@ -32,18 +33,8 @@ pub struct DecreaseLiquidity<'info> {
     #[account(mut)]
     pub pool_state: AccountLoader<'info, PoolState>,
 
-    #[account(
-        mut,
-        seeds = [
-            POSITION_SEED.as_bytes(),
-            pool_state.key().as_ref(),
-            &personal_position.tick_lower_index.to_be_bytes(),
-            &personal_position.tick_upper_index.to_be_bytes(),
-        ],
-        bump,
-        constraint = protocol_position.pool_id == pool_state.key(),
-    )]
-    pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
+    /// CHECK: Deprecated: protocol_position is deprecated and kept for compatibility.
+    pub protocol_position: UncheckedAccount<'info>,
 
     /// Token_0 vault
     #[account(
@@ -102,7 +93,6 @@ pub fn decrease_liquidity_v1<'a, 'b, 'c: 'info, 'info>(
 ) -> Result<()> {
     decrease_liquidity(
         &ctx.accounts.pool_state,
-        &mut ctx.accounts.protocol_position,
         &mut ctx.accounts.personal_position,
         &ctx.accounts.token_vault_0.to_account_info(),
         &ctx.accounts.token_vault_1.to_account_info(),
@@ -124,7 +114,6 @@ pub fn decrease_liquidity_v1<'a, 'b, 'c: 'info, 'info>(
 
 pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
     pool_state_loader: &'b AccountLoader<'info, PoolState>,
-    protocol_position: &'b mut Box<Account<'info, ProtocolPositionState>>,
     personal_position: &'b mut Box<Account<'info, PersonalPositionState>>,
     token_vault_0: &'b AccountInfo<'info>,
     token_vault_1: &'b AccountInfo<'info>,
@@ -191,7 +180,6 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
     let (decrease_amount_0, latest_fees_owed_0, decrease_amount_1, latest_fees_owed_1) =
         decrease_liquidity_and_update_position(
             pool_state_loader,
-            protocol_position,
             personal_position,
             tick_array_lower_loader,
             tick_array_upper_loader,
@@ -301,7 +289,6 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
 
 pub fn decrease_liquidity_and_update_position<'a, 'b, 'c: 'info, 'info>(
     pool_state_loader: &AccountLoader<'info, PoolState>,
-    protocol_position: &mut Box<Account<'info, ProtocolPositionState>>,
     personal_position: &mut Box<Account<'info, PersonalPositionState>>,
     tick_array_lower: &AccountLoader<'info, TickArrayState>,
     tick_array_upper: &AccountLoader<'info, TickArrayState>,
@@ -312,37 +299,32 @@ pub fn decrease_liquidity_and_update_position<'a, 'b, 'c: 'info, 'info>(
     let mut decrease_amount_0 = 0;
     let mut decrease_amount_1 = 0;
     if pool_state.get_status_by_bit(PoolStatusBitIndex::DecreaseLiquidity) {
-        (decrease_amount_0, decrease_amount_1) = burn_liquidity(
+        let LiquidityChangeResult {
+            amount_0,
+            amount_1,
+            fee_growth_inside_0_x64: fee_growth_inside_0_x64_latest,
+            fee_growth_inside_1_x64: fee_growth_inside_1_x64_latest,
+            reward_growths_inside: reward_growths_inside_latest,
+            ..
+        } = burn_liquidity(
             &mut pool_state,
             tick_array_lower,
             tick_array_upper,
-            protocol_position,
             tick_array_bitmap_extension,
+            personal_position.tick_lower_index,
+            personal_position.tick_upper_index,
             liquidity,
         )?;
 
-        personal_position.token_fees_owed_0 = calculate_latest_token_fees(
-            personal_position.token_fees_owed_0,
-            personal_position.fee_growth_inside_0_last_x64,
-            protocol_position.fee_growth_inside_0_last_x64,
-            personal_position.liquidity,
-        );
-
-        personal_position.token_fees_owed_1 = calculate_latest_token_fees(
-            personal_position.token_fees_owed_1,
-            personal_position.fee_growth_inside_1_last_x64,
-            protocol_position.fee_growth_inside_1_last_x64,
-            personal_position.liquidity,
-        );
-
-        personal_position.fee_growth_inside_0_last_x64 =
-            protocol_position.fee_growth_inside_0_last_x64;
-        personal_position.fee_growth_inside_1_last_x64 =
-            protocol_position.fee_growth_inside_1_last_x64;
-
-        // update rewards, must update before decrease liquidity
-        personal_position.update_rewards(protocol_position.reward_growth_inside, true)?;
-        personal_position.liquidity = personal_position.liquidity.checked_sub(liquidity).unwrap();
+        personal_position.decrease_liquidity(
+            liquidity,
+            fee_growth_inside_0_x64_latest,
+            fee_growth_inside_1_x64_latest,
+            reward_growths_inside_latest,
+            get_recent_epoch()?,
+        )?;
+        decrease_amount_0 = amount_0;
+        decrease_amount_1 = amount_1;
     }
 
     let mut latest_fees_owed_0 = 0;
@@ -385,25 +367,25 @@ pub fn burn_liquidity<'c: 'info, 'info>(
     pool_state: &mut RefMut<PoolState>,
     tick_array_lower_loader: &AccountLoader<'info, TickArrayState>,
     tick_array_upper_loader: &AccountLoader<'info, TickArrayState>,
-    protocol_position: &mut ProtocolPositionState,
     tickarray_bitmap_extension: Option<&'c AccountInfo<'info>>,
+    tick_lower_index: i32,
+    tick_upper_index: i32,
     liquidity: u128,
-) -> Result<(u64, u64)> {
+) -> Result<LiquidityChangeResult> {
     require_keys_eq!(tick_array_lower_loader.load()?.pool_id, pool_state.key());
     require_keys_eq!(tick_array_upper_loader.load()?.pool_id, pool_state.key());
     let liquidity_before = pool_state.liquidity;
     // get tick_state
     let mut tick_lower_state = *tick_array_lower_loader
         .load_mut()?
-        .get_tick_state_mut(protocol_position.tick_lower_index, pool_state.tick_spacing)?;
+        .get_tick_state_mut(tick_lower_index, pool_state.tick_spacing)?;
     let mut tick_upper_state = *tick_array_upper_loader
         .load_mut()?
-        .get_tick_state_mut(protocol_position.tick_upper_index, pool_state.tick_spacing)?;
+        .get_tick_state_mut(tick_upper_index, pool_state.tick_spacing)?;
     let clock = Clock::get()?;
-    let (amount_0, amount_1, flip_tick_lower, flip_tick_upper) = modify_position(
+    let result = modify_position(
         -i128::try_from(liquidity).unwrap(),
         pool_state,
-        protocol_position,
         &mut tick_lower_state,
         &mut tick_upper_state,
         clock.unix_timestamp as u64,
@@ -411,17 +393,17 @@ pub fn burn_liquidity<'c: 'info, 'info>(
 
     // update tick_state
     tick_array_lower_loader.load_mut()?.update_tick_state(
-        protocol_position.tick_lower_index,
+        tick_lower_index,
         pool_state.tick_spacing,
         tick_lower_state,
     )?;
     tick_array_upper_loader.load_mut()?.update_tick_state(
-        protocol_position.tick_upper_index,
+        tick_upper_index,
         pool_state.tick_spacing,
         tick_upper_state,
     )?;
 
-    if flip_tick_lower {
+    if result.tick_lower_flipped {
         let mut tick_array_lower = tick_array_lower_loader.load_mut()?;
         tick_array_lower.update_initialized_tick_count(false)?;
         if tick_array_lower.initialized_tick_count == 0 {
@@ -431,7 +413,7 @@ pub fn burn_liquidity<'c: 'info, 'info>(
             )?;
         }
     }
-    if flip_tick_upper {
+    if result.tick_upper_flipped {
         let mut tick_array_upper = tick_array_upper_loader.load_mut()?;
         tick_array_upper.update_initialized_tick_count(false)?;
         if tick_array_upper.initialized_tick_count == 0 {
@@ -445,13 +427,13 @@ pub fn burn_liquidity<'c: 'info, 'info>(
     emit!(LiquidityChangeEvent {
         pool_state: pool_state.key(),
         tick: pool_state.tick_current,
-        tick_lower: protocol_position.tick_lower_index,
-        tick_upper: protocol_position.tick_upper_index,
+        tick_lower: tick_lower_index,
+        tick_upper: tick_upper_index,
         liquidity_before: liquidity_before,
         liquidity_after: pool_state.liquidity,
     });
 
-    Ok((amount_0, amount_1))
+    Ok(result)
 }
 
 pub fn collect_rewards<'a, 'b, 'c, 'info>(

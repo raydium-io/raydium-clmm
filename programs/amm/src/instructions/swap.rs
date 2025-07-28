@@ -804,6 +804,7 @@ mod swap_test {
     use crate::states::tick_array_test::{
         build_tick, build_tick_array_with_tick_states, TickArrayInfo,
     };
+    use rand::Rng;
     use std::cell::RefCell;
     use std::collections::HashMap;
     use std::vec;
