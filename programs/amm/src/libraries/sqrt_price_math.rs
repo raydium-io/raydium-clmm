@@ -90,6 +90,9 @@ pub fn get_next_sqrt_price_from_amount_1_rounding_down(
     amount: u64,
     add: bool,
 ) -> u128 {
+    if amount == 0 {
+        return sqrt_price_x64;
+    };
     if add {
         let quotient = U256::from(u128::from(amount) << fixed_point_64::RESOLUTION) / liquidity;
         sqrt_price_x64.checked_add(quotient.as_u128()).unwrap()
