@@ -1,6 +1,3 @@
-use std::collections::VecDeque;
-use std::ops::Deref;
-
 use crate::error::ErrorCode;
 use crate::libraries::tick_math;
 use crate::swap::swap_internal;
@@ -10,6 +7,7 @@ use anchor_lang::{prelude::*, solana_program};
 use anchor_spl::memo::Memo;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
+use std::collections::VecDeque;
 
 /// Memo msg for swap
 pub const SWAP_MEMO_MSG: &'static [u8] = b"raydium_swap";
@@ -130,11 +128,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         let tick_array_bitmap_extension_key = TickArrayBitmapExtension::key(pool_state.key());
         for account_info in remaining_accounts.into_iter() {
             if account_info.key().eq(&tick_array_bitmap_extension_key) {
-                tickarray_bitmap_extension = Some(
-                    *(AccountLoader::<TickArrayBitmapExtension>::try_from(account_info)?
-                        .load()?
-                        .deref()),
-                );
+                tickarray_bitmap_extension = Some(account_info);
                 continue;
             }
             if account_info.data_len() != TickArrayState::LEN {
@@ -148,7 +142,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             pool_state,
             tick_array_states,
             &mut ctx.observation_state.load_mut()?,
-            &tickarray_bitmap_extension,
+            tickarray_bitmap_extension,
             amount_calculate_specified,
             if sqrt_price_limit_x64 == 0 {
                 if zero_for_one {
@@ -310,9 +304,9 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         tick: pool_state.tick_current
     });
     if zero_for_one {
-        require_gt!(swap_price_before, pool_state.sqrt_price_x64);
+        require_gte!(swap_price_before, pool_state.sqrt_price_x64);
     } else {
-        require_gt!(pool_state.sqrt_price_x64, swap_price_before);
+        require_gte!(pool_state.sqrt_price_x64, swap_price_before);
     }
     if sqrt_price_limit_x64 == 0 {
         // Does't allow partial filled without specified limit_price.

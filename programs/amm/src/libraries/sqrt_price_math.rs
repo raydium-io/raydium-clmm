@@ -36,11 +36,11 @@ pub fn get_next_sqrt_price_from_amount_0_rounding_up(
     if amount == 0 {
         return sqrt_price_x64;
     };
-    let numerator_1 = (U256::from(liquidity)) << fixed_point_64::RESOLUTION;
+    let numerator_1 = U256::from(liquidity) << fixed_point_64::RESOLUTION;
 
     if add {
         if let Some(product) = U256::from(amount).checked_mul(U256::from(sqrt_price_x64)) {
-            let denominator = numerator_1 + U256::from(product);
+            let denominator = numerator_1 + product;
             if denominator >= numerator_1 {
                 return numerator_1
                     .mul_div_ceil(U256::from(sqrt_price_x64), denominator)
@@ -57,11 +57,9 @@ pub fn get_next_sqrt_price_from_amount_0_rounding_up(
         )
         .as_u128()
     } else {
-        let product = U256::from(
-            U256::from(amount)
-                .checked_mul(U256::from(sqrt_price_x64))
-                .unwrap(),
-        );
+        let product = U256::from(amount)
+            .checked_mul(U256::from(sqrt_price_x64))
+            .unwrap();
         let denominator = numerator_1.checked_sub(product).unwrap();
         numerator_1
             .mul_div_ceil(U256::from(sqrt_price_x64), denominator)
@@ -74,10 +72,10 @@ pub fn get_next_sqrt_price_from_amount_0_rounding_up(
 ///
 /// Always round down because
 /// 1. In the exact output case, token 1 supply decreases leading to price decrease.
-/// Move price down by rounding down so that exact output of token 0 is met.
+///    Move price down by rounding down so that exact output of token 0 is met.
 /// 2. In the exact input case, token 1 supply increases leading to price increase.
-/// Do not round down to minimize price impact. We only need to meet input
-/// change and not gurantee exact output for token 0.
+///    We still round down to avoid giving away extra token 0; we only need to meet the
+///    input amount and do not guarantee exact output for token 0.
 ///
 ///
 /// # Formula
@@ -90,8 +88,12 @@ pub fn get_next_sqrt_price_from_amount_1_rounding_down(
     amount: u64,
     add: bool,
 ) -> u128 {
+    if amount == 0 {
+        return sqrt_price_x64;
+    }
+
     if add {
-        let quotient = U256::from(u128::from(amount) << fixed_point_64::RESOLUTION) / liquidity;
+        let quotient = (U256::from(amount) << fixed_point_64::RESOLUTION) / liquidity;
         sqrt_price_x64.checked_add(quotient.as_u128()).unwrap()
     } else {
         let quotient = U256::div_rounding_up(

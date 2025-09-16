@@ -508,7 +508,7 @@ pub fn collect_rewards<'a, 'b, 'c, 'info>(
                 reward_amount_owed.checked_sub(transfer_amount).unwrap();
             pool_state_loader
                 .load_mut()?
-                .add_reward_clamed(i, transfer_amount)?;
+                .add_reward_claimed(i, transfer_amount)?;
 
             transfer_from_pool_vault_to_user(
                 &pool_state_loader,

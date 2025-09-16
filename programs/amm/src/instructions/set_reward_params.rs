@@ -165,13 +165,13 @@ fn normal_update(
         if extend_period < reward_period_limit::MIN_REWARD_PERIOD
             || extend_period > reward_period_limit::MAX_REWARD_PERIOD
         {
-            return err!(ErrorCode::NotApproveUpdateRewardEmissiones);
+            return err!(ErrorCode::NotApproveUpdateRewardEmissions);
         }
 
-        // emissions_per_second_x64 must not smaller than before with in 72hrs
+        // emissions_per_second_x64 must not be smaller than before within 72hrs
         if emissions_per_second_x64 < reward_info.emissions_per_second_x64 {
             require_gt!(
-                reward_period_limit::INCREASE_EMISSIONES_PERIOD,
+                reward_period_limit::INCREASE_EMISSIONS_PERIOD,
                 left_reward_time
             );
         }
@@ -235,7 +235,7 @@ fn admin_update(
         let left_reward_time = reward_info.end_time.checked_sub(current_timestamp).unwrap();
         let extend_period = end_time.saturating_sub(reward_info.end_time);
 
-        // emissions_per_second_x64 can be update for admin during anytime
+        // emissions_per_second_x64 can be updated by admin at any time
         let emission_diff_x64 =
             emissions_per_second_x64.saturating_sub(reward_info.emissions_per_second_x64);
         reward_amount = U256::from(left_reward_time)

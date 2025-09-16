@@ -24,12 +24,13 @@ pub struct AmmConfig {
     pub fund_fee_rate: u32,
     // padding space for upgrade
     pub padding_u32: u32,
+    /// The fund owner
     pub fund_owner: Pubkey,
     pub padding: [u64; 3],
 }
 
 impl AmmConfig {
-    pub const LEN: usize = 8 + 1 + 2 + 32 + 4 + 4 + 2 + 64;
+    pub const LEN: usize = 8 + 1 + 2 + 32 + 4 + 4 + 2 + 4 + 4 + 32 + 8 * 3;
 
     pub fn is_authorized<'info>(
         &self,

@@ -17,13 +17,12 @@ use anchor_lang::prelude::*;
 pub fn add_delta(x: u128, y: i128) -> Result<u128> {
     let z: u128;
     if y < 0 {
-        z = x - u128::try_from(-y).unwrap();
+        z = x - y.unsigned_abs();
         require_gt!(x, z, ErrorCode::LiquiditySubValueErr);
     } else {
-        z = x + u128::try_from(y).unwrap();
+        z = x + y.unsigned_abs();
         require_gte!(z, x, ErrorCode::LiquidityAddValueErr);
     }
-
     Ok(z)
 }
 
@@ -34,6 +33,9 @@ pub fn get_liquidity_from_amount_0(
     mut sqrt_ratio_b_x64: u128,
     amount_0: u64,
 ) -> u128 {
+    if amount_0 == 0 {
+        return 0;
+    }
     // sqrt_ratio_a_x64 should hold the smaller value
     if sqrt_ratio_a_x64 > sqrt_ratio_b_x64 {
         std::mem::swap(&mut sqrt_ratio_a_x64, &mut sqrt_ratio_b_x64);
@@ -61,6 +63,9 @@ pub fn get_liquidity_from_amount_1(
     mut sqrt_ratio_b_x64: u128,
     amount_1: u64,
 ) -> u128 {
+    if amount_1 == 0 {
+        return 0;
+    }
     // sqrt_ratio_a_x64 should hold the smaller value
     if sqrt_ratio_a_x64 > sqrt_ratio_b_x64 {
         std::mem::swap(&mut sqrt_ratio_a_x64, &mut sqrt_ratio_b_x64);
@@ -239,14 +244,19 @@ pub fn get_delta_amount_0_signed(
         get_delta_amount_0_unsigned(
             sqrt_ratio_a_x64,
             sqrt_ratio_b_x64,
-            u128::try_from(-liquidity).unwrap(),
+            u128::try_from(
+                liquidity
+                    .checked_neg()
+                    .ok_or(ErrorCode::CalculateOverflow)?,
+            )
+            .map_err(|_| ErrorCode::CalculateOverflow)?,
             false,
         )
     } else {
         get_delta_amount_0_unsigned(
             sqrt_ratio_a_x64,
             sqrt_ratio_b_x64,
-            u128::try_from(liquidity).unwrap(),
+            u128::try_from(liquidity).map_err(|_| ErrorCode::CalculateOverflow)?,
             true,
         )
     }
@@ -262,14 +272,19 @@ pub fn get_delta_amount_1_signed(
         get_delta_amount_1_unsigned(
             sqrt_ratio_a_x64,
             sqrt_ratio_b_x64,
-            u128::try_from(-liquidity).unwrap(),
+            u128::try_from(
+                liquidity
+                    .checked_neg()
+                    .ok_or(ErrorCode::CalculateOverflow)?,
+            )
+            .map_err(|_| ErrorCode::CalculateOverflow)?,
             false,
         )
     } else {
         get_delta_amount_1_unsigned(
             sqrt_ratio_a_x64,
             sqrt_ratio_b_x64,
-            u128::try_from(liquidity).unwrap(),
+            u128::try_from(liquidity).map_err(|_| ErrorCode::CalculateOverflow)?,
             true,
         )
     }
@@ -289,28 +304,24 @@ pub fn get_delta_amounts_signed(
             tick_math::get_sqrt_price_at_tick(tick_lower)?,
             tick_math::get_sqrt_price_at_tick(tick_upper)?,
             liquidity_delta,
-        )
-        .unwrap();
+        )?;
     } else if tick_current < tick_upper {
         amount_0 = get_delta_amount_0_signed(
             sqrt_price_x64_current,
             tick_math::get_sqrt_price_at_tick(tick_upper)?,
             liquidity_delta,
-        )
-        .unwrap();
+        )?;
         amount_1 = get_delta_amount_1_signed(
             tick_math::get_sqrt_price_at_tick(tick_lower)?,
             sqrt_price_x64_current,
             liquidity_delta,
-        )
-        .unwrap();
+        )?;
     } else {
         amount_1 = get_delta_amount_1_signed(
             tick_math::get_sqrt_price_at_tick(tick_lower)?,
             tick_math::get_sqrt_price_at_tick(tick_upper)?,
             liquidity_delta,
-        )
-        .unwrap();
+        )?;
     }
     Ok((amount_0, amount_1))
 }

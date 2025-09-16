@@ -7,7 +7,7 @@ edition = "2021"
 mpl-token-metadata = { version = "5.1.0" }
 anchor-client = "0.32.1"
 anchor-lang = "0.32.1"
-raydium-amm-v3 = { path = "../programs/amm", features = [
+raydium-clmm = { path = "../programs/amm", features = [
     "no-entrypoint",
     "client",
 ] }

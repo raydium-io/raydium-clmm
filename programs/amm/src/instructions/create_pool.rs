@@ -199,6 +199,7 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u6
         ctx.accounts.token_mint_0.as_ref(),
         ctx.accounts.token_mint_1.as_ref(),
         ctx.accounts.observation_state.key(),
+        CollectFeeOn::default(),
     )?;
 
     ctx.accounts

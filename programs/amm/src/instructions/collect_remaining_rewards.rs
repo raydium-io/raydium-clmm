@@ -92,7 +92,7 @@ fn get_remaining_reward_amount(
         .amount
         .checked_sub(
             reward_info
-                .reward_total_emissioned
+                .reward_total_emitted
                 .checked_sub(reward_info.reward_claimed)
                 .unwrap(),
         )

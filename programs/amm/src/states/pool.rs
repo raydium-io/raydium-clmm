@@ -26,13 +26,13 @@ pub const REWARD_NUM: usize = 3;
 pub mod reward_period_limit {
     pub const MIN_REWARD_PERIOD: u64 = 1 * 60 * 60;
     pub const MAX_REWARD_PERIOD: u64 = 2 * 60 * 60;
-    pub const INCREASE_EMISSIONES_PERIOD: u64 = 30 * 60;
+    pub const INCREASE_EMISSIONS_PERIOD: u64 = 30 * 60;
 }
 #[cfg(not(feature = "paramset"))]
 pub mod reward_period_limit {
     pub const MIN_REWARD_PERIOD: u64 = 7 * 24 * 60 * 60;
     pub const MAX_REWARD_PERIOD: u64 = 90 * 24 * 60 * 60;
-    pub const INCREASE_EMISSIONES_PERIOD: u64 = 72 * 60 * 60;
+    pub const INCREASE_EMISSIONS_PERIOD: u64 = 72 * 60 * 60;
 }
 
 pub enum PoolStatusBitIndex {
@@ -41,6 +41,7 @@ pub enum PoolStatusBitIndex {
     CollectFee,
     CollectReward,
     Swap,
+    LimitOrder,
 }
 
 #[derive(PartialEq, Eq)]
@@ -112,9 +113,12 @@ pub struct PoolState {
     /// bit2, 1: disable collect fee, 0: normal
     /// bit3, 1: disable collect reward, 0: normal
     /// bit4, 1: disable swap, 0: normal
+    /// bit5, 1: disable limit order, 0: normal
     pub status: u8,
+    /// Fee on which token (0 = FromInput, 1 = Token0Only, 2 = Token1Only)
+    pub fee_on: u8,
     /// Leave blank for future use
-    pub padding: [u8; 7],
+    pub padding: [u8; 6],
 
     pub reward_infos: [RewardInfo; REWARD_NUM],
 
@@ -137,8 +141,10 @@ pub struct PoolState {
     // account recent update epoch
     pub recent_epoch: u64,
 
+    /// Dynamic fee info
+    pub dynamic_fee_info: DynamicFeeInfo,
     // Unused bytes for future upgrades.
-    pub padding1: [u64; 24],
+    pub padding1: [u64; 14],
     pub padding2: [u64; 32],
 }
 
@@ -163,9 +169,12 @@ impl PoolState {
         + 16
         + 16
         + 8
-        + RewardInfo::LEN * REWARD_NUM
+        + RewardInfo::LEN * REWARD_NUM // 169 * 3 = 507
         + 8 * 16
-        + 512;
+        + 8 * 8
+        + DynamicFeeInfo::LEN // 80
+        + 8 * 14 
+        + 8 * 32;
 
     pub fn seeds(&self) -> [&[u8]; 5] {
         [
@@ -194,6 +203,7 @@ impl PoolState {
         token_mint_0: &InterfaceAccount<Mint>,
         token_mint_1: &InterfaceAccount<Mint>,
         observation_state_key: Pubkey,
+        collect_fee_on: CollectFeeOn,
     ) -> Result<()> {
         self.bump = [bump];
         self.amm_config = amm_config.key();
@@ -220,7 +230,8 @@ impl PoolState {
         self.swap_in_amount_token_1 = 0;
         self.swap_out_amount_token_0 = 0;
         self.status = 0;
-        self.padding = [0; 7];
+        self.fee_on = collect_fee_on.to_u8();
+        self.padding = [0; 6];
         self.tick_array_bitmap = [0; 16];
         self.total_fees_token_0 = 0;
         self.total_fees_claimed_token_0 = 0;
@@ -230,7 +241,8 @@ impl PoolState {
         self.fund_fees_token_1 = 0;
         self.open_time = open_time;
         self.recent_epoch = get_recent_epoch()?;
-        self.padding1 = [0; 24];
+        self.dynamic_fee_info = DynamicFeeInfo::default();
+        self.padding1 = [0; 14];
         self.padding2 = [0; 32];
         self.observation_key = observation_state_key;
 
@@ -254,11 +266,7 @@ impl PoolState {
             None => return Err(ErrorCode::FullRewardInfo.into()),
         };
 
-        if lowest_index >= REWARD_NUM {
-            return Err(ErrorCode::FullRewardInfo.into());
-        }
-
-        // one of first two reward token must be a vault token and the last reward token must be controled by the admin
+        // one of first two reward token must be a vault token and the last reward token must be controlled by the admin
         let reward_mints: Vec<Pubkey> = reward_infos
             .into_iter()
             .map(|item| item.token_mint)
@@ -309,7 +317,7 @@ impl PoolState {
                 }
             }
         } else if lowest_index == REWARD_NUM - 1 {
-            // the last reward token must be controled by the admin
+            // the last reward token must be controlled by the admin
             require!(
                 *authority == crate::admin::ID
                     || operation_state.validate_operation_owner(*authority),
@@ -371,8 +379,8 @@ impl PoolState {
                     .checked_add(reward_growth_delta.as_u128())
                     .unwrap();
 
-                reward_info.reward_total_emissioned = reward_info
-                    .reward_total_emissioned
+                reward_info.reward_total_emitted = reward_info
+                    .reward_total_emitted
                     .checked_add(
                         U128::from(time_delta)
                             .mul_div_ceil(
@@ -408,8 +416,8 @@ impl PoolState {
         }
         self.reward_infos = next_reward_infos;
         #[cfg(feature = "enable-log")]
-        msg!("update pool reward info, reward_0_total_emissioned:{}, reward_1_total_emissioned:{}, reward_2_total_emissioned:{}, pool.liquidity:{}",
-        identity(self.reward_infos[0].reward_total_emissioned),identity(self.reward_infos[1].reward_total_emissioned),identity(self.reward_infos[2].reward_total_emissioned), identity(self.liquidity));
+        msg!("update pool reward info, reward_0_total_emitted:{}, reward_1_total_emitted:{}, reward_2_total_emitted:{}, pool.liquidity:{}",
+        identity(self.reward_infos[0].reward_total_emitted),identity(self.reward_infos[1].reward_total_emitted),identity(self.reward_infos[2].reward_total_emitted), identity(self.liquidity));
         self.recent_epoch = get_recent_epoch()?;
         Ok(next_reward_infos)
     }
@@ -417,14 +425,14 @@ impl PoolState {
     pub fn check_unclaimed_reward(&self, index: usize, reward_amount_owed: u64) -> Result<()> {
         assert!(index < REWARD_NUM);
         let unclaimed_reward = self.reward_infos[index]
-            .reward_total_emissioned
+            .reward_total_emitted
             .checked_sub(self.reward_infos[index].reward_claimed)
             .unwrap();
         require_gte!(unclaimed_reward, reward_amount_owed);
         Ok(())
     }
 
-    pub fn add_reward_clamed(&mut self, index: usize, amount: u64) -> Result<()> {
+    pub fn add_reward_claimed(&mut self, index: usize, amount: u64) -> Result<()> {
         assert!(index < REWARD_NUM);
         self.reward_infos[index].reward_claimed = self.reward_infos[index]
             .reward_claimed
@@ -444,7 +452,7 @@ impl PoolState {
         Ok(tick_array_offset_in_bitmap as usize)
     }
 
-    fn flip_tick_array_bit_internal(&mut self, tick_array_start_index: i32) -> Result<()> {
+    fn flip_tick_array_bit_default(&mut self, tick_array_start_index: i32) -> Result<()> {
         let tick_array_offset_in_bitmap = self.get_tick_array_offset(tick_array_start_index)?;
 
         let tick_array_bitmap = U1024(self.tick_array_bitmap);
@@ -469,8 +477,50 @@ impl PoolState {
             .load_mut()?
             .flip_tick_array_bit(tick_array_start_index, self.tick_spacing)
         } else {
-            self.flip_tick_array_bit_internal(tick_array_start_index)
+            self.flip_tick_array_bit_default(tick_array_start_index)
         }
+    }
+
+    /// Get the first initialized tick array start index with tickarray bitmap extension info
+    pub fn first_tick_array_index_with_extension_info<'c: 'info, 'info>(
+        &self,
+        tickarray_bitmap_extension_info: Option<&'c AccountInfo<'info>>,
+        zero_for_one: bool,
+    ) -> Result<(bool, i32)> {
+        let (is_initialized, start_index) =
+            if self.is_overflow_default_tickarray_bitmap(vec![self.tick_current]) {
+                // Only load extension when needed (when overflow default bitmap)
+                if tickarray_bitmap_extension_info.is_none() {
+                    return err!(ErrorCode::MissingTickArrayBitmapExtensionAccount);
+                }
+                AccountLoader::<TickArrayBitmapExtension>::try_from(
+                    tickarray_bitmap_extension_info.unwrap(),
+                )?
+                .load()?
+                .check_tick_array_is_initialized(
+                    TickArrayState::get_array_start_index(self.tick_current, self.tick_spacing),
+                    self.tick_spacing,
+                )?
+            } else {
+                check_current_tick_array_is_initialized(
+                    U1024(self.tick_array_bitmap),
+                    self.tick_current,
+                    self.tick_spacing.into(),
+                )?
+            };
+        if is_initialized {
+            return Ok((true, start_index));
+        }
+        let next_start_index = self.next_tick_array_index_with_extension_info(
+            tickarray_bitmap_extension_info,
+            TickArrayState::get_array_start_index(self.tick_current, self.tick_spacing),
+            zero_for_one,
+        )?;
+        require!(
+            next_start_index.is_some(),
+            ErrorCode::InsufficientLiquidityForDirection
+        );
+        return Ok((false, next_start_index.unwrap()));
     }
 
     pub fn get_first_initialized_tick_array(
@@ -506,6 +556,56 @@ impl PoolState {
             ErrorCode::InsufficientLiquidityForDirection
         );
         return Ok((false, next_start_index.unwrap()));
+    }
+
+    /// Get the next initialized tick array start index with tickarray bitmap extension info
+    pub fn next_tick_array_index_with_extension_info<'c: 'info, 'info>(
+        &self,
+        tickarray_bitmap_extension_info: Option<&'c AccountInfo<'info>>,
+        mut last_tick_array_start_index: i32,
+        zero_for_one: bool,
+    ) -> Result<Option<i32>> {
+        last_tick_array_start_index =
+            TickArrayState::get_array_start_index(last_tick_array_start_index, self.tick_spacing);
+
+        loop {
+            let (is_found, start_index) =
+                tick_array_bit_map::next_initialized_tick_array_start_index(
+                    U1024(self.tick_array_bitmap),
+                    last_tick_array_start_index,
+                    self.tick_spacing,
+                    zero_for_one,
+                );
+            if is_found {
+                return Ok(Some(start_index));
+            }
+            last_tick_array_start_index = start_index;
+
+            if tickarray_bitmap_extension_info.is_none() {
+                return err!(ErrorCode::MissingTickArrayBitmapExtensionAccount);
+            }
+            // Only load extension when needed (after default bitmap search fails)
+            let extension_loader = AccountLoader::<TickArrayBitmapExtension>::try_from(
+                tickarray_bitmap_extension_info.unwrap(),
+            )?;
+            let (is_found, start_index) = extension_loader
+                .load()?
+                .next_initialized_tick_array_from_one_bitmap(
+                    last_tick_array_start_index,
+                    self.tick_spacing,
+                    zero_for_one,
+                )?;
+            if is_found {
+                return Ok(Some(start_index));
+            }
+            last_tick_array_start_index = start_index;
+
+            if last_tick_array_start_index < tick_math::MIN_TICK
+                || last_tick_array_start_index > tick_math::MAX_TICK
+            {
+                return Ok(None);
+            }
+        }
     }
 
     pub fn next_initialized_tick_array_start_index(
@@ -568,7 +668,7 @@ impl PoolState {
         }
     }
 
-    /// Get status by bit, if it is `noraml` status, return true
+    /// Get status by bit, if it is `normal` status, return true
     pub fn get_status_by_bit(&self, bit: PoolStatusBitIndex) -> bool {
         let status = u8::from(1) << (bit as u8);
         self.status.bitand(status) == 0
@@ -592,7 +692,7 @@ impl PoolState {
     // the range of tick array start index that default tickarray bitmap can represent
     // if tick_spacing = 1, the result range is [-30720, 30720)
     pub fn tick_array_start_index_range(&self) -> (i32, i32) {
-        // the range of ticks that default tickarrary can represent
+        // the range of ticks that default tickarray can represent
         let mut max_tick_boundary =
             tick_array_bit_map::max_tick_in_tickarray_bitmap(self.tick_spacing);
         let mut min_tick_boundary = -max_tick_boundary;
@@ -607,6 +707,116 @@ impl PoolState {
                 TickArrayState::get_array_start_index(tick_math::MIN_TICK, self.tick_spacing);
         }
         (min_tick_boundary, max_tick_boundary)
+    }
+
+    pub fn update_after_swap(
+        &mut self,
+        tick_current: i32,
+        sqrt_price_x64: u128,
+        liquidity: u128,
+        lp_fee: u64, // fee for lp
+        protocol_fee: u64,
+        fund_fee: u64,
+        fee_growth_global_x64: u128,
+        amount_0: u64,
+        amount_1: u64,
+        zero_for_one: bool, // swap direction
+        dynamic_fee_info: Option<DynamicFeeInfo>,
+    ) -> Result<()> {
+        self.tick_current = tick_current;
+        self.sqrt_price_x64 = sqrt_price_x64;
+        self.liquidity = liquidity;
+        self.update_fee_and_trade_volume(
+            amount_0,
+            amount_1,
+            lp_fee,
+            protocol_fee,
+            fund_fee,
+            fee_growth_global_x64,
+            zero_for_one,
+        )?;
+        self.update_dynamic_fee_variables(dynamic_fee_info)?;
+        Ok(())
+    }
+
+    pub fn update_fee_and_trade_volume(
+        &mut self,
+        amount_0: u64,
+        amount_1: u64,
+        lp_fee: u64, // fee for lp
+        protocol_fee: u64,
+        fund_fee: u64,
+        fee_growth_global_x64: u128,
+        zero_for_one: bool, // swap direction
+    ) -> Result<()> {
+        // Determine if fees should be recorded to token0
+        let fee_from_token0 = self.is_fee_on_token0(zero_for_one);
+
+        // Record fees to the appropriate token based on fee_from_token0
+        if fee_from_token0 {
+            if lp_fee > 0 {
+                self.fee_growth_global_0_x64 = fee_growth_global_x64;
+                self.total_fees_token_0 = self
+                    .total_fees_token_0
+                    .checked_add(lp_fee)
+                    .ok_or(ErrorCode::CalculateOverflow)?;
+            }
+            if protocol_fee > 0 {
+                self.protocol_fees_token_0 = self
+                    .protocol_fees_token_0
+                    .checked_add(protocol_fee)
+                    .ok_or(ErrorCode::CalculateOverflow)?;
+            }
+            if fund_fee > 0 {
+                self.fund_fees_token_0 = self
+                    .fund_fees_token_0
+                    .checked_add(fund_fee)
+                    .ok_or(ErrorCode::CalculateOverflow)?;
+            }
+        } else {
+            if lp_fee > 0 {
+                self.fee_growth_global_1_x64 = fee_growth_global_x64;
+                self.total_fees_token_1 = self
+                    .total_fees_token_1
+                    .checked_add(lp_fee)
+                    .ok_or(ErrorCode::CalculateOverflow)?;
+            }
+            if protocol_fee > 0 {
+                self.protocol_fees_token_1 = self
+                    .protocol_fees_token_1
+                    .checked_add(protocol_fee)
+                    .ok_or(ErrorCode::CalculateOverflow)?;
+            }
+            if fund_fee > 0 {
+                self.fund_fees_token_1 = self
+                    .fund_fees_token_1
+                    .checked_add(fund_fee)
+                    .ok_or(ErrorCode::CalculateOverflow)?;
+            }
+        }
+
+        if zero_for_one {
+            self.swap_in_amount_token_0 = self
+                .swap_in_amount_token_0
+                .checked_add(u128::from(amount_0))
+                .ok_or(ErrorCode::CalculateOverflow)?;
+            self.swap_out_amount_token_1 = self
+                .swap_out_amount_token_1
+                .checked_add(u128::from(amount_1))
+                .ok_or(ErrorCode::CalculateOverflow)?;
+        } else {
+            self.swap_in_amount_token_1 = self
+                .swap_in_amount_token_1
+                .checked_add(u128::from(amount_1))
+                .ok_or(ErrorCode::CalculateOverflow)?;
+
+            self.swap_out_amount_token_0 = self
+                .swap_out_amount_token_0
+                .checked_add(u128::from(amount_0))
+                .ok_or(ErrorCode::CalculateOverflow)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -637,8 +847,8 @@ pub struct RewardInfo {
     pub last_update_time: u64,
     /// Q64.64 number indicates how many tokens per second are earned per unit of liquidity.
     pub emissions_per_second_x64: u128,
-    /// The total amount of reward emissioned
-    pub reward_total_emissioned: u64,
+    /// The total amount of reward emitted
+    pub reward_total_emitted: u64,
     /// The total amount of claimed reward
     pub reward_claimed: u64,
     /// Reward token mint.
@@ -1081,13 +1291,9 @@ pub mod pool_test {
 
     mod use_tickarray_bitmap_extension_test {
 
-        use std::ops::Deref;
-
         use super::*;
-
-        use crate::tick_array_bitmap_extension_test::{
-            build_tick_array_bitmap_extension_info, BuildExtensionAccountInfo,
-        };
+        use crate::tick_array_bitmap_extension_test::build_tick_array_bitmap_extension_info;
+        use std::ops::Deref;
 
         pub fn pool_flip_tick_array_bit_helper<'c: 'info, 'info>(
             pool_state: &mut PoolState,
@@ -1115,21 +1321,12 @@ pub mod pool_test {
 
             let mut pool_state = pool_state_refcel.borrow_mut();
 
-            let param: &mut BuildExtensionAccountInfo = &mut BuildExtensionAccountInfo::default();
-            param.key = Pubkey::find_program_address(
-                &[
-                    POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
-                    pool_state.key().as_ref(),
-                ],
-                &crate::id(),
-            )
-            .0;
-            let tick_array_bitmap_extension_info: AccountInfo<'_> =
-                build_tick_array_bitmap_extension_info(param);
+            let tick_array_bitmap_extension_info =
+                build_tick_array_bitmap_extension_info(pool_state.key());
 
             pool_flip_tick_array_bit_helper(
                 &mut pool_state,
-                Some(&tick_array_bitmap_extension_info),
+                Some(tick_array_bitmap_extension_info),
                 vec![
                     -tick_spacing * TICK_ARRAY_SIZE * 513, // tick in extension
                     tick_spacing * TICK_ARRAY_SIZE * 511,
@@ -1174,6 +1371,82 @@ pub mod pool_test {
             assert!(start_index == tick_spacing * TICK_ARRAY_SIZE * 512);
         }
 
+        #[test]
+        fn get_initialized_tick_array_with_extension_info_test() {
+            let tick_spacing = 1;
+            let tick_current = tick_spacing * TICK_ARRAY_SIZE * 511 - 1;
+
+            let pool_state_refcel = build_pool(
+                tick_current,
+                tick_spacing.try_into().unwrap(),
+                tick_math::get_sqrt_price_at_tick(tick_current).unwrap(),
+                0,
+            );
+
+            let mut pool_state = pool_state_refcel.borrow_mut();
+            let tick_array_bitmap_extension_info =
+                build_tick_array_bitmap_extension_info(pool_state.key());
+
+            pool_flip_tick_array_bit_helper(
+                &mut pool_state,
+                Some(tick_array_bitmap_extension_info),
+                vec![
+                    -tick_spacing * TICK_ARRAY_SIZE * 520, // tick in extension
+                    -tick_spacing * TICK_ARRAY_SIZE * 513, // tick in extension
+                    tick_spacing * TICK_ARRAY_SIZE * 511,
+                    tick_spacing * TICK_ARRAY_SIZE * 513, // tick in extension
+                    tick_spacing * TICK_ARRAY_SIZE * 520, // tick in extension
+                ],
+            );
+
+            let (is_first_initilzied, start_index) = pool_state
+                .first_tick_array_index_with_extension_info(
+                    Some(tick_array_bitmap_extension_info),
+                    true,
+                )
+                .unwrap();
+            assert!(is_first_initilzied == false);
+            assert!(start_index == -tick_spacing * TICK_ARRAY_SIZE * 513);
+
+            let next_start_index = pool_state
+                .next_tick_array_index_with_extension_info(
+                    Some(tick_array_bitmap_extension_info),
+                    -tick_spacing * TICK_ARRAY_SIZE * 513,
+                    true,
+                )
+                .unwrap();
+            assert!(next_start_index.unwrap() == -tick_spacing * TICK_ARRAY_SIZE * 520);
+
+            pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 511;
+            let (is_first_initilzied, start_index) = pool_state
+                .first_tick_array_index_with_extension_info(
+                    Some(tick_array_bitmap_extension_info),
+                    false,
+                )
+                .unwrap();
+            assert!(is_first_initilzied == true);
+            assert!(start_index == tick_spacing * TICK_ARRAY_SIZE * 511);
+
+            pool_state.tick_current = tick_spacing * TICK_ARRAY_SIZE * 512;
+            let (is_first_initilzied, start_index) = pool_state
+                .first_tick_array_index_with_extension_info(
+                    Some(tick_array_bitmap_extension_info),
+                    false,
+                )
+                .unwrap();
+            assert!(is_first_initilzied == false);
+            assert!(start_index == tick_spacing * TICK_ARRAY_SIZE * 513);
+
+            let next_start_index = pool_state
+                .next_tick_array_index_with_extension_info(
+                    Some(tick_array_bitmap_extension_info),
+                    tick_spacing * TICK_ARRAY_SIZE * 513,
+                    false,
+                )
+                .unwrap();
+            assert!(next_start_index.unwrap() == tick_spacing * TICK_ARRAY_SIZE * 520);
+        }
+
         mod next_initialized_tick_array_start_index_test {
 
             use super::*;
@@ -1191,19 +1464,8 @@ pub mod pool_test {
 
                 let mut pool_state = pool_state_refcel.borrow_mut();
 
-                let param: &mut BuildExtensionAccountInfo =
-                    &mut BuildExtensionAccountInfo::default();
-                param.key = Pubkey::find_program_address(
-                    &[
-                        POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
-                        pool_state.key().as_ref(),
-                    ],
-                    &crate::id(),
-                )
-                .0;
-
-                let tick_array_bitmap_extension_info: AccountInfo<'_> =
-                    build_tick_array_bitmap_extension_info(param);
+                let tick_array_bitmap_extension_info =
+                    build_tick_array_bitmap_extension_info(pool_state.key());
 
                 pool_flip_tick_array_bit_helper(
                     &mut pool_state,
@@ -1290,18 +1552,8 @@ pub mod pool_test {
 
                 let mut pool_state = pool_state_refcel.borrow_mut();
 
-                let param: &mut BuildExtensionAccountInfo =
-                    &mut BuildExtensionAccountInfo::default();
-                param.key = Pubkey::find_program_address(
-                    &[
-                        POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
-                        pool_state.key().as_ref(),
-                    ],
-                    &crate::id(),
-                )
-                .0;
-                let tick_array_bitmap_extension_info: AccountInfo<'_> =
-                    build_tick_array_bitmap_extension_info(param);
+                let tick_array_bitmap_extension_info =
+                    build_tick_array_bitmap_extension_info(pool_state.key());
 
                 pool_flip_tick_array_bit_helper(
                     &mut pool_state,
@@ -1378,19 +1630,8 @@ pub mod pool_test {
 
                 let mut pool_state = pool_state_refcel.borrow_mut();
 
-                let param: &mut BuildExtensionAccountInfo =
-                    &mut BuildExtensionAccountInfo::default();
-                param.key = Pubkey::find_program_address(
-                    &[
-                        POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
-                        pool_state.key().as_ref(),
-                    ],
-                    &crate::id(),
-                )
-                .0;
-
-                let tick_array_bitmap_extension_info: AccountInfo<'_> =
-                    build_tick_array_bitmap_extension_info(param);
+                let tick_array_bitmap_extension_info =
+                    build_tick_array_bitmap_extension_info(pool_state.key());
 
                 pool_flip_tick_array_bit_helper(
                     &mut pool_state,
@@ -1436,18 +1677,8 @@ pub mod pool_test {
 
                 let mut pool_state = pool_state_refcel.borrow_mut();
 
-                let param: &mut BuildExtensionAccountInfo =
-                    &mut BuildExtensionAccountInfo::default();
-                param.key = Pubkey::find_program_address(
-                    &[
-                        POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
-                        pool_state.key().as_ref(),
-                    ],
-                    &crate::id(),
-                )
-                .0;
-                let tick_array_bitmap_extension_info: AccountInfo<'_> =
-                    build_tick_array_bitmap_extension_info(param);
+                let tick_array_bitmap_extension_info =
+                    build_tick_array_bitmap_extension_info(pool_state.key());
 
                 pool_flip_tick_array_bit_helper(
                     &mut pool_state,
@@ -1481,14 +1712,20 @@ pub mod pool_test {
 
             #[test]
             fn no_initialized_tick_array() {
-                let mut pool_state = PoolState::default();
-                pool_state.tick_spacing = 1;
-                pool_state.tick_current = 0;
+                let tick_spacing = 1;
+                let tick_current = 0;
 
-                let param: &mut BuildExtensionAccountInfo =
-                    &mut BuildExtensionAccountInfo::default();
-                let tick_array_bitmap_extension_info: AccountInfo<'_> =
-                    build_tick_array_bitmap_extension_info(param);
+                let pool_state_refcel = build_pool(
+                    tick_current,
+                    tick_spacing.try_into().unwrap(),
+                    tick_math::get_sqrt_price_at_tick(tick_current).unwrap(),
+                    0,
+                );
+
+                let mut pool_state = pool_state_refcel.borrow_mut();
+
+                let tick_array_bitmap_extension_info =
+                    build_tick_array_bitmap_extension_info(pool_state.key());
 
                 pool_flip_tick_array_bit_helper(
                     &mut pool_state,
@@ -1539,18 +1776,8 @@ pub mod pool_test {
 
                 let mut pool_state = pool_state_refcel.borrow_mut();
 
-                let param: &mut BuildExtensionAccountInfo =
-                    &mut BuildExtensionAccountInfo::default();
-                param.key = Pubkey::find_program_address(
-                    &[
-                        POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
-                        pool_state.key().as_ref(),
-                    ],
-                    &crate::id(),
-                )
-                .0;
-                let tick_array_bitmap_extension_info: AccountInfo<'_> =
-                    build_tick_array_bitmap_extension_info(param);
+                let tick_array_bitmap_extension_info =
+                    build_tick_array_bitmap_extension_info(pool_state.key());
 
                 pool_flip_tick_array_bit_helper(
                     &mut pool_state,
@@ -1613,14 +1840,15 @@ pub mod pool_test {
             let swap_in_amount_token_1: u128 = 0x11223344556677008899aabbccddeeff;
             let swap_out_amount_token_0: u128 = 0x11223344556677880099aabbccddeeff;
             let status: u8 = 0x1b;
-            let padding: [u8; 7] = [0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18];
+            let fee_on: u8 = 0x19;
+            let padding: [u8; 6] = [0x12, 0x13, 0x14, 0x15, 0x16, 0x17];
             // RewardInfo
             let reward_state: u8 = 0x1c;
             let open_time: u64 = 0x123456789abc0def;
             let end_time: u64 = 0x123456789ab0cdef;
             let last_update_time: u64 = 0x123456789a0bcdef;
             let emissions_per_second_x64: u128 = 0x11223344556677889900aabbccddeeff;
-            let reward_total_emissioned: u64 = 0x1234567890abcdef;
+            let reward_total_emitted: u64 = 0x1234567890abcdef;
             let reward_claimed: u64 = 0x1234567809abcdef;
             let token_mint = Pubkey::new_unique();
             let token_vault = Pubkey::new_unique();
@@ -1641,7 +1869,7 @@ pub mod pool_test {
                 .copy_from_slice(&emissions_per_second_x64.to_le_bytes());
             offset += 16;
             reward_info_data[offset..offset + 8]
-                .copy_from_slice(&reward_total_emissioned.to_le_bytes());
+                .copy_from_slice(&reward_total_emitted.to_le_bytes());
             offset += 8;
             reward_info_data[offset..offset + 8].copy_from_slice(&reward_claimed.to_le_bytes());
             offset += 8;
@@ -1684,14 +1912,16 @@ pub mod pool_test {
             let fund_fees_token_1: u64 = 0x1230456789abcdef;
             let pool_open_time: u64 = 0x1203456789abcdef;
             let recent_epoch: u64 = 0x1023456789abcdef;
-            let mut padding1: [u64; 24] = [0u64; 24];
-            let mut padding1_data = [0u8; 8 * 24];
+            let dynamic_fee_info_data = [0u8; DynamicFeeInfo::LEN];
+            let mut padding1: [u64; 14] = [0u64; 14];
+            let mut padding1_data = [0u8; 8 * 14];
             let mut offset = 0;
-            for i in 0..24 {
+            for i in 0..14 {
                 padding1[i] = u64::MAX - i as u64;
                 padding1_data[offset..offset + 8].copy_from_slice(&padding1[i].to_le_bytes());
                 offset += 8;
             }
+            assert_eq!(offset, padding1_data.len());
             let mut padding2: [u64; 32] = [0u64; 32];
             let mut padding2_data = [0u8; 8 * 32];
             let mut offset = 0;
@@ -1755,8 +1985,10 @@ pub mod pool_test {
             offset += 16;
             pool_data[offset..offset + 1].copy_from_slice(&status.to_le_bytes());
             offset += 1;
-            pool_data[offset..offset + 7].copy_from_slice(&padding);
-            offset += 7;
+            pool_data[offset..offset + 1].copy_from_slice(&fee_on.to_le_bytes());
+            offset += 1;
+            pool_data[offset..offset + 6].copy_from_slice(&padding);
+            offset += 6;
             pool_data[offset..offset + RewardInfo::LEN * REWARD_NUM]
                 .copy_from_slice(&reward_info_datas);
             offset += RewardInfo::LEN * REWARD_NUM;
@@ -1780,8 +2012,10 @@ pub mod pool_test {
             offset += 8;
             pool_data[offset..offset + 8].copy_from_slice(&recent_epoch.to_le_bytes());
             offset += 8;
-            pool_data[offset..offset + 8 * 24].copy_from_slice(&padding1_data);
-            offset += 8 * 24;
+            pool_data[offset..offset + DynamicFeeInfo::LEN].copy_from_slice(&dynamic_fee_info_data);
+            offset += DynamicFeeInfo::LEN;
+            pool_data[offset..offset + 8 * 14].copy_from_slice(&padding1_data);
+            offset += 8 * 14;
             pool_data[offset..offset + 8 * 32].copy_from_slice(&padding2_data);
             offset += 8 * 32;
 
@@ -1844,6 +2078,8 @@ pub mod pool_test {
             assert_eq!(unpack_swap_out_amount_token_0, swap_out_amount_token_0);
             let unpack_status = unpack_data.status;
             assert_eq!(unpack_status, status);
+            let unpack_fee_on = unpack_data.fee_on;
+            assert_eq!(unpack_fee_on, fee_on);
             let unpack_padding = unpack_data.padding;
             assert_eq!(unpack_padding, padding);
 
@@ -1858,8 +2094,8 @@ pub mod pool_test {
                 assert_eq!(unpack_last_update_time, last_update_time);
                 let unpack_emissions_per_second_x64 = reward.emissions_per_second_x64;
                 assert_eq!(unpack_emissions_per_second_x64, emissions_per_second_x64);
-                let unpack_reward_total_emissioned = reward.reward_total_emissioned;
-                assert_eq!(unpack_reward_total_emissioned, reward_total_emissioned);
+                let unpack_reward_total_emitted = reward.reward_total_emitted;
+                assert_eq!(unpack_reward_total_emitted, reward_total_emitted);
                 let unpack_reward_claimed = reward.reward_claimed;
                 assert_eq!(unpack_reward_claimed, reward_claimed);
                 let unpack_token_mint = reward.token_mint;

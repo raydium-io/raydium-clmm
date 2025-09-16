@@ -10,7 +10,7 @@ pub enum ErrorCode {
     InvalidUpdateConfigFlag,
     #[msg("Account lack")]
     AccountLack,
-    #[msg("Remove liquitity, collect fees owed and reward then you can close position account")]
+    #[msg("Remove liquidity, collect fees owed and reward then you can close position account")]
     ClosePositionErr,
 
     #[msg("Minting amount should be greater than 0")]
@@ -66,7 +66,7 @@ pub enum ErrorCode {
     InvalidInputPoolVault,
     #[msg("Swap input or output amount is too small")]
     TooSmallInputOrOutputAmount,
-    #[msg("Not enought tick array account")]
+    #[msg("Not enough tick array account")]
     NotEnoughTickArrayAccount,
     #[msg("Invalid first tick array account")]
     InvalidFirstTickArrayAccount,
@@ -89,9 +89,9 @@ pub enum ErrorCode {
     #[msg("Invalid reward period")]
     InvalidRewardPeriod,
     #[msg(
-        "Modification of emissiones is allowed within 72 hours from the end of the previous cycle"
+        "Modification of emissions is allowed within 72 hours from the end of the previous cycle"
     )]
-    NotApproveUpdateRewardEmissiones,
+    NotApproveUpdateRewardEmissions,
     #[msg("uninitialized reward info")]
     UnInitializedRewardInfo,
 
@@ -107,4 +107,15 @@ pub enum ErrorCode {
     CalculateOverflow,
     #[msg("TransferFee calculate not match")]
     TransferFeeCalculateNotMatch,
+    #[msg("Order already fully filled, cannot modify")]
+    OrderAlreadyFilled,
+    #[msg("Invalid order phase")]
+    InvalidOrderPhase,
+    #[msg("Invalid limit order amount")]
+    InvalidLimitOrderAmount,
+
+    #[msg("Invalid dynamic fee config params")]
+    InvalidDynamicFeeConfigParams,
+    #[msg("Invalid fee on which token (must be 0, 1, or 2)")]
+    InvalidFeeOn,
 }

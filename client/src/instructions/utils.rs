@@ -1,8 +1,8 @@
 use anchor_lang::AccountDeserialize;
 use anyhow::Result;
-use raydium_amm_v3::libraries::fixed_point_64;
-use raydium_amm_v3::libraries::*;
-use raydium_amm_v3::states::*;
+use raydium_clmm::libraries::fixed_point_64;
+use raydium_clmm::libraries::*;
+use raydium_clmm::states::*;
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::program_pack::Pack;
 use solana_sdk::{account::Account, pubkey::Pubkey};
@@ -464,7 +464,7 @@ fn swap_compute(
         } else {
             step.sqrt_price_next_x64
         };
-        let swap_step = swap_math::compute_swap_step(
+        let swap_step = swap_math::compute_swap(
             state.sqrt_price_x64,
             target_price,
             state.liquidity,
@@ -472,7 +472,7 @@ fn swap_compute(
             fee,
             is_base_input,
             zero_for_one,
-            1,
+            pool_state.is_fee_on_input(zero_for_one),
         )
         .unwrap();
         state.sqrt_price_x64 = swap_step.sqrt_price_next_x64;

@@ -1,7 +1,8 @@
-use super::pool::PoolState;
 use crate::error::ErrorCode;
-use crate::libraries::{liquidity_math, tick_math};
+use crate::libraries::U128;
+use crate::libraries::{fixed_point_64, full_math::MulDiv, liquidity_math, tick_math};
 use crate::pool::{RewardInfo, REWARD_NUM};
+use crate::states::config::FEE_RATE_DENOMINATOR_VALUE;
 use crate::util::*;
 use crate::Result;
 use anchor_lang::{prelude::*, system_program};
@@ -11,8 +12,18 @@ use std::convert::identity;
 pub const TICK_ARRAY_SEED: &str = "tick_array";
 pub const TICK_ARRAY_SIZE_USIZE: usize = 60;
 pub const TICK_ARRAY_SIZE: i32 = 60;
-// pub const MIN_TICK_ARRAY_START_INDEX: i32 = -443636;
-// pub const MAX_TICK_ARRAY_START_INDEX: i32 = 306600;
+
+/// Result of limit order matching
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LimitOrderMatchResult {
+    /// Amount of input tokens consumed by the limit order
+    pub amount_in: u64,
+    /// Amount of output tokens produced by the limit order
+    pub amount_out: u64,
+    /// Amount of fee tokens paid by the swap taker
+    pub amm_fee_amount: u64,
+}
+
 #[account(zero_copy(unsafe))]
 #[repr(C, packed)]
 pub struct TickArrayState {
@@ -45,7 +56,7 @@ impl TickArrayState {
         payer: AccountInfo<'info>,
         tick_array_account_info: AccountInfo<'info>,
         system_program: AccountInfo<'info>,
-        pool_state_loader: &AccountLoader<'info, PoolState>,
+        pool_state: Pubkey,
         tick_array_start_index: i32,
         tick_spacing: u16,
     ) -> Result<AccountLoad<'info, TickArrayState>> {
@@ -58,7 +69,7 @@ impl TickArrayState {
             let (expect_pda_address, bump) = Pubkey::find_program_address(
                 &[
                     TICK_ARRAY_SEED.as_bytes(),
-                    pool_state_loader.key().as_ref(),
+                    pool_state.key().as_ref(),
                     &tick_array_start_index.to_be_bytes(),
                 ],
                 &crate::id(),
@@ -71,7 +82,7 @@ impl TickArrayState {
                 tick_array_account_info.clone(),
                 &[
                     TICK_ARRAY_SEED.as_bytes(),
-                    pool_state_loader.key().as_ref(),
+                    pool_state.key().as_ref(),
                     &tick_array_start_index.to_be_bytes(),
                     &[bump],
                 ],
@@ -86,7 +97,7 @@ impl TickArrayState {
                 tick_array_account.initialize(
                     tick_array_start_index,
                     tick_spacing,
-                    pool_state_loader.key(),
+                    pool_state.key(),
                 )?;
             }
             tick_array_state_loader
@@ -130,6 +141,11 @@ impl TickArrayState {
         Ok(&mut self.ticks[offset_in_array])
     }
 
+    pub fn get_tick_state(&self, tick_index: i32, tick_spacing: u16) -> Result<&TickState> {
+        let offset_in_array = self.get_tick_offset_in_array(tick_index, tick_spacing)?;
+        Ok(&self.ticks[offset_in_array])
+    }
+
     pub fn update_tick_state(
         &mut self,
         tick_index: i32,
@@ -158,23 +174,17 @@ impl TickArrayState {
     /// Base on swap directioin, return the first initialized tick in the tick array.
     pub fn first_initialized_tick(&mut self, zero_for_one: bool) -> Result<&mut TickState> {
         if zero_for_one {
-            let mut i = TICK_ARRAY_SIZE - 1;
-            while i >= 0 {
-                if self.ticks[i as usize].is_initialized() {
-                    return Ok(self.ticks.get_mut(i as usize).unwrap());
-                }
-                i = i - 1;
-            }
+            self.ticks
+                .iter_mut()
+                .rev()
+                .find(|tick| tick.is_initialized())
+                .ok_or_else(|| error!(ErrorCode::InvalidTickArray))
         } else {
-            let mut i = 0;
-            while i < TICK_ARRAY_SIZE_USIZE {
-                if self.ticks[i].is_initialized() {
-                    return Ok(self.ticks.get_mut(i).unwrap());
-                }
-                i = i + 1;
-            }
+            self.ticks
+                .iter_mut()
+                .find(|tick| tick.is_initialized())
+                .ok_or_else(|| error!(ErrorCode::InvalidTickArray))
         }
-        err!(ErrorCode::InvalidTickArray)
     }
 
     /// Get next initialized tick in tick array, `current_tick_index` can be any tick index, in other words, `current_tick_index` not exactly a point in the tickarray,
@@ -191,26 +201,18 @@ impl TickArrayState {
         if current_tick_array_start_index != self.start_tick_index {
             return Ok(None);
         }
-        let mut offset_in_array =
+        let offset_in_array =
             (current_tick_index - self.start_tick_index) / i32::from(tick_spacing);
 
-        if zero_for_one {
-            while offset_in_array >= 0 {
-                if self.ticks[offset_in_array as usize].is_initialized() {
-                    return Ok(self.ticks.get_mut(offset_in_array as usize));
-                }
-                offset_in_array = offset_in_array - 1;
-            }
+        let found_index = if zero_for_one {
+            (0..=offset_in_array)
+                .rev()
+                .find(|&i| self.ticks[i as usize].is_initialized())
         } else {
-            offset_in_array = offset_in_array + 1;
-            while offset_in_array < TICK_ARRAY_SIZE {
-                if self.ticks[offset_in_array as usize].is_initialized() {
-                    return Ok(self.ticks.get_mut(offset_in_array as usize));
-                }
-                offset_in_array = offset_in_array + 1;
-            }
-        }
-        Ok(None)
+            ((offset_in_array + 1)..TICK_ARRAY_SIZE)
+                .find(|&i| self.ticks[i as usize].is_initialized())
+        };
+        Ok(found_index.map(|i| &mut self.ticks[i as usize]))
     }
 
     /// Base on swap directioin, return the next tick array start index.
@@ -279,14 +281,25 @@ pub struct TickState {
     pub fee_growth_outside_0_x64: u128,
     pub fee_growth_outside_1_x64: u128,
 
-    // Reward growth per unit of liquidity like fee, array of Q64.64
+    /// Reward growth per unit of liquidity like fee, array of Q64.64
     pub reward_growths_outside_x64: [u128; REWARD_NUM],
-    // Unused bytes for future upgrades.
-    pub padding: [u32; 13],
+
+    // Limit order related fields
+    /// Order phase of the tick, used as a FIFO cohort index for limit orders
+    pub order_phase: u64,
+    /// The amount of limit orders that have never been matched,
+    /// only counts newly opened orders, not partially filled ones
+    pub orders_amount: u64,
+    /// The amount of limit orders that have been partially filled,
+    /// including partially filled orders and unfulfilled orders
+    pub part_filled_orders_total: u64,
+    /// Remaining part filled orders amount
+    pub part_filled_orders_remaining: u64,
+    pub padding: [u32; 5],
 }
 
 impl TickState {
-    pub const LEN: usize = 4 + 16 + 16 + 16 + 16 + 16 * REWARD_NUM + 16 + 16 + 8 + 8 + 4;
+    pub const LEN: usize = 4 + 16 + 16 + 16 + 16 + 16 * REWARD_NUM + 4 * 8 + 4 * 5;
 
     pub fn initialize(&mut self, tick: i32, tick_spacing: u16) -> Result<()> {
         if TickState::check_is_out_of_boundary(tick) {
@@ -314,8 +327,10 @@ impl TickState {
             liquidity_math::add_delta(liquidity_gross_before, liquidity_delta)?;
 
         // Either liquidity_gross_after becomes 0 (uninitialized) XOR liquidity_gross_before
-        // was zero (initialized)
-        let flipped = (liquidity_gross_after == 0) != (liquidity_gross_before == 0);
+        // was zero (initialized), and there are no unfilled limit orders
+        let no_unfilled_orders = self.limit_order_unfilled_amount()? == 0;
+        let flipped =
+            ((liquidity_gross_after == 0) != (liquidity_gross_before == 0)) && no_unfilled_orders;
         if liquidity_gross_before == 0 {
             // by convention, we assume that all growth before a tick was initialized happened _below_ the tick
             if self.tick <= tick_current {
@@ -375,8 +390,206 @@ impl TickState {
         self.reward_growths_outside_x64 = [0; REWARD_NUM];
     }
 
-    pub fn is_initialized(self) -> bool {
-        self.liquidity_gross != 0
+    pub fn is_initialized(&self) -> bool {
+        self.has_liquidity() || self.has_limit_orders()
+    }
+
+    pub fn has_limit_orders(&self) -> bool {
+        self.orders_amount > 0 || self.part_filled_orders_remaining > 0
+    }
+
+    pub fn has_liquidity(&self) -> bool {
+        self.liquidity_gross > 0
+    }
+    /// Get the output amount of a limit order
+    /// amount_in: the amount of the input token
+    /// zero_for_one: the direction of the input token
+    /// output amount is rounded down
+    pub fn get_limit_order_output(amount_in: u64, tick: i32, zero_for_one: bool) -> Result<u64> {
+        let output_amount = if zero_for_one {
+            let token_0_price_x64 = tick_math::get_price_at_tick(tick, false)?;
+            // Convert token0 amount to token1 amount using token0 price
+            // token1_amount = token0_amount * token_0_price_x64 / 2^64
+            U128::from(amount_in)
+                .mul_div_floor(token_0_price_x64, U128::from(fixed_point_64::Q64))
+                .ok_or(ErrorCode::CalculateOverflow)?
+                .as_u64()
+        } else {
+            let token_0_price_x64 = tick_math::get_price_at_tick(tick, true)?;
+            // Convert token1 amount to token0 amount using token1 price (1/token_0_price_x64)
+            // token0_amount = token1_amount * 2^64 / token_0_price_x64
+            U128::from(amount_in)
+                .mul_div_floor(U128::from(fixed_point_64::Q64), token_0_price_x64)
+                .ok_or(ErrorCode::CalculateOverflow)?
+                .as_u64()
+        };
+        Ok(output_amount)
+    }
+
+    /// Given the output amount from a limit order, calculate the required input token amount
+    /// the direction of the limit order is always opposite to the direction of the swap
+    /// amount_out: the amount of the output token(limit order token)
+    /// zero_for_one: the direction of the limit order
+    /// input amount is rounded up
+    pub fn get_limit_order_input(amount_out: u64, tick: i32, zero_for_one: bool) -> Result<u64> {
+        let amount_in = if zero_for_one {
+            let token_0_price_x64 = tick_math::get_price_at_tick(tick, true)?;
+            // token1_consumed = token0_executed * token_0_price_x64 / 2^64
+            U128::from(amount_out)
+                .mul_div_ceil(token_0_price_x64, U128::from(fixed_point_64::Q64))
+                .ok_or(ErrorCode::CalculateOverflow)?
+                .as_u64()
+        } else {
+            let token_0_price_x64 = tick_math::get_price_at_tick(tick, false)?;
+            // token0_consumed = token1_executed * 2^64 / token_0_price_x64
+            U128::from(amount_out)
+                .mul_div_ceil(U128::from(fixed_point_64::Q64), token_0_price_x64)
+                .ok_or(ErrorCode::CalculateOverflow)?
+                .as_u64()
+        };
+        Ok(amount_in)
+    }
+
+    pub fn limit_order_unfilled_amount(&self) -> Result<u64> {
+        let total_unfilled_amount = self
+            .orders_amount
+            .checked_add(self.part_filled_orders_remaining)
+            .ok_or(ErrorCode::CalculateOverflow)?;
+        Ok(total_unfilled_amount)
+    }
+
+    pub fn match_limit_order(
+        &mut self,
+        swap_amount: u64,
+        swap_direction_zero_for_one: bool,
+        is_base_input: bool,
+        fee_rate: u32,
+        is_fee_on_input: bool,
+    ) -> Result<LimitOrderMatchResult> {
+        let mut result = LimitOrderMatchResult::default();
+
+        let total_unfilled_amount = self.limit_order_unfilled_amount()?;
+        if swap_amount == 0 || total_unfilled_amount == 0 {
+            return Ok(result);
+        }
+
+        if is_base_input {
+            // Assume the input amount can be fully consumed, calculate the amount of limit order tokens matched
+            if is_fee_on_input {
+                result.amm_fee_amount = swap_amount
+                    .mul_div_ceil((fee_rate).into(), u64::from(FEE_RATE_DENOMINATOR_VALUE))
+                    .ok_or(ErrorCode::CalculateOverflow)?;
+                result.amount_in = swap_amount - result.amm_fee_amount;
+            } else {
+                result.amount_in = swap_amount;
+            }
+            result.amount_out = TickState::get_limit_order_output(
+                result.amount_in,
+                self.tick,
+                swap_direction_zero_for_one,
+            )?;
+            // If the amount of limit order tokens matched is greater than the total unfilled amount,
+            // it means the input cannot be fully consumed, so recalculate the input and output amounts
+            if result.amount_out > total_unfilled_amount {
+                result.amount_out = total_unfilled_amount;
+                result.amount_in = TickState::get_limit_order_input(
+                    total_unfilled_amount,
+                    self.tick,
+                    !swap_direction_zero_for_one,
+                )?;
+                if is_fee_on_input {
+                    result.amm_fee_amount = result
+                        .amount_in
+                        .mul_div_ceil(
+                            (fee_rate).into(),
+                            u64::from(FEE_RATE_DENOMINATOR_VALUE - fee_rate),
+                        )
+                        .ok_or(ErrorCode::CalculateOverflow)?;
+                }
+                // Fee from output will be calculated at the end
+            }
+        } else {
+            // swap_amount is the desired net output (after fee deduction if fee is from output)
+            let net_output = swap_amount.min(total_unfilled_amount);
+            result.amount_out = if is_fee_on_input {
+                net_output
+            } else {
+                // total_output = net_output / (1 - fee_rate / FEE_RATE_DENOMINATOR)
+                net_output
+                    .mul_div_ceil(
+                        u64::from(FEE_RATE_DENOMINATOR_VALUE).into(),
+                        (FEE_RATE_DENOMINATOR_VALUE - fee_rate).into(),
+                    )
+                    .ok_or(ErrorCode::CalculateOverflow)?
+                    .min(total_unfilled_amount)
+            };
+            result.amount_in = TickState::get_limit_order_input(
+                result.amount_out,
+                self.tick,
+                !swap_direction_zero_for_one,
+            )?;
+            if is_fee_on_input {
+                result.amm_fee_amount = result
+                    .amount_in
+                    .mul_div_ceil(
+                        (fee_rate).into(),
+                        u64::from(FEE_RATE_DENOMINATOR_VALUE - fee_rate),
+                    )
+                    .ok_or(ErrorCode::CalculateOverflow)?;
+            }
+            // Fee from output will be calculated at the end
+        }
+        require_gt!(result.amount_out, 0, ErrorCode::ZeroAmountSpecified);
+        require_gt!(result.amount_in, 0, ErrorCode::ZeroAmountSpecified);
+
+        let mut consume_from_part_remaining = 0;
+        // Consume part_filled_orders_remaining first (FIFO priority)
+        if self.part_filled_orders_remaining > 0 {
+            require_gt!(self.part_filled_orders_total, 0);
+            consume_from_part_remaining = self.part_filled_orders_remaining.min(result.amount_out);
+            self.part_filled_orders_remaining = self
+                .part_filled_orders_remaining
+                .saturating_sub(consume_from_part_remaining);
+        }
+        let amount_out_continue_to_consume = result
+            .amount_out
+            .saturating_sub(consume_from_part_remaining);
+
+        // If there is still more to consume, consume from orders_amount
+        if amount_out_continue_to_consume > 0 {
+            require_eq!(self.part_filled_orders_remaining, 0);
+            require_gte!(
+                self.orders_amount,
+                amount_out_continue_to_consume,
+                ErrorCode::InvalidLimitOrderAmount
+            );
+            // Order phase increases when consuming from orders_amount
+            self.order_phase = self.order_phase.saturating_add(1);
+
+            // Set part_filled_orders_total to the original orders_amount
+            // This represents the total amount that was moved to partial fill state
+            self.part_filled_orders_total = self.orders_amount;
+
+            // Move remaining orders_amount to part_filled_orders_remaining
+            self.part_filled_orders_remaining = self
+                .part_filled_orders_remaining
+                .saturating_add(self.orders_amount - amount_out_continue_to_consume);
+            self.orders_amount = 0;
+        }
+        // Calculate fee and deduct from output if fee is from output (after limit order consumption calculation)
+        // Limit order consumption calculation needs gross output, so we calculate and deduct fee at the end
+        if !is_fee_on_input {
+            result.amm_fee_amount = result
+                .amount_out
+                .mul_div_ceil((fee_rate).into(), u64::from(FEE_RATE_DENOMINATOR_VALUE))
+                .ok_or(ErrorCode::CalculateOverflow)?;
+            // Deduct fee from output: user receives net output
+            result.amount_out = result
+                .amount_out
+                .checked_sub(result.amm_fee_amount)
+                .ok_or(ErrorCode::CalculateOverflow)?;
+        }
+        Ok(result)
     }
 
     /// Common checks for a valid tick input.
@@ -557,9 +770,8 @@ pub mod tick_array_test {
         new_tick_array
             .initialize(start_index, tick_spacing, pool_id)
             .unwrap();
-
+        new_tick_array.initialized_tick_count = tick_states.len() as u8;
         for tick_state in tick_states {
-            assert!(tick_state.tick != 0);
             let offset = new_tick_array
                 .get_tick_offset_in_array(tick_state.tick, tick_spacing)
                 .unwrap();
@@ -1333,15 +1545,13 @@ pub mod tick_array_test {
                 0x11223344556600778899aabbccddeeff,
                 0x11223344556677008899aabbccddeeff,
             ];
-            let mut tick_padding: [u32; 13] = [0u32; 13];
-            let mut tick_padding_data = [0u8; 4 * 13];
-            let mut offset = 0;
-            for i in 0..13 {
-                tick_padding[i] = u32::MAX - 3 * i as u32;
-                tick_padding_data[offset..offset + 4]
-                    .copy_from_slice(&tick_padding[i].to_le_bytes());
-                offset += 4;
-            }
+
+            // Limit order related fields
+            let limit_order_amount: u64 = 0x1122334455667788;
+            let total_weight: u64 = 0x8877665544332211;
+            let filled_per_weight_zero_for_one_x64: u128 = 0x112233445566778899aabbccddeeff00;
+            let filled_per_weight_one_for_zero_x64: u128 = 0x00112233445566778899aabbccddeeff;
+            let cross_id: u32 = 0x12345678;
 
             let mut tick_data = [0u8; TickState::LEN];
             let mut offset = 0;
@@ -1360,8 +1570,20 @@ pub mod tick_array_test {
                     .copy_from_slice(&reward_growths_outside_x64[i].to_le_bytes());
                 offset += 16;
             }
-            tick_data[offset..offset + 4 * 13].copy_from_slice(&tick_padding_data);
-            offset += 4 * 13;
+            // Limit order fields
+            tick_data[offset..offset + 8].copy_from_slice(&limit_order_amount.to_le_bytes());
+            offset += 8;
+            tick_data[offset..offset + 8].copy_from_slice(&total_weight.to_le_bytes());
+            offset += 8;
+            tick_data[offset..offset + 16]
+                .copy_from_slice(&filled_per_weight_zero_for_one_x64.to_le_bytes());
+            offset += 16;
+            tick_data[offset..offset + 16]
+                .copy_from_slice(&filled_per_weight_one_for_zero_x64.to_le_bytes());
+            offset += 16;
+            tick_data[offset..offset + 4].copy_from_slice(&cross_id.to_le_bytes());
+            offset += 4;
+
             assert_eq!(offset, tick_data.len());
             assert_eq!(tick_data.len(), core::mem::size_of::<TickState>());
 
@@ -1419,8 +1641,6 @@ pub mod tick_array_test {
                     unpack_reward_growths_outside_x64,
                     reward_growths_outside_x64
                 );
-                let unpack_tick_padding = tick_item.padding;
-                assert_eq!(unpack_tick_padding, tick_padding);
             }
             let unpack_initialized_tick_count = unpack_data.initialized_tick_count;
             assert_eq!(unpack_initialized_tick_count, initialized_tick_count);

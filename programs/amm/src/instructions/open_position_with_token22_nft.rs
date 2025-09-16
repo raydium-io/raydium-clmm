@@ -1,6 +1,6 @@
 use super::open_position::open_position;
 use crate::states::*;
-use crate::util::create_position_nft_mint_with_extensions;
+use crate::util::create_nft_mint_with_extensions;
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::{create, AssociatedToken, Create};
 use anchor_spl::token::Token;
@@ -142,7 +142,7 @@ pub fn open_position_with_token22_nft<'a, 'b, 'c: 'info, 'info>(
     with_metadata: bool,
     base_flag: Option<bool>,
 ) -> Result<()> {
-    create_position_nft_mint_with_extensions(
+    create_nft_mint_with_extensions(
         &ctx.accounts.payer,
         &ctx.accounts.position_nft_mint,
         &ctx.accounts.pool_state.to_account_info(),

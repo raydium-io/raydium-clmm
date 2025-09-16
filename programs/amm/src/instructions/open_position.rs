@@ -4,8 +4,7 @@ use crate::libraries::tick_math;
 use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program;
-use anchor_lang::system_program::{transfer, Transfer};
+
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::metadata::{
     create_metadata_accounts_v3,
@@ -13,13 +12,8 @@ use anchor_spl::metadata::{
     CreateMetadataAccountsV3, Metadata,
 };
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use anchor_spl::token_2022::spl_token_2022::{
-    self,
-    extension::{BaseStateWithExtensions, StateWithExtensions},
-    instruction::AuthorityType,
-};
+use anchor_spl::token_2022::spl_token_2022::instruction::AuthorityType;
 use anchor_spl::token_2022::{self, Token2022};
-use anchor_spl::token_2022_extensions::spl_token_metadata_interface;
 use anchor_spl::token_interface;
 use std::cell::RefMut;
 #[cfg(feature = "enable-log")]
@@ -258,13 +252,13 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
         )?;
 
         // Why not use anchor's `init-if-needed` to create?
-        // Beacuse `tick_array_lower` and `tick_array_upper` can be the same account, anchor can initialze tick_array_lower but it causes a crash when anchor to initialze the `tick_array_upper`,
-        // the problem is variable scope, tick_array_lower_loader not exit to save the discriminator while build tick_array_upper_loader.
+        // Because `tick_array_lower` and `tick_array_upper` can be the same account, anchor can initialize tick_array_lower but it causes a crash when anchor tries to initialize the `tick_array_upper`,
+        // the problem is variable scope, tick_array_lower_loader does not exist to save the discriminator while building tick_array_upper_loader.
         let tick_array_lower_loader = TickArrayState::get_or_create_tick_array(
             payer.to_account_info(),
             tick_array_lower_loader.to_account_info(),
             system_program.to_account_info(),
-            &pool_state_loader,
+            pool_state_loader.key(),
             tick_array_lower_start_index,
             pool_state.tick_spacing,
         )?;
@@ -277,7 +271,7 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
                     payer.to_account_info(),
                     tick_array_upper_loader.to_account_info(),
                     system_program.to_account_info(),
-                    &pool_state_loader,
+                    pool_state_loader.key(),
                     tick_array_upper_start_index,
                     pool_state.tick_spacing,
                 )?
@@ -832,66 +826,6 @@ fn initialize_metadata_account<'info>(
         true,
         None,
     )?;
-    Ok(())
-}
-
-pub fn initialize_token_metadata_extension<'info>(
-    payer: &Signer<'info>,
-    position_nft_mint: &AccountInfo<'info>,
-    mint_authority: &AccountInfo<'info>,
-    metadata_update_authority: &AccountInfo<'info>,
-    token_2022_program: &Program<'info, Token2022>,
-    name: String,
-    symbol: String,
-    uri: String,
-    signers_seeds: &[&[&[u8]]],
-) -> Result<()> {
-    let metadata = spl_token_metadata_interface::state::TokenMetadata {
-        name,
-        symbol,
-        uri,
-        ..Default::default()
-    };
-
-    let mint_data = position_nft_mint.try_borrow_data()?;
-    let mint_state_unpacked =
-        StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
-    let new_account_len =
-        mint_state_unpacked.try_get_new_account_len_for_variable_len_extension(&metadata)?;
-    let new_rent_exempt_lamports = Rent::get()?.minimum_balance(new_account_len);
-    let additional_lamports = new_rent_exempt_lamports.saturating_sub(position_nft_mint.lamports());
-    // CPI call will borrow the account data
-    drop(mint_data);
-
-    let cpi_context = CpiContext::new(
-        token_2022_program.to_account_info(),
-        Transfer {
-            from: payer.to_account_info(),
-            to: position_nft_mint.to_account_info(),
-        },
-    );
-    transfer(cpi_context, additional_lamports)?;
-
-    solana_program::program::invoke_signed(
-        &spl_token_metadata_interface::instruction::initialize(
-            token_2022_program.key,
-            position_nft_mint.key,
-            metadata_update_authority.key,
-            position_nft_mint.key,
-            &mint_authority.key(),
-            metadata.name,
-            metadata.symbol,
-            metadata.uri,
-        ),
-        &[
-            position_nft_mint.to_account_info(),
-            mint_authority.to_account_info(),
-            metadata_update_authority.to_account_info(),
-            token_2022_program.to_account_info(),
-        ],
-        signers_seeds,
-    )?;
-
     Ok(())
 }
 

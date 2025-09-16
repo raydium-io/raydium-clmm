@@ -4,9 +4,9 @@ use anchor_lang::Discriminator;
 use anyhow::Result;
 use colorful::Color;
 use colorful::Colorful;
-use raydium_amm_v3::instruction;
-use raydium_amm_v3::instructions::*;
-use raydium_amm_v3::states::*;
+use raydium_clmm::instruction;
+use raydium_clmm::instructions::*;
+use raydium_clmm::states::*;
 use regex::Regex;
 use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedTransaction, UiTransactionStatusMeta,
