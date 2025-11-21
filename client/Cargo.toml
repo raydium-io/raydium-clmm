@@ -1,37 +1,68 @@
+# Cargo.toml - ULTIMATE CLEAN Manifest File (FINALIZED)
+
 [package]
-name = "client"
-version = "0.1.0"
+name = "avm"
+version = "0.24.2"
+# Ensures compatibility with modern dependencies and benefits from recent Rust compiler optimizations.
+rust-version = "1.70"
 edition = "2021"
 
+# --- Binary Targets Configuration ---
+[[bin]]
+name = "avm"
+path = "src/main.rs"
+description = "The main AVM application executable."
+
+[[bin]]
+name = "anchor"
+path = "src/anchor/main.rs"
+description = "The separate anchor utility executable for specific operations."
+
+# --- Dependencies ---
 [dependencies]
-mpl-token-metadata = { version = "5.1.0" }
-anchor-client = "0.31.1"
-anchor-lang = "0.31.1"
-raydium-amm-v3 = { path = "../programs/amm", features = [
-    "no-entrypoint",
-    "client",
-] }
-solana-sdk = "=2.1.0"
-solana-client = "=2.1.0"
-solana-account-decoder = "=2.1.0"
-solana-transaction-status = "=2.1.0"
-spl-token = { version = "7.0.0", features = ["no-entrypoint"] }
-spl-token-client = "0.14.0"
-spl-memo = "6.0.0"
-spl-associated-token-account = { version = "6.0.0", features = [
-    "no-entrypoint",
-] }
-spl-token-2022 = { version = "7.0.0", features = ["no-entrypoint"] }
-clap = { version = "4.1.8", features = ["derive"] }
-anyhow = "1.0.32"
-rand = "0.9.0"
-hex = "0.4.3"
-configparser = "3.0.0"
-serde_json = { version = "1.0.78" }
-serde = { version = "1.0", features = ["derive"] }
-arrayref = "0.3.7"
-bs58 = { version = "0.5.0" }
-bincode = { version = "1.3.3" }
-regex = "1"
-colorful = "0.3.2"
-base64 = "0.21.0"
+# Dependencies are strictly organized alphabetically for maximum readability and conflict resolution.
+
+# Error handling framework for simplified result management.
+anyhow = "1.0.86"
+
+# Conditional compilation utility.
+cfg-if = "1.0.0"
+
+# Command-line argument parser, upgraded to the modern 4.x API.
+clap = { version = "4.5.4", features = [ "derive" ]}
+
+# Retrieves standard OS directories (e.g., config, cache).
+dirs = "5.0.1"
+
+# Ensures lazy, thread-safe initialization of static data.
+once_cell = "1.19.0"
+
+# HIGH-VALUE OPTIMIZATION: Switched to non-blocking async reqwest.
+# default-features=false ensures only the required features are compiled, minimizing attack surface and binary size.
+reqwest = { 
+    version = "0.12.4", 
+    default-features = false, 
+    features = ['json', 'rustls-tls'] # Recommended: Use rustls for better security/portability than native-tls
+} 
+
+# Semantic versioning parser.
+semver = "1.0.22"
+
+# Serialization/deserialization library.
+serde = { version = "1.0.203", features = [ "derive" ]}
+serde_json = "1.0.117"
+
+# Temporary file and directory creation.
+tempfile = "3.10.1"
+
+# Custom error derive macro for structured error definitions.
+thiserror = "1.0.60"
+
+# REQUIRED FOR ASYNC I/O: The async runtime.
+# default-features=false is used here as well to reduce compilation time and binary size.
+# 'rt-multi-thread' is used for robust network concurrent applications.
+tokio = { 
+    version = "1.37.0", 
+    default-features = false, 
+    features = ["macros", "rt-multi-thread"] 
+}
