@@ -5,16 +5,16 @@ edition = "2021"
 
 [dependencies]
 mpl-token-metadata = { version = "5.1.0" }
-anchor-client = "0.31.1"
-anchor-lang = "0.31.1"
+anchor-client = "0.32.1"
+anchor-lang = "0.32.1"
 raydium-amm-v3 = { path = "../programs/amm", features = [
     "no-entrypoint",
     "client",
 ] }
-solana-sdk = "=2.1.0"
-solana-client = "=2.1.0"
-solana-account-decoder = "=2.1.0"
-solana-transaction-status = "=2.1.0"
+solana-sdk = "2.3.0"
+solana-client = "2.3.0"
+solana-account-decoder = "2.3.0"
+solana-transaction-status = "2.3.0"
 spl-token = { version = "7.0.0", features = ["no-entrypoint"] }
 spl-token-client = "0.14.0"
 spl-memo = "6.0.0"

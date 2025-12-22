@@ -9,12 +9,7 @@ use anchor_lang::{
 };
 use anchor_spl::memo::spl_memo;
 use anchor_spl::token::{self, Token};
-use anchor_spl::token_2022::{
-    self, get_account_data_size, GetAccountDataSize, InitializeAccount3, InitializeImmutableOwner,
-    Token2022,
-};
-use anchor_spl::token_interface::{initialize_mint2, InitializeMint2, Mint, TokenInterface};
-use spl_token_2022::{
+use anchor_spl::token_2022::spl_token_2022::{
     self,
     extension::{
         default_account_state::DefaultAccountState,
@@ -24,6 +19,11 @@ use spl_token_2022::{
     },
     state::AccountState,
 };
+use anchor_spl::token_2022::{
+    self, get_account_data_size, GetAccountDataSize, InitializeAccount3, InitializeImmutableOwner,
+    Token2022,
+};
+use anchor_spl::token_interface::{initialize_mint2, InitializeMint2, Mint, TokenInterface};
 use std::collections::HashSet;
 
 const MINT_WHITELIST: [&'static str; 6] = [
