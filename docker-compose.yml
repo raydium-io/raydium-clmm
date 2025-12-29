@@ -1,0 +1,47 @@
+# -------------------------------------------------------------------
+# Build program in a container
+# Usage cheatsheet (all commands run from project root)
+#
+# Build program (one-shot container, auto-remove after finish):
+#   docker-compose run --rm solana-dev anchor build
+#
+# Run tests (Anchor tests):
+#   docker-compose run --rm solana-dev anchor test
+#
+# Run a shell inside the dev container:
+#   docker-compose run --rm solana-dev bash
+#
+# Long-running workflow (keep container running):
+#   docker-compose up -d
+#   docker-compose exec solana-dev anchor build
+#   docker-compose exec solana-dev anchor test
+#   docker-compose exec solana-dev bash
+#
+# Stop container:
+#   docker-compose down
+#
+# Clean containers + volumes (but keep images):
+#   docker-compose down -v
+#
+# Note: source code is bind-mounted from the host, Rust caches are
+# stored in Docker volumes to speed up subsequent builds.
+# -------------------------------------------------------------------
+
+services:
+  solana-dev:
+    image: solanafoundation/anchor:v0.32.1
+    container_name: raydium-clmm-dev
+    volumes:
+      - .:/workspace
+      - ~/.config/solana:/root/.config/solana
+      - rust-cache:/root/.cargo/registry
+      - rust-git-cache:/root/.cargo/git
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    network_mode: host
+
+volumes:
+  rust-cache:
+  rust-git-cache:
+

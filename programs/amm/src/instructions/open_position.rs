@@ -13,13 +13,14 @@ use anchor_spl::metadata::{
     CreateMetadataAccountsV3, Metadata,
 };
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use anchor_spl::token_2022::{self, spl_token_2022::instruction::AuthorityType, Token2022};
-use anchor_spl::token_2022_extensions::spl_token_metadata_interface;
-use anchor_spl::token_interface;
-use spl_token_2022::{
+use anchor_spl::token_2022::spl_token_2022::{
     self,
     extension::{BaseStateWithExtensions, StateWithExtensions},
+    instruction::AuthorityType,
 };
+use anchor_spl::token_2022::{self, Token2022};
+use anchor_spl::token_2022_extensions::spl_token_metadata_interface;
+use anchor_spl::token_interface;
 use std::cell::RefMut;
 #[cfg(feature = "enable-log")]
 use std::convert::identity;
