@@ -315,7 +315,9 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         require_gt!(pool_state.sqrt_price_x64, swap_price_before);
     }
     if sqrt_price_limit_x64 == 0 {
-        // Does't allow partial filled without specified limit_price.
+        // Doesn't allow partial fill without specified limit_price.
+        // For base_output with transfer fee tokens, use amount_calculate_specified
+        // since swap_internal receives the adjusted amount (including transfer fee).
         if is_base_input {
             if zero_for_one {
                 require_eq!(amount_specified, transfer_amount_0);
@@ -324,9 +326,9 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             }
         } else {
             if zero_for_one {
-                require_eq!(amount_specified, transfer_amount_1);
+                require_eq!(amount_calculate_specified, transfer_amount_1);
             } else {
-                require_eq!(amount_specified, transfer_amount_0);
+                require_eq!(amount_calculate_specified, transfer_amount_0);
             }
         }
     }
