@@ -461,11 +461,15 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
     let mut tick_upper_state = *tick_array_upper_loader
         .load_mut()?
         .get_tick_state_mut(tick_upper_index, pool_state.tick_spacing)?;
-    // If the tickState is not initialized, assign a value to tickState.tick here
-    if tick_lower_state.tick == 0 {
+    // If the tickState is not initialized, assign a value to tickState.tick here.
+    // SECURITY FIX: Use liquidity_gross == 0 as additional check because tick index 0
+    // is a valid tick. Using only `tick == 0` conflates uninitialized state with
+    // legitimate tick 0, causing fee growth corruption after liquidity removal and
+    // re-addition at tick 0.
+    if tick_lower_state.tick == 0 && tick_lower_state.liquidity_gross == 0 {
         tick_lower_state.tick = tick_lower_index;
     }
-    if tick_upper_state.tick == 0 {
+    if tick_upper_state.tick == 0 && tick_upper_state.liquidity_gross == 0 {
         tick_upper_state.tick = tick_upper_index;
     }
     let clock = Clock::get()?;
