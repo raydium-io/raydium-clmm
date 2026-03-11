@@ -121,6 +121,7 @@ pub struct PoolState {
     /// Packed initialized tick array state
     pub tick_array_bitmap: [u64; 16],
 
+    /// Currently, the calculation of fees does not consider overflow issues; these fields may be removed in the future.
     /// except protocol_fee and fund_fee
     pub total_fees_token_0: u64,
     /// except protocol_fee and fund_fee

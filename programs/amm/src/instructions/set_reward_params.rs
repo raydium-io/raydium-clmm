@@ -95,6 +95,11 @@ pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
         )
         .unwrap()
     };
+    // check reward total emissioned overflow, if overflow, return error
+    reward_info
+        .reward_total_emissioned
+        .checked_add(reward_amount)
+        .ok_or(ErrorCode::MaxTokenOverflow)?;
 
     pool_state.reward_infos[reward_index as usize] = reward_info;
 
