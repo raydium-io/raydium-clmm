@@ -290,16 +290,16 @@ pub struct TickState {
     /// The amount of limit orders that have never been matched,
     /// only counts newly opened orders, not partially filled ones
     pub orders_amount: u64,
-    /// The amount of limit orders that have been partially filled,
-    /// including partially filled orders and unfulfilled orders
-    pub part_filled_orders_total: u64,
     /// Remaining part filled orders amount
     pub part_filled_orders_remaining: u64,
-    pub padding: [u32; 5],
+    /// Cumulative unfilled ratio for the current part-filled cohort (Q64.64 format).
+    /// Starts at Q64(1) when a new cohort forms, multiplied down as fills occur.
+    pub unfilled_ratio_x64: u128,
+    pub padding: [u32; 3],
 }
 
 impl TickState {
-    pub const LEN: usize = 4 + 16 + 16 + 16 + 16 + 16 * REWARD_NUM + 4 * 8 + 4 * 5;
+    pub const LEN: usize = 4 + 16 + 16 + 16 + 16 + 16 * REWARD_NUM + 4 * 8 + 16 + 4 * 1;
 
     pub fn initialize(&mut self, tick: i32, tick_spacing: u16) -> Result<()> {
         if TickState::check_is_out_of_boundary(tick) {
@@ -539,14 +539,21 @@ impl TickState {
             }
             // Fee from output will be calculated at the end
         }
-        require_gt!(result.amount_out, 0, ErrorCode::ZeroAmountSpecified);
-        require_gt!(result.amount_in, 0, ErrorCode::ZeroAmountSpecified);
 
         let mut consume_from_part_remaining = 0;
         // Consume part_filled_orders_remaining first (FIFO priority)
         if self.part_filled_orders_remaining > 0 {
-            require_gt!(self.part_filled_orders_total, 0);
             consume_from_part_remaining = self.part_filled_orders_remaining.min(result.amount_out);
+            // Update unfilled_ratio: ratio *= (remaining - consumed) / remaining
+            if consume_from_part_remaining > 0 {
+                self.unfilled_ratio_x64 = U128::from(self.unfilled_ratio_x64)
+                    .mul_div_floor(
+                        U128::from(self.part_filled_orders_remaining - consume_from_part_remaining),
+                        U128::from(self.part_filled_orders_remaining),
+                    )
+                    .ok_or(ErrorCode::CalculateOverflow)?
+                    .as_u128();
+            }
             self.part_filled_orders_remaining = self
                 .part_filled_orders_remaining
                 .saturating_sub(consume_from_part_remaining);
@@ -566,14 +573,17 @@ impl TickState {
             // Order phase increases when consuming from orders_amount
             self.order_phase = self.order_phase.saturating_add(1);
 
-            // Set part_filled_orders_total to the original orders_amount
-            // This represents the total amount that was moved to partial fill state
-            self.part_filled_orders_total = self.orders_amount;
+            // Reset unfilled_ratio for new phase, then update for consumption
+            self.unfilled_ratio_x64 = U128::from(fixed_point_64::Q64)
+                .mul_div_floor(
+                    U128::from(self.orders_amount - amount_out_continue_to_consume),
+                    U128::from(self.orders_amount),
+                )
+                .ok_or(ErrorCode::CalculateOverflow)?
+                .as_u128();
 
             // Move remaining orders_amount to part_filled_orders_remaining
-            self.part_filled_orders_remaining = self
-                .part_filled_orders_remaining
-                .saturating_add(self.orders_amount - amount_out_continue_to_consume);
+            self.part_filled_orders_remaining = self.orders_amount - amount_out_continue_to_consume;
             self.orders_amount = 0;
         }
         // Calculate fee and deduct from output if fee is from output (after limit order consumption calculation)

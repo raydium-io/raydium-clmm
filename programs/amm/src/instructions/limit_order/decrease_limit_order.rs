@@ -103,10 +103,13 @@ pub fn decrease_limit_order<'a, 'b, 'c: 'info, 'info>(
     let tick_state = tick_array.get_tick_state_mut(order.tick_index, tick_spacing)?;
     let tick_initialized_before = tick_state.is_initialized();
 
+    // In-place decrease: settle first, then subtract
     let DecreaseAmountResult {
         settled_output_amount,
         real_decrease_amount,
     } = order.decrease_amount(tick_state, amount)?;
+
+    // Handle tick deinitialization
     if tick_initialized_before && !tick_state.is_initialized() {
         tick_array.update_initialized_tick_count(false)?;
 
@@ -171,7 +174,7 @@ pub fn decrease_limit_order<'a, 'b, 'c: 'info, 'info>(
         tick_index: ctx.accounts.limit_order.tick_index,
         total_amount: ctx.accounts.limit_order.total_amount,
         filled_amount: ctx.accounts.limit_order.filled_amount,
-        settled_output_amount: settled_output_amount,
+        settled_output_amount,
         decreased_amount: real_decrease_amount,
     });
     Ok(())

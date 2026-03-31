@@ -1,3 +1,4 @@
+use super::check_limit_order_amount;
 use crate::states::*;
 use crate::util::get_transfer_fee;
 use crate::{error::ErrorCode, Result};
@@ -77,6 +78,12 @@ pub fn increase_limit_order(ctx: Context<IncreaseLimitOrder>, amount: u64) -> Re
     ctx.accounts
         .limit_order
         .increase_amount(tick_state, amount_without_transfer_fee)?;
+
+    check_limit_order_amount(
+        ctx.accounts.limit_order.total_amount,
+        tick_index,
+        ctx.accounts.limit_order.zero_for_one,
+    )?;
 
     token_2022::transfer_checked(
         CpiContext::new(

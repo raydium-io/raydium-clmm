@@ -261,6 +261,11 @@ impl SwapState {
                 .lp_fee
                 .checked_add(remaining_fee)
                 .ok_or(ErrorCode::CalculateOverflow)?;
+        } else {
+            self.protocol_fee = self
+                .protocol_fee
+                .checked_add(remaining_fee)
+                .ok_or(ErrorCode::CalculateOverflow)?;
         }
         Ok(())
     }
@@ -3912,7 +3917,6 @@ mod swap_test {
 
                 let mut tick_state = build_tick(tick_with_orders, 1, -100).take();
                 tick_state.order_phase = 7;
-                tick_state.part_filled_orders_total = 500;
                 tick_state.part_filled_orders_remaining = 500;
                 tick_state.orders_amount = 1_000;
 
@@ -3953,11 +3957,9 @@ mod swap_test {
                 let after = get_tick_state(&tick_array_states, tick_with_orders).unwrap();
                 // TickState is packed; copy fields to locals before asserting.
                 let after_part_remaining = after.part_filled_orders_remaining;
-                let after_part_total = after.part_filled_orders_total;
                 let after_orders_amount = after.orders_amount;
                 let after_order_phase = after.order_phase;
                 assert_eq!(after_part_remaining, 300);
-                assert_eq!(after_part_total, 500);
                 assert_eq!(after_orders_amount, 1_000);
                 assert_eq!(
                     after_order_phase, 7,
@@ -3975,7 +3977,6 @@ mod swap_test {
 
                 let mut tick_state = build_tick(tick_with_orders, 1, -100).take();
                 tick_state.order_phase = 7;
-                tick_state.part_filled_orders_total = 500;
                 tick_state.part_filled_orders_remaining = 500;
                 tick_state.orders_amount = 1_000;
 
@@ -4011,14 +4012,9 @@ mod swap_test {
 
                 let after = get_tick_state(&tick_array_states, tick_with_orders).unwrap();
                 let after_orders_amount = after.orders_amount;
-                let after_part_total = after.part_filled_orders_total;
                 let after_part_remaining = after.part_filled_orders_remaining;
                 let after_order_phase = after.order_phase;
                 assert_eq!(after_orders_amount, 0);
-                assert_eq!(
-                    after_part_total, 1_000,
-                    "should reset cohort total to original orders_amount"
-                );
                 assert_eq!(
                     after_part_remaining, 800,
                     "remaining from orders_amount should move into part_remaining"
@@ -4044,7 +4040,6 @@ mod swap_test {
 
                 let mut tick_state = build_tick(tick_with_orders, 1, liquidity_net).take();
                 tick_state.order_phase = 7;
-                tick_state.part_filled_orders_total = 500;
                 tick_state.part_filled_orders_remaining = 500;
                 tick_state.orders_amount = 0;
 
@@ -4100,7 +4095,6 @@ mod swap_test {
 
                 let mut tick_state = build_tick(tick_with_orders, 1, -100).take();
                 tick_state.order_phase = 7;
-                tick_state.part_filled_orders_total = 500;
                 tick_state.part_filled_orders_remaining = 500;
                 tick_state.orders_amount = 1_000;
 
@@ -4140,11 +4134,9 @@ mod swap_test {
 
                 let after = get_tick_state(&tick_array_states, tick_with_orders).unwrap();
                 let after_part_remaining = after.part_filled_orders_remaining;
-                let after_part_total = after.part_filled_orders_total;
                 let after_orders_amount = after.orders_amount;
                 let after_order_phase = after.order_phase;
                 assert_eq!(after_part_remaining, 300);
-                assert_eq!(after_part_total, 500);
                 assert_eq!(after_orders_amount, 1_000);
                 assert_eq!(after_order_phase, 7);
             }
@@ -4159,7 +4151,6 @@ mod swap_test {
 
                 let mut tick_state = build_tick(tick_with_orders, 1, -100).take();
                 tick_state.order_phase = 7;
-                tick_state.part_filled_orders_total = 500;
                 tick_state.part_filled_orders_remaining = 500;
                 tick_state.orders_amount = 1_000;
 
@@ -4195,12 +4186,11 @@ mod swap_test {
 
                 let after = get_tick_state(&tick_array_states, tick_with_orders).unwrap();
                 let after_orders_amount = after.orders_amount;
-                let after_part_total = after.part_filled_orders_total;
                 let after_part_remaining = after.part_filled_orders_remaining;
                 let after_order_phase = after.order_phase;
 
                 assert_eq!(after_orders_amount, 0);
-                assert_eq!(after_part_total, 1_000);
+
                 assert_eq!(after_part_remaining, 800);
                 assert_eq!(after_order_phase, 8);
                 assert!(pool_state.borrow().tick_current == tick_current);
@@ -4217,7 +4207,6 @@ mod swap_test {
 
                 let mut tick_state = build_tick(tick_with_orders, 1, liquidity_net).take();
                 tick_state.order_phase = 7;
-                tick_state.part_filled_orders_total = 500;
                 tick_state.part_filled_orders_remaining = 500;
                 tick_state.orders_amount = 0;
 

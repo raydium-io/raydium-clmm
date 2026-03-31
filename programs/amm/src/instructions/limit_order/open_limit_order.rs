@@ -208,7 +208,7 @@ pub fn open_limit_order<'a, 'b, 'c: 'info, 'info>(
 
 /// Validates limit order amount: must be non-zero and the implied output amount
 /// (at this tick's price) must be in [1, u64::MAX - 2].
-fn check_limit_order_amount(amount: u64, tick_index: i32, zero_for_one: bool) -> Result<()> {
+pub fn check_limit_order_amount(amount: u64, tick_index: i32, zero_for_one: bool) -> Result<()> {
     if amount == 0 {
         return err!(ErrorCode::ZeroAmountSpecified);
     }
