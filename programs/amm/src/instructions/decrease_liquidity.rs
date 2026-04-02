@@ -258,8 +258,6 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
         transfer_amount_1,
     )?;
 
-    check_unclaimed_fees_and_vault(pool_state_loader, token_vault_0, token_vault_1)?;
-
     let reward_amounts = collect_rewards(
         pool_state_loader,
         remaining_collect_accounts.as_slice(),
@@ -332,27 +330,8 @@ pub fn decrease_liquidity_and_update_position<'a, 'b, 'c: 'info, 'info>(
     if pool_state.get_status_by_bit(PoolStatusBitIndex::CollectFee) {
         latest_fees_owed_0 = personal_position.token_fees_owed_0;
         latest_fees_owed_1 = personal_position.token_fees_owed_1;
-
-        require_gte!(
-            pool_state.total_fees_token_0 - pool_state.total_fees_claimed_token_0,
-            latest_fees_owed_0
-        );
-        require_gte!(
-            pool_state.total_fees_token_1 - pool_state.total_fees_claimed_token_1,
-            latest_fees_owed_1
-        );
-
         personal_position.token_fees_owed_0 = 0;
         personal_position.token_fees_owed_1 = 0;
-
-        pool_state.total_fees_claimed_token_0 = pool_state
-            .total_fees_claimed_token_0
-            .checked_add(latest_fees_owed_0)
-            .unwrap();
-        pool_state.total_fees_claimed_token_1 = pool_state
-            .total_fees_claimed_token_1
-            .checked_add(latest_fees_owed_1)
-            .unwrap();
     }
 
     Ok((
@@ -541,42 +520,6 @@ fn check_required_accounts_length(
     let remaining_accounts_len = remaining_accounts.len();
     if remaining_accounts_len != valid_reward_count * reward_group_account_num {
         return err!(ErrorCode::InvalidRewardInputAccountNumber);
-    }
-    Ok(())
-}
-
-pub fn check_unclaimed_fees_and_vault(
-    pool_state_loader: &AccountLoader<PoolState>,
-    token_vault_0: &AccountInfo,
-    token_vault_1: &AccountInfo,
-) -> Result<()> {
-    let token_vault_0_amount = spl_token_2022::extension::StateWithExtensions::<
-        spl_token_2022::state::Account,
-    >::unpack(token_vault_0.try_borrow_data()?.deref())?
-    .base
-    .amount;
-
-    let token_vault_1_amount = spl_token_2022::extension::StateWithExtensions::<
-        spl_token_2022::state::Account,
-    >::unpack(token_vault_1.try_borrow_data()?.deref())?
-    .base
-    .amount;
-
-    let pool_state = &mut pool_state_loader.load_mut()?;
-
-    let unclaimed_fee_token_0 = pool_state
-        .total_fees_token_0
-        .checked_sub(pool_state.total_fees_claimed_token_0)
-        .unwrap();
-    let unclaimed_fee_token_1 = pool_state
-        .total_fees_token_1
-        .checked_sub(pool_state.total_fees_claimed_token_1)
-        .unwrap();
-
-    if (unclaimed_fee_token_0 >= token_vault_0_amount && token_vault_0_amount != 0)
-        || (unclaimed_fee_token_1 >= token_vault_1_amount && token_vault_1_amount != 0)
-    {
-        pool_state.set_status_by_bit(PoolStatusBitIndex::CollectFee, PoolStatusBitFlag::Disable);
     }
     Ok(())
 }

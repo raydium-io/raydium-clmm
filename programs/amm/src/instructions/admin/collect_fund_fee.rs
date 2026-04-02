@@ -1,4 +1,3 @@
-use crate::decrease_liquidity::check_unclaimed_fees_and_vault;
 use crate::error::ErrorCode;
 use crate::states::*;
 use crate::util::*;
@@ -93,12 +92,6 @@ pub fn collect_fund_fee(
         &ctx.accounts.token_program,
         Some(ctx.accounts.token_program_2022.to_account_info()),
         amount_1,
-    )?;
-
-    check_unclaimed_fees_and_vault(
-        &ctx.accounts.pool_state,
-        &ctx.accounts.token_vault_0.to_account_info(),
-        &ctx.accounts.token_vault_1.to_account_info(),
     )?;
 
     emit!(CollectProtocolFeeEvent {

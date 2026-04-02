@@ -109,6 +109,17 @@ pub fn decrease_limit_order<'a, 'b, 'c: 'info, 'info>(
         real_decrease_amount,
     } = order.decrease_amount(tick_state, amount)?;
 
+    emit!(DecreaseLimitOrderEvent {
+        pool_id: ctx.accounts.pool_state.key(),
+        limit_order: order.key(),
+        zero_for_one: order.zero_for_one,
+        tick_index: order.tick_index,
+        total_amount: order.total_amount,
+        filled_amount: order.filled_amount,
+        settled_output_amount,
+        decreased_amount: real_decrease_amount,
+    });
+
     // Handle tick deinitialization
     if tick_initialized_before && !tick_state.is_initialized() {
         tick_array.update_initialized_tick_count(false)?;
@@ -167,15 +178,5 @@ pub fn decrease_limit_order<'a, 'b, 'c: 'info, 'info>(
         )?;
     }
 
-    emit!(DecreaseLimitOrderEvent {
-        pool_id: ctx.accounts.pool_state.key(),
-        limit_order: ctx.accounts.limit_order.key(),
-        zero_for_one: ctx.accounts.limit_order.zero_for_one,
-        tick_index: ctx.accounts.limit_order.tick_index,
-        total_amount: ctx.accounts.limit_order.total_amount,
-        filled_amount: ctx.accounts.limit_order.filled_amount,
-        settled_output_amount,
-        decreased_amount: real_decrease_amount,
-    });
     Ok(())
 }

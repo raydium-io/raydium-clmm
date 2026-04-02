@@ -229,10 +229,6 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             Some(ctx.token_program_2022.to_account_info()),
             transfer_amount_0,
         )?;
-        if vault_1.amount <= transfer_amount_1 {
-            // freeze pool, disable all instructions
-            ctx.pool_state.load_mut()?.set_status(255);
-        }
         // x -> y，transfer y token from pool vault to user.
         transfer_from_pool_vault_to_user(
             &ctx.pool_state,
@@ -271,10 +267,6 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             Some(ctx.token_program_2022.to_account_info()),
             transfer_amount_1,
         )?;
-        if vault_0.amount <= transfer_amount_0 {
-            // freeze pool, disable all instructions
-            ctx.pool_state.load_mut()?.set_status(255);
-        }
         transfer_from_pool_vault_to_user(
             &ctx.pool_state,
             &vault_0.to_account_info(),
@@ -318,9 +310,9 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             }
         } else {
             if zero_for_one {
-                require_eq!(amount_specified, transfer_amount_1);
+                require_eq!(amount_calculate_specified, transfer_amount_1);
             } else {
-                require_eq!(amount_specified, transfer_amount_0);
+                require_eq!(amount_calculate_specified, transfer_amount_0);
             }
         }
     }

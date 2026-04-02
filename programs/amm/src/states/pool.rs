@@ -101,11 +101,7 @@ pub struct PoolState {
     pub protocol_fees_token_0: u64,
     pub protocol_fees_token_1: u64,
 
-    /// The amounts in and out of swap token_0 and token_1
-    pub swap_in_amount_token_0: u128,
-    pub swap_out_amount_token_1: u128,
-    pub swap_in_amount_token_1: u128,
-    pub swap_out_amount_token_0: u128,
+    pub padding5: [u128; 4],
 
     /// Bitwise representation of the state of the pool
     /// bit0, 1: disable open position and increase liquidity, 0: normal
@@ -125,12 +121,7 @@ pub struct PoolState {
     /// Packed initialized tick array state
     pub tick_array_bitmap: [u64; 16],
 
-    /// except protocol_fee and fund_fee
-    pub total_fees_token_0: u64,
-    /// except protocol_fee and fund_fee
-    pub total_fees_claimed_token_0: u64,
-    pub total_fees_token_1: u64,
-    pub total_fees_claimed_token_1: u64,
+    pub padding6: [u64; 4],
 
     pub fund_fees_token_0: u64,
     pub fund_fees_token_1: u64,
@@ -225,18 +216,12 @@ impl PoolState {
         self.fee_growth_global_1_x64 = 0;
         self.protocol_fees_token_0 = 0;
         self.protocol_fees_token_1 = 0;
-        self.swap_in_amount_token_0 = 0;
-        self.swap_out_amount_token_1 = 0;
-        self.swap_in_amount_token_1 = 0;
-        self.swap_out_amount_token_0 = 0;
+        self.padding5 = [0; 4];
         self.status = 0;
         self.fee_on = collect_fee_on.to_u8();
         self.padding = [0; 6];
         self.tick_array_bitmap = [0; 16];
-        self.total_fees_token_0 = 0;
-        self.total_fees_claimed_token_0 = 0;
-        self.total_fees_token_1 = 0;
-        self.total_fees_claimed_token_1 = 0;
+        self.padding6 = [0; 4];
         self.fund_fees_token_0 = 0;
         self.fund_fees_token_1 = 0;
         self.open_time = open_time;
@@ -718,17 +703,13 @@ impl PoolState {
         protocol_fee: u64,
         fund_fee: u64,
         fee_growth_global_x64: u128,
-        amount_0: u64,
-        amount_1: u64,
         zero_for_one: bool, // swap direction
         dynamic_fee_info: Option<DynamicFeeInfo>,
     ) -> Result<()> {
         self.tick_current = tick_current;
         self.sqrt_price_x64 = sqrt_price_x64;
         self.liquidity = liquidity;
-        self.update_fee_and_trade_volume(
-            amount_0,
-            amount_1,
+        self.update_fee(
             lp_fee,
             protocol_fee,
             fund_fee,
@@ -739,10 +720,8 @@ impl PoolState {
         Ok(())
     }
 
-    pub fn update_fee_and_trade_volume(
+    pub fn update_fee(
         &mut self,
-        amount_0: u64,
-        amount_1: u64,
         lp_fee: u64, // fee for lp
         protocol_fee: u64,
         fund_fee: u64,
@@ -756,10 +735,6 @@ impl PoolState {
         if fee_from_token0 {
             if lp_fee > 0 {
                 self.fee_growth_global_0_x64 = fee_growth_global_x64;
-                self.total_fees_token_0 = self
-                    .total_fees_token_0
-                    .checked_add(lp_fee)
-                    .ok_or(ErrorCode::CalculateOverflow)?;
             }
             if protocol_fee > 0 {
                 self.protocol_fees_token_0 = self
@@ -776,10 +751,6 @@ impl PoolState {
         } else {
             if lp_fee > 0 {
                 self.fee_growth_global_1_x64 = fee_growth_global_x64;
-                self.total_fees_token_1 = self
-                    .total_fees_token_1
-                    .checked_add(lp_fee)
-                    .ok_or(ErrorCode::CalculateOverflow)?;
             }
             if protocol_fee > 0 {
                 self.protocol_fees_token_1 = self
@@ -793,27 +764,6 @@ impl PoolState {
                     .checked_add(fund_fee)
                     .ok_or(ErrorCode::CalculateOverflow)?;
             }
-        }
-
-        if zero_for_one {
-            self.swap_in_amount_token_0 = self
-                .swap_in_amount_token_0
-                .checked_add(u128::from(amount_0))
-                .ok_or(ErrorCode::CalculateOverflow)?;
-            self.swap_out_amount_token_1 = self
-                .swap_out_amount_token_1
-                .checked_add(u128::from(amount_1))
-                .ok_or(ErrorCode::CalculateOverflow)?;
-        } else {
-            self.swap_in_amount_token_1 = self
-                .swap_in_amount_token_1
-                .checked_add(u128::from(amount_1))
-                .ok_or(ErrorCode::CalculateOverflow)?;
-
-            self.swap_out_amount_token_0 = self
-                .swap_out_amount_token_0
-                .checked_add(u128::from(amount_0))
-                .ok_or(ErrorCode::CalculateOverflow)?;
         }
 
         Ok(())
@@ -1835,10 +1785,12 @@ pub mod pool_test {
             let fee_growth_global_1_x64: u128 = 0x11223344005566778899aabbccddeeff;
             let protocol_fees_token_0: u64 = 0x123456789abcdef0;
             let protocol_fees_token_1: u64 = 0x123456789abcde0f;
-            let swap_in_amount_token_0: u128 = 0x11223344550066778899aabbccddeeff;
-            let swap_out_amount_token_1: u128 = 0x11223344556600778899aabbccddeeff;
-            let swap_in_amount_token_1: u128 = 0x11223344556677008899aabbccddeeff;
-            let swap_out_amount_token_0: u128 = 0x11223344556677880099aabbccddeeff;
+            let padding5: [u128; 4] = [
+                0x11223344550066778899aabbccddeeff,
+                0x11223344556600778899aabbccddeeff,
+                0x11223344556677008899aabbccddeeff,
+                0x11223344556677880099aabbccddeeff,
+            ];
             let status: u8 = 0x1b;
             let fee_on: u8 = 0x19;
             let padding: [u8; 6] = [0x12, 0x13, 0x14, 0x15, 0x16, 0x17];
@@ -1904,10 +1856,12 @@ pub mod pool_test {
                     .copy_from_slice(&tick_array_bitmap[i].to_le_bytes());
                 offset += 8;
             }
-            let total_fees_token_0: u64 = 0x1234567809abcdef;
-            let total_fees_token_1: u64 = 0x1234567089abcdef;
-            let total_fees_claimed_token_0: u64 = 0x1234560789abcdef;
-            let total_fees_claimed_token_1: u64 = 0x1234506789abcdef;
+            let padding6: [u64; 4] = [
+                0x1234567809abcdef,
+                0x1234567089abcdef,
+                0x1234560789abcdef,
+                0x1234506789abcdef,
+            ];
             let fund_fees_token_0: u64 = 0x1234056789abcdef;
             let fund_fees_token_1: u64 = 0x1230456789abcdef;
             let pool_open_time: u64 = 0x1203456789abcdef;
@@ -1975,14 +1929,10 @@ pub mod pool_test {
             offset += 8;
             pool_data[offset..offset + 8].copy_from_slice(&protocol_fees_token_1.to_le_bytes());
             offset += 8;
-            pool_data[offset..offset + 16].copy_from_slice(&swap_in_amount_token_0.to_le_bytes());
-            offset += 16;
-            pool_data[offset..offset + 16].copy_from_slice(&swap_out_amount_token_1.to_le_bytes());
-            offset += 16;
-            pool_data[offset..offset + 16].copy_from_slice(&swap_in_amount_token_1.to_le_bytes());
-            offset += 16;
-            pool_data[offset..offset + 16].copy_from_slice(&swap_out_amount_token_0.to_le_bytes());
-            offset += 16;
+            for val in &padding5 {
+                pool_data[offset..offset + 16].copy_from_slice(&val.to_le_bytes());
+                offset += 16;
+            }
             pool_data[offset..offset + 1].copy_from_slice(&status.to_le_bytes());
             offset += 1;
             pool_data[offset..offset + 1].copy_from_slice(&fee_on.to_le_bytes());
@@ -1994,16 +1944,10 @@ pub mod pool_test {
             offset += RewardInfo::LEN * REWARD_NUM;
             pool_data[offset..offset + 8 * 16].copy_from_slice(&tick_array_bitmap_data);
             offset += 8 * 16;
-            pool_data[offset..offset + 8].copy_from_slice(&total_fees_token_0.to_le_bytes());
-            offset += 8;
-            pool_data[offset..offset + 8]
-                .copy_from_slice(&total_fees_claimed_token_0.to_le_bytes());
-            offset += 8;
-            pool_data[offset..offset + 8].copy_from_slice(&total_fees_token_1.to_le_bytes());
-            offset += 8;
-            pool_data[offset..offset + 8]
-                .copy_from_slice(&total_fees_claimed_token_1.to_le_bytes());
-            offset += 8;
+            for val in &padding6 {
+                pool_data[offset..offset + 8].copy_from_slice(&val.to_le_bytes());
+                offset += 8;
+            }
             pool_data[offset..offset + 8].copy_from_slice(&fund_fees_token_0.to_le_bytes());
             offset += 8;
             pool_data[offset..offset + 8].copy_from_slice(&fund_fees_token_1.to_le_bytes());
@@ -2068,14 +2012,8 @@ pub mod pool_test {
             assert_eq!(unpack_protocol_fees_token_0, protocol_fees_token_0);
             let unpack_protocol_fees_token_1 = unpack_data.protocol_fees_token_1;
             assert_eq!(unpack_protocol_fees_token_1, protocol_fees_token_1);
-            let unpack_swap_in_amount_token_0 = unpack_data.swap_in_amount_token_0;
-            assert_eq!(unpack_swap_in_amount_token_0, swap_in_amount_token_0);
-            let unpack_swap_out_amount_token_1 = unpack_data.swap_out_amount_token_1;
-            assert_eq!(unpack_swap_out_amount_token_1, swap_out_amount_token_1);
-            let unpack_swap_in_amount_token_1 = unpack_data.swap_in_amount_token_1;
-            assert_eq!(unpack_swap_in_amount_token_1, swap_in_amount_token_1);
-            let unpack_swap_out_amount_token_0 = unpack_data.swap_out_amount_token_0;
-            assert_eq!(unpack_swap_out_amount_token_0, swap_out_amount_token_0);
+            let unpack_padding5 = { unpack_data.padding5 };
+            assert_eq!(unpack_padding5, padding5);
             let unpack_status = unpack_data.status;
             assert_eq!(unpack_status, status);
             let unpack_fee_on = unpack_data.fee_on;
@@ -2110,18 +2048,8 @@ pub mod pool_test {
 
             let unpack_tick_array_bitmap = unpack_data.tick_array_bitmap;
             assert_eq!(unpack_tick_array_bitmap, tick_array_bitmap);
-            let unpack_total_fees_token_0 = unpack_data.total_fees_token_0;
-            assert_eq!(unpack_total_fees_token_0, total_fees_token_0);
-            let unpack_total_fees_claimed_token_0 = unpack_data.total_fees_claimed_token_0;
-            assert_eq!(
-                unpack_total_fees_claimed_token_0,
-                total_fees_claimed_token_0
-            );
-            let unpack_total_fees_claimed_token_1 = unpack_data.total_fees_claimed_token_1;
-            assert_eq!(
-                unpack_total_fees_claimed_token_1,
-                total_fees_claimed_token_1
-            );
+            let unpack_padding6 = { unpack_data.padding6 };
+            assert_eq!(unpack_padding6, padding6);
             let unpack_fund_fees_token_0 = unpack_data.fund_fees_token_0;
             assert_eq!(unpack_fund_fees_token_0, fund_fees_token_0);
             let unpack_fund_fees_token_1 = unpack_data.fund_fees_token_1;

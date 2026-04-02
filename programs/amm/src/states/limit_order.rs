@@ -1,7 +1,7 @@
 use crate::error::ErrorCode;
 use crate::instructions::check_limit_order_amount;
-use crate::libraries::{big_num::U128, full_math::MulDiv};
-use crate::libraries::{fixed_point_64, tick_math};
+use crate::libraries::fixed_point_64;
+use crate::libraries::{big_num::U128, full_math::Upcast256};
 use crate::states::tick_array::TickState;
 use anchor_lang::prelude::*;
 
@@ -71,7 +71,8 @@ impl LimitOrderState {
             .ok_or(ErrorCode::CalculateOverflow.into())
     }
 
-    /// Settle order, return the amount of output token.
+    /// Settle order, return (amount_out, is_exact).
+    /// `is_exact` indicates whether the ratio division in partial fill had no remainder.
     /// total_amount and index are NOT modified — only filled_amount is updated.
     pub fn settle_filled_order(&mut self, tick_state: &TickState) -> Result<u64> {
         let remaining_amount = self.get_unfilled_amount()?;
@@ -79,27 +80,26 @@ impl LimitOrderState {
             return Ok(0);
         }
 
-        let filled_amount = if self.order_phase == tick_state.order_phase {
+        let (filled_amount, is_exact) = if self.order_phase == tick_state.order_phase {
             // same phase, unfilled - no output
-            0
+            (0, true)
         } else if self.order_phase + 1 == tick_state.order_phase {
             // Part-filled: use index to compute current unfilled
             // current_unfilled = floor(remaining_amount * tick.index / order.index)
-            let new_remaining_amount = U128::from(remaining_amount)
-                .mul_div_floor(
-                    U128::from(tick_state.unfilled_ratio_x64),
-                    U128::from(self.unfilled_ratio_x64),
-                )
-                .ok_or(ErrorCode::CalculateOverflow)?
-                .as_u64();
+            let numerator = U128::from(remaining_amount).as_u256()
+                * U128::from(tick_state.unfilled_ratio_x64).as_u256();
+            let denominator = U128::from(self.unfilled_ratio_x64).as_u256();
+
+            let new_remaining_amount = (numerator / denominator).as_u64();
             let filled = remaining_amount.saturating_sub(new_remaining_amount);
             if filled > 0 {
                 self.unfilled_ratio_x64 = tick_state.unfilled_ratio_x64;
             }
-            filled
+
+            (filled, (numerator % denominator).is_zero())
         } else if self.order_phase + 2 <= tick_state.order_phase {
             // fully filled
-            remaining_amount
+            (remaining_amount, true)
         } else {
             return err!(ErrorCode::InvalidOrderPhase);
         };
@@ -113,8 +113,17 @@ impl LimitOrderState {
             .checked_add(filled_amount)
             .ok_or(ErrorCode::CalculateOverflow)?;
 
-        let amount_out =
-            TickState::get_limit_order_output(filled_amount, tick_state.tick, self.zero_for_one)?;
+        let effective_filled_amount = if is_exact {
+            filled_amount
+        } else {
+            filled_amount - 1
+        };
+
+        let amount_out = TickState::get_limit_order_output(
+            effective_filled_amount,
+            tick_state.tick,
+            self.zero_for_one,
+        )?;
         Ok(amount_out)
     }
 
@@ -387,7 +396,7 @@ mod tests {
             settled_output_amount,
             real_decrease_amount,
         } = order.decrease_amount(&mut tick_state, 300).unwrap();
-        assert_eq!(settled_output_amount, 101);
+        assert_eq!(settled_output_amount, 100);
         assert_eq!(real_decrease_amount, 300);
         assert_eq!(order.total_amount, 400);
         assert_eq!(order.filled_amount, 101);
@@ -603,7 +612,7 @@ mod tests {
             .unwrap();
 
         let output = order.settle_filled_order(&mut tick_state).unwrap();
-        assert_eq!(output, 701);
+        assert_eq!(output, 700);
         // NEW: total stays 1000, filled accumulates to 701
         assert_eq!(order.total_amount, 1000);
         assert_eq!(order.filled_amount, 701);
@@ -703,10 +712,10 @@ mod tests {
             &mut tick_state,
         );
 
-        // A: floor(1000 * 2500/3000) = 833 remaining, filled=167
-        assert_eq!(user_a.settle_filled_order(&mut tick_state).unwrap(), 167);
-        // B: floor(2000 * 2500/3000) = 1666 remaining, filled=334
-        assert_eq!(user_b.settle_filled_order(&mut tick_state).unwrap(), 334);
+        // A: floor(1000 * 2500/3000) = 833 remaining, filled=167, is_exact=false → output=166
+        assert_eq!(user_a.settle_filled_order(&mut tick_state).unwrap(), 166);
+        // B: floor(2000 * 2500/3000) = 1666 remaining, filled=334, is_exact=false → output=333
+        assert_eq!(user_b.settle_filled_order(&mut tick_state).unwrap(), 333);
         // C: same phase, unfilled
         assert_eq!(user_c.settle_filled_order(&mut tick_state).unwrap(), 0);
 
@@ -723,7 +732,7 @@ mod tests {
         tick_state
             .match_limit_order(1, !limit_zero_for_one, false, 0, true)
             .unwrap();
-        assert_eq!(user_c.settle_filled_order(&mut tick_state).unwrap(), 2);
+        assert_eq!(user_c.settle_filled_order(&mut tick_state).unwrap(), 1);
 
         tick_state
             .match_limit_order(2000, !limit_zero_for_one, false, 0, true)
@@ -852,8 +861,8 @@ mod tests {
             .unwrap();
         assert!(tick_state.part_filled_orders_remaining == 400);
 
-        // Third settle: additional filled=101 (floor rounding on remaining)
-        assert_eq!(order.settle_filled_order(&mut tick_state).unwrap(), 101);
+        // Third settle: additional filled=101, is_exact=false → output=100
+        assert_eq!(order.settle_filled_order(&mut tick_state).unwrap(), 100);
         assert_eq!(order.total_amount, 1000);
 
         // Match remaining
@@ -1056,8 +1065,8 @@ mod tests {
         assert_eq!(order1.settle_filled_order(&mut tick_state).unwrap(), 1000);
         assert!(order1.is_fully_filled());
 
-        assert_eq!(order2.settle_filled_order(&mut tick_state).unwrap(), 301);
-        assert_eq!(1000 + 301, 1301);
+        assert_eq!(order2.settle_filled_order(&mut tick_state).unwrap(), 300);
+        assert_eq!(1000 + 300, 1300);
     }
 
     // ==================== Index-based decrease coverage ====================
@@ -1107,16 +1116,16 @@ mod tests {
         // B: index-based settle. B.index=Q64, tick.index = Q64/2 * 150/750 ≈ Q64/10
         // B: new_remaining = floor(1000 * (Q64/10) / Q64) = 99, filled=901
         let out_b = order_b.settle_filled_order(&tick_state).unwrap();
-        assert_eq!(out_b, 901);
+        assert_eq!(out_b, 900);
 
         // A: total=750, filled=500, index updated to Q64/2
         // After 600 more matched: tick.index ≈ Q64/10
-        // A: current_unfilled = floor(250 * (Q64/10) / (Q64/2)) = 49, additional = 201
+        // A: current_unfilled = floor(250 * (Q64/10) / (Q64/2)) = 49, additional = 201, is_exact=false → 200
         let out_a = order_a.settle_filled_order(&tick_state).unwrap();
-        assert_eq!(out_a, 201);
+        assert_eq!(out_a, 200);
 
-        // Floor rounding can cause fills to slightly exceed consumed (dust per order)
-        assert_eq!(500 + 901 + 201, 1602);
+        // is_exact=false reduces output by 1 per non-exact settle
+        assert_eq!(500 + 900 + 200, 1600);
     }
 
     #[test]
@@ -1292,25 +1301,23 @@ mod tests {
             .match_limit_order(4000, !limit_zero_for_one, false, 0, true)
             .unwrap();
 
-        // A: settle 1201 (floor rounding), decrease 1799 (capped by unfilled)
+        // A: settle 1200 (is_exact=false, reduced by 1), decrease 1799 (capped by unfilled)
         // NEW: total = 3000 - 1799 = 1201, filled = 1201
         let dec_a = order_a.decrease_amount(&mut tick_state, 1800).unwrap();
-        assert_eq!(dec_a.settled_output_amount, 1201);
+        assert_eq!(dec_a.settled_output_amount, 1200);
         assert_eq!(dec_a.real_decrease_amount, 1799);
         assert_eq!(order_a.total_amount, 1201);
         assert!(order_a.is_fully_filled());
 
-        // B: settle 2801 (floor rounding)
+        // B: settle 2800 (is_exact=false, reduced by 1)
         let b_output = order_b.settle_filled_order(&tick_state).unwrap();
-        assert_eq!(b_output, 2801);
+        assert_eq!(b_output, 2800);
 
-        // Floor rounding causes fills to slightly exceed consumed
-        assert_eq!(1201 + 2801, 4002);
-        // Per-order conservation still holds: settled + decreased + unfilled = opened
-        assert_eq!(
-            1201 + 1799 + 2801 + order_b.get_unfilled_amount().unwrap(),
-            10000
-        );
+        // is_exact=false reduces output by 1 per non-exact settle
+        assert_eq!(1200 + 2800, 4000);
+        // Conservation with dust: settled + decreased + unfilled <= opened
+        let lhs = 1200u64 + 1799 + 2800 + order_b.get_unfilled_amount().unwrap();
+        assert!(lhs <= 10000 && lhs >= 10000 - 2, "lhs={}", lhs);
     }
 
     #[test]
@@ -1331,9 +1338,9 @@ mod tests {
             .match_limit_order(600, !limit_zero_for_one, false, 0, true)
             .unwrap();
 
-        // Decrease 200: settle 601 (floor rounding), total = 1000 - 200 = 800, filled = 601
+        // Decrease 200: settle 600 (is_exact=false, reduced by 1), total = 1000 - 200 = 800, filled = 601
         let dec1 = order.decrease_amount(&mut tick_state, 200).unwrap();
-        assert_eq!(dec1.settled_output_amount, 601);
+        assert_eq!(dec1.settled_output_amount, 600);
         assert_eq!(dec1.real_decrease_amount, 200);
         assert_eq!(order.total_amount, 800);
 
@@ -1343,7 +1350,7 @@ mod tests {
             .unwrap();
 
         let out = order.settle_filled_order(&tick_state).unwrap();
-        assert_eq!(out, 100);
+        assert_eq!(out, 99);
         assert_eq!(order.total_amount, 800);
 
         // Match remaining
@@ -1709,18 +1716,19 @@ mod tests {
             .unwrap();
         assert!(ts.part_filled_orders_remaining == 587);
 
-        // A: floor(333 * 587/1000) = 195 unfilled, filled=138
+        // A: floor(333 * 587/1000) = 195 unfilled, filled=138, is_exact=false → output=137
         let dec = a.decrease_amount(&mut ts, u64::MAX).unwrap();
-        assert_eq!(dec.settled_output_amount, 138);
+        assert_eq!(dec.settled_output_amount, 137);
         assert_eq!(dec.real_decrease_amount, 195);
 
-        // B: floor(667 * 587/1000) = 391 unfilled, filled=276
+        // B: floor(667 * 587/1000) = 391 unfilled, filled=276, is_exact=false → output=275
         let out_b = b.settle_filled_order(&ts).unwrap();
-        assert_eq!(out_b, 276);
+        assert_eq!(out_b, 275);
 
-        // Floor rounding: fills can slightly exceed consumed
-        assert_eq!(138 + 276, 414);
-        assert_eq!(138 + 195 + 276 + (667 - 276), 1000);
+        // is_exact=false reduces output by 1 per non-exact settle
+        assert_eq!(137 + 275, 412);
+        let lhs = 137u64 + 195 + 275 + (667 - 276);
+        assert!(lhs <= 1000 && lhs >= 1000 - 2, "lhs={}", lhs);
     }
 
     #[test]
@@ -1735,29 +1743,31 @@ mod tests {
         ts.match_limit_order(127, !limit_zero_for_one, false, 0, true)
             .unwrap();
 
-        // A: floor(37 * 124/251) = 18 unfilled, filled=19
+        // A: floor(37 * 124/251) = 18 unfilled, filled=19, is_exact=false → output=18
         let dec_a = a.decrease_amount(&mut ts, u64::MAX).unwrap();
-        assert_eq!(dec_a.settled_output_amount, 19);
+        assert_eq!(dec_a.settled_output_amount, 18);
         assert_eq!(dec_a.real_decrease_amount, 18);
 
-        // B: floor(83 * 124/251) = 41 unfilled, filled=42
+        // B: floor(83 * 124/251) = 41 unfilled, filled=42, is_exact=false → output=41
         let dec_b = b.decrease_amount(&mut ts, u64::MAX).unwrap();
-        assert_eq!(dec_b.settled_output_amount, 42);
+        assert_eq!(dec_b.settled_output_amount, 41);
         assert_eq!(dec_b.real_decrease_amount, 41);
 
-        // C: floor(131 * 124/251) = 64 unfilled, filled=67
+        // C: floor(131 * 124/251) = 64 unfilled, filled=67, is_exact=false → output=66
         // Decrease capped at remaining part_filled_orders_remaining (124-18-41=65)
         let dec_c = c.decrease_amount(&mut ts, u64::MAX).unwrap();
-        assert_eq!(dec_c.settled_output_amount, 67);
+        assert_eq!(dec_c.settled_output_amount, 66);
         assert_eq!(dec_c.real_decrease_amount, 64);
 
-        let total_filled = 19 + 42 + 67;
+        let total_output = 18 + 41 + 66;
         let total_decreased = 18 + 41 + 64;
-        // Floor rounding: fills can slightly exceed consumed
-        assert!(total_filled <= 127 + 3, "filled {} too large", total_filled);
-        assert!(total_filled + total_decreased <= 251);
-        let dust = 251 - total_filled - total_decreased;
-        assert!(dust <= 3, "dust {} too large", dust);
+        // is_exact=false reduces output, solvency guaranteed
+        assert!(
+            total_output <= 127,
+            "output {} > consumed 127",
+            total_output
+        );
+        assert!(total_output + total_decreased <= 251);
     }
 
     #[test]
@@ -1771,17 +1781,17 @@ mod tests {
         ts.match_limit_order(5, !limit_zero_for_one, false, 0, true)
             .unwrap();
 
-        // A: floor(3 * 5/10) = floor(1.5) = 1 unfilled, filled=2
-        // Decrease 1: settled=2, decrease=1, total = 3-1 = 2, filled = 2
+        // A: floor(3 * 5/10) = floor(1.5) = 1 unfilled, filled=2, is_exact=false → output=1
+        // Decrease 1: settled=1, decrease=1, total = 3-1 = 2, filled = 2
         let dec = a.decrease_amount(&mut ts, 1).unwrap();
-        assert_eq!(dec.settled_output_amount, 2);
+        assert_eq!(dec.settled_output_amount, 1);
         assert_eq!(dec.real_decrease_amount, 1);
         assert_eq!(a.total_amount, 2);
         assert!(ts.part_filled_orders_remaining == 4);
 
-        // B: floor(7 * 5/10) = floor(3.5) = 3 unfilled, filled=4
+        // B: floor(7 * 5/10) = floor(3.5) = 3 unfilled, filled=4, is_exact=false → output=3
         let out_b = b.settle_filled_order(&ts).unwrap();
-        assert_eq!(out_b, 4);
+        assert_eq!(out_b, 3);
     }
 
     #[test]
@@ -1795,15 +1805,15 @@ mod tests {
         ts.match_limit_order(50000, !limit_zero_for_one, false, 0, true)
             .unwrap();
 
-        // A: floor(1 * 50000/100000) = floor(0.5) = 0 unfilled, filled=1
+        // A: floor(1 * 50000/100000) = floor(0.5) = 0 unfilled, filled=1, is_exact=false → output=0
         let dec = a.decrease_amount(&mut ts, u64::MAX).unwrap();
-        assert_eq!(dec.settled_output_amount, 1);
+        assert_eq!(dec.settled_output_amount, 0);
         assert_eq!(dec.real_decrease_amount, 0);
         assert!(ts.part_filled_orders_remaining == 50000);
 
-        // B: floor(99999 * 50000/100000) = floor(49999.5) = 49999 unfilled, filled=50000
+        // B: floor(99999 * 50000/100000) = floor(49999.5) = 49999 unfilled, filled=50000, is_exact=false → output=49999
         let out_b = b.settle_filled_order(&ts).unwrap();
-        assert_eq!(out_b, 50000);
+        assert_eq!(out_b, 49999);
     }
 
     #[test]
@@ -1866,22 +1876,18 @@ mod tests {
         let out_a = a.settle_filled_order(&ts).unwrap();
         let out_b = b.settle_filled_order(&ts).unwrap();
 
-        // Per-order conservation: all settles + decreased + remaining unfilled = opened
-        // NEW: remaining unfilled = total_amount - filled_amount
-        assert_eq!(
-            dec_a.settled_output_amount
-                + dec_a.real_decrease_amount
-                + out_a
-                + a.get_unfilled_amount().unwrap(),
-            a_opened
-        );
-        assert_eq!(
-            dec_b.settled_output_amount
-                + dec_b.real_decrease_amount
-                + out_b
-                + b.get_unfilled_amount().unwrap(),
-            b_opened
-        );
+        // Per-order conservation with dust: settled + decreased + unfilled <= opened
+        // (is_exact=false reduces output by 1 per non-exact settle, dust stays in vault)
+        let lhs_a = dec_a.settled_output_amount
+            + dec_a.real_decrease_amount
+            + out_a
+            + a.get_unfilled_amount().unwrap();
+        assert!(lhs_a <= a_opened && lhs_a >= a_opened - 2, "a: {}", lhs_a);
+        let lhs_b = dec_b.settled_output_amount
+            + dec_b.real_decrease_amount
+            + out_b
+            + b.get_unfilled_amount().unwrap();
+        assert!(lhs_b <= b_opened && lhs_b >= b_opened - 2, "b: {}", lhs_b);
     }
 
     #[test]
@@ -1894,10 +1900,10 @@ mod tests {
         ts.match_limit_order(600, !limit_zero_for_one, false, 0, true)
             .unwrap();
 
-        // Decrease 400: settle 601 (floor rounding), unfilled=399, decrease=min(400,399)=399
+        // Decrease 400: settle 600 (is_exact=false), unfilled=399, decrease=min(400,399)=399
         // NEW: total = 1000 - 399 = 601, filled = 601
         let dec = order.decrease_amount(&mut ts, 400).unwrap();
-        assert_eq!(dec.settled_output_amount, 601);
+        assert_eq!(dec.settled_output_amount, 600);
         assert_eq!(dec.real_decrease_amount, 399);
         assert_eq!(order.total_amount, 601);
         assert!(order.is_fully_filled());
@@ -1980,7 +1986,13 @@ mod tests {
             .unwrap();
 
         let total_settled_2 = settle_all(&mut orders, &ts);
-        assert_eq!(total_settled + total_settled_2, 5000);
+        // is_exact=false reduces output; total_settled <= total_consumed
+        assert!(
+            total_settled + total_settled_2 <= 5000
+                && total_settled + total_settled_2 >= 5000 - orders.len() as u64 * 2,
+            "total {} out of range",
+            total_settled + total_settled_2
+        );
     }
 
     // =========================================================================
@@ -2120,25 +2132,19 @@ mod tests {
             total_consumed + 10
         );
 
-        // Per-order conservation
-        assert_eq!(
-            a_total_settled + a_total_decreased + out_a + a.get_unfilled_amount().unwrap(),
-            1000
-        );
-        assert_eq!(
-            dec_b1.settled_output_amount
-                + dec_b1.real_decrease_amount
-                + out_b
-                + b.get_unfilled_amount().unwrap(),
-            1000
-        );
-        assert_eq!(
-            dec_c1.settled_output_amount
-                + dec_c1.real_decrease_amount
-                + out_c
-                + c.get_unfilled_amount().unwrap(),
-            1000
-        );
+        // Per-order conservation with dust (is_exact=false reduces output by 1 per non-exact settle)
+        let lhs_a = a_total_settled + a_total_decreased + out_a + a.get_unfilled_amount().unwrap();
+        assert!(lhs_a <= 1000 && lhs_a >= 1000 - 3, "a: {}", lhs_a);
+        let lhs_b = dec_b1.settled_output_amount
+            + dec_b1.real_decrease_amount
+            + out_b
+            + b.get_unfilled_amount().unwrap();
+        assert!(lhs_b <= 1000 && lhs_b >= 1000 - 3, "b: {}", lhs_b);
+        let lhs_c = dec_c1.settled_output_amount
+            + dec_c1.real_decrease_amount
+            + out_c
+            + c.get_unfilled_amount().unwrap();
+        assert!(lhs_c <= 1000 && lhs_c >= 1000 - 3, "c: {}", lhs_c);
     }
 
     /// After partial decrease, new orders join the same tick.
@@ -2263,23 +2269,21 @@ mod tests {
             total_consumed
         );
 
-        // Per-order conservation
-        assert_eq!(
-            dec_a.settled_output_amount
-                + dec_a.real_decrease_amount
-                + out_a
-                + a.get_unfilled_amount().unwrap(),
-            300
-        );
-        assert_eq!(
-            dec_b.settled_output_amount
-                + dec_b.real_decrease_amount
-                + out_b
-                + b.get_unfilled_amount().unwrap(),
-            500
-        );
-        assert_eq!(out_c + c.get_unfilled_amount().unwrap(), 500);
-        assert_eq!(out_d + d.get_unfilled_amount().unwrap(), 200);
+        // Per-order conservation with dust (is_exact=false reduces output by 1 per non-exact settle)
+        let lhs_a = dec_a.settled_output_amount
+            + dec_a.real_decrease_amount
+            + out_a
+            + a.get_unfilled_amount().unwrap();
+        assert!(lhs_a <= 300 && lhs_a >= 300 - 2, "a: {}", lhs_a);
+        let lhs_b = dec_b.settled_output_amount
+            + dec_b.real_decrease_amount
+            + out_b
+            + b.get_unfilled_amount().unwrap();
+        assert!(lhs_b <= 500 && lhs_b >= 500 - 2, "b: {}", lhs_b);
+        let lhs_c = out_c + c.get_unfilled_amount().unwrap();
+        assert!(lhs_c <= 500 && lhs_c >= 500 - 2, "c: {}", lhs_c);
+        let lhs_d = out_d + d.get_unfilled_amount().unwrap();
+        assert!(lhs_d <= 200 && lhs_d >= 200 - 2, "d: {}", lhs_d);
     }
 
     /// Same cohort: many orders, interleaved partial decreases between multiple matches.
@@ -2360,25 +2364,30 @@ mod tests {
             total_consumed
         );
 
-        // Per-order conservation: settled + decreased + unfilled = opened
+        // Per-order conservation with dust (is_exact=false reduces output by 1 per non-exact settle)
         for (i, order) in orders.iter().enumerate() {
             let unfilled = order.get_unfilled_amount().unwrap();
-            assert_eq!(
-                settled_outputs[i] + decreased_inputs[i] + unfilled,
-                amounts[i] as u64,
-                "Conservation failed for order {}",
-                i
+            let lhs = settled_outputs[i] + decreased_inputs[i] + unfilled;
+            assert!(
+                lhs <= amounts[i] as u64 && lhs >= amounts[i] as u64 - 3,
+                "Conservation failed for order {}: {} vs {}",
+                i,
+                lhs,
+                amounts[i]
             );
         }
 
-        // Global conservation: all outputs + all decreases + all unfilled = total opened
+        // Global conservation with dust
         let total_decreased: u64 = decreased_inputs.iter().sum();
         let total_unfilled: u64 = orders
             .iter()
             .map(|o| o.get_unfilled_amount().unwrap())
             .sum();
-        assert_eq!(
-            total_settled + total_decreased + total_unfilled,
+        let global_lhs = total_settled + total_decreased + total_unfilled;
+        assert!(
+            global_lhs <= total_opened && global_lhs >= total_opened - orders.len() as u64 * 3,
+            "Global conservation: {} vs {}",
+            global_lhs,
             total_opened
         );
     }
@@ -2428,13 +2437,13 @@ mod tests {
         // New orders: phase+1 == tick.phase → proportional fill (floor rounding)
         let out_new_c = new_c.settle_filled_order(&ts).unwrap();
         let out_new_d = new_d.settle_filled_order(&ts).unwrap();
-        assert_eq!(out_new_c, 481); // floor(800 * ratio / Q64) rounded
-        assert_eq!(out_new_d, 121); // floor(200 * ratio / Q64) rounded
-        assert_eq!(out_new_c + out_new_d, 602);
+        assert_eq!(out_new_c, 480); // is_exact=false → output reduced by 1
+        assert_eq!(out_new_d, 120); // is_exact=false → output reduced by 1
+        assert_eq!(out_new_c + out_new_d, 600);
 
-        // Floor rounding: fills can slightly exceed consumed
+        // is_exact=false ensures solvency: total output <= total consumed
         let total_output = out_old_a + out_old_b + out_new_c + out_new_d;
-        assert_eq!(total_output, 1602);
+        assert_eq!(total_output, 1600);
     }
 
     #[test]
@@ -2456,5 +2465,77 @@ mod tests {
         // tick state unchanged — nothing was actually consumed
         assert!(ts.orders_amount == 1);
         assert!(ts.part_filled_orders_remaining == 0);
+    }
+
+    #[test]
+    fn decrease_down_realistic_multi_round_last_users_get_not_zero() {
+        let tick = 0;
+        let initial_order_phase = 100;
+        let limit_zero_for_one = true;
+
+        let mut tick_state = create_mock_tick_state(tick, initial_order_phase, 0, 0);
+
+        // 200 users, 1,000 tokens each = 200,000 total
+        // (e.g. 0.001 SOL per order with 9 decimals, or $1 USDC with 6 decimals)
+        let order_count = 200usize;
+        let order_size = 1_000u64;
+        let mut orders: Vec<LimitOrderState> = (0..order_count)
+            .map(|_| {
+                open_order(
+                    order_size,
+                    limit_zero_for_one,
+                    initial_order_phase,
+                    &mut tick_state,
+                )
+            })
+            .collect();
+
+        // 10 rounds of swaps with non-round amounts
+        // Total consumed: ~194,079 out of 200,000 (≈97%)
+        // Each round fills a decreasing chunk: mimics real trading activity
+        let swap_amounts: [u64; 10] = [
+            67_123, 41_288, 28_342, 19_756, 13_457, 8_975, 6_124, 4_182, 2_857, 1_975,
+        ];
+
+        for &swap_amount in &swap_amounts {
+            let avail = tick_state.limit_order_unfilled_amount().unwrap();
+            if swap_amount > avail || avail == 0 {
+                break;
+            }
+            tick_state
+                .match_limit_order(swap_amount, !limit_zero_for_one, false, 0, true)
+                .unwrap();
+
+            // Between each round, all users settle (claiming output tokens)
+            // Each settle_up introduces up to +1 ceil error per order
+            for order in orders.iter_mut() {
+                let _ = order.settle_filled_order(&tick_state).unwrap();
+            }
+        }
+
+        let part_remaining = tick_state.part_filled_orders_remaining;
+
+        // Compute sum of all orders' perceived unfilled amounts
+        let sum_unfilled: u64 = orders
+            .iter()
+            .map(|o| o.get_unfilled_amount().unwrap())
+            .sum();
+
+        // Key: ceil rounding inflates sum_unfilled above actual part_remaining
+        let rounding_gap = part_remaining - sum_unfilled;
+        assert!(rounding_gap > 0,);
+
+        // All 200 users try to withdraw remaining principal
+        let mut zero_count = 0u64;
+
+        for order in orders.iter_mut() {
+            let unfilled_before = order.get_unfilled_amount().unwrap();
+            let result = order.decrease_amount(&mut tick_state, order_size).unwrap();
+
+            if unfilled_before > 0 && result.real_decrease_amount == 0 {
+                zero_count += 1;
+            }
+        }
+        assert!(zero_count == 0,);
     }
 }

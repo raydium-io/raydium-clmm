@@ -79,6 +79,16 @@ pub fn increase_limit_order(ctx: Context<IncreaseLimitOrder>, amount: u64) -> Re
         .limit_order
         .increase_amount(tick_state, amount_without_transfer_fee)?;
 
+    emit!(IncreaseLimitOrderEvent {
+        pool_id: ctx.accounts.pool_state.key(),
+        limit_order: ctx.accounts.limit_order.key(),
+        zero_for_one: ctx.accounts.limit_order.zero_for_one,
+        tick_index: ctx.accounts.limit_order.tick_index,
+        total_amount: ctx.accounts.limit_order.total_amount,
+        increased_amount: amount_without_transfer_fee,
+        transfer_fee: transfer_fee,
+    });
+
     check_limit_order_amount(
         ctx.accounts.limit_order.total_amount,
         tick_index,
@@ -99,14 +109,5 @@ pub fn increase_limit_order(ctx: Context<IncreaseLimitOrder>, amount: u64) -> Re
         ctx.accounts.input_vault_mint.decimals,
     )?;
 
-    emit!(IncreaseLimitOrderEvent {
-        pool_id: ctx.accounts.pool_state.key(),
-        limit_order: ctx.accounts.limit_order.key(),
-        zero_for_one: ctx.accounts.limit_order.zero_for_one,
-        tick_index: ctx.accounts.limit_order.tick_index,
-        total_amount: ctx.accounts.limit_order.total_amount,
-        increased_amount: amount_without_transfer_fee,
-        transfer_fee: transfer_fee,
-    });
     Ok(())
 }

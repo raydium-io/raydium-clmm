@@ -63,25 +63,8 @@ pub fn settle_limit_order(ctx: Context<SettleLimitOrder>) -> Result<()> {
 
     let order = &mut ctx.accounts.limit_order;
     let amount_out = order.settle_filled_order(tick_state)?;
-
     if order.get_unfilled_amount()? != 0 {
         require_gt!(amount_out, 0);
-    }
-    if amount_out > 0 {
-        token_2022::transfer_checked(
-            CpiContext::new_with_signer(
-                ctx.accounts.output_token_program.to_account_info(),
-                token_2022::TransferChecked {
-                    from: ctx.accounts.output_vault.to_account_info(),
-                    to: ctx.accounts.output_token_account.to_account_info(),
-                    authority: ctx.accounts.pool_state.to_account_info(),
-                    mint: ctx.accounts.output_vault_mint.to_account_info(),
-                },
-                &[&ctx.accounts.pool_state.load()?.seeds()],
-            ),
-            amount_out,
-            ctx.accounts.output_vault_mint.decimals,
-        )?;
     }
     emit!(SettleLimitOrderEvent {
         pool_id: ctx.accounts.pool_state.key(),
@@ -92,6 +75,21 @@ pub fn settle_limit_order(ctx: Context<SettleLimitOrder>) -> Result<()> {
         filled_amount: ctx.accounts.limit_order.filled_amount,
         settled_amount_out: amount_out,
     });
+    // For monitoring purposes, perform the transfer even if amount_out is 0
+    token_2022::transfer_checked(
+        CpiContext::new_with_signer(
+            ctx.accounts.output_token_program.to_account_info(),
+            token_2022::TransferChecked {
+                from: ctx.accounts.output_vault.to_account_info(),
+                to: ctx.accounts.output_token_account.to_account_info(),
+                authority: ctx.accounts.pool_state.to_account_info(),
+                mint: ctx.accounts.output_vault_mint.to_account_info(),
+            },
+            &[&ctx.accounts.pool_state.load()?.seeds()],
+        ),
+        amount_out,
+        ctx.accounts.output_vault_mint.decimals,
+    )?;
 
     Ok(())
 }
