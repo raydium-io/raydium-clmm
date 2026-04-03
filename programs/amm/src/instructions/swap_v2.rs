@@ -324,9 +324,9 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             }
         } else {
             if zero_for_one {
-                require_eq!(amount_specified, transfer_amount_1);
+                require_eq!(amount_calculate_specified, transfer_amount_1);
             } else {
-                require_eq!(amount_specified, transfer_amount_0);
+                require_eq!(amount_calculate_specified, transfer_amount_0);
             }
         }
     }
