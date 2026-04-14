@@ -338,7 +338,7 @@ impl PoolState {
 
         for i in 0..REWARD_NUM {
             let reward_info = &mut next_reward_infos[i];
-            if !reward_info.initialized() {
+            if !reward_info.initialized() || reward_info.reward_total_emitted == u64::MAX {
                 continue;
             }
             if curr_timestamp <= reward_info.open_time {
@@ -347,35 +347,44 @@ impl PoolState {
             let latest_update_timestamp = curr_timestamp.min(reward_info.end_time);
 
             if self.liquidity != 0 {
-                require_gte!(latest_update_timestamp, reward_info.last_update_time);
+                // require_gte!(latest_update_timestamp, reward_info.last_update_time);
                 let time_delta = latest_update_timestamp
-                    .checked_sub(reward_info.last_update_time)
-                    .unwrap();
+                    .saturating_sub(reward_info.last_update_time);
+                if time_delta == 0{
+                    continue;
+                }
+                let reward_delta = U128::from(time_delta)
+                    .mul_div_ceil(
+                        U128::from(reward_info.emissions_per_second_x64),
+                        U128::from(fixed_point_64::Q64),
+                    )
+                    .unwrap_or(U128::zero()).as_u64();
 
-                let reward_growth_delta = U256::from(time_delta)
+                let mut reward_growth_delta = U256::from(time_delta)
                     .mul_div_floor(
                         U256::from(reward_info.emissions_per_second_x64),
                         U256::from(self.liquidity),
                     )
-                    .unwrap();
+                    .unwrap_or(U256::zero());
+
+                if let Some(new_total) = reward_info
+                    .reward_total_emitted
+                    .checked_add(reward_delta)
+                {
+                    reward_info.reward_total_emitted = new_total;
+                } else {
+                    let remain = u64::MAX.saturating_sub(reward_info.reward_total_emitted);
+                    reward_info.reward_total_emitted = u64::MAX;
+
+                    reward_growth_delta = U256::from(remain)
+                        .mul_div_floor(U256::from(fixed_point_64::Q64), U256::from(self.liquidity))
+                        .unwrap_or(U256::zero());
+                }
 
                 reward_info.reward_growth_global_x64 = reward_info
                     .reward_growth_global_x64
-                    .checked_add(reward_growth_delta.as_u128())
-                    .unwrap();
+                    .wrapping_add(reward_growth_delta.as_u128());
 
-                reward_info.reward_total_emitted = reward_info
-                    .reward_total_emitted
-                    .checked_add(
-                        U128::from(time_delta)
-                            .mul_div_ceil(
-                                U128::from(reward_info.emissions_per_second_x64),
-                                U128::from(fixed_point_64::Q64),
-                            )
-                            .unwrap()
-                            .as_u64(),
-                    )
-                    .unwrap();
                 #[cfg(feature = "enable-log")]
                 msg!(
                     "reward_index:{},latest_update_timestamp:{},reward_info.reward_last_update_time:{},time_delta:{},reward_emission_per_second_x64:{},reward_growth_delta:{},reward_info.reward_growth_global_x64:{}, reward_info.reward_claim:{}",

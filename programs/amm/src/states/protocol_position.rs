@@ -75,12 +75,12 @@ impl ProtocolPositionState {
         );
         // calculate accumulated Fees
         let tokens_owed_0 =
-            U128::from(fee_growth_inside_0_x64.saturating_sub(self.fee_growth_inside_0_last_x64))
+            U128::from(fee_growth_inside_0_x64.wrapping_sub(self.fee_growth_inside_0_last_x64))
                 .mul_div_floor(U128::from(self.liquidity), U128::from(fixed_point_64::Q64))
                 .unwrap()
                 .to_underflow_u64();
         let tokens_owed_1 =
-            U128::from(fee_growth_inside_1_x64.saturating_sub(self.fee_growth_inside_1_last_x64))
+            U128::from(fee_growth_inside_1_x64.wrapping_sub(self.fee_growth_inside_1_last_x64))
                 .mul_div_floor(U128::from(self.liquidity), U128::from(fixed_point_64::Q64))
                 .unwrap()
                 .to_underflow_u64();

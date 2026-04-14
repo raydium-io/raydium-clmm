@@ -362,11 +362,9 @@ impl TickState {
         reward_infos: &[RewardInfo; REWARD_NUM],
     ) -> i128 {
         self.fee_growth_outside_0_x64 = fee_growth_global_0_x64
-            .checked_sub(self.fee_growth_outside_0_x64)
-            .unwrap();
+            .wrapping_sub(self.fee_growth_outside_0_x64);
         self.fee_growth_outside_1_x64 = fee_growth_global_1_x64
-            .checked_sub(self.fee_growth_outside_1_x64)
-            .unwrap();
+            .wrapping_sub(self.fee_growth_outside_1_x64);
 
         for i in 0..REWARD_NUM {
             if !reward_infos[i].initialized() {
@@ -375,8 +373,7 @@ impl TickState {
 
             self.reward_growths_outside_x64[i] = reward_infos[i]
                 .reward_growth_global_x64
-                .checked_sub(self.reward_growths_outside_x64[i])
-                .unwrap();
+                .wrapping_sub(self.reward_growths_outside_x64[i]);
         }
 
         self.liquidity_net
@@ -628,11 +625,9 @@ pub fn get_fee_growth_inside(
     } else {
         (
             fee_growth_global_0_x64
-                .checked_sub(tick_lower.fee_growth_outside_0_x64)
-                .unwrap(),
+                .wrapping_sub(tick_lower.fee_growth_outside_0_x64),
             fee_growth_global_1_x64
-                .checked_sub(tick_lower.fee_growth_outside_1_x64)
-                .unwrap(),
+                .wrapping_sub(tick_lower.fee_growth_outside_1_x64),
         )
     };
 
@@ -645,11 +640,9 @@ pub fn get_fee_growth_inside(
     } else {
         (
             fee_growth_global_0_x64
-                .checked_sub(tick_upper.fee_growth_outside_0_x64)
-                .unwrap(),
+                .wrapping_sub(tick_upper.fee_growth_outside_0_x64),
             fee_growth_global_1_x64
-                .checked_sub(tick_upper.fee_growth_outside_1_x64)
-                .unwrap(),
+                .wrapping_sub(tick_upper.fee_growth_outside_1_x64),
         )
     };
     let fee_growth_inside_0_x64 = fee_growth_global_0_x64
@@ -681,8 +674,7 @@ pub fn get_reward_growths_inside(
         } else {
             reward_infos[i]
                 .reward_growth_global_x64
-                .checked_sub(tick_lower.reward_growths_outside_x64[i])
-                .unwrap()
+                .wrapping_sub(tick_lower.reward_growths_outside_x64[i])
         };
 
         let reward_growths_above = if tick_current_index < tick_upper.tick {
@@ -690,8 +682,7 @@ pub fn get_reward_growths_inside(
         } else {
             reward_infos[i]
                 .reward_growth_global_x64
-                .checked_sub(tick_upper.reward_growths_outside_x64[i])
-                .unwrap()
+                .wrapping_sub(tick_upper.reward_growths_outside_x64[i])
         };
         reward_growths_inside[i] = reward_infos[i]
             .reward_growth_global_x64

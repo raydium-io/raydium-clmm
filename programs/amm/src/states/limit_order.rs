@@ -84,8 +84,24 @@ impl LimitOrderState {
             // same phase, unfilled - no output
             (0, true)
         } else if self.order_phase + 1 == tick_state.order_phase {
-            // Part-filled: use index to compute current unfilled
-            // current_unfilled = floor(remaining_amount * tick.index / order.index)
+            // Part-filled: use ratio to compute current unfilled.
+            //
+            // Uses floor (truncating division) for new_remaining_amount so that each order's
+            // unfilled amount is at most its proportional share. This guarantees the sum of all
+            // orders' unfilled amounts never exceeds tick.part_filled_orders_remaining, preventing
+            // vault insolvency when users withdraw. Rounding dust (at most 1 per order) stays in
+            // the protocol.
+            //
+            // If ceil were used instead, each order's unfilled amount could exceed its fair share
+            // by 1 per settlement. Since each order can settle multiple times, the cumulative
+            // excess is unbounded, causing the total unfilled across all orders to exceed
+            // tick.part_filled_orders_remaining. Later withdrawers would be silently capped
+            // by the .min(part_filled_orders_remaining) check in decrease_amount — unfairly
+            // shorting them.
+            //
+            // Since floor makes filled_amount up to 1 too large, the effective_filled_amount
+            // subtracts 1 when the division is not exact (is_exact == false), ensuring output
+            // tokens are not over-claimed.
             let numerator = U128::from(remaining_amount).as_u256()
                 * U128::from(tick_state.unfilled_ratio_x64).as_u256();
             let denominator = U128::from(self.unfilled_ratio_x64).as_u256();

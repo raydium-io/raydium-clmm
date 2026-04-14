@@ -255,8 +255,7 @@ impl SwapState {
 
             self.fee_growth_global_x64 = self
                 .fee_growth_global_x64
-                .checked_add(fee_growth_global_x64_delta)
-                .ok_or(ErrorCode::CalculateOverflow)?;
+                .wrapping_add(fee_growth_global_x64_delta);
             self.lp_fee = self
                 .lp_fee
                 .checked_add(remaining_fee)
