@@ -17,12 +17,20 @@ pub struct LimitOrderState {
     pub order_phase: u64,
     /// Total amount of the limit order
     pub total_amount: u64,
-    /// Filled amount of the limit order
+    /// Filled amount of the limit order (informational, for events/display)
     pub filled_amount: u64,
+    /// The unfilled amount when the current computation segment started.
+    /// Set to total_amount on open, reset on decrease. Never updated during settle —
+    /// this avoids cascading floor-division error across multiple settles.
+    pub settle_base: u64,
+    /// Cumulative output paid to user in the current segment. Reset on decrease.
+    /// Each settle computes total_output from the segment base and pays the diff
+    /// (total_output - settled_output), limiting dust deduction to once per segment.
+    pub settled_output: u64,
     /// Order open time
     pub open_time: u64,
-    /// Snapshot of `TickState.unfilled_ratio_x64` at the time this order last settled (Q64.64).
-    /// Initialized to Q64 on open; used with the tick's current ratio to compute proportional fill.
+    /// Snapshot of `TickState.unfilled_ratio_x64` at the time this segment started (Q64.64).
+    /// Initialized to Q64 on open; reset to tick's current ratio on decrease.
     pub unfilled_ratio_x64: u128,
     pub padding: [u64; 4],
 }
@@ -34,7 +42,7 @@ pub struct DecreaseAmountResult {
 }
 
 impl LimitOrderState {
-    pub const LEN: usize = 8 + 32 + 32 + 4 + 1 + 8 + 8 + 8 + 8 + 16 + 8 * 4;
+    pub const LEN: usize = 8 + 32 + 32 + 4 + 1 + 8 + 8 + 8 + 8 + 8 + 8 + 16 + 8 * 4;
 
     /// Create a new limit order with FIFO queue mechanism
     pub fn initialize(
@@ -56,6 +64,8 @@ impl LimitOrderState {
         self.filled_amount = 0;
         self.open_time = timestamp;
         self.unfilled_ratio_x64 = fixed_point_64::Q64;
+        self.settle_base = amount;
+        self.settled_output = 0;
         self.padding = [0; 4];
     }
 
@@ -71,76 +81,81 @@ impl LimitOrderState {
             .ok_or(ErrorCode::CalculateOverflow.into())
     }
 
-    /// Settle order, return (amount_out, is_exact).
-    /// `is_exact` indicates whether the ratio division in partial fill had no remainder.
-    /// total_amount and index are NOT modified — only filled_amount is updated.
+    /// Settle order using absolute computation with output diff.
+    ///
+    /// Instead of updating the ratio snapshot on each settle (which causes cascading
+    /// floor-division error), the ratio and `remaining` (segment base) are kept fixed.
+    /// Each settle computes the total output from the segment base and pays the diff
+    /// against previously settled output. This limits rounding error to O(1) per segment
+    /// instead of O(N) per settle.
+    ///
+    /// The `-1` dust deduction (for non-exact division) is applied once to the total
+    /// effective filled, and the diff naturally distributes it — no per-settle flag needed.
     pub fn settle_filled_order(&mut self, tick_state: &TickState) -> Result<u64> {
-        let remaining_amount = self.get_unfilled_amount()?;
-        if remaining_amount == 0 {
+        if self.settle_base == 0 {
             return Ok(0);
         }
 
-        let (filled_amount, is_exact) = if self.order_phase == tick_state.order_phase {
-            // same phase, unfilled - no output
-            (0, true)
+        if self.order_phase == tick_state.order_phase {
+            // Same phase, no fills
+            return Ok(0);
         } else if self.order_phase + 1 == tick_state.order_phase {
-            // Part-filled: use ratio to compute current unfilled.
-            //
-            // Uses floor (truncating division) for new_remaining_amount so that each order's
-            // unfilled amount is at most its proportional share. This guarantees the sum of all
-            // orders' unfilled amounts never exceeds tick.part_filled_orders_remaining, preventing
-            // vault insolvency when users withdraw. Rounding dust (at most 1 per order) stays in
-            // the protocol.
-            //
-            // If ceil were used instead, each order's unfilled amount could exceed its fair share
-            // by 1 per settlement. Since each order can settle multiple times, the cumulative
-            // excess is unbounded, causing the total unfilled across all orders to exceed
-            // tick.part_filled_orders_remaining. Later withdrawers would be silently capped
-            // by the .min(part_filled_orders_remaining) check in decrease_amount — unfairly
-            // shorting them.
-            //
-            // Since floor makes filled_amount up to 1 too large, the effective_filled_amount
-            // subtracts 1 when the division is not exact (is_exact == false), ensuring output
-            // tokens are not over-claimed.
-            let numerator = U128::from(remaining_amount).as_u256()
+            // Part-filled: absolute computation from remaining (segment base).
+            // Floor on ideal_remaining ensures each order's unfilled <= proportional share,
+            // so the sum never exceeds tick.part_filled_orders_remaining.
+            let numerator = U128::from(self.settle_base).as_u256()
                 * U128::from(tick_state.unfilled_ratio_x64).as_u256();
             let denominator = U128::from(self.unfilled_ratio_x64).as_u256();
 
-            let new_remaining_amount = (numerator / denominator).as_u64();
-            let filled = remaining_amount.saturating_sub(new_remaining_amount);
-            if filled > 0 {
-                self.unfilled_ratio_x64 = tick_state.unfilled_ratio_x64;
+            let ideal_remaining = (numerator / denominator).as_u64();
+            let is_exact = (numerator % denominator).is_zero();
+
+            let total_filled = self.settle_base.saturating_sub(ideal_remaining);
+            if total_filled == 0 {
+                return Ok(0);
             }
 
-            (filled, (numerator % denominator).is_zero())
+            let effective_filled = if is_exact {
+                total_filled
+            } else {
+                total_filled.saturating_sub(1)
+            };
+
+            let total_output = TickState::get_limit_order_output(
+                effective_filled,
+                tick_state.tick,
+                self.zero_for_one,
+            )?;
+
+            let payout = total_output.saturating_sub(self.settled_output);
+
+            // Always update filled_amount even if payout is 0 (e.g. filled=1,
+            // effective=0 → output=0), so get_unfilled_amount() stays correct.
+            self.filled_amount = self
+                .total_amount
+                .checked_sub(ideal_remaining)
+                .ok_or(ErrorCode::CalculateOverflow)?;
+            self.settled_output = total_output;
+
+            Ok(payout)
         } else if self.order_phase + 2 <= tick_state.order_phase {
-            // fully filled
-            (remaining_amount, true)
+            // Fully filled: all remaining consumed. Output diff recovers any dust
+            // held back during partial-fill settles.
+            let total_output = TickState::get_limit_order_output(
+                self.settle_base,
+                tick_state.tick,
+                self.zero_for_one,
+            )?;
+            let payout = total_output.saturating_sub(self.settled_output);
+
+            self.filled_amount = self.total_amount;
+            self.settle_base = 0;
+            self.settled_output = 0;
+
+            Ok(payout)
         } else {
             return err!(ErrorCode::InvalidOrderPhase);
-        };
-
-        if filled_amount == 0 {
-            return Ok(0);
         }
-
-        self.filled_amount = self
-            .filled_amount
-            .checked_add(filled_amount)
-            .ok_or(ErrorCode::CalculateOverflow)?;
-
-        let effective_filled_amount = if is_exact {
-            filled_amount
-        } else {
-            filled_amount - 1
-        };
-
-        let amount_out = TickState::get_limit_order_output(
-            effective_filled_amount,
-            tick_state.tick,
-            self.zero_for_one,
-        )?;
-        Ok(amount_out)
     }
 
     pub fn increase_amount(&mut self, tick_state: &mut TickState, amount: u64) -> Result<()> {
@@ -150,6 +165,10 @@ impl LimitOrderState {
         // Same phase guarantees the order is in orders_amount, never matched.
         self.total_amount = self
             .total_amount
+            .checked_add(amount)
+            .ok_or(ErrorCode::CalculateOverflow)?;
+        self.settle_base = self
+            .settle_base
             .checked_add(amount)
             .ok_or(ErrorCode::CalculateOverflow)?;
         tick_state.orders_amount = tick_state
@@ -184,7 +203,6 @@ impl LimitOrderState {
             decrease
         } else if self.order_phase + 1 == tick_state.order_phase {
             // Cap at part_filled_orders_remaining to prevent vault insolvency
-            // from ceil-rounding in settle causing unfilled_amount > tick's tracking
             let decrease = amount
                 .min(unfilled_amount)
                 .min(tick_state.part_filled_orders_remaining);
@@ -201,6 +219,17 @@ impl LimitOrderState {
             .total_amount
             .checked_sub(real_decrease_amount)
             .ok_or(ErrorCode::CalculateOverflow)?;
+
+        // Reset computation baseline for the new segment
+        if self.order_phase + 1 == tick_state.order_phase {
+            let new_unfilled = self.get_unfilled_amount()?;
+            self.settle_base = new_unfilled;
+            self.unfilled_ratio_x64 = tick_state.unfilled_ratio_x64;
+            self.settled_output = 0;
+        } else {
+            // Same phase: remaining = total_amount (all unfilled)
+            self.settle_base = self.total_amount;
+        }
 
         let remaining_amount = self.get_unfilled_amount()?;
         if remaining_amount > 0 {
@@ -639,7 +668,8 @@ mod tests {
             .unwrap();
 
         let output2 = order.settle_filled_order(&mut tick_state).unwrap();
-        assert_eq!(output2, 299);
+        // Fully filled recovers the 1-token dust from the first partial settle
+        assert_eq!(output2, 300);
         assert!(order.is_fully_filled());
     }
 
@@ -740,9 +770,10 @@ mod tests {
             .match_limit_order(2500, !limit_zero_for_one, false, 0, true)
             .unwrap();
 
-        // A: after settle total=833, index synced. Now index=0 → filled=833
-        assert_eq!(user_a.settle_filled_order(&mut tick_state).unwrap(), 833);
-        assert_eq!(user_b.settle_filled_order(&mut tick_state).unwrap(), 1666);
+        // A/B: ratio=0 (all consumed), total_output = get_output(remaining).
+        // Output diff recovers the 1-token dust from the first partial settle.
+        assert_eq!(user_a.settle_filled_order(&mut tick_state).unwrap(), 834);
+        assert_eq!(user_b.settle_filled_order(&mut tick_state).unwrap(), 1667);
         assert_eq!(user_c.settle_filled_order(&mut tick_state).unwrap(), 0);
 
         tick_state
@@ -753,7 +784,8 @@ mod tests {
         tick_state
             .match_limit_order(2000, !limit_zero_for_one, false, 0, true)
             .unwrap();
-        assert_eq!(user_c.settle_filled_order(&mut tick_state).unwrap(), 1498);
+        // Exact division (ratio=0) → no dust, diff recovers the 1-token from first C settle
+        assert_eq!(user_c.settle_filled_order(&mut tick_state).unwrap(), 1499);
     }
 
     #[test]
@@ -887,7 +919,8 @@ mod tests {
             .unwrap();
         assert!(tick_state.part_filled_orders_remaining == 0);
 
-        assert_eq!(order.settle_filled_order(&mut tick_state).unwrap(), 399);
+        // Ratio=0 (all consumed), exact → output diff recovers dust from earlier partial settle
+        assert_eq!(order.settle_filled_order(&mut tick_state).unwrap(), 400);
         assert!(order.is_fully_filled());
     }
 
@@ -1375,7 +1408,8 @@ mod tests {
             .unwrap();
 
         let out_final = order.settle_filled_order(&tick_state).unwrap();
-        assert_eq!(out_final, 99);
+        // Ratio=0 (all consumed), exact → dust recovered from earlier partial settle
+        assert_eq!(out_final, 100);
         assert!(order.is_fully_filled());
 
         // Decrease on fully filled: no-op
