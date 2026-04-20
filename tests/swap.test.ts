@@ -123,8 +123,8 @@ describe("swap_test", () => {
         "tickState.partFilledOrdersRemaining should be equal to 0"
       );
       assert.isTrue(
-        tickStateBeforePartial.partFilledOrdersTotal.toString() === "0",
-        "tickState.partFilledOrdersTotal should be equal to 0"
+        tickStateBeforePartial.unfilledRatioX64.toString() === "0",
+        "tickState.unfilledRatioX64 should be 0 before any partial fill"
       );
 
       // Check pool price and tickCurrent
@@ -188,9 +188,8 @@ describe("swap_test", () => {
         "tickState.partFilledOrdersRemaining should be equal to ORDER_AMOUNT - SWAP_AMOUNT"
       );
       assert.isTrue(
-        tickStateAfterPartial.partFilledOrdersTotal.toString() ===
-          ORDER_AMOUNT.toString(),
-        "tickState.partFilledOrdersTotal should be equal to 0"
+        !tickStateAfterPartial.unfilledRatioX64.isZero(),
+        "tickState.unfilledRatioX64 should be non-zero after partial fill"
       );
 
       // Check pool price and tickCurrent
@@ -253,9 +252,8 @@ describe("swap_test", () => {
         "tickState.partFilledOrdersRemaining should be equal to 0"
       );
       assert.isTrue(
-        tickStateAfterFull.partFilledOrdersTotal.toString() ===
-          ORDER_AMOUNT.toString(),
-        "tickState.partFilledOrdersTotal should be equal to 0"
+        tickStateAfterFull.unfilledRatioX64.isZero(),
+        "tickState.unfilledRatioX64 should collapse to 0 after full fill"
       );
 
       // Check pool price and tickCurrent
@@ -407,8 +405,8 @@ describe("swap_test", () => {
         "tickState.partFilledOrdersRemaining should be equal to 0"
       );
       assert.isTrue(
-        tickStateBeforePartial.partFilledOrdersTotal.toString() === "0",
-        "tickState.partFilledOrdersTotal should be equal to 0"
+        tickStateBeforePartial.unfilledRatioX64.toString() === "0",
+        "tickState.unfilledRatioX64 should be 0 before any partial fill"
       );
 
       // Check pool price and tickCurrent
@@ -475,9 +473,8 @@ describe("swap_test", () => {
         "tickState.partFilledOrdersRemaining should be equal to ORDER_AMOUNT - SWAP_AMOUNT"
       );
       assert.isTrue(
-        tickStateAfterPartial.partFilledOrdersTotal.toString() ===
-          ORDER_AMOUNT.toString(),
-        "tickState.partFilledOrdersTotal should be equal to 0"
+        !tickStateAfterPartial.unfilledRatioX64.isZero(),
+        "tickState.unfilledRatioX64 should be non-zero after partial fill"
       );
 
       // Check pool price and tickCurrent
@@ -540,9 +537,8 @@ describe("swap_test", () => {
         "tickState.partFilledOrdersRemaining should be equal to 0"
       );
       assert.isTrue(
-        tickStateAfterFull.partFilledOrdersTotal.toString() ===
-          ORDER_AMOUNT.toString(),
-        "tickState.partFilledOrdersTotal should be equal to 0"
+        tickStateAfterFull.unfilledRatioX64.isZero(),
+        "tickState.unfilledRatioX64 should collapse to 0 after full fill"
       );
 
       // Check pool price and tickCurrent

@@ -113,6 +113,8 @@ pub enum ErrorCode {
     InvalidOrderPhase,
     #[msg("Invalid limit order amount")]
     InvalidLimitOrderAmount,
+    #[msg("Tick order phase saturated")]
+    OrderPhaseSaturated,
 
     #[msg("Invalid dynamic fee config params")]
     InvalidDynamicFeeConfigParams,

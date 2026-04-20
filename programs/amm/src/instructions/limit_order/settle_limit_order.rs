@@ -8,7 +8,7 @@ pub struct SettleLimitOrder<'info> {
     #[account(constraint = signer.key() == limit_order.owner || signer.key() == crate::limit_order_admin::ID)]
     pub signer: Signer<'info>,
 
-    #[account(mut)]
+    #[account()]
     pub pool_state: AccountLoader<'info, PoolState>,
 
     #[account(

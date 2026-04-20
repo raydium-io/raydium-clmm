@@ -8,7 +8,7 @@ pub struct CloseLimitOrder<'info> {
     pub signer: Signer<'info>,
 
     /// CHECK: The rent receiver account
-    #[account(address = limit_order.owner)]
+    #[account(mut, address = limit_order.owner)]
     pub rent_receiver: UncheckedAccount<'info>,
 
     #[account(mut)]

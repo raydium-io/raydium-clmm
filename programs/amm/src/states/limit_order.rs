@@ -99,7 +99,7 @@ impl LimitOrderState {
         if self.order_phase == tick_state.order_phase {
             // Same phase, no fills
             return Ok(0);
-        } else if self.order_phase + 1 == tick_state.order_phase {
+        } else if self.order_phase.saturating_add(1) == tick_state.order_phase {
             // Part-filled: absolute computation from remaining (segment base).
             // Floor on ideal_remaining ensures each order's unfilled <= proportional share,
             // so the sum never exceeds tick.part_filled_orders_remaining.
@@ -138,7 +138,7 @@ impl LimitOrderState {
             self.settled_output = total_output;
 
             Ok(payout)
-        } else if self.order_phase + 2 <= tick_state.order_phase {
+        } else if self.order_phase.saturating_add(2) <= tick_state.order_phase {
             // Fully filled: all remaining consumed. Output diff recovers any dust
             // held back during partial-fill settles.
             let total_output = TickState::get_limit_order_output(
@@ -201,7 +201,7 @@ impl LimitOrderState {
                 .checked_sub(decrease)
                 .ok_or(ErrorCode::CalculateOverflow)?;
             decrease
-        } else if self.order_phase + 1 == tick_state.order_phase {
+        } else if self.order_phase.saturating_add(1) == tick_state.order_phase {
             // Cap at part_filled_orders_remaining to prevent vault insolvency
             let decrease = amount
                 .min(unfilled_amount)
@@ -212,8 +212,17 @@ impl LimitOrderState {
                 .ok_or(ErrorCode::CalculateOverflow)?;
             decrease
         } else {
+            // Fully-filled orders are normalized to unfilled == 0 by the preceding
+            // settle_filled_order and hit the early return above, impossible to trigger.
             return err!(ErrorCode::OrderAlreadyFilled);
         };
+
+        if real_decrease_amount == 0 {
+            return Ok(DecreaseAmountResult {
+                settled_output_amount,
+                real_decrease_amount: 0,
+            });
+        }
 
         self.total_amount = self
             .total_amount
@@ -221,7 +230,7 @@ impl LimitOrderState {
             .ok_or(ErrorCode::CalculateOverflow)?;
 
         // Reset computation baseline for the new segment
-        if self.order_phase + 1 == tick_state.order_phase {
+        if self.order_phase.saturating_add(1) == tick_state.order_phase {
             let new_unfilled = self.get_unfilled_amount()?;
             self.settle_base = new_unfilled;
             self.unfilled_ratio_x64 = tick_state.unfilled_ratio_x64;

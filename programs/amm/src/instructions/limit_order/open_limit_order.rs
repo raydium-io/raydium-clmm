@@ -99,7 +99,9 @@ pub fn open_limit_order<'a, 'b, 'c: 'info, 'info>(
 ) -> Result<()> {
     let (tick_spacing, tick_current) = {
         let pool_state = ctx.accounts.pool_state.load()?;
-        if !pool_state.get_status_by_bit(PoolStatusBitIndex::LimitOrder) {
+        if !pool_state.get_status_by_bit(PoolStatusBitIndex::LimitOrder)
+            || !pool_state.get_status_by_bit(PoolStatusBitIndex::Swap)
+        {
             return err!(ErrorCode::NotApproved);
         }
         (pool_state.tick_spacing, pool_state.tick_current)
@@ -136,6 +138,10 @@ pub fn open_limit_order<'a, 'b, 'c: 'info, 'info>(
     let before_init_tick_count = tick_array.initialized_tick_count;
 
     let tick_state = tick_array.get_tick_state_mut(tick_index, tick_spacing)?;
+    require!(
+        tick_state.order_phase < u64::MAX,
+        ErrorCode::OrderPhaseSaturated
+    );
     let tick_initialized_before = tick_state.is_initialized();
     tick_state.tick = tick_index;
 

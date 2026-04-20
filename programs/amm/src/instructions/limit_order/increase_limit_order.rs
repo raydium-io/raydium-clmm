@@ -61,7 +61,9 @@ pub fn increase_limit_order(ctx: Context<IncreaseLimitOrder>, amount: u64) -> Re
     require!(amount > 0, ErrorCode::ZeroAmountSpecified);
     let tick_spacing = {
         let pool_state = ctx.accounts.pool_state.load()?;
-        if !pool_state.get_status_by_bit(PoolStatusBitIndex::LimitOrder) {
+        if !pool_state.get_status_by_bit(PoolStatusBitIndex::LimitOrder)
+            || !pool_state.get_status_by_bit(PoolStatusBitIndex::Swap)
+        {
             return err!(ErrorCode::NotApproved);
         }
         pool_state.tick_spacing
