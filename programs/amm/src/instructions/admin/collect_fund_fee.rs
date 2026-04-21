@@ -71,8 +71,14 @@ pub fn collect_fund_fee(
         amount_0 = amount_0_requested.min(pool_state.fund_fees_token_0);
         amount_1 = amount_1_requested.min(pool_state.fund_fees_token_1);
 
-        pool_state.fund_fees_token_0 = pool_state.fund_fees_token_0.checked_sub(amount_0).unwrap();
-        pool_state.fund_fees_token_1 = pool_state.fund_fees_token_1.checked_sub(amount_1).unwrap();
+        pool_state.fund_fees_token_0 = pool_state
+            .fund_fees_token_0
+            .checked_sub(amount_0)
+            .ok_or(ErrorCode::CalculateOverflow)?;
+        pool_state.fund_fees_token_1 = pool_state
+            .fund_fees_token_1
+            .checked_sub(amount_1)
+            .ok_or(ErrorCode::CalculateOverflow)?;
     }
     transfer_from_pool_vault_to_user(
         &ctx.accounts.pool_state,

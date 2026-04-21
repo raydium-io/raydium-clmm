@@ -78,11 +78,11 @@ pub fn collect_protocol_fee(
         pool_state.protocol_fees_token_0 = pool_state
             .protocol_fees_token_0
             .checked_sub(amount_0)
-            .unwrap();
+            .ok_or(ErrorCode::CalculateOverflow)?;
         pool_state.protocol_fees_token_1 = pool_state
             .protocol_fees_token_1
             .checked_sub(amount_1)
-            .unwrap();
+            .ok_or(ErrorCode::CalculateOverflow)?;
     }
     transfer_from_pool_vault_to_user(
         &ctx.accounts.pool_state,

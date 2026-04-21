@@ -2,8 +2,6 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum ErrorCode {
-    #[msg("LOK")]
-    LOK,
     #[msg("Not approved")]
     NotApproved,
     #[msg("invalid update amm config flag")]
@@ -12,9 +10,6 @@ pub enum ErrorCode {
     AccountLack,
     #[msg("Remove liquidity, collect fees owed and reward then you can close position account")]
     ClosePositionErr,
-
-    #[msg("Minting amount should be greater than 0")]
-    ZeroMintAmount,
 
     #[msg("Tick out of range")]
     InvalidTickIndex,
@@ -43,17 +38,12 @@ pub enum ErrorCode {
     // Liquidity Add
     #[msg("Liquidity add delta L must be greater, or equal to before")]
     LiquidityAddValueErr,
-    #[msg("Invalid liquidity when update position")]
-    InvalidLiquidity,
     #[msg("Both token amount must not be zero while supply liquidity")]
     ForbidBothZeroForSupplyLiquidity,
     #[msg("Liquidity insufficient")]
     LiquidityInsufficient,
 
     /// swap errors
-    // Non fungible position manager
-    #[msg("Transaction too old")]
-    TransactionTooOld,
     #[msg("Price slippage check")]
     PriceSlippageCheck,
     #[msg("Too little output received")]
@@ -82,8 +72,6 @@ pub enum ErrorCode {
     ExceptRewardMint,
     #[msg("Invalid reward init param")]
     InvalidRewardInitParam,
-    #[msg("Invalid collect reward desired amount")]
-    InvalidRewardDesiredAmount,
     #[msg("Invalid collect reward input account number")]
     InvalidRewardInputAccountNumber,
     #[msg("Invalid reward period")]
@@ -120,4 +108,15 @@ pub enum ErrorCode {
     InvalidDynamicFeeConfigParams,
     #[msg("Invalid fee on which token (must be 0, 1, or 2)")]
     InvalidFeeOn,
+
+    #[msg("sqrt_price_x64 must be greater than 0")]
+    ZeroSqrtPrice,
+    #[msg("liquidity must be greater than 0")]
+    ZeroLiquidity,
+    #[msg("base_flag is required when liquidity is zero")]
+    MissingBaseFlag,
+    #[msg("Mint account is required but not provided")]
+    MissingMintAccount,
+    #[msg("Token-2022 program is required but not provided")]
+    MissingTokenProgram2022,
 }

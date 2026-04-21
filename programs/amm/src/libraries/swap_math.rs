@@ -46,7 +46,7 @@ pub fn compute_swap(
                     (FEE_RATE_DENOMINATOR_VALUE - fee_rate).into(),
                     u64::from(FEE_RATE_DENOMINATOR_VALUE),
                 )
-                .unwrap()
+                .ok_or(ErrorCode::CalculateOverflow)?
         } else {
             amount_remaining
         };
@@ -71,7 +71,7 @@ pub fn compute_swap(
                     liquidity,
                     amount_for_price_calc,
                     zero_for_one,
-                )
+                )?
             };
     } else {
         // amount_remaining is the net output the user wants to receive (after fee deduction if fee is from output)
@@ -85,7 +85,7 @@ pub fn compute_swap(
                     u64::from(FEE_RATE_DENOMINATOR_VALUE).into(),
                     (FEE_RATE_DENOMINATOR_VALUE - fee_rate).into(),
                 )
-                .unwrap()
+                .ok_or(ErrorCode::CalculateOverflow)?
         };
 
         let amount_out = calculate_amount_in_range(
@@ -107,7 +107,7 @@ pub fn compute_swap(
                     liquidity,
                     amount_for_price_calc,
                     zero_for_one,
-                )
+                )?
             }
     }
 
@@ -171,7 +171,7 @@ pub fn compute_swap(
                         fee_rate.into(),
                         (FEE_RATE_DENOMINATOR_VALUE - fee_rate).into(),
                     )
-                    .unwrap();
+                    .ok_or(ErrorCode::CalculateOverflow)?;
             }
         } else {
             // Fee from output: result.amount_out is gross output, fee is calculated from gross output
@@ -179,7 +179,7 @@ pub fn compute_swap(
             result.fee_amount = result
                 .amount_out
                 .mul_div_ceil(fee_rate.into(), FEE_RATE_DENOMINATOR_VALUE.into())
-                .unwrap();
+                .ok_or(ErrorCode::CalculateOverflow)?;
             // Deduct fee from output: user receives net output
             result.amount_out = result
                 .amount_out
@@ -197,12 +197,12 @@ pub fn compute_swap(
                     fee_rate.into(),
                     (FEE_RATE_DENOMINATOR_VALUE - fee_rate).into(),
                 )
-                .unwrap();
+                .ok_or(ErrorCode::CalculateOverflow)?;
         } else {
             result.fee_amount = result
                 .amount_out
                 .mul_div_ceil(fee_rate.into(), FEE_RATE_DENOMINATOR_VALUE.into())
-                .unwrap();
+                .ok_or(ErrorCode::CalculateOverflow)?;
 
             // Calculate net output
             let net_output = result
@@ -240,8 +240,8 @@ fn calculate_amount_in_range(
     zero_for_one: bool,
     is_base_input: bool,
 ) -> Result<Option<u64>> {
-    if is_base_input {
-        let result = if zero_for_one {
+    let result = if is_base_input {
+        if zero_for_one {
             liquidity_math::get_delta_amount_0_unsigned(
                 sqrt_price_target_x64,
                 sqrt_price_current_x64,
@@ -255,19 +255,9 @@ fn calculate_amount_in_range(
                 liquidity,
                 true,
             )
-        };
-
-        if result.is_ok() {
-            return Ok(Some(result.unwrap()));
-        } else {
-            if result.err().unwrap() == crate::error::ErrorCode::MaxTokenOverflow.into() {
-                return Ok(None);
-            } else {
-                return Err(ErrorCode::SqrtPriceLimitOverflow.into());
-            }
         }
     } else {
-        let result = if zero_for_one {
+        if zero_for_one {
             liquidity_math::get_delta_amount_1_unsigned(
                 sqrt_price_target_x64,
                 sqrt_price_current_x64,
@@ -281,16 +271,13 @@ fn calculate_amount_in_range(
                 liquidity,
                 false,
             )
-        };
-        if result.is_ok() {
-            return Ok(Some(result.unwrap()));
-        } else {
-            if result.err().unwrap() == crate::error::ErrorCode::MaxTokenOverflow.into() {
-                return Ok(None);
-            } else {
-                return Err(ErrorCode::SqrtPriceLimitOverflow.into());
-            }
         }
+    };
+
+    match result {
+        Ok(v) => Ok(Some(v)),
+        Err(e) if e == ErrorCode::MaxTokenOverflow.into() => Ok(None),
+        Err(_) => Err(ErrorCode::SqrtPriceLimitOverflow.into()),
     }
 }
 

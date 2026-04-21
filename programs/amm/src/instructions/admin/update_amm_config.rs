@@ -21,11 +21,21 @@ pub fn update_amm_config(ctx: Context<UpdateAmmConfig>, param: u8, value: u32) -
         Some(1) => update_protocol_fee_rate(amm_config, value)?,
         Some(2) => update_fund_fee_rate(amm_config, value)?,
         Some(3) => {
-            let new_owner = *ctx.remaining_accounts.iter().next().unwrap().key;
+            let new_owner = *ctx
+                .remaining_accounts
+                .iter()
+                .next()
+                .ok_or(ErrorCode::AccountLack)?
+                .key;
             set_new_owner(amm_config, new_owner);
         }
         Some(4) => {
-            let new_fund_owner = *ctx.remaining_accounts.iter().next().unwrap().key;
+            let new_fund_owner = *ctx
+                .remaining_accounts
+                .iter()
+                .next()
+                .ok_or(ErrorCode::AccountLack)?
+                .key;
             set_new_fund_owner(amm_config, new_fund_owner);
         }
         _ => return err!(ErrorCode::InvalidUpdateConfigFlag),

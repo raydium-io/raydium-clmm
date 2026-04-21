@@ -349,7 +349,7 @@ impl TickState {
         } else {
             self.liquidity_net.checked_add(liquidity_delta)
         }
-        .unwrap();
+        .ok_or(ErrorCode::CalculateOverflow)?;
         Ok(flipped)
     }
 

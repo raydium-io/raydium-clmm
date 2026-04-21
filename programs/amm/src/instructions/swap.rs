@@ -952,15 +952,14 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
     }
 
     if is_base_input {
-        Ok(output_balance_before
+        output_balance_before
             .checked_sub(ctx.output_vault.amount)
-            .unwrap())
+            .ok_or(ErrorCode::CalculateOverflow.into())
     } else {
-        Ok(ctx
-            .input_vault
+        ctx.input_vault
             .amount
             .checked_sub(input_balance_before)
-            .unwrap())
+            .ok_or(ErrorCode::CalculateOverflow.into())
     }
 }
 
@@ -1123,7 +1122,8 @@ mod swap_test {
                     tick_math::get_sqrt_price_at_tick(position_param.tick_upper).unwrap(),
                     position_param.amount_0,
                     position_param.amount_1,
-                );
+                )
+                .unwrap();
 
                 let (amount_0, amount_1) = get_delta_amounts_signed(
                     start_tick,

@@ -179,13 +179,13 @@ pub fn get_tick_at_sqrt_price(sqrt_price_x64: u128) -> Result<i32> {
     // tick + (2^-14 / log2(√1.0001)) + 0.01
     let tick_high = ((log_sqrt_10001_x64 + 15793534762490258745i128) >> 64) as i32;
 
-    Ok(if tick_low == tick_high {
-        tick_low
-    } else if get_sqrt_price_at_tick(tick_high).unwrap() <= sqrt_price_x64 {
-        tick_high
+    if tick_low == tick_high {
+        Ok(tick_low)
+    } else if get_sqrt_price_at_tick(tick_high)? <= sqrt_price_x64 {
+        Ok(tick_high)
     } else {
-        tick_low
-    })
+        Ok(tick_low)
+    }
 }
 
 /// Returns the price at the specified tick as a U128 fixed-point value.

@@ -41,7 +41,7 @@ pub fn swap_router_base_in<'a, 'b, 'c: 'info, 'info>(
     let mut accounts: &[AccountInfo] = ctx.remaining_accounts;
     while !accounts.is_empty() {
         let mut remaining_accounts = accounts.iter();
-        let account_info = remaining_accounts.next().unwrap();
+        let account_info = remaining_accounts.next().ok_or(ErrorCode::AccountLack)?;
         if accounts.len() != ctx.remaining_accounts.len()
             && account_info.data_len() != AmmConfig::LEN
         {
@@ -49,22 +49,24 @@ pub fn swap_router_base_in<'a, 'b, 'c: 'info, 'info>(
             continue;
         }
         let amm_config = Box::new(Account::<AmmConfig>::try_from(account_info)?);
-        let pool_state_loader =
-            AccountLoader::<PoolState>::try_from(remaining_accounts.next().unwrap())?;
+        let pool_state_loader = AccountLoader::<PoolState>::try_from(
+            remaining_accounts.next().ok_or(ErrorCode::AccountLack)?,
+        )?;
         let output_token_account = Box::new(InterfaceAccount::<TokenAccount>::try_from(
-            &remaining_accounts.next().unwrap(),
+            remaining_accounts.next().ok_or(ErrorCode::AccountLack)?,
         )?);
         let input_vault = Box::new(InterfaceAccount::<TokenAccount>::try_from(
-            remaining_accounts.next().unwrap(),
+            remaining_accounts.next().ok_or(ErrorCode::AccountLack)?,
         )?);
         let output_vault = Box::new(InterfaceAccount::<TokenAccount>::try_from(
-            remaining_accounts.next().unwrap(),
+            remaining_accounts.next().ok_or(ErrorCode::AccountLack)?,
         )?);
         let output_token_mint = Box::new(InterfaceAccount::<Mint>::try_from(
-            remaining_accounts.next().unwrap(),
+            remaining_accounts.next().ok_or(ErrorCode::AccountLack)?,
         )?);
-        let observation_state =
-            AccountLoader::<ObservationState>::try_from(remaining_accounts.next().unwrap())?;
+        let observation_state = AccountLoader::<ObservationState>::try_from(
+            remaining_accounts.next().ok_or(ErrorCode::AccountLack)?,
+        )?;
 
         {
             let pool_state = pool_state_loader.load()?;

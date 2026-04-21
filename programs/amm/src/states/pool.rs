@@ -417,21 +417,21 @@ impl PoolState {
     }
 
     pub fn check_unclaimed_reward(&self, index: usize, reward_amount_owed: u64) -> Result<()> {
-        assert!(index < REWARD_NUM);
+        require!(index < REWARD_NUM, ErrorCode::InvalidRewardIndex);
         let unclaimed_reward = self.reward_infos[index]
             .reward_total_emitted
             .checked_sub(self.reward_infos[index].reward_claimed)
-            .unwrap();
+            .ok_or(ErrorCode::CalculateOverflow)?;
         require_gte!(unclaimed_reward, reward_amount_owed);
         Ok(())
     }
 
     pub fn add_reward_claimed(&mut self, index: usize, amount: u64) -> Result<()> {
-        assert!(index < REWARD_NUM);
+        require!(index < REWARD_NUM, ErrorCode::InvalidRewardIndex);
         self.reward_infos[index].reward_claimed = self.reward_infos[index]
             .reward_claimed
             .checked_add(amount)
-            .unwrap();
+            .ok_or(ErrorCode::CalculateOverflow)?;
         Ok(())
     }
 
@@ -461,15 +461,15 @@ impl PoolState {
         tick_array_start_index: i32,
     ) -> Result<()> {
         if self.is_overflow_default_tickarray_bitmap(vec![tick_array_start_index]) {
+            let extension_info = tickarray_bitmap_extension
+                .ok_or(ErrorCode::MissingTickArrayBitmapExtensionAccount)?;
             require_keys_eq!(
-                tickarray_bitmap_extension.unwrap().key(),
+                extension_info.key(),
                 TickArrayBitmapExtension::key(self.key())
             );
-            AccountLoader::<TickArrayBitmapExtension>::try_from(
-                tickarray_bitmap_extension.unwrap(),
-            )?
-            .load_mut()?
-            .flip_tick_array_bit(tick_array_start_index, self.tick_spacing)
+            AccountLoader::<TickArrayBitmapExtension>::try_from(extension_info)?
+                .load_mut()?
+                .flip_tick_array_bit(tick_array_start_index, self.tick_spacing)
         } else {
             self.flip_tick_array_bit_default(tick_array_start_index)
         }
@@ -484,48 +484,10 @@ impl PoolState {
         let (is_initialized, start_index) =
             if self.is_overflow_default_tickarray_bitmap(vec![self.tick_current]) {
                 // Only load extension when needed (when overflow default bitmap)
-                if tickarray_bitmap_extension_info.is_none() {
-                    return err!(ErrorCode::MissingTickArrayBitmapExtensionAccount);
-                }
-                AccountLoader::<TickArrayBitmapExtension>::try_from(
-                    tickarray_bitmap_extension_info.unwrap(),
-                )?
-                .load()?
-                .check_tick_array_is_initialized(
-                    TickArrayState::get_array_start_index(self.tick_current, self.tick_spacing),
-                    self.tick_spacing,
-                )?
-            } else {
-                check_current_tick_array_is_initialized(
-                    U1024(self.tick_array_bitmap),
-                    self.tick_current,
-                    self.tick_spacing.into(),
-                )?
-            };
-        if is_initialized {
-            return Ok((true, start_index));
-        }
-        let next_start_index = self.next_tick_array_index_with_extension_info(
-            tickarray_bitmap_extension_info,
-            TickArrayState::get_array_start_index(self.tick_current, self.tick_spacing),
-            zero_for_one,
-        )?;
-        require!(
-            next_start_index.is_some(),
-            ErrorCode::InsufficientLiquidityForDirection
-        );
-        return Ok((false, next_start_index.unwrap()));
-    }
-
-    pub fn get_first_initialized_tick_array(
-        &self,
-        tickarray_bitmap_extension: &Option<TickArrayBitmapExtension>,
-        zero_for_one: bool,
-    ) -> Result<(bool, i32)> {
-        let (is_initialized, start_index) =
-            if self.is_overflow_default_tickarray_bitmap(vec![self.tick_current]) {
-                tickarray_bitmap_extension
-                    .unwrap()
+                let extension_info = tickarray_bitmap_extension_info
+                    .ok_or(ErrorCode::MissingTickArrayBitmapExtensionAccount)?;
+                AccountLoader::<TickArrayBitmapExtension>::try_from(extension_info)?
+                    .load()?
                     .check_tick_array_is_initialized(
                         TickArrayState::get_array_start_index(self.tick_current, self.tick_spacing),
                         self.tick_spacing,
@@ -540,16 +502,48 @@ impl PoolState {
         if is_initialized {
             return Ok((true, start_index));
         }
-        let next_start_index = self.next_initialized_tick_array_start_index(
-            tickarray_bitmap_extension,
-            TickArrayState::get_array_start_index(self.tick_current, self.tick_spacing),
-            zero_for_one,
-        )?;
-        require!(
-            next_start_index.is_some(),
-            ErrorCode::InsufficientLiquidityForDirection
-        );
-        return Ok((false, next_start_index.unwrap()));
+        let next_start_index = self
+            .next_tick_array_index_with_extension_info(
+                tickarray_bitmap_extension_info,
+                TickArrayState::get_array_start_index(self.tick_current, self.tick_spacing),
+                zero_for_one,
+            )?
+            .ok_or(ErrorCode::InsufficientLiquidityForDirection)?;
+        Ok((false, next_start_index))
+    }
+
+    pub fn get_first_initialized_tick_array(
+        &self,
+        tickarray_bitmap_extension: &Option<TickArrayBitmapExtension>,
+        zero_for_one: bool,
+    ) -> Result<(bool, i32)> {
+        let (is_initialized, start_index) =
+            if self.is_overflow_default_tickarray_bitmap(vec![self.tick_current]) {
+                let extension = tickarray_bitmap_extension
+                    .as_ref()
+                    .ok_or(ErrorCode::MissingTickArrayBitmapExtensionAccount)?;
+                extension.check_tick_array_is_initialized(
+                    TickArrayState::get_array_start_index(self.tick_current, self.tick_spacing),
+                    self.tick_spacing,
+                )?
+            } else {
+                check_current_tick_array_is_initialized(
+                    U1024(self.tick_array_bitmap),
+                    self.tick_current,
+                    self.tick_spacing.into(),
+                )?
+            };
+        if is_initialized {
+            return Ok((true, start_index));
+        }
+        let next_start_index = self
+            .next_initialized_tick_array_start_index(
+                tickarray_bitmap_extension,
+                TickArrayState::get_array_start_index(self.tick_current, self.tick_spacing),
+                zero_for_one,
+            )?
+            .ok_or(ErrorCode::InsufficientLiquidityForDirection)?;
+        Ok((false, next_start_index))
     }
 
     /// Get the next initialized tick array start index with tickarray bitmap extension info
@@ -569,19 +563,17 @@ impl PoolState {
                     last_tick_array_start_index,
                     self.tick_spacing,
                     zero_for_one,
-                );
+                )?;
             if is_found {
                 return Ok(Some(start_index));
             }
             last_tick_array_start_index = start_index;
 
-            if tickarray_bitmap_extension_info.is_none() {
-                return err!(ErrorCode::MissingTickArrayBitmapExtensionAccount);
-            }
             // Only load extension when needed (after default bitmap search fails)
-            let extension_loader = AccountLoader::<TickArrayBitmapExtension>::try_from(
-                tickarray_bitmap_extension_info.unwrap(),
-            )?;
+            let extension_info = tickarray_bitmap_extension_info
+                .ok_or(ErrorCode::MissingTickArrayBitmapExtensionAccount)?;
+            let extension_loader =
+                AccountLoader::<TickArrayBitmapExtension>::try_from(extension_info)?;
             let (is_found, start_index) = extension_loader
                 .load()?
                 .next_initialized_tick_array_from_one_bitmap(
@@ -618,23 +610,21 @@ impl PoolState {
                     last_tick_array_start_index,
                     self.tick_spacing,
                     zero_for_one,
-                );
+                )?;
             if is_found {
                 return Ok(Some(start_index));
             }
             last_tick_array_start_index = start_index;
 
-            if tickarray_bitmap_extension.is_none() {
-                return err!(ErrorCode::MissingTickArrayBitmapExtensionAccount);
-            }
+            let extension = tickarray_bitmap_extension
+                .as_ref()
+                .ok_or(ErrorCode::MissingTickArrayBitmapExtensionAccount)?;
 
-            let (is_found, start_index) = tickarray_bitmap_extension
-                .unwrap()
-                .next_initialized_tick_array_from_one_bitmap(
-                    last_tick_array_start_index,
-                    self.tick_spacing,
-                    zero_for_one,
-                )?;
+            let (is_found, start_index) = extension.next_initialized_tick_array_from_one_bitmap(
+                last_tick_array_start_index,
+                self.tick_spacing,
+                zero_for_one,
+            )?;
             if is_found {
                 return Ok(Some(start_index));
             }

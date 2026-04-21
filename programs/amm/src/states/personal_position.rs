@@ -140,13 +140,13 @@ impl PersonalPositionState {
             self.fee_growth_inside_0_last_x64,
             fee_growth_inside_0_x64_latest,
             self.liquidity,
-        );
+        )?;
         self.token_fees_owed_1 = calculate_latest_token_fees(
             self.token_fees_owed_1,
             self.fee_growth_inside_1_last_x64,
             fee_growth_inside_1_x64_latest,
             self.liquidity,
-        );
+        )?;
 
         self.fee_growth_inside_0_last_x64 = fee_growth_inside_0_x64_latest;
         self.fee_growth_inside_1_last_x64 = fee_growth_inside_1_x64_latest;

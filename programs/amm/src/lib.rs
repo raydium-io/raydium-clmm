@@ -6,6 +6,7 @@ pub mod util;
 
 use anchor_lang::prelude::*;
 use core as core_;
+use error::ErrorCode;
 use instructions::*;
 use states::*;
 
@@ -498,7 +499,7 @@ pub mod raydium_clmm {
         amount_0_max: u64,
         amount_1_max: u64,
     ) -> Result<()> {
-        assert!(liquidity != 0);
+        require_gt!(liquidity, 0);
         instructions::increase_liquidity_v1(ctx, liquidity, amount_0_max, amount_1_max, None)
     }
 
@@ -520,7 +521,7 @@ pub mod raydium_clmm {
         base_flag: Option<bool>,
     ) -> Result<()> {
         if liquidity == 0 {
-            assert!(base_flag.is_some());
+            require!(base_flag.is_some(), ErrorCode::MissingBaseFlag);
         }
         instructions::increase_liquidity_v2(ctx, liquidity, amount_0_max, amount_1_max, base_flag)
     }

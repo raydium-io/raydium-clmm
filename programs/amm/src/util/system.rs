@@ -1,3 +1,4 @@
+use crate::error::ErrorCode;
 use anchor_lang::{prelude::*, system_program};
 
 pub fn create_or_allocate_account<'a>(
@@ -21,7 +22,7 @@ pub fn create_or_allocate_account<'a>(
         system_program::create_account(
             cpi_context.with_signer(&[siger_seed]),
             lamports,
-            u64::try_from(space).unwrap(),
+            u64::try_from(space).map_err(|_| ErrorCode::CalculateOverflow)?,
             program_id,
         )?;
     } else {
@@ -43,7 +44,7 @@ pub fn create_or_allocate_account<'a>(
         let cpi_context = CpiContext::new(system_program.clone(), cpi_accounts);
         system_program::allocate(
             cpi_context.with_signer(&[siger_seed]),
-            u64::try_from(space).unwrap(),
+            u64::try_from(space).map_err(|_| ErrorCode::CalculateOverflow)?,
         )?;
 
         let cpi_accounts = system_program::Assign {

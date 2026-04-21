@@ -212,10 +212,15 @@ pub fn get_transfer_inverse_fee(
         } else {
             let transfer_fee = transfer_fee_config
                 .calculate_inverse_epoch_fee(epoch, post_fee_amount)
-                .unwrap();
+                .ok_or(ErrorCode::CalculateOverflow)?;
             let transfer_fee_for_check = transfer_fee_config
-                .calculate_epoch_fee(epoch, post_fee_amount.checked_add(transfer_fee).unwrap())
-                .unwrap();
+                .calculate_epoch_fee(
+                    epoch,
+                    post_fee_amount
+                        .checked_add(transfer_fee)
+                        .ok_or(ErrorCode::CalculateOverflow)?,
+                )
+                .ok_or(ErrorCode::CalculateOverflow)?;
             if transfer_fee != transfer_fee_for_check {
                 return err!(ErrorCode::TransferFeeCalculateNotMatch);
             }
@@ -242,7 +247,7 @@ pub fn get_transfer_fee(
     let fee = if let Ok(transfer_fee_config) = mint.get_extension::<TransferFeeConfig>() {
         transfer_fee_config
             .calculate_epoch_fee(get_recent_epoch()?, pre_fee_amount)
-            .unwrap()
+            .ok_or(ErrorCode::CalculateOverflow)?
     } else {
         0
     };
