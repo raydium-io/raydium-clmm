@@ -409,9 +409,7 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
         if base_flag {
             // must deduct transfer fee before calculate liquidity
             // because only v2 instruction support token_2022, vault_0_mint must be exist
-            let vault_0_mint = vault_0_mint
-                .clone()
-                .ok_or(ErrorCode::MissingMintAccount)?;
+            let vault_0_mint = vault_0_mint.clone().ok_or(ErrorCode::MissingMintAccount)?;
             let amount_0_transfer_fee = get_transfer_fee(vault_0_mint, amount_0_max)?;
             *liquidity = liquidity_math::get_liquidity_from_single_amount_0(
                 pool_state.sqrt_price_x64,
@@ -431,9 +429,7 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
         } else {
             // must deduct transfer fee before calculate liquidity
             // because only v2 instruction support token_2022, vault_1_mint must be exist
-            let vault_1_mint = vault_1_mint
-                .clone()
-                .ok_or(ErrorCode::MissingMintAccount)?;
+            let vault_1_mint = vault_1_mint.clone().ok_or(ErrorCode::MissingMintAccount)?;
             let amount_1_transfer_fee = get_transfer_fee(vault_1_mint, amount_1_max)?;
             *liquidity = liquidity_math::get_liquidity_from_single_amount_1(
                 pool_state.sqrt_price_x64,
@@ -563,9 +559,8 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
         amount_1 + amount_1_transfer_fee,
         ErrorCode::PriceSlippageCheck
     );
-    let token_2022_program_opt: Option<AccountInfo> = token_program_2022
-        .clone()
-        .map(|p| p.to_account_info());
+    let token_2022_program_opt: Option<AccountInfo> =
+        token_program_2022.clone().map(|p| p.to_account_info());
     transfer_from_user_to_pool_vault(
         payer,
         token_account_0,

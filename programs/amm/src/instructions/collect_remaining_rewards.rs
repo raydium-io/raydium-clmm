@@ -72,8 +72,8 @@ fn get_remaining_reward_amount(
     reward_funder: &Pubkey,
     reward_index: u8,
 ) -> Result<u64> {
-    let current_timestamp = u64::try_from(Clock::get()?.unix_timestamp)
-        .map_err(|_| ErrorCode::CalculateOverflow)?;
+    let current_timestamp =
+        u64::try_from(Clock::get()?.unix_timestamp).map_err(|_| ErrorCode::CalculateOverflow)?;
     let mut pool_state = pool_state_loader.load_mut()?;
     pool_state.update_reward_infos(current_timestamp)?;
 

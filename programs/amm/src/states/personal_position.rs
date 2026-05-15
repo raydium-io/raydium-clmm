@@ -176,14 +176,14 @@ impl PersonalPositionState {
 
                 let amount_owed_delta = U256::from(reward_growth_delta)
                     .mul_div_floor(U256::from(self.liquidity), U256::from(fixed_point_64::Q64))
-                    .unwrap()
+                    .ok_or(ErrorCode::CalculateOverflow)?
                     .to_underflow_u64();
 
                 // Overflows not allowed. Must collect rewards owed before overflow.
                 self.reward_infos[i].reward_amount_owed = curr_reward_info
                     .reward_amount_owed
                     .checked_add(amount_owed_delta)
-                    .unwrap();
+                    .ok_or(ErrorCode::CalculateOverflow)?;
 
                 #[cfg(feature = "enable-log")]
                 msg!("update personal reward, index:{}, owed_before:{:?}, amount_owed_delta:{}, owed_after:{}, reward_growth_delta:{}, self.liquidity:{}", i, curr_reward_info.reward_amount_owed,amount_owed_delta, self.reward_infos[i].reward_amount_owed,reward_growth_delta,self.liquidity );

@@ -1,6 +1,6 @@
 use crate::error::ErrorCode;
 use crate::libraries::tick_math;
-use crate::swap::swap_internal;
+use crate::swap::{swap_internal, SwapInternalResult};
 use crate::util::*;
 use crate::{states::*, util};
 use anchor_lang::{prelude::*, solana_program};
@@ -84,8 +84,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
 
     let block_timestamp = solana_program::clock::Clock::get()?.unix_timestamp as u64;
 
-    let amount_0;
-    let amount_1;
+    let swap_result: SwapInternalResult;
     let zero_for_one;
     let swap_price_before;
 
@@ -94,8 +93,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
 
     // calculate specified amount because the amount includes transfer_fee as input and without transfer_fee as output
     let (amount_calculate_specified, transfer_fee) = if is_base_input {
-        let transfer_fee =
-            util::get_transfer_fee(ctx.input_vault_mint.clone(), amount_specified)?;
+        let transfer_fee = util::get_transfer_fee(ctx.input_vault_mint.clone(), amount_specified)?;
         (amount_specified - transfer_fee, transfer_fee)
     } else {
         let transfer_fee =
@@ -136,7 +134,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             tick_array_states.push_back(AccountLoad::load_data_mut(account_info)?);
         }
 
-        (amount_0, amount_1) = swap_internal(
+        swap_result = swap_internal(
             &ctx.amm_config,
             pool_state,
             tick_array_states,
@@ -161,11 +159,11 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         msg!(
             "exact_swap_internal, is_base_input:{}, amount_0: {}, amount_1: {}",
             is_base_input,
-            amount_0,
-            amount_1
+            swap_result.amount_0,
+            swap_result.amount_1
         );
         require!(
-            amount_0 != 0 && amount_1 != 0,
+            swap_result.amount_0 != 0 && swap_result.amount_1 != 0,
             ErrorCode::TooSmallInputOrOutputAmount
         );
     }
@@ -190,36 +188,80 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             )
         };
 
-    // user or pool real amount delta without tranfer fee
     let amount_0_without_fee;
     let amount_1_without_fee;
-    // the transfer fee amount charged by withheld_amount
     let transfer_fee_0;
     let transfer_fee_1;
-    // transfer amount
     let transfer_amount_0;
     let transfer_amount_1;
     if zero_for_one {
-        transfer_fee_0 = if is_base_input && amount_0 == amount_calculate_specified {
+        transfer_fee_0 = if is_base_input && swap_result.amount_0 == amount_calculate_specified {
             transfer_fee
         } else {
-            util::get_transfer_inverse_fee(vault_0_mint.clone(), amount_0)?
+            util::get_transfer_inverse_fee(vault_0_mint.clone(), swap_result.amount_0)?
         };
-        transfer_fee_1 = util::get_transfer_fee(vault_1_mint.clone(), amount_1)?;
+        transfer_fee_1 = util::get_transfer_fee(vault_1_mint.clone(), swap_result.amount_1)?;
 
-        amount_0_without_fee = amount_0;
-        amount_1_without_fee = amount_1
+        amount_0_without_fee = swap_result.amount_0;
+        amount_1_without_fee = swap_result
+            .amount_1
             .checked_sub(transfer_fee_1)
             .ok_or(ErrorCode::CalculateOverflow)?;
-        (transfer_amount_0, transfer_amount_1) = (amount_0 + transfer_fee_0, amount_1);
-        #[cfg(feature = "enable-log")]
-        msg!(
-            "amount_0:{}, transfer_fee_0:{}, amount_1:{}, transfer_fee_1:{}",
-            amount_0,
-            transfer_fee_0,
-            amount_1,
-            transfer_fee_1
+        (transfer_amount_0, transfer_amount_1) = (
+            swap_result
+                .amount_0
+                .checked_add(transfer_fee_0)
+                .ok_or(ErrorCode::CalculateOverflow)?,
+            swap_result.amount_1,
         );
+    } else {
+        transfer_fee_0 = util::get_transfer_fee(vault_0_mint.clone(), swap_result.amount_0)?;
+        transfer_fee_1 = if is_base_input && swap_result.amount_1 == amount_calculate_specified {
+            transfer_fee
+        } else {
+            util::get_transfer_inverse_fee(vault_1_mint.clone(), swap_result.amount_1)?
+        };
+
+        amount_0_without_fee = swap_result
+            .amount_0
+            .checked_sub(transfer_fee_0)
+            .ok_or(ErrorCode::CalculateOverflow)?;
+        amount_1_without_fee = swap_result.amount_1;
+        (transfer_amount_0, transfer_amount_1) = (
+            swap_result.amount_0,
+            swap_result
+                .amount_1
+                .checked_add(transfer_fee_1)
+                .ok_or(ErrorCode::CalculateOverflow)?,
+        );
+    }
+    #[cfg(feature = "enable-log")]
+    msg!(
+        "amount_0:{}, transfer_fee_0:{}, amount_1:{}, transfer_fee_1:{}",
+        swap_result.amount_0,
+        transfer_fee_0,
+        swap_result.amount_1,
+        transfer_fee_1
+    );
+
+    emit!(SwapEvent {
+        pool_state: ctx.pool_state.key(),
+        sender: ctx.payer.key(),
+        token_account_0: token_account_0.key(),
+        token_account_1: token_account_1.key(),
+        amount_0: amount_0_without_fee,
+        transfer_fee_0,
+        amount_1: amount_1_without_fee,
+        transfer_fee_1,
+        zero_for_one,
+        sqrt_price_x64: swap_result.sqrt_price_x64,
+        liquidity: swap_result.liquidity,
+        tick: swap_result.tick,
+        trade_fee_0: swap_result.trade_fee_0,
+        trade_fee_1: swap_result.trade_fee_1,
+    });
+
+    if zero_for_one {
         //  x -> y, deposit x token from user to pool vault.
         transfer_from_user_to_pool_vault(
             &ctx.payer,
@@ -241,26 +283,6 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             transfer_amount_1,
         )?;
     } else {
-        transfer_fee_0 = util::get_transfer_fee(vault_0_mint.clone(), amount_0)?;
-        transfer_fee_1 = if is_base_input && amount_1 == amount_calculate_specified {
-            transfer_fee
-        } else {
-            util::get_transfer_inverse_fee(vault_1_mint.clone(), amount_1)?
-        };
-
-        amount_0_without_fee = amount_0
-            .checked_sub(transfer_fee_0)
-            .ok_or(ErrorCode::CalculateOverflow)?;
-        amount_1_without_fee = amount_1;
-        (transfer_amount_0, transfer_amount_1) = (amount_0, amount_1 + transfer_fee_1);
-        #[cfg(feature = "enable-log")]
-        msg!(
-            "amount_0:{}, transfer_fee_0:{}, amount_1:{}, transfer_fee_1:{}",
-            amount_0,
-            transfer_fee_0,
-            amount_1,
-            transfer_fee_1
-        );
         transfer_from_user_to_pool_vault(
             &ctx.payer,
             &token_account_1.to_account_info(),
@@ -283,25 +305,10 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
     ctx.output_token_account.reload()?;
     ctx.input_token_account.reload()?;
 
-    let pool_state = ctx.pool_state.load()?;
-    emit!(SwapEvent {
-        pool_state: pool_state.key(),
-        sender: ctx.payer.key(),
-        token_account_0: token_account_0.key(),
-        token_account_1: token_account_1.key(),
-        amount_0: amount_0_without_fee,
-        transfer_fee_0,
-        amount_1: amount_1_without_fee,
-        transfer_fee_1,
-        zero_for_one,
-        sqrt_price_x64: pool_state.sqrt_price_x64,
-        liquidity: pool_state.liquidity,
-        tick: pool_state.tick_current
-    });
     if zero_for_one {
-        require_gte!(swap_price_before, pool_state.sqrt_price_x64);
+        require_gte!(swap_price_before, swap_result.sqrt_price_x64);
     } else {
-        require_gte!(pool_state.sqrt_price_x64, swap_price_before);
+        require_gte!(swap_result.sqrt_price_x64, swap_price_before);
     }
     if sqrt_price_limit_x64 == 0 {
         // Does't allow partial filled without specified limit_price.

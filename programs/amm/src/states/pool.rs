@@ -348,9 +348,9 @@ impl PoolState {
 
             if self.liquidity != 0 {
                 // require_gte!(latest_update_timestamp, reward_info.last_update_time);
-                let time_delta = latest_update_timestamp
-                    .saturating_sub(reward_info.last_update_time);
-                if time_delta == 0{
+                let time_delta =
+                    latest_update_timestamp.saturating_sub(reward_info.last_update_time);
+                if time_delta == 0 {
                     continue;
                 }
                 let reward_delta = U128::from(time_delta)
@@ -358,7 +358,8 @@ impl PoolState {
                         U128::from(reward_info.emissions_per_second_x64),
                         U128::from(fixed_point_64::Q64),
                     )
-                    .unwrap_or(U128::zero()).as_u64();
+                    .unwrap_or(U128::zero())
+                    .as_u64();
 
                 let mut reward_growth_delta = U256::from(time_delta)
                     .mul_div_floor(
@@ -367,9 +368,7 @@ impl PoolState {
                     )
                     .unwrap_or(U256::zero());
 
-                if let Some(new_total) = reward_info
-                    .reward_total_emitted
-                    .checked_add(reward_delta)
+                if let Some(new_total) = reward_info.reward_total_emitted.checked_add(reward_delta)
                 {
                     reward_info.reward_total_emitted = new_total;
                 } else {
@@ -927,6 +926,12 @@ pub struct SwapEvent {
 
     /// The log base 1.0001 of price of the pool after the swap
     pub tick: i32,
+
+    /// Total AMM trade fee (lp + protocol + fund) charged in token_0 during this swap
+    pub trade_fee_0: u64,
+
+    /// Total AMM trade fee (lp + protocol + fund) charged in token_1 during this swap
+    pub trade_fee_1: u64,
 }
 
 /// Emitted pool liquidity change when increase and decrease liquidity

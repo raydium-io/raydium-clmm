@@ -57,8 +57,8 @@ pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
     let admin_operator = admin_keys.contains(&ctx.accounts.authority.key())
         || ctx.accounts.authority.key() == crate::admin::ID;
 
-    let current_timestamp = u64::try_from(Clock::get()?.unix_timestamp)
-        .map_err(|_| ErrorCode::CalculateOverflow)?;
+    let current_timestamp =
+        u64::try_from(Clock::get()?.unix_timestamp).map_err(|_| ErrorCode::CalculateOverflow)?;
     require_gt!(open_time, current_timestamp);
 
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;

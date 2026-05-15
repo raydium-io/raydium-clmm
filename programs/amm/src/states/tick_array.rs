@@ -125,9 +125,15 @@ impl TickArrayState {
 
     pub fn update_initialized_tick_count(&mut self, add: bool) -> Result<()> {
         if add {
-            self.initialized_tick_count += 1;
+            self.initialized_tick_count = self
+                .initialized_tick_count
+                .checked_add(1)
+                .ok_or(ErrorCode::CalculateOverflow)?;
         } else {
-            self.initialized_tick_count -= 1;
+            self.initialized_tick_count = self
+                .initialized_tick_count
+                .checked_sub(1)
+                .ok_or(ErrorCode::CalculateOverflow)?;
         }
         Ok(())
     }
@@ -361,10 +367,10 @@ impl TickState {
         fee_growth_global_1_x64: u128,
         reward_infos: &[RewardInfo; REWARD_NUM],
     ) -> i128 {
-        self.fee_growth_outside_0_x64 = fee_growth_global_0_x64
-            .wrapping_sub(self.fee_growth_outside_0_x64);
-        self.fee_growth_outside_1_x64 = fee_growth_global_1_x64
-            .wrapping_sub(self.fee_growth_outside_1_x64);
+        self.fee_growth_outside_0_x64 =
+            fee_growth_global_0_x64.wrapping_sub(self.fee_growth_outside_0_x64);
+        self.fee_growth_outside_1_x64 =
+            fee_growth_global_1_x64.wrapping_sub(self.fee_growth_outside_1_x64);
 
         for i in 0..REWARD_NUM {
             if !reward_infos[i].initialized() {
@@ -624,10 +630,8 @@ pub fn get_fee_growth_inside(
         )
     } else {
         (
-            fee_growth_global_0_x64
-                .wrapping_sub(tick_lower.fee_growth_outside_0_x64),
-            fee_growth_global_1_x64
-                .wrapping_sub(tick_lower.fee_growth_outside_1_x64),
+            fee_growth_global_0_x64.wrapping_sub(tick_lower.fee_growth_outside_0_x64),
+            fee_growth_global_1_x64.wrapping_sub(tick_lower.fee_growth_outside_1_x64),
         )
     };
 
@@ -639,10 +643,8 @@ pub fn get_fee_growth_inside(
         )
     } else {
         (
-            fee_growth_global_0_x64
-                .wrapping_sub(tick_upper.fee_growth_outside_0_x64),
-            fee_growth_global_1_x64
-                .wrapping_sub(tick_upper.fee_growth_outside_1_x64),
+            fee_growth_global_0_x64.wrapping_sub(tick_upper.fee_growth_outside_0_x64),
+            fee_growth_global_1_x64.wrapping_sub(tick_upper.fee_growth_outside_1_x64),
         )
     };
     let fee_growth_inside_0_x64 = fee_growth_global_0_x64

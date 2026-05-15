@@ -229,9 +229,8 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
     let transfer_amount_0 = decrease_amount_0 + latest_fees_owed_0;
     let transfer_amount_1 = decrease_amount_1 + latest_fees_owed_1;
 
-    let token_2022_program_opt: Option<AccountInfo> = token_program_2022
-        .clone()
-        .map(|p| p.to_account_info());
+    let token_2022_program_opt: Option<AccountInfo> =
+        token_program_2022.clone().map(|p| p.to_account_info());
 
     transfer_from_pool_vault_to_user(
         pool_state_loader,

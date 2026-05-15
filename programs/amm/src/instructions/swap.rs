@@ -84,6 +84,25 @@ pub struct SwapAccounts<'b, 'info> {
     pub observation_state: &'b mut AccountLoader<'info, ObservationState>,
 }
 
+/// Aggregated outcome returned by `swap_internal` after the swap loop finishes.
+#[derive(Debug, Clone, Copy)]
+pub struct SwapInternalResult {
+    /// Net token_0 amount the pool absorbs (input side) or releases (output side)
+    pub amount_0: u64,
+    /// Net token_1 amount the pool absorbs (input side) or releases (output side)
+    pub amount_1: u64,
+    /// Total AMM trade fee (lp + protocol + fund) charged in token_0 during the swap
+    pub trade_fee_0: u64,
+    /// Total AMM trade fee (lp + protocol + fund) charged in token_1 during the swap
+    pub trade_fee_1: u64,
+    /// Pool sqrt(price) (Q64.64) after the swap
+    pub sqrt_price_x64: u128,
+    /// Pool liquidity after the swap
+    pub liquidity: u128,
+    /// Pool current tick after the swap
+    pub tick: i32,
+}
+
 // the top level state of the swap, the results of which are recorded in storage at the end
 #[derive(Debug)]
 pub struct SwapState {
@@ -267,6 +286,41 @@ impl SwapState {
                 .ok_or(ErrorCode::CalculateOverflow)?;
         }
         Ok(())
+    }
+
+    /// Settle the per-token deltas and trade-fee split after the swap loop.
+    /// Returns `(amount_0, amount_1, trade_fee_0, trade_fee_1)`:
+    /// - `amount_*` are the net token_0 / token_1 deltas the pool absorbs or releases.
+    /// - `trade_fee_*` is the total AMM trade fee (lp + protocol + fund) charged on the
+    ///   fee-side token (the other is zero).
+    pub fn settle_amounts(
+        &self,
+        amount_specified: u64,
+        zero_for_one: bool,
+        is_base_input: bool,
+        fee_on_token0: bool,
+    ) -> Result<(u64, u64, u64, u64)> {
+        let consumed = amount_specified
+            .checked_sub(self.amount_specified_remaining)
+            .ok_or(ErrorCode::CalculateOverflow)?;
+        let (amount_0, amount_1) = if zero_for_one == is_base_input {
+            (consumed, self.amount_calculated)
+        } else {
+            (self.amount_calculated, consumed)
+        };
+
+        let total_trade_fee = self
+            .lp_fee
+            .checked_add(self.protocol_fee)
+            .and_then(|v| v.checked_add(self.fund_fee))
+            .ok_or(ErrorCode::CalculateOverflow)?;
+        let (trade_fee_0, trade_fee_1) = if fee_on_token0 {
+            (total_trade_fee, 0u64)
+        } else {
+            (0u64, total_trade_fee)
+        };
+
+        Ok((amount_0, amount_1, trade_fee_0, trade_fee_1))
     }
 
     fn get_target_price_based_on_next_tick(
@@ -457,7 +511,7 @@ pub fn swap_internal<'b, 'c: 'info, 'info>(
     zero_for_one: bool,
     is_base_input: bool,
     block_timestamp: u32,
-) -> Result<(u64, u64)> {
+) -> Result<SwapInternalResult> {
     require!(amount_specified != 0, ErrorCode::ZeroAmountSpecified);
     if !pool_state.get_status_by_bit(PoolStatusBitIndex::Swap) {
         return err!(ErrorCode::NotApproved);
@@ -741,21 +795,12 @@ pub fn swap_internal<'b, 'c: 'info, 'info>(
         observation_state.update(block_timestamp, pool_state.tick_current);
     }
 
-    let (amount_0, amount_1) = if zero_for_one == is_base_input {
-        (
-            amount_specified
-                .checked_sub(state.amount_specified_remaining)
-                .ok_or(ErrorCode::CalculateOverflow)?,
-            state.amount_calculated,
-        )
-    } else {
-        (
-            state.amount_calculated,
-            amount_specified
-                .checked_sub(state.amount_specified_remaining)
-                .ok_or(ErrorCode::CalculateOverflow)?,
-        )
-    };
+    let (amount_0, amount_1, trade_fee_0, trade_fee_1) = state.settle_amounts(
+        amount_specified,
+        zero_for_one,
+        is_base_input,
+        pool_state.is_fee_on_token0(zero_for_one),
+    )?;
 
     pool_state.update_after_swap(
         state.tick,
@@ -768,7 +813,15 @@ pub fn swap_internal<'b, 'c: 'info, 'info>(
         zero_for_one,
         state.dynamic_fee_info,
     )?;
-    Ok((amount_0, amount_1))
+    Ok(SwapInternalResult {
+        amount_0,
+        amount_1,
+        trade_fee_0,
+        trade_fee_1,
+        sqrt_price_x64: pool_state.sqrt_price_x64,
+        liquidity: pool_state.liquidity,
+        tick: pool_state.tick_current,
+    })
 }
 
 /// Performs a single exact input/output swap
@@ -782,8 +835,7 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
 ) -> Result<u64> {
     let block_timestamp = solana_program::clock::Clock::get()?.unix_timestamp as u64;
 
-    let amount_0;
-    let amount_1;
+    let swap_result: SwapInternalResult;
     let zero_for_one;
     let swap_price_before;
 
@@ -821,7 +873,7 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
             tick_array_states.push_back(AccountLoad::load_data_mut(account_info)?);
         }
 
-        (amount_0, amount_1) = swap_internal(
+        swap_result = swap_internal(
             &ctx.amm_config,
             pool_state,
             tick_array_states,
@@ -846,11 +898,11 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
         msg!(
             "exact_swap_internal, is_base_input:{}, amount_0: {}, amount_1: {}",
             is_base_input,
-            amount_0,
-            amount_1
+            swap_result.amount_0,
+            swap_result.amount_1
         );
         require!(
-            amount_0 != 0 && amount_1 != 0,
+            swap_result.amount_0 != 0 && swap_result.amount_1 != 0,
             ErrorCode::TooSmallInputOrOutputAmount
         );
     }
@@ -870,6 +922,23 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
         )
     };
 
+    emit!(SwapEvent {
+        pool_state: ctx.pool_state.key(),
+        sender: ctx.signer.key(),
+        token_account_0: token_account_0.key(),
+        token_account_1: token_account_1.key(),
+        amount_0: swap_result.amount_0,
+        transfer_fee_0: 0,
+        amount_1: swap_result.amount_1,
+        transfer_fee_1: 0,
+        zero_for_one,
+        sqrt_price_x64: swap_result.sqrt_price_x64,
+        liquidity: swap_result.liquidity,
+        tick: swap_result.tick,
+        trade_fee_0: swap_result.trade_fee_0,
+        trade_fee_1: swap_result.trade_fee_1,
+    });
+
     if zero_for_one {
         //  x -> y, deposit x token from user to pool vault.
         transfer_from_user_to_pool_vault(
@@ -879,7 +948,7 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
             None,
             &ctx.token_program,
             None,
-            amount_0,
+            swap_result.amount_0,
         )?;
         // x -> y，transfer y token from pool vault to user.
         transfer_from_pool_vault_to_user(
@@ -889,7 +958,7 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
             None,
             &ctx.token_program,
             None,
-            amount_1,
+            swap_result.amount_1,
         )?;
     } else {
         transfer_from_user_to_pool_vault(
@@ -899,7 +968,7 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
             None,
             &ctx.token_program,
             None,
-            amount_1,
+            swap_result.amount_1,
         )?;
         transfer_from_pool_vault_to_user(
             &ctx.pool_state,
@@ -908,45 +977,30 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
             None,
             &ctx.token_program,
             None,
-            amount_0,
+            swap_result.amount_0,
         )?;
     }
     ctx.output_vault.reload()?;
     ctx.input_vault.reload()?;
 
-    let pool_state = ctx.pool_state.load()?;
-    emit!(SwapEvent {
-        pool_state: pool_state.key(),
-        sender: ctx.signer.key(),
-        token_account_0: token_account_0.key(),
-        token_account_1: token_account_1.key(),
-        amount_0,
-        transfer_fee_0: 0,
-        amount_1,
-        transfer_fee_1: 0,
-        zero_for_one,
-        sqrt_price_x64: pool_state.sqrt_price_x64,
-        liquidity: pool_state.liquidity,
-        tick: pool_state.tick_current
-    });
     if zero_for_one {
-        require_gte!(swap_price_before, pool_state.sqrt_price_x64);
+        require_gte!(swap_price_before, swap_result.sqrt_price_x64);
     } else {
-        require_gte!(pool_state.sqrt_price_x64, swap_price_before);
+        require_gte!(swap_result.sqrt_price_x64, swap_price_before);
     }
     if sqrt_price_limit_x64 == 0 {
         // Does't allow partial filled without specified limit_price.
         if is_base_input {
             if zero_for_one {
-                require_eq!(amount_specified, amount_0);
+                require_eq!(amount_specified, swap_result.amount_0);
             } else {
-                require_eq!(amount_specified, amount_1);
+                require_eq!(amount_specified, swap_result.amount_1);
             }
         } else {
             if zero_for_one {
-                require_eq!(amount_specified, amount_1);
+                require_eq!(amount_specified, swap_result.amount_1);
             } else {
-                require_eq!(amount_specified, amount_0);
+                require_eq!(amount_specified, swap_result.amount_0);
             }
         }
     }
@@ -1311,7 +1365,9 @@ mod swap_test {
                 );
 
             // just cross the tickarray boundary(-32400), hasn't reached the next tick array initialized tick
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -1342,7 +1398,9 @@ mod swap_test {
             // so we pop the tickarray with start_index -32400
             // in this swap we will cross the tick(-32460), but not reach next tick (-32520)
             tick_array_states.pop_front();
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -1370,7 +1428,9 @@ mod swap_test {
             liquidity = pool_state.borrow().liquidity;
 
             // swap in tickarray with start_index -36000, cross the tick -32520
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -1427,7 +1487,9 @@ mod swap_test {
                 );
 
             // just cross the tickarray boundary(-32400), hasn't reached the next tick array initialized tick
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -1458,7 +1520,9 @@ mod swap_test {
             // so we pop the tickarray with start_index -32400
             // in this swap we will cross the tick(-32460), but not reach next tick (-32520)
             tick_array_states.pop_front();
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -1486,7 +1550,9 @@ mod swap_test {
             liquidity = pool_state.borrow().liquidity;
 
             // swap in tickarray with start_index -36000
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -1543,7 +1609,9 @@ mod swap_test {
                 );
 
             // just cross the tickarray boundary(-32460), hasn't reached the next tick array initialized tick
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -1573,7 +1641,9 @@ mod swap_test {
             // cross the tickarray boundary(-32460) in last step, but not reached tick -32400, because -32400 is the next tickarray boundary,
             // so the tickarray_current still is the tick array with start_index -36000
             // in this swap we will cross the tick(-32400), but not reach next tick (-29220)
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -1602,7 +1672,9 @@ mod swap_test {
 
             // swap in tickarray with start_index -32400, cross the tick -29220
             tick_array_states.pop_front();
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -1659,7 +1731,9 @@ mod swap_test {
                 );
 
             // just cross the tickarray boundary(-32460), hasn't reached the next tick array initialized tick
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -1689,7 +1763,9 @@ mod swap_test {
             // cross the tickarray boundary(-32460) in last step, but not reached tick -32400, because -32400 is the next tickarray boundary,
             // so the tickarray_current still is the tick array with start_index -36000
             // in this swap we will cross the tick(-32400), but not reach next tick (-29220)
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -1718,7 +1794,9 @@ mod swap_test {
 
             // swap in tickarray with start_index -32400, cross the tick -29220
             tick_array_states.pop_front();
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -1768,7 +1846,9 @@ mod swap_test {
             );
 
             // find the first initialized tick(-28860) and cross it in tickarray
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -1813,7 +1893,9 @@ mod swap_test {
             );
 
             // find the first initialized tick(-32400) and cross it in tickarray
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -1899,7 +1981,9 @@ mod swap_test {
         );
 
         // not cross tick(-28860), but pool.tick_current = -28860
-        let (amount_0, amount_1) = swap_internal(
+        let SwapInternalResult {
+            amount_0, amount_1, ..
+        } = swap_internal(
             &amm_config,
             &mut pool_state.borrow_mut(),
             &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -1922,7 +2006,9 @@ mod swap_test {
         assert!(amount_0 == 25);
 
         // just cross tick(-28860), pool.tick_current = -28861
-        let (amount_0, amount_1) = swap_internal(
+        let SwapInternalResult {
+            amount_0, amount_1, ..
+        } = swap_internal(
             &amm_config,
             &mut pool_state.borrow_mut(),
             &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -1948,7 +2034,9 @@ mod swap_test {
 
         // we swap just a little amount, let pool tick_current also equal -28861
         // but pool.sqrt_price_x64 > tick_math::get_sqrt_price_at_tick(-28861)
-        let (amount_0, amount_1) = swap_internal(
+        let SwapInternalResult {
+            amount_0, amount_1, ..
+        } = swap_internal(
             &amm_config,
             &mut pool_state.borrow_mut(),
             &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -2001,7 +2089,9 @@ mod swap_test {
             );
 
             // zero for one, just cross tick(-28860),  pool.tick_current = -28861 and pool.sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(-28860)
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -2028,7 +2118,9 @@ mod swap_test {
             sqrt_price_x64 = pool_state.borrow().sqrt_price_x64;
 
             // we swap just a little amount, it is completely taken by fees, the sqrt price and the tick will remain the same
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -2053,7 +2145,9 @@ mod swap_test {
             // Actually, the loop for this swap was executed twice because the previous swap happened to have `pool.tick_current` exactly on the boundary that is divisible by `tick_spacing`.
             // In the first iteration of this swap's loop, it found the initial tick (-28860), but at this point, both the initial and final prices were equal to the price at tick -28860.
             // This did not meet the conditions for swapping so both swap_amount_input and swap_amount_output were 0. The actual output was calculated in the second iteration of the loop.
-            let (amount_0, amount_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -2560,7 +2654,7 @@ mod swap_test {
                     );
 
                     if result.is_ok() {
-                        let ( amount_0_before, amount_1_before) = result.unwrap();
+                        let SwapInternalResult { amount_0: amount_0_before, amount_1: amount_1_before, .. } = result.unwrap();
 
                         let (amm_config, pool_state, tick_array_states, observation_state,bitmap_extension_info,  _sum_amount_0, _sum_amount_1) = setup_swap_test(
                             tick_current,
@@ -2584,7 +2678,7 @@ mod swap_test {
 
                         // println!("----- input: tick_current:{}, amount_0:{}, amount_1:{}, amount_specified:{},tick_lower:{}, tick_upper:{},liquidity:{}", tick_current, amount_0, amount_1,amount_specified, tick_lower, tick_upper, identity(pool_state.borrow().liquidity));
 
-                        let ( amount_0_after, amount_1_after) = result.unwrap();
+                        let SwapInternalResult { amount_0: amount_0_after, amount_1: amount_1_after, .. } = result.unwrap();
                         assert_eq!(amount_0_before, amount_0_after);
                         assert_eq!(amount_1_before, amount_1_after);
 
@@ -2651,7 +2745,7 @@ mod swap_test {
                     );
 
                     if result.is_ok() {
-                        let ( amount_0_before, amount_1_before) = result.unwrap();
+                        let SwapInternalResult { amount_0: amount_0_before, amount_1: amount_1_before, .. } = result.unwrap();
 
                         let (amm_config, pool_state, tick_array_states, observation_state,bitmap_extension_info, _sum_amount_0, _sum_amount_1) = setup_swap_test(
                             tick_current,
@@ -2675,7 +2769,7 @@ mod swap_test {
 
                         println!("----- input: tick_current:{}, amount_0:{}, amount_1:{}, amount_specified:{},tick_lower:{}, tick_upper:{},liquidity:{}", tick_current, amount_0, amount_1,amount_specified, tick_lower, tick_upper, identity(pool_state.borrow().liquidity));
 
-                        let ( amount_0_after, amount_1_after) = result.unwrap();
+                        let SwapInternalResult { amount_0: amount_0_after, amount_1: amount_1_after, .. } = result.unwrap();
                         assert_eq!(amount_0_before, amount_0_after);
                         assert_eq!(amount_1_before, amount_1_after);
 
@@ -2743,7 +2837,7 @@ mod swap_test {
                     );
 
                     if result.is_ok() {
-                        let ( amount_0_before, amount_1_before) = result.unwrap();
+                        let SwapInternalResult { amount_0: amount_0_before, amount_1: amount_1_before, .. } = result.unwrap();
 
                         let (amm_config, pool_state, tick_array_states, observation_state,bitmap_extension_info,  _sum_amount_0, _sum_amount_1) = setup_swap_test(
                             tick_current,
@@ -2767,7 +2861,7 @@ mod swap_test {
 
                         // println!("----- input: tick_current:{}, amount_0:{}, amount_1:{}, amount_specified:{},tick_lower:{}, tick_upper:{},liquidity:{}", tick_current, amount_0, amount_1,amount_specified, tick_lower, tick_upper, identity(pool_state.borrow().liquidity));
 
-                        let (amount_0_after, amount_1_after) = result.unwrap();
+                        let SwapInternalResult { amount_0: amount_0_after, amount_1: amount_1_after, .. } = result.unwrap();
                         assert_eq!(amount_0_before, amount_0_after);
                         assert_eq!(amount_1_before, amount_1_after);
 
@@ -2833,7 +2927,7 @@ mod swap_test {
                     );
 
                     if result.is_ok() {
-                        let ( amount_0_before, amount_1_before) = result.unwrap();
+                        let SwapInternalResult { amount_0: amount_0_before, amount_1: amount_1_before, .. } = result.unwrap();
 
                         let (amm_config, pool_state, tick_array_states, observation_state,bitmap_extension_info,  _sum_amount_0, _sum_amount_1) = setup_swap_test(
                             tick_current,
@@ -2857,7 +2951,7 @@ mod swap_test {
 
                         // println!("----- input: tick_current:{}, amount_0:{}, amount_1:{}, amount_specified:{},tick_lower:{}, tick_upper:{},liquidity:{}", tick_current, amount_0, amount_1,amount_specified, tick_lower, tick_upper, identity(pool_state.borrow().liquidity));
 
-                        let (amount_0_after, amount_1_after) = result.unwrap();
+                        let SwapInternalResult { amount_0: amount_0_after, amount_1: amount_1_after, .. } = result.unwrap();
                         assert_eq!(amount_0_before, amount_0_after);
                         assert_eq!(amount_1_before, amount_1_after);
 
@@ -2947,7 +3041,7 @@ mod swap_test {
                 let tick_state = get_tick_state(&tick_array_states, -10).unwrap();
                 let unfilled_amount = tick_state.limit_order_unfilled_amount().unwrap();
                 // first swap, reach tick(-10), no limit order executed
-                let (_amount_0, _amount_1) = swap_internal(
+                let SwapInternalResult { .. } = swap_internal(
                     &amm_config,
                     &mut pool_state.borrow_mut(),
                     &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -2977,7 +3071,9 @@ mod swap_test {
                 let amount_in = result_expected.amount_in + result_expected.amm_fee_amount;
 
                 // continue swap, partial execution of the limit order
-                let (amount_0, amount_1) = swap_internal(
+                let SwapInternalResult {
+                    amount_0, amount_1, ..
+                } = swap_internal(
                     &amm_config,
                     &mut pool_state.borrow_mut(),
                     &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3013,7 +3109,9 @@ mod swap_test {
                     .unwrap();
                 let amount_in = result_expected.amount_in + result_expected.amm_fee_amount;
                 // continue swap,  all limit orders are executed, just cross tick(-10)
-                let (amount_0, amount_1) = swap_internal(
+                let SwapInternalResult {
+                    amount_0, amount_1, ..
+                } = swap_internal(
                     &amm_config,
                     &mut pool_state.borrow_mut(),
                     &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3083,7 +3181,7 @@ mod swap_test {
                 let unfilled_amount = tick_state.limit_order_unfilled_amount().unwrap();
 
                 // First swap, reach tick(10), no limit order executed
-                let (_amount_0, _amount_1) = swap_internal(
+                let SwapInternalResult { .. } = swap_internal(
                     &amm_config,
                     &mut pool_state.borrow_mut(),
                     &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3112,7 +3210,9 @@ mod swap_test {
                     .unwrap();
                 let amount_in = result_expected.amount_in + result_expected.amm_fee_amount;
                 // continue swap, partial execution of the limit order
-                let (amount_0, amount_1) = swap_internal(
+                let SwapInternalResult {
+                    amount_0, amount_1, ..
+                } = swap_internal(
                     &amm_config,
                     &mut pool_state.borrow_mut(),
                     &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3150,7 +3250,9 @@ mod swap_test {
                 let amount_in = result_expected.amount_in + result_expected.amm_fee_amount;
 
                 // continue swap, just cross tick(-10), full execution of the limit order
-                let (amount_0, amount_1) = swap_internal(
+                let SwapInternalResult {
+                    amount_0, amount_1, ..
+                } = swap_internal(
                     &amm_config,
                     &mut pool_state.borrow_mut(),
                     &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3219,7 +3321,7 @@ mod swap_test {
                 let tick_state = get_tick_state(&tick_array_states, -10).unwrap();
                 let unfilled_amount = tick_state.limit_order_unfilled_amount().unwrap();
                 // first swap, reach tick(-10), no limit order executed
-                let (_amount_0, _amount_1) = swap_internal(
+                let SwapInternalResult { .. } = swap_internal(
                     &amm_config,
                     &mut pool_state.borrow_mut(),
                     &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3248,7 +3350,7 @@ mod swap_test {
                 let unfilled_amount2 = tick_state2.limit_order_unfilled_amount().unwrap();
 
                 tick_array_states.make_contiguous().reverse();
-                let (_amount_0, amount_1) = swap_internal(
+                let SwapInternalResult { amount_1, .. } = swap_internal(
                     &amm_config,
                     &mut pool_state.borrow_mut(),
                     &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3277,7 +3379,7 @@ mod swap_test {
                 let tick_state4 = get_tick_state(&tick_array_states, -10).unwrap();
                 let unfilled_amount4 = tick_state4.limit_order_unfilled_amount().unwrap();
 
-                let (amount_0, _amount_1) = swap_internal(
+                let SwapInternalResult { amount_0, .. } = swap_internal(
                     &amm_config,
                     &mut pool_state.borrow_mut(),
                     &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3346,7 +3448,7 @@ mod swap_test {
                     .unwrap();
                 let expected_amount_in = result_expected.amount_in + result_expected.amm_fee_amount;
                 // first swap, reach tick(-10), partial execution of the limit order
-                let (amount_0, _amount_1) = swap_internal(
+                let SwapInternalResult { amount_0, .. } = swap_internal(
                     &amm_config,
                     &mut pool_state.borrow_mut(),
                     &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3378,7 +3480,7 @@ mod swap_test {
                     .unwrap();
                 let expected_amount_in = result_expected.amount_in + result_expected.amm_fee_amount;
                 tick_array_states.make_contiguous().reverse();
-                let (_amount_0, amount_1) = swap_internal(
+                let SwapInternalResult { amount_1, .. } = swap_internal(
                     &amm_config,
                     &mut pool_state.borrow_mut(),
                     &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3407,7 +3509,7 @@ mod swap_test {
                 let tick_state4 = get_tick_state(&tick_array_states, -10).unwrap();
                 let unfilled_amount4 = tick_state4.limit_order_unfilled_amount().unwrap();
 
-                let (amount_0, _amount_1) = swap_internal(
+                let SwapInternalResult { amount_0, .. } = swap_internal(
                     &amm_config,
                     &mut pool_state.borrow_mut(),
                     &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3482,7 +3584,7 @@ mod swap_test {
                     .unwrap();
                 let expected_amount_in = result_expected.amount_in + result_expected.amm_fee_amount;
                 // first swap, reach tick(-10), full execution of the limit order
-                let (amount_0, _amount_1) = swap_internal(
+                let SwapInternalResult { amount_0, .. } = swap_internal(
                     &amm_config,
                     &mut pool_state.borrow_mut(),
                     &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3525,7 +3627,7 @@ mod swap_test {
                     .unwrap();
                 let expected_amount_in = result_expected.amount_in + result_expected.amm_fee_amount;
 
-                let (_amount_0, amount_1) = swap_internal(
+                let SwapInternalResult { amount_1, .. } = swap_internal(
                     &amm_config,
                     &mut pool_state.borrow_mut(),
                     &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3557,7 +3659,7 @@ mod swap_test {
                 let tick_state4 = get_tick_state(&tick_array_states, -10).unwrap();
                 let unfilled_amount4 = tick_state4.limit_order_unfilled_amount().unwrap();
                 assert_eq!(unfilled_amount4, 0);
-                let (amount_0, _amount_1) = swap_internal(
+                let SwapInternalResult { amount_0, .. } = swap_internal(
                     &amm_config,
                     &mut pool_state.borrow_mut(),
                     &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3623,7 +3725,7 @@ mod swap_test {
                     ],
                 );
             // Reach tick(-10), partial execution of the limit order
-            let (_amount_0, amount_1) = swap_internal(
+            let SwapInternalResult { amount_1, .. } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3653,7 +3755,7 @@ mod swap_test {
                 1000
             );
             // cross tick(-10), full execution of the limit order
-            let (_amount_0, amount_1) = swap_internal(
+            let SwapInternalResult { amount_1, .. } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3683,7 +3785,7 @@ mod swap_test {
             let tick_state1 = get_tick_state(&tick_array_states, 10).unwrap();
             let unfilled_amount1 = tick_state1.limit_order_unfilled_amount().unwrap();
 
-            let (amount_0, _amount_1) = swap_internal(
+            let SwapInternalResult { amount_0, .. } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3710,7 +3812,7 @@ mod swap_test {
             // cross tick(10), full execution of the limit order
             tick_array_states.make_contiguous().reverse();
 
-            let (amount_0, _amount_1) = swap_internal(
+            let SwapInternalResult { amount_0, .. } = swap_internal(
                 &amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -3828,7 +3930,9 @@ mod swap_test {
             );
 
             assert!(result.is_ok(), "Swap should succeed");
-            let (amount_0, amount_1) = result.unwrap();
+            let SwapInternalResult {
+                amount_0, amount_1, ..
+            } = result.unwrap();
             assert!(amount_0 > 0, "Swap should have produced output");
             assert!(amount_1 > 0, "Swap should have consumed input");
 
@@ -4446,7 +4550,7 @@ mod swap_test {
 
             // Perform a swap that crosses multiple tick spacings
             let swap_amount = 10_000_000_000u64; // Large swap to cross ticks
-            let (_, _) = swap_internal(
+            let _ = swap_internal(
                 &_amm_config,
                 &mut pool_state.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
@@ -5031,7 +5135,10 @@ mod swap_test {
             assert!(pool_state1.borrow().is_fee_on_input(zero_for_one));
             let total_fees_token0_before1 = pool_state1.borrow().fee_growth_global_0_x64;
             let total_fees_token1_before1 = pool_state1.borrow().fee_growth_global_1_x64;
-            let (_amount_0_fee_from_input, amount_1_fee_from_input) = swap_internal(
+            let SwapInternalResult {
+                amount_1: amount_1_fee_from_input,
+                ..
+            } = swap_internal(
                 &amm_config1,
                 &mut pool_state1.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states1).borrow_mut(),
@@ -5080,7 +5187,10 @@ mod swap_test {
             assert!(!pool_state2.borrow().is_fee_on_input(zero_for_one));
             let total_fees_token0_before2 = pool_state2.borrow().fee_growth_global_0_x64;
             let total_fees_token1_before2 = pool_state2.borrow().fee_growth_global_1_x64;
-            let (_amount_0_fee_from_output, amount_1_fee_from_output) = swap_internal(
+            let SwapInternalResult {
+                amount_1: amount_1_fee_from_output,
+                ..
+            } = swap_internal(
                 &amm_config2,
                 &mut pool_state2.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states2).borrow_mut(),
@@ -5205,7 +5315,10 @@ mod swap_test {
             assert!(pool_state1.borrow().is_fee_on_input(zero_for_one));
             let total_fees_token0_before1 = pool_state1.borrow().fee_growth_global_0_x64;
             let total_fees_token1_before1 = pool_state1.borrow().fee_growth_global_1_x64;
-            let (_amount_0_fee_from_input, _amount_1_fee_from_input) = swap_internal(
+            let SwapInternalResult {
+                amount_0: _amount_0_fee_from_input,
+                ..
+            } = swap_internal(
                 &amm_config1,
                 &mut pool_state1.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states1).borrow_mut(),
@@ -5254,7 +5367,10 @@ mod swap_test {
             assert!(!pool_state2.borrow().is_fee_on_input(zero_for_one));
             let total_fees_token0_before2 = pool_state2.borrow().fee_growth_global_0_x64;
             let total_fees_token1_before2 = pool_state2.borrow().fee_growth_global_1_x64;
-            let (amount_0_fee_from_output, _amount_1_fee_from_output) = swap_internal(
+            let SwapInternalResult {
+                amount_0: amount_0_fee_from_output,
+                ..
+            } = swap_internal(
                 &amm_config2,
                 &mut pool_state2.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states2).borrow_mut(),
@@ -5372,7 +5488,11 @@ mod swap_test {
             assert!(pool_state1.borrow().is_fee_on_input(zero_for_one));
             let total_fees_token0_before1 = pool_state1.borrow().fee_growth_global_0_x64;
             let total_fees_token1_before1 = pool_state1.borrow().fee_growth_global_1_x64;
-            let (amount_0_fee_from_input, amount_1_fee_from_input) = swap_internal(
+            let SwapInternalResult {
+                amount_0: amount_0_fee_from_input,
+                amount_1: amount_1_fee_from_input,
+                ..
+            } = swap_internal(
                 &amm_config1,
                 &mut pool_state1.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states1).borrow_mut(),
@@ -5422,7 +5542,11 @@ mod swap_test {
             assert!(!pool_state2.borrow().is_fee_on_input(zero_for_one));
             let total_fees_token0_before2 = pool_state2.borrow().fee_growth_global_0_x64;
             let total_fees_token1_before2 = pool_state2.borrow().fee_growth_global_1_x64;
-            let (amount_0_fee_from_output, amount_1_fee_from_output) = swap_internal(
+            let SwapInternalResult {
+                amount_0: amount_0_fee_from_output,
+                amount_1: amount_1_fee_from_output,
+                ..
+            } = swap_internal(
                 &amm_config2,
                 &mut pool_state2.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states2).borrow_mut(),
@@ -5541,7 +5665,11 @@ mod swap_test {
             assert!(pool_state1.borrow().is_fee_on_input(zero_for_one));
             let total_fees_token0_before1 = pool_state1.borrow().fee_growth_global_0_x64;
             let total_fees_token1_before1 = pool_state1.borrow().fee_growth_global_1_x64;
-            let (amount_0_fee_from_input, amount_1_fee_from_input) = swap_internal(
+            let SwapInternalResult {
+                amount_0: amount_0_fee_from_input,
+                amount_1: amount_1_fee_from_input,
+                ..
+            } = swap_internal(
                 &amm_config1,
                 &mut pool_state1.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states1).borrow_mut(),
@@ -5591,7 +5719,11 @@ mod swap_test {
             assert!(!pool_state2.borrow().is_fee_on_input(zero_for_one));
             let total_fees_token0_before2 = pool_state2.borrow().fee_growth_global_0_x64;
             let total_fees_token1_before2 = pool_state2.borrow().fee_growth_global_1_x64;
-            let (amount_0_fee_from_output, amount_1_fee_from_output) = swap_internal(
+            let SwapInternalResult {
+                amount_0: amount_0_fee_from_output,
+                amount_1: amount_1_fee_from_output,
+                ..
+            } = swap_internal(
                 &amm_config2,
                 &mut pool_state2.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states2).borrow_mut(),
@@ -5667,7 +5799,7 @@ mod swap_test {
                 );
             pool_state1.borrow_mut().set_fee_on(0).unwrap();
             let total_fees_token1_before1 = pool_state1.borrow().fee_growth_global_1_x64;
-            let (_amount_0_1, _amount_1_1) = swap_internal(
+            let SwapInternalResult { .. } = swap_internal(
                 &amm_config1,
                 &mut pool_state1.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states1).borrow_mut(),
@@ -5712,7 +5844,7 @@ mod swap_test {
                 );
             pool_state2.borrow_mut().set_fee_on(1).unwrap();
             let total_fees_token0_before2 = pool_state2.borrow().fee_growth_global_0_x64;
-            let (_amount_0_2, _amount_1_2) = swap_internal(
+            let SwapInternalResult { .. } = swap_internal(
                 &amm_config2,
                 &mut pool_state2.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states2).borrow_mut(),
@@ -5771,7 +5903,11 @@ mod swap_test {
                 );
             pool_state1.borrow_mut().set_fee_on(0).unwrap();
             let swap_amount1 = 887470480u64;
-            let (amount_0_1, amount_1_1) = swap_internal(
+            let SwapInternalResult {
+                amount_0: amount_0_1,
+                amount_1: amount_1_1,
+                ..
+            } = swap_internal(
                 &amm_config1,
                 &mut pool_state1.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states1).borrow_mut(),
@@ -5815,7 +5951,10 @@ mod swap_test {
             pool_state2.borrow_mut().set_fee_on(1).unwrap();
             let net_input2 = amount_1_1; // Use same net input
             let total_fees_token0_before2 = pool_state2.borrow().fee_growth_global_0_x64;
-            let (amount_0_2, _amount_1_2) = swap_internal(
+            let SwapInternalResult {
+                amount_0: amount_0_2,
+                ..
+            } = swap_internal(
                 &amm_config2,
                 &mut pool_state2.borrow_mut(),
                 &mut get_tick_array_states_mut(&tick_array_states2).borrow_mut(),

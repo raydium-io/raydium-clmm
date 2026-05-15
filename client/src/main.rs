@@ -1100,14 +1100,14 @@ fn main() -> Result<()> {
                     tick_lower_price_x64,
                     tick_upper_price_x64,
                     input_amount,
-                )
+                )?
             } else {
                 liquidity_math::get_liquidity_from_single_amount_1(
                     pool.sqrt_price_x64,
                     tick_lower_price_x64,
                     tick_upper_price_x64,
                     input_amount,
-                )
+                )?
             };
             let (amount_0, amount_1) = liquidity_math::get_delta_amounts_signed(
                 pool.tick_current,
@@ -1305,14 +1305,14 @@ fn main() -> Result<()> {
                     tick_lower_price_x64,
                     tick_upper_price_x64,
                     imput_amount,
-                )
+                )?
             } else {
                 liquidity_math::get_liquidity_from_single_amount_1(
                     pool.sqrt_price_x64,
                     tick_lower_price_x64,
                     tick_upper_price_x64,
                     imput_amount,
-                )
+                )?
             };
             let (amount_0, amount_1) = liquidity_math::get_delta_amounts_signed(
                 pool.tick_current,
