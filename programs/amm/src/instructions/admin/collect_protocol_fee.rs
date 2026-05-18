@@ -1,4 +1,3 @@
-use crate::decrease_liquidity::check_unclaimed_fees_and_vault;
 use crate::error::ErrorCode;
 use crate::states::*;
 use crate::util::*;
@@ -79,11 +78,11 @@ pub fn collect_protocol_fee(
         pool_state.protocol_fees_token_0 = pool_state
             .protocol_fees_token_0
             .checked_sub(amount_0)
-            .unwrap();
+            .ok_or(ErrorCode::CalculateOverflow)?;
         pool_state.protocol_fees_token_1 = pool_state
             .protocol_fees_token_1
             .checked_sub(amount_1)
-            .unwrap();
+            .ok_or(ErrorCode::CalculateOverflow)?;
     }
     transfer_from_pool_vault_to_user(
         &ctx.accounts.pool_state,
@@ -103,12 +102,6 @@ pub fn collect_protocol_fee(
         &ctx.accounts.token_program,
         Some(ctx.accounts.token_program_2022.to_account_info()),
         amount_1,
-    )?;
-
-    check_unclaimed_fees_and_vault(
-        &ctx.accounts.pool_state,
-        &ctx.accounts.token_vault_0.to_account_info(),
-        &ctx.accounts.token_vault_1.to_account_info(),
     )?;
 
     emit!(CollectProtocolFeeEvent {

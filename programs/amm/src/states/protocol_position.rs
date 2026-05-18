@@ -75,14 +75,14 @@ impl ProtocolPositionState {
         );
         // calculate accumulated Fees
         let tokens_owed_0 =
-            U128::from(fee_growth_inside_0_x64.saturating_sub(self.fee_growth_inside_0_last_x64))
+            U128::from(fee_growth_inside_0_x64.wrapping_sub(self.fee_growth_inside_0_last_x64))
                 .mul_div_floor(U128::from(self.liquidity), U128::from(fixed_point_64::Q64))
-                .unwrap()
+                .ok_or(ErrorCode::CalculateOverflow)?
                 .to_underflow_u64();
         let tokens_owed_1 =
-            U128::from(fee_growth_inside_1_x64.saturating_sub(self.fee_growth_inside_1_last_x64))
+            U128::from(fee_growth_inside_1_x64.wrapping_sub(self.fee_growth_inside_1_last_x64))
                 .mul_div_floor(U128::from(self.liquidity), U128::from(fixed_point_64::Q64))
-                .unwrap()
+                .ok_or(ErrorCode::CalculateOverflow)?
                 .to_underflow_u64();
 
         // Update the position liquidity
@@ -92,8 +92,14 @@ impl ProtocolPositionState {
         self.tick_lower_index = tick_lower_index;
         self.tick_upper_index = tick_upper_index;
         if tokens_owed_0 > 0 || tokens_owed_1 > 0 {
-            self.token_fees_owed_0 = self.token_fees_owed_0.checked_add(tokens_owed_0).unwrap();
-            self.token_fees_owed_1 = self.token_fees_owed_1.checked_add(tokens_owed_1).unwrap();
+            self.token_fees_owed_0 = self
+                .token_fees_owed_0
+                .checked_add(tokens_owed_0)
+                .ok_or(ErrorCode::CalculateOverflow)?;
+            self.token_fees_owed_1 = self
+                .token_fees_owed_1
+                .checked_add(tokens_owed_1)
+                .ok_or(ErrorCode::CalculateOverflow)?;
         }
         #[cfg(feature = "enable-log")]
         msg!(

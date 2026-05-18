@@ -92,7 +92,7 @@ impl ObservationState {
                 return;
             }
 
-            let delta_tick_cumulative = i64::from(tick).checked_mul(delta_time.into()).unwrap();
+            let delta_tick_cumulative = i64::from(tick).saturating_mul(delta_time.into());
             let next_observation_index = if observation_index as usize == OBSERVATION_NUM - 1 {
                 0
             } else {

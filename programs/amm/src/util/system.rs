@@ -1,3 +1,4 @@
+use crate::error::ErrorCode;
 use anchor_lang::{prelude::*, system_program};
 
 pub fn create_or_allocate_account<'a>(
@@ -5,7 +6,7 @@ pub fn create_or_allocate_account<'a>(
     payer: AccountInfo<'a>,
     system_program: AccountInfo<'a>,
     target_account: AccountInfo<'a>,
-    siger_seed: &[&[u8]],
+    signer_seeds: &[&[u8]],
     space: usize,
 ) -> Result<()> {
     let rent = Rent::get()?;
@@ -19,9 +20,9 @@ pub fn create_or_allocate_account<'a>(
         };
         let cpi_context = CpiContext::new(system_program.clone(), cpi_accounts);
         system_program::create_account(
-            cpi_context.with_signer(&[siger_seed]),
+            cpi_context.with_signer(&[signer_seeds]),
             lamports,
-            u64::try_from(space).unwrap(),
+            u64::try_from(space).map_err(|_| ErrorCode::CalculateOverflow)?,
             program_id,
         )?;
     } else {
@@ -42,15 +43,15 @@ pub fn create_or_allocate_account<'a>(
         };
         let cpi_context = CpiContext::new(system_program.clone(), cpi_accounts);
         system_program::allocate(
-            cpi_context.with_signer(&[siger_seed]),
-            u64::try_from(space).unwrap(),
+            cpi_context.with_signer(&[signer_seeds]),
+            u64::try_from(space).map_err(|_| ErrorCode::CalculateOverflow)?,
         )?;
 
         let cpi_accounts = system_program::Assign {
             account_to_assign: target_account.clone(),
         };
         let cpi_context = CpiContext::new(system_program.clone(), cpi_accounts);
-        system_program::assign(cpi_context.with_signer(&[siger_seed]), program_id)?;
+        system_program::assign(cpi_context.with_signer(&[signer_seeds]), program_id)?;
     }
     Ok(())
 }

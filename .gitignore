@@ -4,10 +4,11 @@
 target
 KeyPairs
 *.json
+!package.json
+!tsconfig.json
 client/target
 **/*.rs.bk
 node_modules
-tests
 test-ledger
 .yarn*
 yarn.lock

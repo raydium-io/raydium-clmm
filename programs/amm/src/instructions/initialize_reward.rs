@@ -83,7 +83,10 @@ impl InitializeRewardParam {
         {
             return Err(ErrorCode::InvalidRewardInitParam.into());
         }
-        let time_delta = self.end_time.checked_sub(self.open_time).unwrap();
+        let time_delta = self
+            .end_time
+            .checked_sub(self.open_time)
+            .ok_or(ErrorCode::CalculateOverflow)?;
         if time_delta < reward_period_limit::MIN_REWARD_PERIOD
             || time_delta > reward_period_limit::MAX_REWARD_PERIOD
         {
@@ -104,9 +107,7 @@ pub fn initialize_reward(
     if !util::is_supported_mint(
         &ctx.accounts.reward_token_mint,
         mint_associated_is_initialized,
-    )
-    .unwrap()
-    {
+    )? {
         return err!(ErrorCode::NotSupportMint);
     }
 
@@ -145,12 +146,13 @@ pub fn initialize_reward(
             U256::from(param.emissions_per_second_x64),
             U256::from(fixed_point_64::Q64),
         )
-        .unwrap()
+        .ok_or(ErrorCode::CalculateOverflow)?
         .as_u64();
     let transfer_fee =
-        util::get_transfer_inverse_fee(ctx.accounts.reward_token_mint.clone(), reward_amount)
-            .unwrap();
-    let reward_amount_with_transfer_fee = reward_amount.checked_add(transfer_fee).unwrap();
+        util::get_transfer_inverse_fee(ctx.accounts.reward_token_mint.clone(), reward_amount)?;
+    let reward_amount_with_transfer_fee = reward_amount
+        .checked_add(transfer_fee)
+        .ok_or(ErrorCode::CalculateOverflow)?;
     require_gte!(
         ctx.accounts.funder_token_account.amount,
         reward_amount_with_transfer_fee

@@ -1,6 +1,7 @@
 use super::{create_or_allocate_account, get_recent_epoch};
 use crate::error::ErrorCode;
 use crate::states::*;
+use anchor_lang::system_program::{transfer, Transfer};
 use anchor_lang::{
     prelude::*,
     solana_program,
@@ -23,9 +24,9 @@ use anchor_spl::token_2022::{
     self, get_account_data_size, GetAccountDataSize, InitializeAccount3, InitializeImmutableOwner,
     Token2022,
 };
+use anchor_spl::token_2022_extensions::spl_token_metadata_interface;
 use anchor_spl::token_interface::{initialize_mint2, InitializeMint2, Mint, TokenInterface};
 use std::collections::HashSet;
-
 const MINT_WHITELIST: [&'static str; 6] = [
     "HVbpJAQGNpkgBaYBZQBR1t7yFdvaYVp2vCQQfKKEN4tM",
     "Crn4x1Y2HUKko7ox2EZMT6N2t2ZyH7eKtwkBGVnhEq1g",
@@ -211,10 +212,15 @@ pub fn get_transfer_inverse_fee(
         } else {
             let transfer_fee = transfer_fee_config
                 .calculate_inverse_epoch_fee(epoch, post_fee_amount)
-                .unwrap();
+                .ok_or(ErrorCode::CalculateOverflow)?;
             let transfer_fee_for_check = transfer_fee_config
-                .calculate_epoch_fee(epoch, post_fee_amount.checked_add(transfer_fee).unwrap())
-                .unwrap();
+                .calculate_epoch_fee(
+                    epoch,
+                    post_fee_amount
+                        .checked_add(transfer_fee)
+                        .ok_or(ErrorCode::CalculateOverflow)?,
+                )
+                .ok_or(ErrorCode::CalculateOverflow)?;
             if transfer_fee != transfer_fee_for_check {
                 return err!(ErrorCode::TransferFeeCalculateNotMatch);
             }
@@ -241,7 +247,7 @@ pub fn get_transfer_fee(
     let fee = if let Ok(transfer_fee_config) = mint.get_extension::<TransferFeeConfig>() {
         transfer_fee_config
             .calculate_epoch_fee(get_recent_epoch()?, pre_fee_amount)
-            .unwrap()
+            .ok_or(ErrorCode::CalculateOverflow)?
     } else {
         0
     };
@@ -314,9 +320,9 @@ pub fn is_supported_mint(
     Ok(true)
 }
 
-pub fn create_position_nft_mint_with_extensions<'info>(
+pub fn create_nft_mint_with_extensions<'info>(
     payer: &Signer<'info>,
-    position_nft_mint: &AccountInfo<'info>,
+    nft_mint: &AccountInfo<'info>,
     mint_authority: &AccountInfo<'info>,
     mint_close_authority: &AccountInfo<'info>,
     system_program: &Program<'info, System>,
@@ -343,7 +349,7 @@ pub fn create_position_nft_mint_with_extensions<'info>(
             system_program.to_account_info(),
             CreateAccount {
                 from: payer.to_account_info(),
-                to: position_nft_mint.to_account_info(),
+                to: nft_mint.to_account_info(),
             },
         ),
         lamports,
@@ -357,29 +363,29 @@ pub fn create_position_nft_mint_with_extensions<'info>(
             ExtensionType::MetadataPointer => {
                 let ix = metadata_pointer::instruction::initialize(
                     token_2022_program.key,
-                    position_nft_mint.key,
+                    nft_mint.key,
                     None,
-                    Some(position_nft_mint.key()),
+                    Some(nft_mint.key()),
                 )?;
                 solana_program::program::invoke(
                     &ix,
                     &[
                         token_2022_program.to_account_info(),
-                        position_nft_mint.to_account_info(),
+                        nft_mint.to_account_info(),
                     ],
                 )?;
             }
             ExtensionType::MintCloseAuthority => {
                 let ix = spl_token_2022::instruction::initialize_mint_close_authority(
                     token_2022_program.key,
-                    position_nft_mint.key,
+                    nft_mint.key,
                     Some(mint_close_authority.key),
                 )?;
                 solana_program::program::invoke(
                     &ix,
                     &[
                         token_2022_program.to_account_info(),
-                        position_nft_mint.to_account_info(),
+                        nft_mint.to_account_info(),
                     ],
                 )?;
             }
@@ -394,13 +400,73 @@ pub fn create_position_nft_mint_with_extensions<'info>(
         CpiContext::new(
             token_2022_program.to_account_info(),
             InitializeMint2 {
-                mint: position_nft_mint.to_account_info(),
+                mint: nft_mint.to_account_info(),
             },
         ),
         0,
         &mint_authority.key(),
         None,
     )
+}
+
+pub fn initialize_token_metadata_extension<'info>(
+    payer: &Signer<'info>,
+    nft_mint: &AccountInfo<'info>,
+    mint_authority: &AccountInfo<'info>,
+    metadata_update_authority: &AccountInfo<'info>,
+    token_2022_program: &Program<'info, Token2022>,
+    name: String,
+    symbol: String,
+    uri: String,
+    signers_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    let metadata = spl_token_metadata_interface::state::TokenMetadata {
+        name,
+        symbol,
+        uri,
+        ..Default::default()
+    };
+
+    let mint_data = nft_mint.try_borrow_data()?;
+    let mint_state_unpacked =
+        StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
+    let new_account_len =
+        mint_state_unpacked.try_get_new_account_len_for_variable_len_extension(&metadata)?;
+    let new_rent_exempt_lamports = Rent::get()?.minimum_balance(new_account_len);
+    let additional_lamports = new_rent_exempt_lamports.saturating_sub(nft_mint.lamports());
+    // CPI call will borrow the account data
+    drop(mint_data);
+
+    let cpi_context = CpiContext::new(
+        token_2022_program.to_account_info(),
+        Transfer {
+            from: payer.to_account_info(),
+            to: nft_mint.to_account_info(),
+        },
+    );
+    transfer(cpi_context, additional_lamports)?;
+
+    solana_program::program::invoke_signed(
+        &spl_token_metadata_interface::instruction::initialize(
+            token_2022_program.key,
+            nft_mint.key,
+            metadata_update_authority.key,
+            nft_mint.key,
+            &mint_authority.key(),
+            metadata.name,
+            metadata.symbol,
+            metadata.uri,
+        ),
+        &[
+            nft_mint.to_account_info(),
+            mint_authority.to_account_info(),
+            metadata_update_authority.to_account_info(),
+            token_2022_program.to_account_info(),
+        ],
+        signers_seeds,
+    )?;
+
+    Ok(())
 }
 
 pub fn create_token_vault_account<'info>(

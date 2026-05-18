@@ -72,7 +72,8 @@ fn get_remaining_reward_amount(
     reward_funder: &Pubkey,
     reward_index: u8,
 ) -> Result<u64> {
-    let current_timestamp = u64::try_from(Clock::get()?.unix_timestamp).unwrap();
+    let current_timestamp =
+        u64::try_from(Clock::get()?.unix_timestamp).map_err(|_| ErrorCode::CalculateOverflow)?;
     let mut pool_state = pool_state_loader.load_mut()?;
     pool_state.update_reward_infos(current_timestamp)?;
 
@@ -88,15 +89,14 @@ fn get_remaining_reward_amount(
     require_keys_eq!(reward_funder.key(), reward_info.authority);
     require_keys_eq!(reward_token_vault.key(), reward_info.token_vault);
 
+    let unclaimed_reward = reward_info
+        .reward_total_emitted
+        .checked_sub(reward_info.reward_claimed)
+        .ok_or(ErrorCode::CalculateOverflow)?;
     let amount_remaining = reward_token_vault
         .amount
-        .checked_sub(
-            reward_info
-                .reward_total_emissioned
-                .checked_sub(reward_info.reward_claimed)
-                .unwrap(),
-        )
-        .unwrap();
+        .checked_sub(unclaimed_reward)
+        .ok_or(ErrorCode::CalculateOverflow)?;
 
     Ok(amount_remaining)
 }

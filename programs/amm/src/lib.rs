@@ -6,6 +6,7 @@ pub mod util;
 
 use anchor_lang::prelude::*;
 use core as core_;
+use error::ErrorCode;
 use instructions::*;
 use states::*;
 
@@ -33,20 +34,29 @@ pub mod admin {
     pub const ID: Pubkey = pubkey!("GThUX1Atko4tqhN2NaiTazWSeFWMuiUvfFnyJyUghFMJ");
 }
 
+pub mod limit_order_admin {
+    use super::{pubkey, Pubkey};
+    #[cfg(feature = "devnet")]
+    pub const ID: Pubkey = pubkey!("DRaypkxM96mjYYnqMmuYjsSL3stHxLf1CvYuTcqxUaav");
+    #[cfg(not(feature = "devnet"))]
+    pub const ID: Pubkey = pubkey!("Ray8HHtixhL9zvnokMyELCVGp622PDPJj96zcVC9RWp");
+}
+
 #[program]
-pub mod amm_v3 {
+pub mod raydium_clmm {
 
     use super::*;
 
     // The configuration of AMM protocol, include trade fee and protocol fee
     /// # Arguments
     ///
-    /// * `ctx`- The accounts needed by instruction.
+    /// * `ctx` - The accounts needed by instruction.
     /// * `index` - The index of amm config, there may be multiple config.
     /// * `tick_spacing` - The tickspacing binding with config, cannot be changed.
     /// * `trade_fee_rate` - Trade fee rate, can be changed.
     /// * `protocol_fee_rate` - The rate of protocol fee within trade fee.
     /// * `fund_fee_rate` - The rate of fund fee within trade fee.
+    /// * `limit_fee_rate` - The rate of limit order fee.
     ///
     pub fn create_amm_config(
         ctx: Context<CreateAmmConfig>,
@@ -56,10 +66,6 @@ pub mod amm_v3 {
         protocol_fee_rate: u32,
         fund_fee_rate: u32,
     ) -> Result<()> {
-        assert!(trade_fee_rate < FEE_RATE_DENOMINATOR_VALUE);
-        assert!(protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
-        assert!(fund_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
-        assert!(fund_fee_rate + protocol_fee_rate <= FEE_RATE_DENOMINATOR_VALUE);
         instructions::create_amm_config(
             ctx,
             index,
@@ -70,7 +76,7 @@ pub mod amm_v3 {
         )
     }
 
-    /// Create support token22 mint account which can create pool and send rewards with ignoring the not support extensions.
+    /// Create support token22 mint account which can create pool and send rewards while ignoring unsupported extensions.
     pub fn create_support_mint_associated(ctx: Context<CreateSupportMintAssociated>) -> Result<()> {
         instructions::create_support_mint_associated(ctx)
     }
@@ -80,23 +86,90 @@ pub mod amm_v3 {
     ///
     /// # Arguments
     ///
-    /// * `ctx`- The context of accounts
-    /// * `trade_fee_rate`- The new trade fee rate of amm config, be set when `param` is 0
-    /// * `protocol_fee_rate`- The new protocol fee rate of amm config, be set when `param` is 1
-    /// * `fund_fee_rate`- The new fund fee rate of amm config, be set when `param` is 2
-    /// * `new_owner`- The config's new owner, be set when `param` is 3
-    /// * `new_fund_owner`- The config's new fund owner, be set when `param` is 4
-    /// * `param`- The value can be 0 | 1 | 2 | 3 | 4, otherwise will report a error
+    /// * `ctx` - The context of accounts
+    /// * `trade_fee_rate` - The new trade fee rate of amm config, be set when `param` is 0
+    /// * `protocol_fee_rate` - The new protocol fee rate of amm config, be set when `param` is 1
+    /// * `fund_fee_rate` - The new fund fee rate of amm config, be set when `param` is 2
+    /// * `new_owner` - The config's new owner, be set when `param` is 3
+    /// * `new_fund_owner` - The config's new fund owner, be set when `param` is 4
+    /// * `limit_protocol_fee_rate` - The new limit protocol fee rate of amm config, be set when `param` is 5
+    /// * `limit_fund_fee_rate` - The new limit fund fee rate of amm config, be set when `param` is 6
+    /// * `param` - The value can be 0 | 1 | 2 | 3 | 4 | 5 | 6, otherwise will report an error
     ///
     pub fn update_amm_config(ctx: Context<UpdateAmmConfig>, param: u8, value: u32) -> Result<()> {
         instructions::update_amm_config(ctx, param, value)
+    }
+
+    /// Create dynamic fee config
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    /// * `index` - The index of dynamic fee config
+    /// * `filter_period` - The period of filter
+    /// * `decay_period` - The period of decay
+    /// * `reduction_factor` - The reduction factor
+    /// * `adaptive_fee_control_factor` - The adaptive fee control factor
+    /// * `max_volatility_accumulator` - The max volatility accumulator
+    /// * `tick_group_size` - The tick group size
+    pub fn create_dynamic_fee_config(
+        ctx: Context<CreateDynamicFeeConfig>,
+        index: u16,
+        filter_period: u16,
+        decay_period: u16,
+        reduction_factor: u16,
+        dynamic_fee_control: u32,
+        max_volatility_accumulator: u32,
+    ) -> Result<()> {
+        instructions::create_dynamic_fee_config(
+            ctx,
+            index,
+            filter_period,
+            decay_period,
+            reduction_factor,
+            dynamic_fee_control,
+            max_volatility_accumulator,
+        )
+    }
+
+    /// Updates the dynamic fee configuration constants.
+    ///
+    /// This function allows updating the parameters that control dynamic fee calculation,
+    /// such as filter period, decay period, reduction factor, fee control factor, etc.
+    /// Only the admin or the amm config owner can update these settings.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    /// * `filter_period` - Period that determines the high frequency trading time window (in seconds)
+    /// * `decay_period` - Period that determines when the dynamic fee starts to decrease (in seconds)
+    /// * `reduction_factor` - Dynamic fee rate decrement rate, used for volatility reference decay
+    /// * `dynamic_fee_control` - Factor used to scale the dynamic fee component
+    /// * `max_volatility_accumulator` - Maximum value for the volatility accumulator
+    /// * `create_pool_authority` - The new authority pubkey that can use this dynamic fee config to create pools
+    pub fn update_dynamic_fee_config(
+        ctx: Context<UpdateDynamicFeeConfig>,
+        filter_period: u16,
+        decay_period: u16,
+        reduction_factor: u16,
+        dynamic_fee_control: u32,
+        max_volatility_accumulator: u32,
+    ) -> Result<()> {
+        instructions::update_dynamic_fee_config(
+            ctx,
+            filter_period,
+            decay_period,
+            reduction_factor,
+            dynamic_fee_control,
+            max_volatility_accumulator,
+        )
     }
 
     /// Creates a pool for the given token pair and the initial price
     ///
     /// # Arguments
     ///
-    /// * `ctx`- The context of accounts
+    /// * `ctx` - The context of accounts
     /// * `sqrt_price_x64` - the initial sqrt price (amount_token_1 / amount_token_0) of the pool as a Q64.64
     /// Note: The open_time must be smaller than the current block_timestamp on chain.
     pub fn create_pool(
@@ -107,11 +180,25 @@ pub mod amm_v3 {
         instructions::create_pool(ctx, sqrt_price_x64, open_time)
     }
 
+    /// Creates a pool for the given token pair with customizable parameters
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    /// * `customizable_params` - the customizable parameters
+    ///
+    pub fn create_customizable_pool<'a, 'b, 'c: 'info, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, CreateCustomizablePool<'info>>,
+        customizable_params: CreateCustomizableParams,
+    ) -> Result<()> {
+        instructions::create_customizable_pool(ctx, customizable_params)
+    }
+
     /// Update pool status for given value
     ///
     /// # Arguments
     ///
-    /// * `ctx`- The context of accounts
+    /// * `ctx` - The context of accounts
     /// * `status` - The value of status
     ///
     pub fn update_pool_status(ctx: Context<UpdatePoolStatus>, status: u8) -> Result<()> {
@@ -122,7 +209,7 @@ pub mod amm_v3 {
     ///
     /// # Arguments
     ///
-    /// * `ctx`- The context of accounts
+    /// * `ctx` - The context of accounts
     ///
     pub fn create_operation_account(ctx: Context<CreateOperationAccount>) -> Result<()> {
         instructions::create_operation_account(ctx)
@@ -132,8 +219,8 @@ pub mod amm_v3 {
     ///
     /// # Arguments
     ///
-    /// * `ctx`- The context of accounts
-    /// * `param`- The value can be 0 | 1 | 2 | 3, otherwise will report a error
+    /// * `ctx` - The context of accounts
+    /// * `param` - The value can be 0 | 1 | 2 | 3, otherwise will report an error
     /// * `keys`- update operation owner when the `param` is 0
     ///           remove operation owner when the `param` is 1
     ///           update whitelist mint when the `param` is 2
@@ -151,8 +238,8 @@ pub mod amm_v3 {
     ///
     /// # Arguments
     ///
-    /// * `ctx`- The context of accounts
-    /// * `new_owner`- new owner pubkey
+    /// * `ctx` - The context of accounts
+    /// * `new_owner` - new owner pubkey
     ///
     pub fn transfer_reward_owner<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, TransferRewardOwner<'info>>,
@@ -165,7 +252,7 @@ pub mod amm_v3 {
     ///
     /// # Arguments
     ///
-    /// * `ctx`- The context of accounts
+    /// * `ctx` - The context of accounts
     /// * `reward_index` - the index to reward info
     /// * `open_time` - reward open timestamp
     /// * `end_time` - reward end timestamp
@@ -182,7 +269,7 @@ pub mod amm_v3 {
     ///
     /// # Arguments
     ///
-    /// * `ctx`- The context of accounts
+    /// * `ctx` - The context of accounts
     /// * `reward_index` - the index to reward info
     ///
     pub fn collect_remaining_rewards(
@@ -196,7 +283,7 @@ pub mod amm_v3 {
     ///
     /// # Arguments
     ///
-    /// * `ctx`- The context of accounts
+    /// * `ctx` - The context of accounts
     ///
     pub fn update_reward_infos<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, UpdateRewardInfos<'info>>,
@@ -271,8 +358,8 @@ pub mod amm_v3 {
     /// * `ctx` - The context of accounts
     /// * `tick_lower_index` - The low boundary of market
     /// * `tick_upper_index` - The upper boundary of market
-    /// * `tick_array_lower_start_index` - The start index of tick array which include tick low
-    /// * `tick_array_upper_start_index` - The start index of tick array which include tick upper
+    /// * `tick_array_lower_start_index` - The start index of tick array which includes tick low
+    /// * `tick_array_upper_start_index` - The start index of tick array which includes tick upper
     /// * `liquidity` - The liquidity to be added
     /// * `amount_0_max` - The max amount of token_0 to spend, which serves as a slippage check
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
@@ -309,8 +396,8 @@ pub mod amm_v3 {
     /// * `ctx` - The context of accounts
     /// * `tick_lower_index` - The low boundary of market
     /// * `tick_upper_index` - The upper boundary of market
-    /// * `tick_array_lower_start_index` - The start index of tick array which include tick low
-    /// * `tick_array_upper_start_index` - The start index of tick array which include tick upper
+    /// * `tick_array_lower_start_index` - The start index of tick array which includes tick low
+    /// * `tick_array_upper_start_index` - The start index of tick array which includes tick upper
     /// * `liquidity` - The liquidity to be added, if zero, and the base_flag is specified, calculate liquidity base amount_0_max or amount_1_max according base_flag, otherwise open position with zero liquidity
     /// * `amount_0_max` - The max amount of token_0 to spend, which serves as a slippage check
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
@@ -350,8 +437,8 @@ pub mod amm_v3 {
     /// * `ctx` - The context of accounts
     /// * `tick_lower_index` - The low boundary of market
     /// * `tick_upper_index` - The upper boundary of market
-    /// * `tick_array_lower_start_index` - The start index of tick array which include tick low
-    /// * `tick_array_upper_start_index` - The start index of tick array which include tick upper
+    /// * `tick_array_lower_start_index` - The start index of tick array which includes tick low
+    /// * `tick_array_upper_start_index` - The start index of tick array which includes tick upper
     /// * `liquidity` - The liquidity to be added, if zero, and the base_flag is specified, calculate liquidity base amount_0_max or amount_1_max according base_flag, otherwise open position with zero liquidity
     /// * `amount_0_max` - The max amount of token_0 to spend, which serves as a slippage check
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
@@ -412,7 +499,7 @@ pub mod amm_v3 {
         amount_0_max: u64,
         amount_1_max: u64,
     ) -> Result<()> {
-        assert!(liquidity != 0);
+        require_gt!(liquidity, 0);
         instructions::increase_liquidity_v1(ctx, liquidity, amount_0_max, amount_1_max, None)
     }
 
@@ -434,7 +521,7 @@ pub mod amm_v3 {
         base_flag: Option<bool>,
     ) -> Result<()> {
         if liquidity == 0 {
-            assert!(base_flag.is_some());
+            require!(base_flag.is_some(), ErrorCode::MissingBaseFlag);
         }
         instructions::increase_liquidity_v2(ctx, liquidity, amount_0_max, amount_1_max, base_flag)
     }
@@ -556,5 +643,84 @@ pub mod amm_v3 {
         ctx: Context<'a, 'b, 'c, 'info, CloseProtocolPosition<'info>>,
     ) -> Result<()> {
         instructions::close_protocol_position(ctx)
+    }
+
+    /// Place a limit order
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    /// * `nonce_index` - The limit order nonce account index, used to create user's order nonce PDA account.
+    /// * `zero_for_one` - The direction of the order, true: zero for one, false: one for zero
+    /// * `tick_index` - The index of the tick
+    /// * `amount` - The amount of the order
+    /// * `with_metadata` - The flag indicating whether to create NFT mint metadata
+    ///
+    pub fn open_limit_order<'a, 'b, 'c: 'info, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, OpenLimitOrder<'info>>,
+        nonce_index: u8,
+        zero_for_one: bool,
+        tick_index: i32,
+        amount: u64,
+    ) -> Result<()> {
+        instructions::open_limit_order(ctx, nonce_index, zero_for_one, tick_index, amount)
+    }
+
+    /// Increase a limit order
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    /// * `amount` - The increase amount of the order
+    /// * `is_increase` - The direction of the order, true: increase, false: decrease
+    ///
+    pub fn increase_limit_order<'a, 'b, 'c: 'info, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, IncreaseLimitOrder<'info>>,
+        amount: u64,
+    ) -> Result<()> {
+        instructions::increase_limit_order(ctx, amount)
+    }
+
+    /// Decrease/Cancel a limit order
+    /// First settle the filled portion of the order; only the remaining unfilled amount can be decreased.
+    /// Even if the specified amount is very large, the decrease will not exceed the remaining unfilled order amount.
+    /// It is recommended to call the `settle_limit_order` instruction before invoking this instruction to settle any filled portions of the order.
+    /// Make sure to check your order's remaining unfilled amount.
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    /// * `amount` - The decrease amount of the order,
+    /// * `amount_min` - The minimum amount of the order, which serves as a slippage check
+    ///
+    pub fn decrease_limit_order<'a, 'b, 'c: 'info, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, DecreaseLimitOrder<'info>>,
+        amount: u64,
+        amount_min: u64,
+    ) -> Result<()> {
+        instructions::decrease_limit_order(ctx, amount, amount_min)
+    }
+
+    /// Settle a limit order
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    ///
+    pub fn settle_limit_order<'a, 'b, 'c: 'info, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, SettleLimitOrder<'info>>,
+    ) -> Result<()> {
+        instructions::settle_limit_order(ctx)
+    }
+
+    /// Close a limit order
+    /// Closes the limit order account when unfilled amount is zero
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The context of accounts
+    ///
+    pub fn close_limit_order<'a, 'b, 'c: 'info, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, CloseLimitOrder<'info>>,
+    ) -> Result<()> {
+        instructions::close_limit_order(ctx)
     }
 }

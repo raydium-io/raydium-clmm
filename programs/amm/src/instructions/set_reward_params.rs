@@ -45,7 +45,10 @@ pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
     open_time: u64,
     end_time: u64,
 ) -> Result<()> {
-    assert!((reward_index as usize) < REWARD_NUM);
+    require!(
+        (reward_index as usize) < REWARD_NUM,
+        ErrorCode::InvalidRewardIndex
+    );
     require_gt!(end_time, open_time);
     require_gt!(emissions_per_second_x64, 0);
     let operation_state = ctx.accounts.operation_state.load()?;
@@ -54,7 +57,8 @@ pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
     let admin_operator = admin_keys.contains(&ctx.accounts.authority.key())
         || ctx.accounts.authority.key() == crate::admin::ID;
 
-    let current_timestamp = u64::try_from(Clock::get()?.unix_timestamp).unwrap();
+    let current_timestamp =
+        u64::try_from(Clock::get()?.unix_timestamp).map_err(|_| ErrorCode::CalculateOverflow)?;
     require_gt!(open_time, current_timestamp);
 
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;
@@ -80,8 +84,7 @@ pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
             emissions_per_second_x64,
             open_time,
             end_time,
-        )
-        .unwrap()
+        )?
     } else {
         if current_timestamp <= reward_info.open_time {
             return err!(ErrorCode::NotApproved);
@@ -92,29 +95,38 @@ pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
             emissions_per_second_x64,
             open_time,
             end_time,
-        )
-        .unwrap()
+        )?
     };
+
+    // check reward total emissioned overflow, if overflow, return error
+    reward_info
+        .reward_total_emitted
+        .checked_add(reward_amount)
+        .ok_or(ErrorCode::MaxTokenOverflow)?;
 
     pool_state.reward_infos[reward_index as usize] = reward_info;
 
     if reward_amount > 0 {
         let mut remaining_accounts = ctx.remaining_accounts.iter();
 
-        let reward_token_vault =
-            InterfaceAccount::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
-        let authority_token_account =
-            InterfaceAccount::<TokenAccount>::try_from(&remaining_accounts.next().unwrap())?;
-        let reward_vault_mint =
-            InterfaceAccount::<Mint>::try_from(&remaining_accounts.next().unwrap())?;
+        let reward_token_vault = InterfaceAccount::<TokenAccount>::try_from(
+            remaining_accounts.next().ok_or(ErrorCode::AccountLack)?,
+        )?;
+        let authority_token_account = InterfaceAccount::<TokenAccount>::try_from(
+            remaining_accounts.next().ok_or(ErrorCode::AccountLack)?,
+        )?;
+        let reward_vault_mint = InterfaceAccount::<Mint>::try_from(
+            remaining_accounts.next().ok_or(ErrorCode::AccountLack)?,
+        )?;
 
         require_keys_eq!(reward_token_vault.mint, authority_token_account.mint);
         require_keys_eq!(reward_token_vault.key(), reward_info.token_vault);
 
         let transfer_fee: u64 =
-            util::get_transfer_inverse_fee(Box::new(reward_vault_mint.clone()), reward_amount)
-                .unwrap();
-        let reward_amount_with_transfer_fee = reward_amount.checked_add(transfer_fee).unwrap();
+            util::get_transfer_inverse_fee(Box::new(reward_vault_mint.clone()), reward_amount)?;
+        let reward_amount_with_transfer_fee = reward_amount
+            .checked_add(transfer_fee)
+            .ok_or(ErrorCode::CalculateOverflow)?;
 
         transfer_from_user_to_pool_vault(
             &ctx.accounts.authority,
@@ -140,7 +152,9 @@ fn normal_update(
     let mut reward_amount: u64;
     if reward_info.last_update_time == reward_info.end_time {
         // reward emission has finished
-        let time_delta = end_time.checked_sub(open_time).unwrap();
+        let time_delta = end_time
+            .checked_sub(open_time)
+            .ok_or(ErrorCode::CalculateOverflow)?;
         if time_delta < reward_period_limit::MIN_REWARD_PERIOD
             || time_delta > reward_period_limit::MAX_REWARD_PERIOD
         {
@@ -151,7 +165,7 @@ fn normal_update(
                 U256::from(emissions_per_second_x64),
                 U256::from(fixed_point_64::Q64),
             )
-            .unwrap()
+            .ok_or(ErrorCode::CalculateOverflow)?
             .as_u64();
 
         reward_info.open_time = open_time;
@@ -160,18 +174,23 @@ fn normal_update(
         reward_info.emissions_per_second_x64 = emissions_per_second_x64;
     } else {
         // reward emission does not finish
-        let left_reward_time = reward_info.end_time.checked_sub(current_timestamp).unwrap();
-        let extend_period = end_time.checked_sub(reward_info.end_time).unwrap();
+        let left_reward_time = reward_info
+            .end_time
+            .checked_sub(current_timestamp)
+            .ok_or(ErrorCode::CalculateOverflow)?;
+        let extend_period = end_time
+            .checked_sub(reward_info.end_time)
+            .ok_or(ErrorCode::CalculateOverflow)?;
         if extend_period < reward_period_limit::MIN_REWARD_PERIOD
             || extend_period > reward_period_limit::MAX_REWARD_PERIOD
         {
-            return err!(ErrorCode::NotApproveUpdateRewardEmissiones);
+            return err!(ErrorCode::NotApproveUpdateRewardEmissions);
         }
 
-        // emissions_per_second_x64 must not smaller than before with in 72hrs
+        // emissions_per_second_x64 must not be smaller than before within 72hrs
         if emissions_per_second_x64 < reward_info.emissions_per_second_x64 {
             require_gt!(
-                reward_period_limit::INCREASE_EMISSIONES_PERIOD,
+                reward_period_limit::INCREASE_EMISSIONS_PERIOD,
                 left_reward_time
             );
         }
@@ -182,7 +201,7 @@ fn normal_update(
                 U256::from(emission_diff_x64),
                 U256::from(fixed_point_64::Q64),
             )
-            .unwrap()
+            .ok_or(ErrorCode::CalculateOverflow)?
             .as_u64();
         reward_info.emissions_per_second_x64 = emissions_per_second_x64;
 
@@ -192,9 +211,11 @@ fn normal_update(
                     U256::from(reward_info.emissions_per_second_x64),
                     U256::from(fixed_point_64::Q64),
                 )
-                .unwrap()
+                .ok_or(ErrorCode::CalculateOverflow)?
                 .as_u64();
-            reward_amount = reward_amount.checked_add(reward_amount_diff).unwrap();
+            reward_amount = reward_amount
+                .checked_add(reward_amount_diff)
+                .ok_or(ErrorCode::CalculateOverflow)?;
             reward_info.end_time = end_time;
         }
     }
@@ -214,7 +235,9 @@ fn admin_update(
         || reward_info.open_time > current_timestamp
     {
         // reward emission has finished
-        let time_delta = end_time.checked_sub(open_time).unwrap();
+        let time_delta = end_time
+            .checked_sub(open_time)
+            .ok_or(ErrorCode::CalculateOverflow)?;
         if time_delta == 0 {
             return Err(ErrorCode::InvalidRewardPeriod.into());
         }
@@ -223,7 +246,7 @@ fn admin_update(
                 U256::from(emissions_per_second_x64),
                 U256::from(fixed_point_64::Q64),
             )
-            .unwrap()
+            .ok_or(ErrorCode::CalculateOverflow)?
             .as_u64();
 
         reward_info.open_time = open_time;
@@ -232,10 +255,13 @@ fn admin_update(
         reward_info.emissions_per_second_x64 = emissions_per_second_x64;
     } else {
         // reward emission does not finish
-        let left_reward_time = reward_info.end_time.checked_sub(current_timestamp).unwrap();
+        let left_reward_time = reward_info
+            .end_time
+            .checked_sub(current_timestamp)
+            .ok_or(ErrorCode::CalculateOverflow)?;
         let extend_period = end_time.saturating_sub(reward_info.end_time);
 
-        // emissions_per_second_x64 can be update for admin during anytime
+        // emissions_per_second_x64 can be updated by admin at any time
         let emission_diff_x64 =
             emissions_per_second_x64.saturating_sub(reward_info.emissions_per_second_x64);
         reward_amount = U256::from(left_reward_time)
@@ -243,7 +269,7 @@ fn admin_update(
                 U256::from(emission_diff_x64),
                 U256::from(fixed_point_64::Q64),
             )
-            .unwrap()
+            .ok_or(ErrorCode::CalculateOverflow)?
             .as_u64();
         reward_info.emissions_per_second_x64 = emissions_per_second_x64;
 
@@ -252,9 +278,11 @@ fn admin_update(
                 U256::from(reward_info.emissions_per_second_x64),
                 U256::from(fixed_point_64::Q64),
             )
-            .unwrap()
+            .ok_or(ErrorCode::CalculateOverflow)?
             .as_u64();
-        reward_amount = reward_amount.checked_add(reward_amount_diff).unwrap();
+        reward_amount = reward_amount
+            .checked_add(reward_amount_diff)
+            .ok_or(ErrorCode::CalculateOverflow)?;
         reward_info.end_time = end_time;
     }
 

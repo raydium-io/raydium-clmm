@@ -6,7 +6,7 @@ anchor_version = "0.32.1"
 seeds = false
 
 [programs.localnet]
-amm_v3 = "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+raydium_clmm = "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
 
 [registry]
 url = "https://github.com/raydium-io/raydium-amm-v3"
@@ -14,3 +14,23 @@ url = "https://github.com/raydium-io/raydium-amm-v3"
 [provider]
 cluster = "localnet"
 wallet = "~/.config/solana/id.json"
+
+[test]
+startup_wait = 10000
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/*.test.ts"
+
+[test.validator]
+url = "https://api.mainnet-beta.solana.com"
+
+# metadata program address
+[[test.validator.clone]]
+address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+
+# amm config address, index 0
+[[test.validator.clone]]
+address = "4BLNHtVe942GSs4teSZqGX24xwKNkqU7bGgNn3iUiUpw"
+# amm config address, index 1
+[[test.validator.clone]]
+address = "E64NGkDLLCdQ2yFNPcavaKptrEgmiQaNykUuLC1Qgwyp"

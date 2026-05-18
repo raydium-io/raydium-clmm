@@ -127,7 +127,9 @@ impl MulDiv for u64 {
     type Output = u64;
 
     fn mul_div_floor(self, num: Self, denom: Self) -> Option<Self::Output> {
-        assert_ne!(denom, 0);
+        if denom == 0 {
+            return None;
+        }
         let r = (U128::from(self) * U128::from(num)) / U128::from(denom);
         if r > U128::from(u64::MAX) {
             None
@@ -137,7 +139,9 @@ impl MulDiv for u64 {
     }
 
     fn mul_div_ceil(self, num: Self, denom: Self) -> Option<Self::Output> {
-        assert_ne!(denom, 0);
+        if denom == 0 {
+            return None;
+        }
         let r = (U128::from(self) * U128::from(num) + U128::from(denom - 1)) / U128::from(denom);
         if r > U128::from(u64::MAX) {
             None
@@ -155,7 +159,9 @@ impl MulDiv for U128 {
     type Output = U128;
 
     fn mul_div_floor(self, num: Self, denom: Self) -> Option<Self::Output> {
-        assert_ne!(denom, U128::default());
+        if denom.is_zero() {
+            return None;
+        }
         let r = ((self.as_u256()) * (num.as_u256())) / (denom.as_u256());
         if r > U128::MAX.as_u256() {
             None
@@ -165,7 +171,9 @@ impl MulDiv for U128 {
     }
 
     fn mul_div_ceil(self, num: Self, denom: Self) -> Option<Self::Output> {
-        assert_ne!(denom, U128::default());
+        if denom.is_zero() {
+            return None;
+        }
         let r = (self.as_u256() * num.as_u256() + (denom - 1).as_u256()) / denom.as_u256();
         if r > U128::MAX.as_u256() {
             None
@@ -187,7 +195,9 @@ impl MulDiv for U256 {
     type Output = U256;
 
     fn mul_div_floor(self, num: Self, denom: Self) -> Option<Self::Output> {
-        assert_ne!(denom, U256::default());
+        if denom.is_zero() {
+            return None;
+        }
         let r = (self.as_u512() * num.as_u512()) / denom.as_u512();
         if r > U256::MAX.as_u512() {
             None
@@ -197,7 +207,9 @@ impl MulDiv for U256 {
     }
 
     fn mul_div_ceil(self, num: Self, denom: Self) -> Option<Self::Output> {
-        assert_ne!(denom, U256::default());
+        if denom.is_zero() {
+            return None;
+        }
         let r = (self.as_u512() * num.as_u512() + (denom - 1).as_u512()) / denom.as_u512();
         if r > U256::MAX.as_u512() {
             None

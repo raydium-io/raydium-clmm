@@ -2,19 +2,14 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum ErrorCode {
-    #[msg("LOK")]
-    LOK,
     #[msg("Not approved")]
     NotApproved,
     #[msg("invalid update amm config flag")]
     InvalidUpdateConfigFlag,
     #[msg("Account lack")]
     AccountLack,
-    #[msg("Remove liquitity, collect fees owed and reward then you can close position account")]
+    #[msg("Remove liquidity, collect fees owed and reward then you can close position account")]
     ClosePositionErr,
-
-    #[msg("Minting amount should be greater than 0")]
-    ZeroMintAmount,
 
     #[msg("Tick out of range")]
     InvalidTickIndex,
@@ -43,17 +38,12 @@ pub enum ErrorCode {
     // Liquidity Add
     #[msg("Liquidity add delta L must be greater, or equal to before")]
     LiquidityAddValueErr,
-    #[msg("Invalid liquidity when update position")]
-    InvalidLiquidity,
     #[msg("Both token amount must not be zero while supply liquidity")]
     ForbidBothZeroForSupplyLiquidity,
     #[msg("Liquidity insufficient")]
     LiquidityInsufficient,
 
     /// swap errors
-    // Non fungible position manager
-    #[msg("Transaction too old")]
-    TransactionTooOld,
     #[msg("Price slippage check")]
     PriceSlippageCheck,
     #[msg("Too little output received")]
@@ -66,7 +56,7 @@ pub enum ErrorCode {
     InvalidInputPoolVault,
     #[msg("Swap input or output amount is too small")]
     TooSmallInputOrOutputAmount,
-    #[msg("Not enought tick array account")]
+    #[msg("Not enough tick array account")]
     NotEnoughTickArrayAccount,
     #[msg("Invalid first tick array account")]
     InvalidFirstTickArrayAccount,
@@ -82,16 +72,14 @@ pub enum ErrorCode {
     ExceptRewardMint,
     #[msg("Invalid reward init param")]
     InvalidRewardInitParam,
-    #[msg("Invalid collect reward desired amount")]
-    InvalidRewardDesiredAmount,
     #[msg("Invalid collect reward input account number")]
     InvalidRewardInputAccountNumber,
     #[msg("Invalid reward period")]
     InvalidRewardPeriod,
     #[msg(
-        "Modification of emissiones is allowed within 72 hours from the end of the previous cycle"
+        "Modification of emissions is allowed within 72 hours from the end of the previous cycle"
     )]
-    NotApproveUpdateRewardEmissiones,
+    NotApproveUpdateRewardEmissions,
     #[msg("uninitialized reward info")]
     UnInitializedRewardInfo,
 
@@ -107,4 +95,28 @@ pub enum ErrorCode {
     CalculateOverflow,
     #[msg("TransferFee calculate not match")]
     TransferFeeCalculateNotMatch,
+    #[msg("Order already fully filled, cannot modify")]
+    OrderAlreadyFilled,
+    #[msg("Invalid order phase")]
+    InvalidOrderPhase,
+    #[msg("Invalid limit order amount")]
+    InvalidLimitOrderAmount,
+    #[msg("Tick order phase saturated")]
+    OrderPhaseSaturated,
+
+    #[msg("Invalid dynamic fee config params")]
+    InvalidDynamicFeeConfigParams,
+    #[msg("Invalid fee on which token (must be 0, 1, or 2)")]
+    InvalidFeeOn,
+
+    #[msg("sqrt_price_x64 must be greater than 0")]
+    ZeroSqrtPrice,
+    #[msg("liquidity must be greater than 0")]
+    ZeroLiquidity,
+    #[msg("base_flag is required when liquidity is zero")]
+    MissingBaseFlag,
+    #[msg("Mint account is required but not provided")]
+    MissingMintAccount,
+    #[msg("Token-2022 program is required but not provided")]
+    MissingTokenProgram2022,
 }

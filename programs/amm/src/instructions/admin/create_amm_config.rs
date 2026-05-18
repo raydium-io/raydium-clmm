@@ -37,6 +37,11 @@ pub fn create_amm_config(
     protocol_fee_rate: u32,
     fund_fee_rate: u32,
 ) -> Result<()> {
+    require_gt!(FEE_RATE_DENOMINATOR_VALUE, trade_fee_rate);
+    require_gte!(
+        FEE_RATE_DENOMINATOR_VALUE,
+        fund_fee_rate + protocol_fee_rate
+    );
     let amm_config = ctx.accounts.amm_config.deref_mut();
     amm_config.owner = ctx.accounts.owner.key();
     amm_config.bump = ctx.bumps.amm_config;
@@ -45,13 +50,14 @@ pub fn create_amm_config(
     amm_config.protocol_fee_rate = protocol_fee_rate;
     amm_config.tick_spacing = tick_spacing;
     amm_config.fund_fee_rate = fund_fee_rate;
+    amm_config.padding_u32 = 0;
     amm_config.fund_owner = ctx.accounts.owner.key();
 
     emit!(ConfigChangeEvent {
         index: amm_config.index,
         owner: ctx.accounts.owner.key(),
-        protocol_fee_rate: amm_config.protocol_fee_rate,
         trade_fee_rate: amm_config.trade_fee_rate,
+        protocol_fee_rate: amm_config.protocol_fee_rate,
         tick_spacing: amm_config.tick_spacing,
         fund_fee_rate: amm_config.fund_fee_rate,
         fund_owner: amm_config.fund_owner,

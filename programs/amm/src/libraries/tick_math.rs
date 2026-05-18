@@ -1,11 +1,14 @@
-use crate::{error::ErrorCode, libraries::big_num::U128};
+use crate::{
+    error::ErrorCode,
+    libraries::{big_num::U128, fixed_point_64, MulDiv},
+};
 
-use anchor_lang::require;
+use anchor_lang::prelude::*;
 
 /// The minimum tick
 pub const MIN_TICK: i32 = -443636;
-/// The minimum tick
-pub const MAX_TICK: i32 = -MIN_TICK;
+/// The maximum tick
+pub const MAX_TICK: i32 = 443636;
 
 /// The minimum value that can be returned from #get_sqrt_price_at_tick. Equivalent to get_sqrt_price_at_tick(MIN_TICK)
 pub const MIN_SQRT_PRICE_X64: u128 = 4295048016;
@@ -28,9 +31,12 @@ const BIT_PRECISION: u32 = 16;
 /// # Arguments
 /// * `tick` - Price tick
 ///
-pub fn get_sqrt_price_at_tick(tick: i32) -> Result<u128, anchor_lang::error::Error> {
-    let abs_tick = tick.abs() as u32;
-    require!(abs_tick <= MAX_TICK as u32, ErrorCode::TickUpperOverflow);
+pub fn get_sqrt_price_at_tick(tick: i32) -> Result<u128> {
+    require!(
+        tick >= MIN_TICK && tick <= MAX_TICK,
+        ErrorCode::TickUpperOverflow
+    );
+    let abs_tick = tick.unsigned_abs();
 
     // i = 0
     let mut ratio = if abs_tick & 0x1 != 0 {
@@ -121,10 +127,10 @@ pub fn get_sqrt_price_at_tick(tick: i32) -> Result<u128, anchor_lang::error::Err
 }
 
 /// Calculates the greatest tick value such that get_sqrt_price_at_tick(tick) <= ratio
-/// Throws if sqrt_price_x64 < MIN_SQRT_RATIO or sqrt_price_x64 > MAX_SQRT_RATIO
+/// Throws if sqrt_price_x64 < MIN_SQRT_PRICE_X64 or sqrt_price_x64 >= MAX_SQRT_PRICE_X64
 ///
 /// Formula: `i = log base(√1.0001) (√P)`
-pub fn get_tick_at_sqrt_price(sqrt_price_x64: u128) -> Result<i32, anchor_lang::error::Error> {
+pub fn get_tick_at_sqrt_price(sqrt_price_x64: u128) -> Result<i32> {
     // second inequality must be < because the price can never reach the price at the max tick
     require!(
         sqrt_price_x64 >= MIN_SQRT_PRICE_X64 && sqrt_price_x64 < MAX_SQRT_PRICE_X64,
@@ -161,8 +167,8 @@ pub fn get_tick_at_sqrt_price(sqrt_price_x64: u128) -> Result<i32, anchor_lang::
     let log2p_fraction_x32 = log2p_fraction_x64 >> 32;
     let log2p_x32 = log2p_integer_x32 + log2p_fraction_x32;
 
-    // 14 bit refinement gives an error margin of 2^-14 / log2 (√1.0001) = 0.8461 < 1
-    // Since tick is a decimal, an error under 1 is acceptable
+    // BIT_PRECISION-bit refinement (16-bit by default) gives an error margin of
+    // 2^-BIT_PRECISION / log2 (√1.0001) < 1. Since tick is an integer, an error under 1 is acceptable
 
     // Change of base rule: multiply with 2^32 / log2 (√1.0001)
     let log_sqrt_10001_x64 = log2p_x32 * 59543866431248i128;
@@ -173,13 +179,34 @@ pub fn get_tick_at_sqrt_price(sqrt_price_x64: u128) -> Result<i32, anchor_lang::
     // tick + (2^-14 / log2(√1.0001)) + 0.01
     let tick_high = ((log_sqrt_10001_x64 + 15793534762490258745i128) >> 64) as i32;
 
-    Ok(if tick_low == tick_high {
-        tick_low
-    } else if get_sqrt_price_at_tick(tick_high).unwrap() <= sqrt_price_x64 {
-        tick_high
+    if tick_low == tick_high {
+        Ok(tick_low)
+    } else if get_sqrt_price_at_tick(tick_high)? <= sqrt_price_x64 {
+        Ok(tick_high)
     } else {
-        tick_low
-    })
+        Ok(tick_low)
+    }
+}
+
+/// Returns the price at the specified tick as a U128 fixed-point value.
+pub fn get_price_at_tick(tick: i32, round_up: bool) -> Result<U128> {
+    let token_0_sqrt_price = get_sqrt_price_at_tick(tick)?;
+    let token_0_price = if round_up {
+        U128::from(token_0_sqrt_price)
+            .mul_div_ceil(
+                U128::from(token_0_sqrt_price),
+                U128::from(fixed_point_64::Q64),
+            )
+            .ok_or(ErrorCode::CalculateOverflow)?
+    } else {
+        U128::from(token_0_sqrt_price)
+            .mul_div_floor(
+                U128::from(token_0_sqrt_price),
+                U128::from(fixed_point_64::Q64),
+            )
+            .ok_or(ErrorCode::CalculateOverflow)?
+    };
+    Ok(token_0_price)
 }
 
 #[cfg(test)]

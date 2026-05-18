@@ -4,8 +4,7 @@ use crate::libraries::tick_math;
 use crate::states::*;
 use crate::util::*;
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program;
-use anchor_lang::system_program::{transfer, Transfer};
+
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::metadata::{
     create_metadata_accounts_v3,
@@ -13,13 +12,8 @@ use anchor_spl::metadata::{
     CreateMetadataAccountsV3, Metadata,
 };
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use anchor_spl::token_2022::spl_token_2022::{
-    self,
-    extension::{BaseStateWithExtensions, StateWithExtensions},
-    instruction::AuthorityType,
-};
+use anchor_spl::token_2022::spl_token_2022::instruction::AuthorityType;
 use anchor_spl::token_2022::{self, Token2022};
-use anchor_spl::token_2022_extensions::spl_token_metadata_interface;
 use anchor_spl::token_interface;
 use std::cell::RefMut;
 #[cfg(feature = "enable-log")]
@@ -258,13 +252,13 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
         )?;
 
         // Why not use anchor's `init-if-needed` to create?
-        // Beacuse `tick_array_lower` and `tick_array_upper` can be the same account, anchor can initialze tick_array_lower but it causes a crash when anchor to initialze the `tick_array_upper`,
-        // the problem is variable scope, tick_array_lower_loader not exit to save the discriminator while build tick_array_upper_loader.
+        // Because `tick_array_lower` and `tick_array_upper` can be the same account, anchor can initialize tick_array_lower but it causes a crash when anchor tries to initialize the `tick_array_upper`,
+        // the problem is variable scope, tick_array_lower_loader does not exist to save the discriminator while building tick_array_upper_loader.
         let tick_array_lower_loader = TickArrayState::get_or_create_tick_array(
             payer.to_account_info(),
             tick_array_lower_loader.to_account_info(),
             system_program.to_account_info(),
-            &pool_state_loader,
+            pool_state_loader.key(),
             tick_array_lower_start_index,
             pool_state.tick_spacing,
         )?;
@@ -277,7 +271,7 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
                     payer.to_account_info(),
                     tick_array_upper_loader.to_account_info(),
                     system_program.to_account_info(),
-                    &pool_state_loader,
+                    pool_state_loader.key(),
                     tick_array_upper_start_index,
                     pool_state.tick_spacing,
                 )?
@@ -407,21 +401,24 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
     base_flag: Option<bool>,
 ) -> Result<LiquidityChangeResult> {
     if *liquidity == 0 {
-        if base_flag.is_none() {
+        let base_flag = match base_flag {
             // when establishing a new position , liquidity allows for further additions
-            return Ok(LiquidityChangeResult::default());
-        }
-        if base_flag.unwrap() {
+            None => return Ok(LiquidityChangeResult::default()),
+            Some(b) => b,
+        };
+        if base_flag {
             // must deduct transfer fee before calculate liquidity
             // because only v2 instruction support token_2022, vault_0_mint must be exist
-            let amount_0_transfer_fee =
-                get_transfer_fee(vault_0_mint.clone().unwrap(), amount_0_max).unwrap();
+            let vault_0_mint = vault_0_mint.clone().ok_or(ErrorCode::MissingMintAccount)?;
+            let amount_0_transfer_fee = get_transfer_fee(vault_0_mint, amount_0_max)?;
             *liquidity = liquidity_math::get_liquidity_from_single_amount_0(
                 pool_state.sqrt_price_x64,
                 tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
                 tick_math::get_sqrt_price_at_tick(tick_upper_index)?,
-                amount_0_max.checked_sub(amount_0_transfer_fee).unwrap(),
-            );
+                amount_0_max
+                    .checked_sub(amount_0_transfer_fee)
+                    .ok_or(ErrorCode::CalculateOverflow)?,
+            )?;
             #[cfg(feature = "enable-log")]
             msg!(
                 "liquidity: {}, amount_0_max:{}, amount_0_transfer_fee:{}",
@@ -432,14 +429,16 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
         } else {
             // must deduct transfer fee before calculate liquidity
             // because only v2 instruction support token_2022, vault_1_mint must be exist
-            let amount_1_transfer_fee =
-                get_transfer_fee(vault_1_mint.clone().unwrap(), amount_1_max).unwrap();
+            let vault_1_mint = vault_1_mint.clone().ok_or(ErrorCode::MissingMintAccount)?;
+            let amount_1_transfer_fee = get_transfer_fee(vault_1_mint, amount_1_max)?;
             *liquidity = liquidity_math::get_liquidity_from_single_amount_1(
                 pool_state.sqrt_price_x64,
                 tick_math::get_sqrt_price_at_tick(tick_lower_index)?,
                 tick_math::get_sqrt_price_at_tick(tick_upper_index)?,
-                amount_1_max.checked_sub(amount_1_transfer_fee).unwrap(),
-            );
+                amount_1_max
+                    .checked_sub(amount_1_transfer_fee)
+                    .ok_or(ErrorCode::CalculateOverflow)?,
+            )?;
             #[cfg(feature = "enable-log")]
             msg!(
                 "liquidity: {}, amount_1_max:{}, amount_1_transfer_fee:{}",
@@ -449,7 +448,7 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
             );
         }
     }
-    assert!(*liquidity > 0);
+    require_gt!(*liquidity, 0, ErrorCode::ZeroLiquidity);
     let liquidity_before = pool_state.liquidity;
     require_keys_eq!(tick_array_lower_loader.load()?.pool_id, pool_state.key());
     require_keys_eq!(tick_array_upper_loader.load()?.pool_id, pool_state.key());
@@ -470,7 +469,7 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
     }
     let clock = Clock::get()?;
     let mut result = modify_position(
-        i128::try_from(*liquidity).unwrap(),
+        i128::try_from(*liquidity).map_err(|_| ErrorCode::CalculateOverflow)?,
         pool_state,
         &mut tick_lower_state,
         &mut tick_upper_state,
@@ -523,14 +522,12 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
 
     let mut amount_0_transfer_fee = 0;
     let mut amount_1_transfer_fee = 0;
-    if vault_0_mint.is_some() {
-        amount_0_transfer_fee =
-            get_transfer_inverse_fee(vault_0_mint.clone().unwrap(), amount_0).unwrap();
+    if let Some(vault_0_mint) = vault_0_mint.clone() {
+        amount_0_transfer_fee = get_transfer_inverse_fee(vault_0_mint, amount_0)?;
         result.amount_0_transfer_fee = amount_0_transfer_fee;
     };
-    if vault_1_mint.is_some() {
-        amount_1_transfer_fee =
-            get_transfer_inverse_fee(vault_1_mint.clone().unwrap(), amount_1).unwrap();
+    if let Some(vault_1_mint) = vault_1_mint.clone() {
+        amount_1_transfer_fee = get_transfer_inverse_fee(vault_1_mint, amount_1)?;
         result.amount_1_transfer_fee = amount_1_transfer_fee;
     }
     emit!(LiquidityCalculateEvent {
@@ -562,10 +559,8 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
         amount_1 + amount_1_transfer_fee,
         ErrorCode::PriceSlippageCheck
     );
-    let mut token_2022_program_opt: Option<AccountInfo> = None;
-    if token_program_2022.is_some() {
-        token_2022_program_opt = Some(token_program_2022.clone().unwrap().to_account_info());
-    }
+    let token_2022_program_opt: Option<AccountInfo> =
+        token_program_2022.clone().map(|p| p.to_account_info());
     transfer_from_user_to_pool_vault(
         payer,
         token_account_0,
@@ -715,7 +710,9 @@ fn mint_nft_and_remove_mint_authority<'info>(
     let token_program_info = if position_nft_mint_info.owner == token_program.key {
         token_program.to_account_info()
     } else {
-        token_program_2022.unwrap().to_account_info()
+        token_program_2022
+            .ok_or(ErrorCode::MissingTokenProgram2022)?
+            .to_account_info()
     };
 
     if with_metadata {
@@ -726,7 +723,7 @@ fn mint_nft_and_remove_mint_authority<'info>(
                 &position_nft_mint_info,
                 &pool_state_info,
                 &personal_position.to_account_info(),
-                token_program_2022.unwrap(),
+                token_program_2022.ok_or(ErrorCode::MissingTokenProgram2022)?,
                 name,
                 symbol,
                 uri,
@@ -737,8 +734,8 @@ fn mint_nft_and_remove_mint_authority<'info>(
                 payer,
                 &pool_state_info,
                 &position_nft_mint_info,
-                metadata_account.unwrap(),
-                metadata_program.unwrap(),
+                metadata_account.ok_or(ErrorCode::AccountLack)?,
+                metadata_program.ok_or(ErrorCode::AccountLack)?,
                 system_program,
                 rent,
                 name,
@@ -832,66 +829,6 @@ fn initialize_metadata_account<'info>(
         true,
         None,
     )?;
-    Ok(())
-}
-
-pub fn initialize_token_metadata_extension<'info>(
-    payer: &Signer<'info>,
-    position_nft_mint: &AccountInfo<'info>,
-    mint_authority: &AccountInfo<'info>,
-    metadata_update_authority: &AccountInfo<'info>,
-    token_2022_program: &Program<'info, Token2022>,
-    name: String,
-    symbol: String,
-    uri: String,
-    signers_seeds: &[&[&[u8]]],
-) -> Result<()> {
-    let metadata = spl_token_metadata_interface::state::TokenMetadata {
-        name,
-        symbol,
-        uri,
-        ..Default::default()
-    };
-
-    let mint_data = position_nft_mint.try_borrow_data()?;
-    let mint_state_unpacked =
-        StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
-    let new_account_len =
-        mint_state_unpacked.try_get_new_account_len_for_variable_len_extension(&metadata)?;
-    let new_rent_exempt_lamports = Rent::get()?.minimum_balance(new_account_len);
-    let additional_lamports = new_rent_exempt_lamports.saturating_sub(position_nft_mint.lamports());
-    // CPI call will borrow the account data
-    drop(mint_data);
-
-    let cpi_context = CpiContext::new(
-        token_2022_program.to_account_info(),
-        Transfer {
-            from: payer.to_account_info(),
-            to: position_nft_mint.to_account_info(),
-        },
-    );
-    transfer(cpi_context, additional_lamports)?;
-
-    solana_program::program::invoke_signed(
-        &spl_token_metadata_interface::instruction::initialize(
-            token_2022_program.key,
-            position_nft_mint.key,
-            metadata_update_authority.key,
-            position_nft_mint.key,
-            &mint_authority.key(),
-            metadata.name,
-            metadata.symbol,
-            metadata.uri,
-        ),
-        &[
-            position_nft_mint.to_account_info(),
-            mint_authority.to_account_info(),
-            metadata_update_authority.to_account_info(),
-            token_2022_program.to_account_info(),
-        ],
-        signers_seeds,
-    )?;
-
     Ok(())
 }
 

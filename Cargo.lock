@@ -1195,7 +1195,7 @@ dependencies = [
  "hex",
  "mpl-token-metadata",
  "rand 0.9.2",
- "raydium-amm-v3",
+ "raydium-clmm",
  "regex",
  "serde",
  "serde_json",
@@ -3818,7 +3818,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "raydium-amm-v3"
+name = "raydium-clmm"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",

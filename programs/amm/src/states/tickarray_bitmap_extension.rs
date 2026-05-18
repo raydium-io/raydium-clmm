@@ -243,42 +243,32 @@ pub mod tick_array_bitmap_extension_test {
         }
     }
 
-    pub struct BuildExtensionAccountInfo {
-        pub key: Pubkey,
-        pub lamports: u64,
-        pub owner: Pubkey,
-        pub data: Vec<u8>,
-    }
+    pub fn build_tick_array_bitmap_extension_info(pool: Pubkey) -> &'static AccountInfo<'static> {
+        let key = Box::leak(Box::new(
+            Pubkey::find_program_address(
+                &[POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(), pool.as_ref()],
+                &crate::id(),
+            )
+            .0,
+        ));
+        let owner = Box::leak(Box::new(
+            Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
+        ));
+        let lamports_ref: &mut u64 = Box::leak(Box::new(1_000_000_000_u64));
+        let data: &mut [u8] =
+            Box::leak(vec![0u8; TickArrayBitmapExtension::LEN].into_boxed_slice());
+        data[..8].copy_from_slice(&[60, 150, 36, 219, 97, 128, 139, 153]);
 
-    impl Default for BuildExtensionAccountInfo {
-        #[inline]
-        fn default() -> BuildExtensionAccountInfo {
-            BuildExtensionAccountInfo {
-                key: Pubkey::new_unique(),
-                lamports: 0,
-                owner: Pubkey::from_str("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK").unwrap(),
-                data: vec![0; 1832],
-            }
-        }
-    }
-
-    pub fn build_tick_array_bitmap_extension_info<'info>(
-        param: &mut BuildExtensionAccountInfo,
-    ) -> AccountInfo {
-        let disc_bytes = [60, 150, 36, 219, 97, 128, 139, 153];
-        for i in 0..8 {
-            param.data[i] = disc_bytes[i];
-        }
-        AccountInfo::new(
-            &param.key,
+        Box::leak(Box::new(AccountInfo::new(
+            key,
             false,
             true,
-            &mut param.lamports,
-            param.data.as_mut_slice(),
-            &param.owner,
+            lamports_ref,
+            data,
+            owner,
             false,
             0,
-        )
+        )))
     }
 
     #[test]

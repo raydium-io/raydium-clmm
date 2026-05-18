@@ -6,9 +6,9 @@ use solana_sdk::{
     instruction::Instruction, pubkey::Pubkey, signature::Signer, system_program, sysvar,
 };
 
-use raydium_amm_v3::accounts as raydium_accounts;
-use raydium_amm_v3::instruction as raydium_instruction;
-use raydium_amm_v3::states::{
+use raydium_clmm::accounts as raydium_accounts;
+use raydium_clmm::instruction as raydium_instruction;
+use raydium_clmm::states::{
     AMM_CONFIG_SEED, OBSERVATION_SEED, OPERATION_SEED, POOL_SEED, POOL_VAULT_SEED, POSITION_SEED,
     TICK_ARRAY_SEED,
 };
@@ -730,7 +730,7 @@ pub fn initialize_reward_instr(
             rent: sysvar::rent::id(),
         })
         .args(raydium_instruction::InitializeReward {
-            param: raydium_amm_v3::instructions::InitializeRewardParam {
+            param: raydium_clmm::instructions::InitializeRewardParam {
                 open_time,
                 end_time,
                 emissions_per_second_x64,
