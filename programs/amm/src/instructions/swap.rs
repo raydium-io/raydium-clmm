@@ -766,6 +766,7 @@ pub fn swap_internal<'b, 'c: 'info, 'info>(
                     tick_math::get_tick_at_sqrt_price(swap_computed_result.sqrt_price_next_x64)?;
             }
             state.sqrt_price_x64 = swap_computed_result.sqrt_price_next_x64;
+            state.update_dynamic_fee_index(zero_for_one, is_skipped_tick_spacing)?;
             if state.amount_specified_remaining == 0 || state.sqrt_price_x64 == target_price {
                 let limit_order_unfilled_amount_after =
                     next_initialized_tick.limit_order_unfilled_amount()?;
@@ -778,7 +779,6 @@ pub fn swap_internal<'b, 'c: 'info, 'info>(
                 }
                 break;
             }
-            state.update_dynamic_fee_index(zero_for_one, is_skipped_tick_spacing)?;
         }
         state.liquidity = liquidity_next;
     }

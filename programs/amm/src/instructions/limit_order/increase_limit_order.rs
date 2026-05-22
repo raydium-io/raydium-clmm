@@ -10,7 +10,7 @@ use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 pub struct IncreaseLimitOrder<'info> {
     pub owner: Signer<'info>,
 
-    #[account()]
+    #[account(mut)]
     pub pool_state: AccountLoader<'info, PoolState>,
 
     #[account(
@@ -55,9 +55,21 @@ pub struct IncreaseLimitOrder<'info> {
         address = *input_vault_mint.to_account_info().owner
     )]
     pub input_token_program: Interface<'info, TokenInterface>,
+    // remaining account, for tick array bitmap extension (optional)
+    // #[account(
+    //     seeds = [
+    //         POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
+    //         pool_state.key().as_ref(),
+    //     ],
+    //     bump
+    // )]
+    // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
 }
 
-pub fn increase_limit_order(ctx: Context<IncreaseLimitOrder>, amount: u64) -> Result<()> {
+pub fn increase_limit_order<'a, 'b, 'c: 'info, 'info>(
+    ctx: Context<'a, 'b, 'c, 'info, IncreaseLimitOrder<'info>>,
+    amount: u64,
+) -> Result<()> {
     require!(amount > 0, ErrorCode::ZeroAmountSpecified);
     let tick_spacing = {
         let pool_state = ctx.accounts.pool_state.load()?;
@@ -70,7 +82,11 @@ pub fn increase_limit_order(ctx: Context<IncreaseLimitOrder>, amount: u64) -> Re
     };
     let tick_index = ctx.accounts.limit_order.tick_index;
     let mut tick_array = ctx.accounts.tick_array.load_mut()?;
+    let tick_array_start_index = tick_array.start_tick_index;
+    let before_init_tick_count = tick_array.initialized_tick_count;
+
     let tick_state = tick_array.get_tick_state_mut(tick_index, tick_spacing)?;
+    let tick_initialized_before = tick_state.is_initialized();
 
     let transfer_fee = get_transfer_fee(ctx.accounts.input_vault_mint.clone(), amount)?;
     let amount_without_transfer_fee = amount
@@ -96,6 +112,24 @@ pub fn increase_limit_order(ctx: Context<IncreaseLimitOrder>, amount: u64) -> Re
         tick_index,
         ctx.accounts.limit_order.zero_for_one,
     )?;
+
+    if !tick_initialized_before {
+        tick_array.update_initialized_tick_count(true)?;
+        if before_init_tick_count == 0 {
+            let mut pool_state = ctx.accounts.pool_state.load_mut()?;
+            let use_tickarray_bitmap_extension =
+                pool_state.is_overflow_default_tickarray_bitmap(vec![tick_array_start_index]);
+
+            let tickarray_bitmap_extension = if use_tickarray_bitmap_extension {
+                require!(ctx.remaining_accounts.len() > 0, ErrorCode::AccountLack);
+                Some(&ctx.remaining_accounts[0])
+            } else {
+                None
+            };
+
+            pool_state.flip_tick_array_bit(tickarray_bitmap_extension, tick_array_start_index)?;
+        }
+    }
 
     token_2022::transfer_checked(
         CpiContext::new(
