@@ -1,5 +1,5 @@
 
-.anchor
+.*/
 .DS_Store
 target
 KeyPairs
@@ -10,9 +10,6 @@ client/target
 **/*.rs.bk
 node_modules
 test-ledger
-.yarn*
 yarn.lock
 Makefile
-sdk/node_modules
-sdk/tools
 programs/amm/proptest-regressions

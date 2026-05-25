@@ -42,6 +42,7 @@ pub fn create_amm_config(
         FEE_RATE_DENOMINATOR_VALUE,
         fund_fee_rate + protocol_fee_rate
     );
+    require_gte!(MAX_TICK_SPACING, tick_spacing);
     let amm_config = ctx.accounts.amm_config.deref_mut();
     amm_config.owner = ctx.accounts.owner.key();
     amm_config.bump = ctx.bumps.amm_config;

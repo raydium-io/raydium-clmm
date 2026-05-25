@@ -400,19 +400,6 @@ impl SwapState {
         Ok(())
     }
 
-    pub fn update_volatility_accumulator_on_price(&mut self) -> Result<()> {
-        if self.dynamic_fee_info.is_some() {
-            let tick_index = tick_math::get_tick_at_sqrt_price(self.sqrt_price_x64)?;
-            let final_tick_spacing_index =
-                tick_spacing_index_from_tick(tick_index, self.tick_spacing);
-            if self.tick_spacing_index != final_tick_spacing_index {
-                self.tick_spacing_index = final_tick_spacing_index;
-                self.update_volatility_accumulator()?;
-            }
-        }
-        Ok(())
-    }
-
     pub fn get_spacing_bounded_price(
         &self,
         target_price: u128,
@@ -783,9 +770,6 @@ pub fn swap_internal<'b, 'c: 'info, 'info>(
         }
         state.liquidity = liquidity_next;
     }
-    // At the end of the entire swap loop, `updating_dynamic_fee_index` does not always guarantee that the tick_spacing_index lands in the correct position.
-    // Therefore, we recalculate its position here based on the current price and update the volatility accumulator.
-    state.update_volatility_accumulator_on_price()?;
 
     #[cfg(feature = "enable-log")]
     msg!("end, state:{:#?}", state);
@@ -5078,9 +5062,16 @@ mod swap_test {
                 fees_token0_dyn
             );
 
-            // And the final persisted accumulator should match the end group's distance from reference.
-            let expected_index = tick_spacing_index_from_tick(target_tick, tick_spacing);
-            let expected_volatility = (u64::from(expected_index.unsigned_abs())
+            // Persisted `volatility_accumulator` reflects the LAST tick group
+            // for which a fee step was charged — NOT the group of the final
+            // sqrt_price. When the swap ends exactly on a spacing boundary,
+            // the last in-loop fee step was charged using `tick_spacing_index
+            // = (target_tick / tick_spacing) - 1`, because the inner-step
+            // that would have used `tick_spacing_index = target_tick /
+            // tick_spacing` never runs (the loop breaks at target).
+            let end_group_index = tick_spacing_index_from_tick(target_tick, tick_spacing);
+            let last_fee_group_index = end_group_index - 1;
+            let expected_volatility = (u64::from(last_fee_group_index.unsigned_abs())
                 * u64::from(VOLATILITY_ACCUMULATOR_SCALE))
             .min(u64::from(max_volatility_accumulator))
                 as u32;
@@ -5091,6 +5082,502 @@ mod swap_test {
                 .map(|info| info.volatility_accumulator)
                 .unwrap_or(0);
             assert_eq!(volatility_accumulator, expected_volatility);
+        }
+
+        // ============================================================
+        // Tests: dynamic fee correctness when pool tick is positioned
+        // relative to a single offset position [position_lower, position_upper):
+        //   TC1. pool tick LEFT of position  (pool_tick < position_lower)
+        //   TC2. pool tick RIGHT of position (pool_tick >= position_upper)
+        //   TC3. pool tick INSIDE position   (position_lower <= pool_tick < position_upper)
+        //
+        // For each case verifies:
+        //   * Final tick_current / sqrt_price_x64 / liquidity are correct.
+        //   * amount_0, amount_1, trade_fee_* are placed on the correct token side.
+        //   * volatility_accumulator exactly matches |ref_index - final_index| * SCALE.
+        //   * fee_growth_global on the LP-fee side actually moves (when in-range fees apply).
+        // ============================================================
+
+        /// Build a pool with dynamic fee enabled and a single position [lower, upper].
+        /// Activates pool.liquidity automatically when pool_tick is inside the position.
+        /// Assumes position_lower / position_upper / pool_tick are all within one tick
+        /// array (start_tick_index = 0), which holds for tick_spacing=60 in [0, 3600).
+        fn setup_offset_position_with_dynamic_fee(
+            pool_tick: i32,
+            tick_spacing: u16,
+            position_lower: i32,
+            position_upper: i32,
+            position_liquidity: u128,
+            timestamp: u64,
+        ) -> (
+            AmmConfig,
+            RefCell<PoolState>,
+            VecDeque<RefCell<TickArrayState>>,
+            RefCell<ObservationState>,
+        ) {
+            let pool_in_range = pool_tick >= position_lower && pool_tick < position_upper;
+            let initial_liquidity = if pool_in_range { position_liquidity } else { 0 };
+
+            let lower_array_start =
+                TickArrayState::get_array_start_index(position_lower, tick_spacing);
+            let upper_array_start =
+                TickArrayState::get_array_start_index(position_upper, tick_spacing);
+
+            let mut tick_array_infos = Vec::new();
+            if lower_array_start == upper_array_start {
+                tick_array_infos.push(TickArrayInfo {
+                    start_tick_index: lower_array_start,
+                    ticks: vec![
+                        build_tick(
+                            position_lower,
+                            position_liquidity,
+                            position_liquidity as i128,
+                        )
+                        .take(),
+                        build_tick(
+                            position_upper,
+                            position_liquidity,
+                            -(position_liquidity as i128),
+                        )
+                        .take(),
+                    ],
+                });
+            } else {
+                tick_array_infos.push(TickArrayInfo {
+                    start_tick_index: lower_array_start,
+                    ticks: vec![build_tick(
+                        position_lower,
+                        position_liquidity,
+                        position_liquidity as i128,
+                    )
+                    .take()],
+                });
+                tick_array_infos.push(TickArrayInfo {
+                    start_tick_index: upper_array_start,
+                    ticks: vec![build_tick(
+                        position_upper,
+                        position_liquidity,
+                        -(position_liquidity as i128),
+                    )
+                    .take()],
+                });
+            }
+
+            let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(pool_tick).unwrap();
+            let (amm_config, pool_state, tick_array_states, observation_state) = build_swap_param(
+                pool_tick,
+                tick_spacing,
+                sqrt_price_x64,
+                initial_liquidity,
+                tick_array_infos,
+            );
+
+            pool_state
+                .borrow_mut()
+                .initialize_dynamic_fee_info(
+                    pool_tick, 60,      // filter_period
+                    3600,    // decay_period
+                    5000,    // reduction_factor = 0.5
+                    1000,    // fee_control_factor
+                    100_000, // max_volatility_accumulator
+                )
+                .unwrap();
+
+            // Set last_update_timestamp so update_reference falls inside filter_period
+            // (no-op) on the first swap. This pins tick_spacing_index_reference to the
+            // value computed by initialize_dynamic_fee_info(pool_tick).
+            {
+                let mut pool = pool_state.borrow_mut();
+                pool.dynamic_fee_info.last_update_timestamp = timestamp;
+            }
+
+            (amm_config, pool_state, tick_array_states, observation_state)
+        }
+
+        /// Compute the expected volatility_accumulator after a swap whose final tick
+        /// lands at `final_tick`, starting from reference `pool_tick`. Capped by max.
+        fn expected_vol_acc(
+            pool_tick: i32,
+            final_tick: i32,
+            tick_spacing: u16,
+            max_volatility_accumulator: u32,
+        ) -> u32 {
+            let ref_index = tick_spacing_index_from_tick(pool_tick, tick_spacing);
+            let final_index = tick_spacing_index_from_tick(final_tick, tick_spacing);
+            let delta = (ref_index - final_index).unsigned_abs() as u64;
+            (delta * u64::from(VOLATILITY_ACCUMULATOR_SCALE))
+                .min(u64::from(max_volatility_accumulator)) as u32
+        }
+
+        /// TC1: pool tick LEFT of position.
+        ///   pool_tick = 0, position [120, 240], swap !zero_for_one to limit price_at_200.
+        /// Expected behavior:
+        ///   * Empty zone [0, 120) is traversed for free (no fee, no amount consumed).
+        ///   * Liquidity activates when crossing tick 120, then trades [120, 200).
+        ///   * Final tick = 200, liquidity = L, sqrt_price = price_at_200.
+        ///   * vol_acc = |ref(0) - 3| * 10_000 = 30_000.
+        #[test]
+        fn test_dynamic_fee_pool_left_of_position() {
+            let tick_spacing: u16 = 60;
+            let pool_tick: i32 = 0;
+            let position_lower: i32 = 120;
+            let position_upper: i32 = 240;
+            let position_liquidity: u128 = 1_000_000_000_000u128;
+            let max_volatility_accumulator: u32 = 100_000;
+            let timestamp: u64 = 1000;
+            let target_tick: i32 = 200;
+
+            let (amm_config, pool_state, tick_array_states, observation_state) =
+                setup_offset_position_with_dynamic_fee(
+                    pool_tick,
+                    tick_spacing,
+                    position_lower,
+                    position_upper,
+                    position_liquidity,
+                    timestamp,
+                );
+
+            // Sanity: before swap, pool is out of range and has zero liquidity.
+            let before_liquidity = pool_state.borrow().liquidity;
+            let before_tick = pool_state.borrow().tick_current;
+            assert_eq!(before_liquidity, 0);
+            assert_eq!(before_tick, pool_tick);
+
+            let fee_growth_global_1_before = pool_state.borrow().fee_growth_global_1_x64;
+            let sqrt_price_limit = tick_math::get_sqrt_price_at_tick(target_tick).unwrap();
+
+            let result = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                None,
+                1_000_000_000_000u64, // large amount, swap is bounded by sqrt_price_limit
+                sqrt_price_limit,
+                false, // zero_for_one = false (price up)
+                true,  // is_base_input
+                timestamp as u32,
+            )
+            .unwrap();
+
+            // Snapshot final pool fields into aligned locals (PoolState is packed).
+            let pool = pool_state.borrow();
+            let final_sqrt_price = pool.sqrt_price_x64;
+            let final_tick = pool.tick_current;
+            let final_liquidity = pool.liquidity;
+            let fee_growth_global_1_after = pool.fee_growth_global_1_x64;
+            let dyn_info = pool.get_dynamic_fee_info().unwrap();
+            let final_tsi_ref = dyn_info.tick_spacing_index_reference;
+            let final_vol_acc = dyn_info.volatility_accumulator;
+            drop(pool);
+
+            // === Pool state ===
+            assert_eq!(
+                final_sqrt_price, sqrt_price_limit,
+                "swap should be clamped at sqrt_price_limit"
+            );
+            assert_eq!(
+                final_tick, target_tick,
+                "tick_current should equal target_tick after limit-clamped swap"
+            );
+            assert_eq!(
+                final_liquidity, position_liquidity,
+                "liquidity should equal position liquidity (position now in range)"
+            );
+            assert!(
+                final_tick >= position_lower && final_tick < position_upper,
+                "tick_current must be inside the position"
+            );
+
+            // === Swap result token sides ===
+            // !zero_for_one base_input: token1 = input, token0 = output;
+            // default fee_on = FromInput, so fee accrues on token1.
+            assert!(result.amount_0 > 0, "amount_0 (output token0) must be > 0");
+            assert!(result.amount_1 > 0, "amount_1 (input token1) must be > 0");
+            assert_eq!(result.trade_fee_0, 0);
+            assert!(
+                result.trade_fee_1 > 0,
+                "trade fee must accrue on token1 input"
+            );
+
+            // === Dynamic fee ===
+            // Reference stayed at 0 (init at pool_tick=0; first swap is inside filter_period).
+            assert_eq!(
+                final_tsi_ref, 0,
+                "tick_spacing_index_reference should remain at 0 (high-freq window)"
+            );
+            let expected = expected_vol_acc(
+                pool_tick,
+                target_tick,
+                tick_spacing,
+                max_volatility_accumulator,
+            );
+            assert_eq!(
+                final_vol_acc, expected,
+                "vol_acc must reflect index movement 0 -> 3"
+            );
+            assert_eq!(final_vol_acc, 30_000);
+
+            // === LP fee growth (fee_on token1) ===
+            assert!(
+                fee_growth_global_1_after != fee_growth_global_1_before,
+                "fee_growth_global_1_x64 must change (LP fees collected within position)"
+            );
+        }
+
+        /// TC2: pool tick RIGHT of position.
+        ///   pool_tick = 300, position [120, 240], swap zero_for_one to limit price_at_160.
+        /// Expected behavior:
+        ///   * Empty zone (240, 300] is traversed for free.
+        ///   * Liquidity activates when crossing tick 240 (upper), then trades (160, 240).
+        ///   * Final tick = 160, liquidity = L, sqrt_price = price_at_160.
+        ///   * vol_acc = |ref(5) - 2| * 10_000 = 30_000.
+        #[test]
+        fn test_dynamic_fee_pool_right_of_position() {
+            let tick_spacing: u16 = 60;
+            let pool_tick: i32 = 300;
+            let position_lower: i32 = 120;
+            let position_upper: i32 = 240;
+            let position_liquidity: u128 = 1_000_000_000_000u128;
+            let max_volatility_accumulator: u32 = 100_000;
+            let timestamp: u64 = 1000;
+            let target_tick: i32 = 160;
+
+            let (amm_config, pool_state, tick_array_states, observation_state) =
+                setup_offset_position_with_dynamic_fee(
+                    pool_tick,
+                    tick_spacing,
+                    position_lower,
+                    position_upper,
+                    position_liquidity,
+                    timestamp,
+                );
+
+            let before_liquidity = pool_state.borrow().liquidity;
+            let before_tick = pool_state.borrow().tick_current;
+            assert_eq!(before_liquidity, 0);
+            assert_eq!(before_tick, pool_tick);
+
+            let fee_growth_global_0_before = pool_state.borrow().fee_growth_global_0_x64;
+            let sqrt_price_limit = tick_math::get_sqrt_price_at_tick(target_tick).unwrap();
+
+            let result = swap_internal(
+                &amm_config,
+                &mut pool_state.borrow_mut(),
+                &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                &mut observation_state.borrow_mut(),
+                None,
+                1_000_000_000_000u64,
+                sqrt_price_limit,
+                true, // zero_for_one = true (price down)
+                true,
+                timestamp as u32,
+            )
+            .unwrap();
+
+            let pool = pool_state.borrow();
+            let final_sqrt_price = pool.sqrt_price_x64;
+            let final_tick = pool.tick_current;
+            let final_liquidity = pool.liquidity;
+            let fee_growth_global_0_after = pool.fee_growth_global_0_x64;
+            let dyn_info = pool.get_dynamic_fee_info().unwrap();
+            let final_tsi_ref = dyn_info.tick_spacing_index_reference;
+            let final_vol_acc = dyn_info.volatility_accumulator;
+            drop(pool);
+
+            assert_eq!(final_sqrt_price, sqrt_price_limit);
+            assert_eq!(final_tick, target_tick);
+            assert_eq!(final_liquidity, position_liquidity);
+            assert!(
+                final_tick >= position_lower && final_tick < position_upper,
+                "tick_current must be inside the position"
+            );
+
+            // zero_for_one base_input: token0 = input, token1 = output; fee on token0.
+            assert!(result.amount_0 > 0);
+            assert!(result.amount_1 > 0);
+            assert!(
+                result.trade_fee_0 > 0,
+                "trade fee must accrue on token0 input"
+            );
+            assert_eq!(result.trade_fee_1, 0);
+
+            assert_eq!(
+                final_tsi_ref, 5,
+                "tick_spacing_index_reference should remain at 5 (high-freq window)"
+            );
+            let expected = expected_vol_acc(
+                pool_tick,
+                target_tick,
+                tick_spacing,
+                max_volatility_accumulator,
+            );
+            assert_eq!(
+                final_vol_acc, expected,
+                "vol_acc must reflect index movement 5 -> 2"
+            );
+            assert_eq!(final_vol_acc, 30_000);
+
+            assert!(
+                fee_growth_global_0_after != fee_growth_global_0_before,
+                "fee_growth_global_0_x64 must change (LP fees on token0)"
+            );
+        }
+
+        /// TC3: pool tick INSIDE position.
+        ///   pool_tick = 180, position [120, 240].
+        ///   Direction A: !zero_for_one to price_at_220 (same tick group, vol_acc = 0).
+        ///   Direction B: zero_for_one to price_at_140 (crosses one group, vol_acc = 10_000).
+        /// Verifies that liquidity stays active throughout and dynamic fee only accrues
+        /// when crossing a tick-spacing boundary.
+        #[test]
+        fn test_dynamic_fee_pool_inside_position_both_directions() {
+            let tick_spacing: u16 = 60;
+            let pool_tick: i32 = 180;
+            let position_lower: i32 = 120;
+            let position_upper: i32 = 240;
+            let position_liquidity: u128 = 1_000_000_000_000u128;
+            let max_volatility_accumulator: u32 = 100_000;
+            let timestamp: u64 = 1000;
+
+            // ---- Direction A: !zero_for_one, target tick 220 (within same group as pool_tick) ----
+            {
+                let (amm_config, pool_state, tick_array_states, observation_state) =
+                    setup_offset_position_with_dynamic_fee(
+                        pool_tick,
+                        tick_spacing,
+                        position_lower,
+                        position_upper,
+                        position_liquidity,
+                        timestamp,
+                    );
+
+                // pool_tick=180 is in [120, 240): liquidity already activated by setup.
+                let before_liquidity_a = pool_state.borrow().liquidity;
+                let before_tick_a = pool_state.borrow().tick_current;
+                assert_eq!(before_liquidity_a, position_liquidity);
+                assert_eq!(before_tick_a, pool_tick);
+
+                let fee_growth_global_1_before = pool_state.borrow().fee_growth_global_1_x64;
+                let target_tick: i32 = 220;
+                let sqrt_price_limit = tick_math::get_sqrt_price_at_tick(target_tick).unwrap();
+
+                let result = swap_internal(
+                    &amm_config,
+                    &mut pool_state.borrow_mut(),
+                    &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                    &mut observation_state.borrow_mut(),
+                    None,
+                    1_000_000_000_000u64,
+                    sqrt_price_limit,
+                    false, // !zero_for_one (price up)
+                    true,
+                    timestamp as u32,
+                )
+                .unwrap();
+
+                let pool = pool_state.borrow();
+                let final_sqrt_price_a = pool.sqrt_price_x64;
+                let final_tick_a = pool.tick_current;
+                let final_liquidity_a = pool.liquidity;
+                let fee_growth_global_1_after = pool.fee_growth_global_1_x64;
+                let dyn_info = pool.get_dynamic_fee_info().unwrap();
+                let final_vol_acc_a = dyn_info.volatility_accumulator;
+                drop(pool);
+
+                assert_eq!(final_sqrt_price_a, sqrt_price_limit);
+                assert_eq!(final_tick_a, target_tick);
+                assert_eq!(
+                    final_liquidity_a, position_liquidity,
+                    "liquidity must stay constant when not crossing position bounds"
+                );
+                assert!(result.amount_0 > 0);
+                assert!(result.amount_1 > 0);
+                assert!(result.trade_fee_1 > 0);
+
+                // 180/60 = 3 = 220/60; movement stays within tick group 3.
+                let expected_a = expected_vol_acc(
+                    pool_tick,
+                    target_tick,
+                    tick_spacing,
+                    max_volatility_accumulator,
+                );
+                assert_eq!(final_vol_acc_a, expected_a);
+                assert_eq!(
+                    final_vol_acc_a, 0,
+                    "vol_acc must remain 0 because no tick-spacing boundary was crossed"
+                );
+
+                // LP fee still flows because the swap actually trades within position.
+                assert!(
+                    fee_growth_global_1_after != fee_growth_global_1_before,
+                    "fee_growth_global_1_x64 must change even when dynamic fee is 0"
+                );
+            }
+
+            // ---- Direction B: zero_for_one, target tick 140 (crosses 120<-180 group boundary) ----
+            {
+                let (amm_config, pool_state, tick_array_states, observation_state) =
+                    setup_offset_position_with_dynamic_fee(
+                        pool_tick,
+                        tick_spacing,
+                        position_lower,
+                        position_upper,
+                        position_liquidity,
+                        timestamp,
+                    );
+
+                let before_liquidity_b = pool_state.borrow().liquidity;
+                assert_eq!(before_liquidity_b, position_liquidity);
+                let fee_growth_global_0_before = pool_state.borrow().fee_growth_global_0_x64;
+                let target_tick: i32 = 140;
+                let sqrt_price_limit = tick_math::get_sqrt_price_at_tick(target_tick).unwrap();
+
+                let result = swap_internal(
+                    &amm_config,
+                    &mut pool_state.borrow_mut(),
+                    &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                    &mut observation_state.borrow_mut(),
+                    None,
+                    1_000_000_000_000u64,
+                    sqrt_price_limit,
+                    true, // zero_for_one (price down)
+                    true,
+                    timestamp as u32,
+                )
+                .unwrap();
+
+                let pool = pool_state.borrow();
+                let final_sqrt_price_b = pool.sqrt_price_x64;
+                let final_tick_b = pool.tick_current;
+                let final_liquidity_b = pool.liquidity;
+                let fee_growth_global_0_after = pool.fee_growth_global_0_x64;
+                let dyn_info = pool.get_dynamic_fee_info().unwrap();
+                let final_vol_acc_b = dyn_info.volatility_accumulator;
+                drop(pool);
+
+                assert_eq!(final_sqrt_price_b, sqrt_price_limit);
+                assert_eq!(final_tick_b, target_tick);
+                assert_eq!(final_liquidity_b, position_liquidity);
+                assert!(result.amount_0 > 0);
+                assert!(result.amount_1 > 0);
+                assert!(result.trade_fee_0 > 0);
+
+                // 180/60 = 3, 140/60 = 2 → delta = 1 → vol_acc = 10_000.
+                let expected_b = expected_vol_acc(
+                    pool_tick,
+                    target_tick,
+                    tick_spacing,
+                    max_volatility_accumulator,
+                );
+                assert_eq!(final_vol_acc_b, expected_b);
+                assert_eq!(final_vol_acc_b, 10_000);
+
+                assert!(
+                    fee_growth_global_0_after != fee_growth_global_0_before,
+                    "fee_growth_global_0_x64 must change"
+                );
+            }
         }
     }
     #[cfg(test)]
