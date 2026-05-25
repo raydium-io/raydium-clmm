@@ -1,5 +1,5 @@
 use crate::error::ErrorCode;
-use crate::states::DynamicFeeInfo;
+use crate::states::{DynamicFeeInfo, MAX_TICK_SPACING};
 use anchor_lang::prelude::*;
 
 pub const DYNAMIC_FEE_CONFIG_SEED: &str = "dynamic_fee_config";
@@ -49,8 +49,11 @@ impl DynamicFeeConfig {
         dynamic_fee_control: u32,
         max_volatility_accumulator: u32,
     ) -> Result<()> {
+        // `create_amm_config` enforces `tick_spacing <= MAX_TICK_SPACING`, so
+        // validating against MAX_TICK_SPACING here is the strictest bound any
+        // pool consuming this config will ever face.
         if !DynamicFeeInfo::validate_params(
-            1000,
+            MAX_TICK_SPACING,
             filter_period,
             decay_period,
             reduction_factor,

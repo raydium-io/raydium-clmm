@@ -5,6 +5,8 @@ pub const AMM_CONFIG_SEED: &str = "amm_config";
 
 pub const FEE_RATE_DENOMINATOR_VALUE: u32 = 1_000_000;
 
+pub const MAX_TICK_SPACING: u16 = 1000;
+
 /// Holds the current owner of the factory
 #[account]
 #[derive(Default, Debug)]

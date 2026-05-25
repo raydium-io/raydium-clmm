@@ -119,7 +119,6 @@ pub struct CreateCustomizablePool<'info> {
     // )]
     // pub support_mint1_associated: Account<'info, SupportMintAssociated>,
 
-    // #[account(constraint = dynamic_fee_config.amm_config == amm_config.key())]
     // pub dynamic_fee_config: Box<Account<'info, DynamicFeeConfig>>,
 }
 
