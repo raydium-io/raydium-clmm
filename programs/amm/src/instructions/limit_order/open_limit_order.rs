@@ -237,7 +237,7 @@ pub fn check_limit_order_amount(amount: u64, tick_index: i32, zero_for_one: bool
     Ok(())
 }
 
-fn check_tick_index(
+pub fn check_tick_index(
     tick_index: i32,
     zero_for_one: bool,
     tick_current: i32,

@@ -1,4 +1,4 @@
-use super::check_limit_order_amount;
+use super::{check_limit_order_amount, check_tick_index};
 use crate::states::*;
 use crate::util::get_transfer_fee;
 use crate::{error::ErrorCode, Result};
@@ -71,15 +71,22 @@ pub fn increase_limit_order<'a, 'b, 'c: 'info, 'info>(
     amount: u64,
 ) -> Result<()> {
     require!(amount > 0, ErrorCode::ZeroAmountSpecified);
-    let tick_spacing = {
+    let (tick_spacing, tick_current) = {
         let pool_state = ctx.accounts.pool_state.load()?;
         if !pool_state.get_status_by_bit(PoolStatusBitIndex::LimitOrder)
             || !pool_state.get_status_by_bit(PoolStatusBitIndex::Swap)
         {
             return err!(ErrorCode::NotApproved);
         }
-        pool_state.tick_spacing
+        (pool_state.tick_spacing, pool_state.tick_current)
     };
+    check_tick_index(
+        ctx.accounts.limit_order.tick_index,
+        ctx.accounts.limit_order.zero_for_one,
+        tick_current,
+        tick_spacing,
+    )?;
+
     let tick_index = ctx.accounts.limit_order.tick_index;
     let mut tick_array = ctx.accounts.tick_array.load_mut()?;
     let tick_array_start_index = tick_array.start_tick_index;
