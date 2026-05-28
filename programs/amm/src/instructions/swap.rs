@@ -683,8 +683,10 @@ pub fn swap_internal<'b, 'c: 'info, 'info>(
                     total_fee_rate,
                     is_fee_on_input,
                 )?;
-
-                if limit_order_result.amount_in > 0 {
+                if limit_order_result.amount_in != 0
+                    || limit_order_result.amount_out != 0
+                    || limit_order_result.amm_fee_amount != 0
+                {
                     #[cfg(feature = "enable-log")]
                     msg!(
                         "limit_order_result: amount_in:{}, amount_out:{}, amm_fee_amount:{}",
@@ -702,7 +704,6 @@ pub fn swap_internal<'b, 'c: 'info, 'info>(
                         amm_config.fund_fee_rate,
                     )?;
                 }
-
                 if !next_initialized_tick.is_initialized() {
                     tick_array_current.update_initialized_tick_count(false)?;
                     if tick_array_current.initialized_tick_count == 0 {
