@@ -566,6 +566,14 @@ impl PoolState {
             if is_found {
                 return Ok(Some(start_index));
             }
+            // When tick_spacing >= 15 the default bitmap already spans the entire
+            // [MIN_TICK, MAX_TICK] range (tick_spacing * 60 * 512 >= MAX_TICK), so a miss means the
+            // direction is exhausted and no extension bitmap exists to search. Return None so the
+            // caller surfaces LiquidityInsufficient, instead of demanding a non-existent extension
+            // account (which would misreport MissingTickArrayBitmapExtensionAccount).
+            if self.tick_spacing >= 15 {
+                return Ok(None);
+            }
             last_tick_array_start_index = start_index;
 
             // Only load extension when needed (after default bitmap search fails)
@@ -612,6 +620,14 @@ impl PoolState {
                 )?;
             if is_found {
                 return Ok(Some(start_index));
+            }
+            // When tick_spacing >= 15 the default bitmap already spans the entire
+            // [MIN_TICK, MAX_TICK] range (tick_spacing * 60 * 512 >= MAX_TICK), so a miss means the
+            // direction is exhausted and no extension bitmap exists to search. Return None so the
+            // caller surfaces LiquidityInsufficient, instead of demanding a non-existent extension
+            // account (which would misreport MissingTickArrayBitmapExtensionAccount).
+            if self.tick_spacing >= 15 {
+                return Ok(None);
             }
             last_tick_array_start_index = start_index;
 
@@ -1025,6 +1041,26 @@ pub mod pool_test {
     mod tick_array_bitmap_test {
 
         use super::*;
+
+        #[test]
+        fn full_range_default_bitmap_returns_none_not_missing_extension() {
+            let mut pool_state = PoolState::default();
+            pool_state.tick_spacing = 60;
+            pool_state.tick_current = 0;
+            // tick_array_bitmap is all-zero by default => no initialized tick arrays.
+
+            for zero_for_one in [true, false] {
+                let pre_loaded = pool_state
+                    .next_initialized_tick_array_start_index(&None, 0, zero_for_one)
+                    .expect("pre-loaded variant must not error at the default-bitmap boundary");
+                assert_eq!(pre_loaded, None, "pre-loaded variant, zero_for_one={}", zero_for_one);
+
+                let lazy = pool_state
+                    .next_tick_array_index_with_extension_info(None, 0, zero_for_one)
+                    .expect("lazy variant must not error at the default-bitmap boundary");
+                assert_eq!(lazy, None, "lazy variant, zero_for_one={}", zero_for_one);
+            }
+        }
 
         #[test]
         fn get_arrary_start_index_negative() {

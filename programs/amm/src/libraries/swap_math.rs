@@ -185,6 +185,15 @@ pub fn compute_swap(
                 .amount_out
                 .checked_sub(result.fee_amount)
                 .ok_or(ErrorCode::CalculateOverflow)?;
+
+            // Partial step: the price moved less than the exact input warrants (rounded toward the
+            // pool — down for one_for_zero, up for zero_for_one), so amount_in recomputed from that
+            // move can be below the available input, leaving an un-tradeable dust (< liquidity/Q64).
+            // Fee-on-input folds it into the fee, fee-on-output cannot, so it would stall the loop.
+            // Charge the full input (== amount_remaining here); the sub-unit excess goes to the pool.
+            if !max {
+                result.amount_in = amount_remaining;
+            }
         }
     } else {
         if is_fee_on_input {

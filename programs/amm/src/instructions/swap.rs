@@ -662,7 +662,10 @@ pub fn swap_internal<'b, 'c: 'info, 'info>(
             let limit_order_unfilled_amount_before =
                 next_initialized_tick.limit_order_unfilled_amount()?;
             if state.sqrt_price_next_x64 == swap_computed_result.sqrt_price_next_x64 {
-                // try to match limit orders on this tick
+                // Match limit orders on this boundary tick at the pre-advance `total_fee_rate`
+                // (last-traversed-group semantics — a design choice). Edge case: with
+                // liquidity == 0 a step can skip several spacing groups, so the fill may undercharge
+                // dynamic fee; accepted as low-impact (no fund-safety effect).
                 let limit_order_result = next_initialized_tick.match_limit_order(
                     state.amount_specified_remaining,
                     zero_for_one,
@@ -1104,6 +1107,133 @@ mod swap_test {
         }
 
         (amm_config, pool_state, tick_array_states, observation_state)
+    }
+
+    /// Regression test for the exact-input "un-tradeable dust" no-progress loop.
+    ///
+    /// Root cause: for a partial exact-input step (target tick not reached), `compute_swap`
+    /// rounds the price down and then recomputes `amount_in` (rounded up) from that smaller
+    /// price delta. The recomputed `amount_in` is less than the available input, leaving a
+    /// `leftover` dust. When fee is charged on the OUTPUT side, that dust was neither consumed
+    /// as fee nor returned, so it stayed in `amount_specified_remaining`. The leftover is always
+    /// too small to move the price by even one Q64 unit (leftover*Q64 < liquidity), so before the
+    /// fix every subsequent iteration produced amount_in=0/amount_out=0 with an unchanged price
+    /// and the loop never satisfied its exit condition (it spun until CU exhaustion).
+    ///
+    /// Trigger conditions:
+    ///   - exact input (is_base_input = true)
+    ///   - fee charged on output (fee_on = 1/2 such that is_fee_on_input(zero_for_one) == false)
+    ///   - the swap ends on a partial step that leaves non-zero dust
+    /// Note: the fee RATE is irrelevant (the loop also occurred with a non-zero trade_fee_rate);
+    /// trade_fee_rate is set to 0 here only to keep the arithmetic clean (amount_in=100, dust=50).
+    ///
+    /// Fix (compute_swap): a fee-on-output partial step now charges the full available input, so
+    /// `amount_specified_remaining` is fully consumed and the loop terminates. The dust accrues to
+    /// the pool reserve (mirroring the fee-on-input branch, which folds its leftover into the fee).
+    /// Here the user spends the entire 150 input (settled into amount_1) for the swap.
+    #[test]
+    fn exact_input_fee_from_output_dust_is_consumed_one_for_zero() {
+        let tick_current = 0;
+        let tick_spacing = 1;
+        let zero_for_one = false; // one_for_zero
+        let is_base_input = true; // exact input
+        let liquidity = 100u128 * u128::from(fixed_point_64::Q64);
+        let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_current).unwrap();
+        let next_initialized_tick = 59;
+
+        let (mut amm_config, pool_state, tick_array_states, observation_state) = build_swap_param(
+            tick_current,
+            tick_spacing,
+            sqrt_price_x64,
+            liquidity,
+            vec![TickArrayInfo {
+                start_tick_index: 0,
+                ticks: vec![build_tick(next_initialized_tick, 1, 0).take()],
+            }],
+        );
+
+        // Isolate the rounding issue. The loop requires fee not to be charged from input,
+        // otherwise the leftover input dust can be consumed as fee.
+        amm_config.trade_fee_rate = 0;
+        pool_state.borrow_mut().set_fee_on(1).unwrap();
+        assert!(!pool_state.borrow().is_fee_on_input(zero_for_one));
+
+        // Before the fix this never returned (CU-exhausting infinite loop). It must now return.
+        let result = swap_internal(
+            &amm_config,
+            &mut pool_state.borrow_mut(),
+            &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+            &mut observation_state.borrow_mut(),
+            None,
+            150,
+            tick_math::MAX_SQRT_PRICE_X64 - 1,
+            zero_for_one,
+            is_base_input,
+            oracle::block_timestamp_mock() as u32,
+        )
+        .unwrap();
+
+        // one_for_zero exact-input: input is token1, so the consumed input is settled into amount_1.
+        // With fix A the full 150 input is consumed (the 50 dust accrues to the pool), so no dust
+        // is left to stall the loop.
+        assert_eq!(
+            result.amount_1, 150,
+            "the full exact input must be consumed (dust accrues to the pool)"
+        );
+    }
+
+    /// Same un-tradeable-dust scenario as above but in the zero_for_one direction, to pin down
+    /// that the fix is direction-agnostic. Here the price moves down and is rounded UP (toward the
+    /// pool), yet amount_in is still recomputed below the available input, so the dust mechanism
+    /// (and, before the fix, the no-progress loop) is symmetric. fee_on = 2 (Token1Only) puts the
+    /// fee on the output side for a zero_for_one swap.
+    #[test]
+    fn exact_input_fee_from_output_dust_is_consumed_zero_for_one() {
+        let tick_current = 59;
+        let tick_spacing = 1;
+        let zero_for_one = true; // price moves down
+        let is_base_input = true; // exact input
+        let liquidity = 100u128 * u128::from(fixed_point_64::Q64);
+        let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_current).unwrap();
+        let next_initialized_tick = 0;
+
+        let (mut amm_config, pool_state, tick_array_states, observation_state) = build_swap_param(
+            tick_current,
+            tick_spacing,
+            sqrt_price_x64,
+            liquidity,
+            vec![TickArrayInfo {
+                start_tick_index: 0,
+                ticks: vec![build_tick(next_initialized_tick, 1, 0).take()],
+            }],
+        );
+
+        // fee_on = 2 (Token1Only) => is_fee_on_input(zero_for_one=true) == false => fee on output.
+        amm_config.trade_fee_rate = 0;
+        pool_state.borrow_mut().set_fee_on(2).unwrap();
+        assert!(!pool_state.borrow().is_fee_on_input(zero_for_one));
+
+        // Before the fix this never returned (CU-exhausting infinite loop). It must now return.
+        let result = swap_internal(
+            &amm_config,
+            &mut pool_state.borrow_mut(),
+            &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+            &mut observation_state.borrow_mut(),
+            None,
+            150,
+            tick_math::MIN_SQRT_PRICE_X64 + 1,
+            zero_for_one,
+            is_base_input,
+            oracle::block_timestamp_mock() as u32,
+        )
+        .unwrap();
+
+        // zero_for_one exact-input: input is token0, so the consumed input is settled into amount_0.
+        // The full 150 input must be consumed (dust accrues to the pool), leaving nothing to stall.
+        assert_eq!(
+            result.amount_0, 150,
+            "the full exact input must be consumed (dust accrues to the pool)"
+        );
     }
 
     pub struct OpenPositionParam {
@@ -1938,10 +2068,12 @@ mod swap_test {
                 oracle::block_timestamp_mock() as u32,
             );
             assert!(result.is_err());
-            assert_eq!(
-                result.unwrap_err(),
-                ErrorCode::MissingTickArrayBitmapExtensionAccount.into()
-            );
+            // tick_spacing = 60 (>= 15) means the default bitmap already spans the full
+            // [MIN_TICK, MAX_TICK] range, so running out of initialized tick arrays in the swap
+            // direction is a liquidity problem, not a missing-extension problem. The lookup now
+            // returns None at the default-bitmap boundary, which the swap loop surfaces as
+            // LiquidityInsufficient (previously it misreported MissingTickArrayBitmapExtensionAccount).
+            assert_eq!(result.unwrap_err(), ErrorCode::LiquidityInsufficient.into());
         }
     }
 
