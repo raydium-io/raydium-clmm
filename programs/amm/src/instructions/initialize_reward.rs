@@ -1,5 +1,5 @@
 use crate::error::ErrorCode;
-use crate::libraries::{fixed_point_64, full_math::MulDiv, U256};
+use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::util::{create_token_vault_account, transfer_from_user_to_pool_vault};
 use crate::{states::*, util};
 use anchor_lang::prelude::*;
@@ -141,10 +141,10 @@ pub fn initialize_reward(
     msg!("current block timestamp:{}", clock.unix_timestamp);
     param.check(clock.unix_timestamp as u64)?;
 
-    let reward_amount = U256::from(param.end_time - param.open_time)
+    let reward_amount = U128::from(param.end_time - param.open_time)
         .mul_div_ceil(
-            U256::from(param.emissions_per_second_x64),
-            U256::from(fixed_point_64::Q64),
+            U128::from(param.emissions_per_second_x64),
+            U128::from(fixed_point_64::Q64),
         )
         .ok_or(ErrorCode::CalculateOverflow)?
         .as_u64();

@@ -1,6 +1,6 @@
 use crate::error::ErrorCode;
 use crate::libraries::{
-    big_num::{U1024, U128, U256},
+    big_num::{U1024, U128},
     check_current_tick_array_is_initialized, fixed_point_64,
     full_math::MulDiv,
     tick_array_bit_map, tick_math,
@@ -360,21 +360,21 @@ impl PoolState {
                     )
                     .unwrap_or(U128::zero());
 
-                let mut reward_growth_delta = U256::from(time_delta)
+                let mut reward_growth_delta = U128::from(time_delta)
                     .mul_div_floor(
-                        U256::from(reward_info.emissions_per_second_x64),
-                        U256::from(self.liquidity),
+                        U128::from(reward_info.emissions_per_second_x64),
+                        U128::from(self.liquidity),
                     )
-                    .unwrap_or(U256::zero());
+                    .unwrap_or(U128::zero());
                 let remain = u64::MAX.saturating_sub(reward_info.reward_total_emitted);
                 if reward_delta <= U128::from(remain) {
                     reward_info.reward_total_emitted += reward_delta.as_u64();
                 } else {
                     reward_info.reward_total_emitted = u64::MAX;
 
-                    reward_growth_delta = U256::from(remain)
-                        .mul_div_floor(U256::from(fixed_point_64::Q64), U256::from(self.liquidity))
-                        .unwrap_or(U256::zero());
+                    reward_growth_delta = U128::from(remain)
+                        .mul_div_floor(U128::from(fixed_point_64::Q64), U128::from(self.liquidity))
+                        .unwrap_or(U128::zero());
                 }
 
                 reward_info.reward_growth_global_x64 = reward_info
@@ -1277,6 +1277,63 @@ pub mod pool_test {
                 identity(updated_reward_infos[0].last_update_time),
                 1666069200
             );
+        }
+
+        // Documents why reward_delta uses ceil (not floor): the pool credits reward_total_emitted
+        // incrementally per refresh, but a position settles lazily, flooring the accumulated growth
+        // only once. Since floor(Sum) >= Sum(floor), a per-step floor on the pool side can fall below
+        // what an LP can claim -> check_unclaimed_reward's require_gte! fails -> decrease_liquidity
+        // reverts (rewards + liquidity locked). High-frequency small emissions (per-step N < Q64) are
+        // the worst case: floor makes emitted stay 0 while growth keeps accruing.
+        #[test]
+        fn reward_total_emitted_uses_ceil_to_stay_solvent() {
+            const STEPS: u64 = 10;
+            // ~0.5 token/s emission against a realistic liquidity: per 1s step ceil=1, floor=0.
+            let emission_x64: u128 = fixed_point_64::Q64 / 2;
+            let liquidity: u128 = 1_000_000_000_000;
+            let start: u64 = 1_700_000_000;
+
+            let operation_state = OperationState {
+                bump: 0,
+                operation_owners: [Pubkey::default(); OPERATION_SIZE_USIZE],
+                whitelist_mints: [Pubkey::default(); WHITE_MINT_SIZE_USIZE],
+            };
+            let pool_state = &mut PoolState::default();
+            pool_state.liquidity = liquidity;
+            pool_state
+                .initialize_reward(
+                    start,
+                    start + 1000,
+                    emission_x64,
+                    &Pubkey::new_unique(),
+                    COption::None,
+                    &Pubkey::new_unique(),
+                    &Pubkey::new_unique(),
+                    &operation_state,
+                )
+                .unwrap();
+
+            // Counterfactual: what a per-step floor would have accumulated.
+            let mut emitted_floor: u64 = 0;
+            for s in 1..=STEPS {
+                pool_state.update_reward_infos(start + s).unwrap();
+                emitted_floor += U128::from(1u64)
+                    .mul_div_floor(U128::from(emission_x64), U128::from(fixed_point_64::Q64))
+                    .unwrap()
+                    .as_u64();
+            }
+
+            let emitted_ceil = identity(pool_state.reward_infos[0].reward_total_emitted);
+            let growth_global = identity(pool_state.reward_infos[0].reward_growth_global_x64);
+            // Mirror the position-side settlement (personal_position.rs:177-180).
+            let claimable = U128::from(growth_global)
+                .mul_div_floor(U128::from(liquidity), U128::from(fixed_point_64::Q64))
+                .unwrap()
+                .as_u64();
+
+            assert!(claimable > 0);
+            assert!(emitted_ceil >= claimable, "ceil keeps pool solvent");
+            assert!(emitted_floor < claimable, "floor would undercount -> claim DoS");
         }
     }
 

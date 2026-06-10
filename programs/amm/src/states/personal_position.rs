@@ -1,7 +1,7 @@
 use super::POSITION_SEED;
 use crate::error::ErrorCode;
 use crate::instructions::calculate_latest_token_fees;
-use crate::libraries::{big_num::U256, fixed_point_64, full_math::MulDiv};
+use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::pool::REWARD_NUM;
 use anchor_lang::prelude::*;
 
@@ -174,9 +174,9 @@ impl PersonalPositionState {
                 let reward_growth_delta =
                     reward_growth_inside.wrapping_sub(curr_reward_info.growth_inside_last_x64);
 
-                let amount_owed_delta = U256::from(reward_growth_delta)
-                    .mul_div_floor(U256::from(self.liquidity), U256::from(fixed_point_64::Q64))
-                    .ok_or(ErrorCode::CalculateOverflow)?
+                let amount_owed_delta = U128::from(reward_growth_delta)
+                    .mul_div_floor(U128::from(self.liquidity), U128::from(fixed_point_64::Q64))
+                    .unwrap_or(U128::zero())
                     .to_underflow_u64();
 
                 // Overflows not allowed. Must collect rewards owed before overflow.

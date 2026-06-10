@@ -6,7 +6,7 @@ import { TestSetup } from "./utils/setup";
 import { InstructionHelper } from "./utils/instructions";
 import { getValidTickForLimitOrder, cleanupAllLimitOrders } from "./utils/util";
 import { getAssociatedTokenAddressSync, getAccount } from "@solana/spl-token";
-import { TickUtils } from "@raydium-io/raydium-sdk-v2";
+import { getTickArrayAddressByTick } from "./utils/util";
 
 const provider = anchor.AnchorProvider.env();
 anchor.setProvider(provider);
@@ -79,7 +79,7 @@ describe("settle_limit_order_test", () => {
         isBaseInput: false,
         remainingAccounts: [
           {
-            pubkey: TickUtils.getTickArrayAddressByTick(
+            pubkey: getTickArrayAddressByTick(
               program.programId,
               poolState,
               validTick,
@@ -176,7 +176,7 @@ describe("settle_limit_order_test", () => {
         isBaseInput: false,
         remainingAccounts: [
           {
-            pubkey: TickUtils.getTickArrayAddressByTick(
+            pubkey: getTickArrayAddressByTick(
               program.programId,
               poolStateLocal,
               validTick,
@@ -302,7 +302,7 @@ describe("settle_limit_order_test", () => {
         isBaseInput: false,
         remainingAccounts: [
           {
-            pubkey: TickUtils.getTickArrayAddressByTick(
+            pubkey: getTickArrayAddressByTick(
               program.programId,
               poolStateLocal,
               validTick,
@@ -345,7 +345,7 @@ describe("settle_limit_order_test", () => {
         isBaseInput: false,
         remainingAccounts: [
           {
-            pubkey: TickUtils.getTickArrayAddressByTick(
+            pubkey: getTickArrayAddressByTick(
               program.programId,
               poolStateLocal,
               validTick,
@@ -418,7 +418,7 @@ describe("settle_limit_order_test", () => {
         isBaseInput: false,
         remainingAccounts: [
           {
-            pubkey: TickUtils.getTickArrayAddressByTick(
+            pubkey: getTickArrayAddressByTick(
               program.programId,
               poolStateLocal,
               validTick,
@@ -516,7 +516,7 @@ describe("settle_limit_order_test", () => {
         isBaseInput: false,
         remainingAccounts: [
           {
-            pubkey: TickUtils.getTickArrayAddressByTick(
+            pubkey: getTickArrayAddressByTick(
               program.programId,
               poolStateLocal,
               validTick,

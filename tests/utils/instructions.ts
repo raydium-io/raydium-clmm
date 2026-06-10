@@ -18,8 +18,9 @@ import {
 import {
   MEMO_PROGRAM_ID,
   METADATA_PROGRAM_ID,
-  TickUtils,
 } from "@raydium-io/raydium-sdk-v2";
+import { getTickArrayAddressByTick } from "./util";
+import { TickArrayUtil } from "@raydium-io/raydium-sdk-v2";
 import { PDAUtils } from "./pda";
 
 /**
@@ -109,24 +110,24 @@ export class InstructionHelper {
     );
 
     // Compute tick array start indexes from tickLowerIndex/tickUpperIndex
-    const lowerStart = TickUtils.getTickArrayStartIndexByTick(
+    const lowerStart = TickArrayUtil.getTickArrayStartIndex(
       params.tickLowerIndex,
       poolStateData.tickSpacing,
     );
-    const upperStart = TickUtils.getTickArrayStartIndexByTick(
+    const upperStart = TickArrayUtil.getTickArrayStartIndex(
       params.tickUpperIndex,
       poolStateData.tickSpacing,
     );
 
     // Derive tick arrays
-    const tickArrayLower = TickUtils.getTickArrayAddressByTick(
+    const tickArrayLower = getTickArrayAddressByTick(
       this.program.programId,
       params.poolState,
       lowerStart,
       poolStateData.tickSpacing,
     );
 
-    const tickArrayUpper = TickUtils.getTickArrayAddressByTick(
+    const tickArrayUpper = getTickArrayAddressByTick(
       this.program.programId,
       params.poolState,
       upperStart,
@@ -326,7 +327,7 @@ export class InstructionHelper {
 
     // Calculate tick array start index using tick spacing
     const tickSpacing = poolStateData.tickSpacing;
-    const tickArray = TickUtils.getTickArrayAddressByTick(
+    const tickArray = getTickArrayAddressByTick(
       this.program.programId,
       params.poolState,
       params.tickIndex,
@@ -406,7 +407,7 @@ export class InstructionHelper {
 
     // Calculate tick array start index from limit order's tick index
     const tickSpacing = poolStateData.tickSpacing;
-    const tickArrayStartIndex = TickUtils.getTickArrayStartIndexByTick(
+    const tickArrayStartIndex = TickArrayUtil.getTickArrayStartIndex(
       limitOrderData.tickIndex,
       tickSpacing,
     );
@@ -478,7 +479,7 @@ export class InstructionHelper {
 
     // Calculate tick array start index from limit order's tick index
     const tickSpacing = poolStateData.tickSpacing;
-    const tickArrayStartIndex = TickUtils.getTickArrayStartIndexByTick(
+    const tickArrayStartIndex = TickArrayUtil.getTickArrayStartIndex(
       limitOrderData.tickIndex,
       tickSpacing,
     );
@@ -578,7 +579,7 @@ export class InstructionHelper {
 
     // Calculate tick array start index from limit order's tick index
     const tickSpacing = poolStateData.tickSpacing;
-    const tickArrayStartIndex = TickUtils.getTickArrayStartIndexByTick(
+    const tickArrayStartIndex = TickArrayUtil.getTickArrayStartIndex(
       limitOrderData.tickIndex,
       tickSpacing,
     );

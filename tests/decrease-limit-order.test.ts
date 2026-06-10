@@ -10,7 +10,7 @@ import {
   cleanupAllLimitOrders,
 } from "./utils/util";
 import { getAssociatedTokenAddressSync, getAccount } from "@solana/spl-token";
-import { TickUtils } from "@raydium-io/raydium-sdk-v2";
+import { getTickArrayAddressByTick } from "./utils/util";
 
 const provider = anchor.AnchorProvider.env();
 anchor.setProvider(provider);
@@ -227,7 +227,7 @@ describe("decrease_limit_order_test", () => {
         isBaseInput: false,
         remainingAccounts: [
           {
-            pubkey: TickUtils.getTickArrayAddressByTick(
+            pubkey: getTickArrayAddressByTick(
               program.programId,
               poolStateLocal,
               validTick,
@@ -347,7 +347,7 @@ describe("decrease_limit_order_test", () => {
         isBaseInput: false,
         remainingAccounts: [
           {
-            pubkey: TickUtils.getTickArrayAddressByTick(
+            pubkey: getTickArrayAddressByTick(
               program.programId,
               poolStateLocal,
               validTick,

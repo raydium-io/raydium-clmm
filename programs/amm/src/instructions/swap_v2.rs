@@ -327,7 +327,7 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         }
     }
 
-    if is_base_input {
+    let result = if is_base_input {
         ctx.output_token_account
             .amount
             .checked_sub(output_balance_before)
@@ -336,7 +336,8 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
         input_balance_before
             .checked_sub(ctx.input_token_account.amount)
             .ok_or(ErrorCode::CalculateOverflow.into())
-    }
+    };
+    result
 }
 
 pub fn swap_v2<'a, 'b, 'c: 'info, 'info>(

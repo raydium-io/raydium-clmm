@@ -2,8 +2,24 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { RaydiumClmm } from "../../target/types/raydium_clmm";
 import { PDAUtils } from "./pda";
-import { TickUtils } from "@raydium-io/raydium-sdk-v2";
-import { AccountMeta, Connection } from "@solana/web3.js";
+import {
+  Raydium,
+  PoolUtils,
+  TickArrayUtil,
+  getPdaTickArrayAddress,
+} from "@raydium-io/raydium-sdk-v2";
+import { AccountMeta, Connection, Keypair, PublicKey } from "@solana/web3.js";
+
+
+export function getTickArrayAddressByTick(
+  programId: PublicKey,
+  poolId: PublicKey,
+  tickIndex: number,
+  tickSpacing: number
+): PublicKey {
+  const startIndex = TickArrayUtil.getTickArrayStartIndex(tickIndex, tickSpacing);
+  return getPdaTickArrayAddress(programId, poolId, startIndex).publicKey;
+}
 
 // Helper: given a tick, compute its tick array and return whether the bitmap bit is 0 or 1
 export async function getTickArrayBitmapBit(
@@ -81,12 +97,12 @@ export async function getTickStateByTick(
   tickIndex: number,
   tickSpacing: number
 ) {
-  const tickArrayStartIndex = TickUtils.getTickArrayStartIndexByTick(
+  const tickArrayStartIndex = TickArrayUtil.getTickArrayStartIndex(
     tickIndex,
     tickSpacing
   );
 
-  const tickArrayAddress = TickUtils.getTickArrayAddressByTick(
+  const tickArrayAddress = getTickArrayAddressByTick(
     program.programId,
     poolStateKey,
     tickIndex,
@@ -139,7 +155,7 @@ export function getTickArrayRemainingAccounts(
 ): AccountMeta[] {
   return [
     {
-      pubkey: TickUtils.getTickArrayAddressByTick(
+      pubkey: getTickArrayAddressByTick(
         programId,
         poolState,
         tickIndex,
@@ -270,4 +286,155 @@ export async function cleanupAllLimitOrders(
     // If we can't fetch limit orders (e.g., no accounts exist), that's fine
     console.log(`No limit orders found or error fetching:`, err.message);
   }
+}
+
+
+const poolInfoCache = new Map<string, Promise<any>>();
+
+async function loadPoolCompute(connection: Connection, poolId: PublicKey) {
+  const key = `${(connection as any)._rpcEndpoint}:${poolId.toBase58()}`;
+  let cached = poolInfoCache.get(key);
+  if (!cached) {
+    cached = (async () => {
+      const raydium = await Raydium.load({
+        connection,
+        owner: Keypair.generate(), // read-only; never signs
+        cluster: "mainnet", // only selects the (unused) raydium HTTP API endpoint
+        disableLoadToken: true,
+        disableFeatureCheck: true,
+      });
+      const data = await raydium.clmm.getPoolInfoFromRpc(poolId.toBase58());
+      return {
+        computePoolInfo: (data as any).computePoolInfo,
+        tickCache: (data as any).tickData[poolId.toBase58()],
+      };
+    })();
+    poolInfoCache.set(key, cached);
+  }
+  return cached;
+}
+
+export async function buildSwapRemainingAccounts(
+  connection: Connection,
+  poolId: PublicKey,
+  inputMint: PublicKey,
+  amount: anchor.BN,
+  isBaseInput = true,
+  sqrtPriceLimitX64?: anchor.BN
+): Promise<AccountMeta[]> {
+  const { computePoolInfo, tickCache } = await loadPoolCompute(connection, poolId);
+  const exBitmap = computePoolInfo.exBitmapInfo;
+  const blockTimestamp = Math.floor(Date.now() / 1000);
+
+  let remainingAccounts: PublicKey[];
+  if (isBaseInput) {
+    // exact-in: `amount` is the input amount of `inputMint`.
+    ({ remainingAccounts } = PoolUtils.getOutputAmountAndRemainAccounts(
+      computePoolInfo,
+      exBitmap,
+      tickCache,
+      inputMint,
+      amount,
+      blockTimestamp,
+      sqrtPriceLimitX64
+    ));
+  } else {
+    // exact-out: `amount` is the desired output amount; the exact-out simulation
+    // is keyed by the OUTPUT mint, which is the pool's other mint.
+    const mintA = new PublicKey(computePoolInfo.mintA.address);
+    const mintB = new PublicKey(computePoolInfo.mintB.address);
+    const outputMint = inputMint.equals(mintA) ? mintB : mintA;
+    ({ remainingAccounts } = PoolUtils.getInputAmountAndRemainAccounts(
+      computePoolInfo,
+      exBitmap,
+      tickCache,
+      outputMint,
+      amount,
+      blockTimestamp,
+      sqrtPriceLimitX64
+    ));
+  }
+
+  if (remainingAccounts.length === 0) {
+    throw new Error(
+      "Swap simulation returned no tick arrays (amount too small or pool empty)"
+    );
+  }
+
+  return remainingAccounts.map((pubkey: PublicKey) => ({
+    pubkey,
+    isWritable: true,
+    isSigner: false,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Surfpool surfnet helpers (mainnet-fork cheatcodes + RPC readiness)
+// ---------------------------------------------------------------------------
+
+// Low-level JSON-RPC call against the surfnet endpoint (for non-standard
+// surfnet_* cheatcode methods the typed client does not expose).
+async function surfnetRpc(
+  connection: Connection,
+  method: string,
+  params: any[]
+): Promise<any> {
+  const endpoint = (connection as any)._rpcEndpoint as string;
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  const json = await res.json();
+  if (json.error) {
+    throw new Error(`${method} failed: ${JSON.stringify(json.error)}`);
+  }
+  return json.result;
+}
+
+/** Block until the surfnet RPC answers `getVersion` (validator is up). */
+export async function waitForRpc(
+  connection: Connection,
+  timeoutMs = 60_000
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      await connection.getVersion();
+      return;
+    } catch (_e) {
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  throw new Error(`Surfpool RPC not reachable within ${timeoutMs}ms`);
+}
+
+/**
+ * Credit `owner`'s associated token account for `mint` with `amount` raw units.
+ * Creates the ATA if it does not exist. `tokenProgram` must match the mint's
+ * owning token program (SPL Token or Token-2022).
+ */
+export async function setTokenAccount(
+  connection: Connection,
+  owner: PublicKey,
+  mint: PublicKey,
+  amount: bigint,
+  tokenProgram: PublicKey
+): Promise<void> {
+  await surfnetRpc(connection, "surfnet_setTokenAccount", [
+    owner.toBase58(),
+    mint.toBase58(),
+    { amount: Number(amount) },
+    tokenProgram.toBase58(),
+  ]);
+}
+
+/** Fund a pubkey with SOL (lamports) for fees / rent. */
+export async function airdrop(
+  connection: Connection,
+  pubkey: PublicKey,
+  lamports: number
+): Promise<void> {
+  const sig = await connection.requestAirdrop(pubkey, lamports);
+  await connection.confirmTransaction(sig, "confirmed");
 }

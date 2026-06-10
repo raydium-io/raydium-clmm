@@ -162,6 +162,10 @@ impl MulDiv for U128 {
         if denom.is_zero() {
             return None;
         }
+        let (prod, overflow) = self.overflowing_mul(num);
+        if !overflow {
+            return Some(prod / denom);
+        }
         let r = ((self.as_u256()) * (num.as_u256())) / (denom.as_u256());
         if r > U128::MAX.as_u256() {
             None
@@ -173,6 +177,12 @@ impl MulDiv for U128 {
     fn mul_div_ceil(self, num: Self, denom: Self) -> Option<Self::Output> {
         if denom.is_zero() {
             return None;
+        }
+        let (prod, overflow) = self.overflowing_mul(num);
+        if !overflow {
+            if let Some(numerator) = prod.checked_add(denom - 1) {
+                return Some(numerator / denom);
+            }
         }
         let r = (self.as_u256() * num.as_u256() + (denom - 1).as_u256()) / denom.as_u256();
         if r > U128::MAX.as_u256() {
@@ -198,6 +208,10 @@ impl MulDiv for U256 {
         if denom.is_zero() {
             return None;
         }
+        let (prod, overflow) = self.overflowing_mul(num);
+        if !overflow {
+            return Some(prod / denom);
+        }
         let r = (self.as_u512() * num.as_u512()) / denom.as_u512();
         if r > U256::MAX.as_u512() {
             None
@@ -209,6 +223,12 @@ impl MulDiv for U256 {
     fn mul_div_ceil(self, num: Self, denom: Self) -> Option<Self::Output> {
         if denom.is_zero() {
             return None;
+        }
+        let (prod, overflow) = self.overflowing_mul(num);
+        if !overflow {
+            if let Some(numerator) = prod.checked_add(denom - 1) {
+                return Some(numerator / denom);
+            }
         }
         let r = (self.as_u512() * num.as_u512() + (denom - 1).as_u512()) / denom.as_u512();
         if r > U256::MAX.as_u512() {
@@ -225,6 +245,32 @@ impl MulDiv for U256 {
             0
         }
     }
+}
+
+#[inline]
+pub fn mul_pow2_div_ceil(x: U256, shift: u32, denom: U256) -> Option<U256> {
+    if denom.is_zero() {
+        return None;
+    }
+    if x.leading_zeros() >= shift {
+        let shifted = x << (shift as usize);
+        if let Some(numerator) = shifted.checked_add(denom - U256::from(1u8)) {
+            return Some(numerator / denom);
+        }
+    }
+    x.mul_div_ceil(U256::from(1u128) << (shift as usize), denom)
+}
+
+#[inline]
+pub fn mul_pow2_div_floor(x: U256, shift: u32, denom: U256) -> Option<U256> {
+    if denom.is_zero() {
+        return None;
+    }
+    if x.leading_zeros() >= shift {
+        let shifted = x << (shift as usize);
+        return Some(shifted / denom);
+    }
+    x.mul_div_floor(U256::from(1u128) << (shift as usize), denom)
 }
 
 #[cfg(test)]

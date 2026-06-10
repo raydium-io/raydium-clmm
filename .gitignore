@@ -13,3 +13,5 @@ test-ledger
 yarn.lock
 Makefile
 programs/amm/proptest-regressions
+runbooks
+txtx.yml
