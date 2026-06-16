@@ -1,5 +1,5 @@
-import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import * as anchor from "@anchor-lang/core";
+import { Program } from "@anchor-lang/core";
 import { RaydiumClmm } from "../../target/types/raydium_clmm";
 import { PDAUtils } from "./pda";
 import {
@@ -207,7 +207,7 @@ export function getValidTickForLimitOrder(
  * Should be called at the beginning of test suites to avoid PDA collisions.
  */
 export async function cleanupAllLimitOrders(
-  program: Program<any>,
+  program: Program<RaydiumClmm>,
   instructions: any,
   owner: anchor.web3.Keypair
 ): Promise<void> {

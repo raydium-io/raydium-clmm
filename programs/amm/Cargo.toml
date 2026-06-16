@@ -22,8 +22,8 @@ paramset = []
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 
 [dependencies]
-anchor-lang = { version = "=0.32.1", features = ["init-if-needed"] }
-anchor-spl = { version = "=0.32.1", features = ["metadata", "memo"] }
+anchor-lang = { version = "=1.0.2", features = ["init-if-needed"] }
+anchor-spl = { version = "=1.0.2", features = ["metadata", "memo"] }
 uint = { git = "https://github.com/raydium-io/parity-common", package = "uint" }
 bytemuck = { version = "1.19.0", features = ["derive", "min_const_generics"] }
 arrayref = { version = "0.3.6" }

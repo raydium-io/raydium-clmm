@@ -491,12 +491,12 @@ impl SwapState {
     }
 }
 
-pub fn swap_internal<'b, 'c: 'info, 'info>(
+pub fn swap_internal<'info>(
     amm_config: &AmmConfig,
     pool_state: &mut RefMut<PoolState>,
     tick_array_states: &mut VecDeque<RefMut<TickArrayState>>,
     observation_state: &mut RefMut<ObservationState>,
-    tickarray_bitmap_extension_info: Option<&'c AccountInfo<'info>>,
+    tickarray_bitmap_extension_info: Option<&'info AccountInfo<'info>>,
     amount_specified: u64,
     sqrt_price_limit_x64: u128,
     zero_for_one: bool,
@@ -825,9 +825,9 @@ pub fn swap_internal<'b, 'c: 'info, 'info>(
 
 /// Performs a single exact input/output swap
 /// if is_base_input = true, return value is the max_amount_out, otherwise is min_amount_in
-pub fn exact_internal<'b, 'c: 'info, 'info>(
+pub fn exact_internal<'b, 'info>(
     ctx: &mut SwapAccounts<'b, 'info>,
-    remaining_accounts: &'c [AccountInfo<'info>],
+    remaining_accounts: &'info [AccountInfo<'info>],
     amount_specified: u64,
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
@@ -1018,8 +1018,8 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
     }
 }
 
-pub fn swap<'a, 'b, 'c: 'info, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, SwapSingle<'info>>,
+pub fn swap<'info>(
+    ctx: Context<'info, SwapSingle<'info>>,
     amount: u64,
     other_amount_threshold: u64,
     sqrt_price_limit_x64: u128,

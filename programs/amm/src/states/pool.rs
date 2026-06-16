@@ -451,9 +451,9 @@ impl PoolState {
         Ok(())
     }
 
-    pub fn flip_tick_array_bit<'c: 'info, 'info>(
+    pub fn flip_tick_array_bit<'info>(
         &mut self,
-        tickarray_bitmap_extension: Option<&'c AccountInfo<'info>>,
+        tickarray_bitmap_extension: Option<&'info AccountInfo<'info>>,
         tick_array_start_index: i32,
     ) -> Result<()> {
         if self.is_overflow_default_tickarray_bitmap(vec![tick_array_start_index]) {
@@ -472,9 +472,9 @@ impl PoolState {
     }
 
     /// Get the first initialized tick array start index with tickarray bitmap extension info
-    pub fn first_tick_array_index_with_extension_info<'c: 'info, 'info>(
+    pub fn first_tick_array_index_with_extension_info<'info>(
         &self,
-        tickarray_bitmap_extension_info: Option<&'c AccountInfo<'info>>,
+        tickarray_bitmap_extension_info: Option<&'info AccountInfo<'info>>,
         zero_for_one: bool,
     ) -> Result<(bool, i32)> {
         let (is_initialized, start_index) =
@@ -543,9 +543,9 @@ impl PoolState {
     }
 
     /// Get the next initialized tick array start index with tickarray bitmap extension info
-    pub fn next_tick_array_index_with_extension_info<'c: 'info, 'info>(
+    pub fn next_tick_array_index_with_extension_info<'info>(
         &self,
-        tickarray_bitmap_extension_info: Option<&'c AccountInfo<'info>>,
+        tickarray_bitmap_extension_info: Option<&'info AccountInfo<'info>>,
         mut last_tick_array_start_index: i32,
         zero_for_one: bool,
     ) -> Result<Option<i32>> {
@@ -1343,9 +1343,9 @@ pub mod pool_test {
         use crate::tick_array_bitmap_extension_test::build_tick_array_bitmap_extension_info;
         use std::ops::Deref;
 
-        pub fn pool_flip_tick_array_bit_helper<'c: 'info, 'info>(
+        pub fn pool_flip_tick_array_bit_helper<'info>(
             pool_state: &mut PoolState,
-            tickarray_bitmap_extension: Option<&'c AccountInfo<'info>>,
+            tickarray_bitmap_extension: Option<&'info AccountInfo<'info>>,
             init_tick_array_start_indexs: Vec<i32>,
         ) {
             for start_index in init_tick_array_start_indexs {

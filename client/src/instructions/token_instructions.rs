@@ -8,8 +8,8 @@ use solana_sdk::{
     program_pack::Pack,
     pubkey::Pubkey,
     signature::{Keypair, Signer},
-    system_instruction,
 };
+use solana_system_interface::instruction as system_instruction;
 use spl_token_2022::{
     extension::{BaseStateWithExtensions, ExtensionType, StateWithExtensionsMut},
     state::{Account, Mint},
@@ -85,7 +85,7 @@ pub fn create_account_rent_exmpt_instr(
             data_size as u64,
             &program.id(),
         ))
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -110,7 +110,7 @@ pub fn create_ata_token_account_instr(
                 &token_program,
             ),
         )
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -168,7 +168,7 @@ pub fn create_and_init_auxiliary_token(
             mint,
             owner,
         )?)
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -193,7 +193,7 @@ pub fn close_token_account(
             &[],
         )?)
         .signer(owner)
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -220,7 +220,7 @@ pub fn spl_token_transfer_instr(
             amount,
         )?)
         .signer(from_authority)
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -252,7 +252,7 @@ pub fn spl_token_mint_to_instr(
             amount,
         )?)
         .signer(mint_authority)
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -286,6 +286,6 @@ pub fn wrap_sol_instr(config: &ClientConfig, amount: u64) -> Result<Vec<Instruct
             &program.id(),
             &wsol_ata_account,
         )?)
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }

@@ -30,8 +30,8 @@ pub struct SwapRouterBaseIn<'info> {
     pub memo_program: Program<'info, Memo>,
 }
 
-pub fn swap_router_base_in<'a, 'b, 'c: 'info, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, SwapRouterBaseIn<'info>>,
+pub fn swap_router_base_in<'info>(
+    ctx: Context<'info, SwapRouterBaseIn<'info>>,
     amount_in: u64,
     amount_out_minimum: u64,
 ) -> Result<()> {

@@ -9,9 +9,7 @@ pub struct UpdateRewardInfos<'info> {
     pub pool_state: AccountLoader<'info, PoolState>,
 }
 
-pub fn update_reward_infos<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, UpdateRewardInfos<'info>>,
-) -> Result<()> {
+pub fn update_reward_infos<'info>(ctx: Context<'info, UpdateRewardInfos<'info>>) -> Result<()> {
     let clock = Clock::get()?;
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;
     let updated_reward_infos = pool_state.update_reward_infos(

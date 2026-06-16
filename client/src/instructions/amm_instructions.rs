@@ -2,9 +2,8 @@ use anchor_client::{Client, Cluster};
 use anchor_lang::prelude::AccountMeta;
 use anyhow::Result;
 use mpl_token_metadata::accounts::Metadata;
-use solana_sdk::{
-    instruction::Instruction, pubkey::Pubkey, signature::Signer, system_program, sysvar,
-};
+use solana_sdk::{instruction::Instruction, pubkey::Pubkey, signature::Signer, sysvar};
+use solana_system_interface::program as system_program;
 
 use raydium_clmm::accounts as raydium_accounts;
 use raydium_clmm::instruction as raydium_instruction;
@@ -47,7 +46,7 @@ pub fn create_amm_config_instr(
             protocol_fee_rate,
             fund_fee_rate,
         })
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -72,7 +71,7 @@ pub fn update_amm_config_instr(
         })
         .accounts(remaining_accounts)
         .args(raydium_instruction::UpdateAmmConfig { param, value })
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -92,7 +91,7 @@ pub fn create_operation_account_instr(config: &ClientConfig) -> Result<Vec<Instr
             system_program: system_program::id(),
         })
         .args(raydium_instruction::CreateOperationAccount)
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -116,7 +115,7 @@ pub fn update_operation_account_instr(
             system_program: system_program::id(),
         })
         .args(raydium_instruction::UpdateOperationAccount { param, keys })
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -189,7 +188,7 @@ pub fn create_pool_instr(
             sqrt_price_x64,
             open_time,
         })
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -296,7 +295,7 @@ pub fn open_position_instr(
             with_metadata,
             base_flag: None,
         })
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -397,7 +396,7 @@ pub fn open_position_with_token22_nft_instr(
             with_metadata,
             base_flag: None,
         })
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -482,7 +481,7 @@ pub fn increase_liquidity_instr(
             amount_1_max,
             base_flag: None,
         })
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -566,7 +565,7 @@ pub fn decrease_liquidity_instr(
             amount_0_min,
             amount_1_min,
         })
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -596,7 +595,7 @@ pub fn close_personal_position_instr(
             token_program: nft_token_program,
         })
         .args(raydium_instruction::ClosePosition)
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -642,7 +641,7 @@ pub fn swap_instr(
             sqrt_price_limit_x64: sqrt_price_limit_x64.unwrap_or(0u128),
             is_base_input,
         })
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -692,7 +691,7 @@ pub fn swap_v2_instr(
             sqrt_price_limit_x64: sqrt_price_limit_x64.unwrap_or(0u128),
             is_base_input,
         })
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -736,7 +735,7 @@ pub fn initialize_reward_instr(
                 emissions_per_second_x64,
             },
         })
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -781,7 +780,7 @@ pub fn set_reward_params_instr(
             open_time,
             end_time,
         })
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }
 
@@ -809,6 +808,6 @@ pub fn transfer_reward_owner(
             pool_state: pool_account_key,
         })
         .args(raydium_instruction::TransferRewardOwner { new_owner })
-        .instructions()?;
+        .instructions();
     Ok(instructions)
 }

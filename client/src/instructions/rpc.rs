@@ -5,9 +5,10 @@ use solana_client::{
     rpc_request::RpcRequest,
     rpc_response::{RpcResult, RpcSimulateTransactionResult},
 };
+use solana_commitment_config::CommitmentConfig;
 use solana_sdk::{
-    account::Account, commitment_config::CommitmentConfig, program_pack::Pack as TokenPack,
-    pubkey::Pubkey, signature::Signature, transaction::Transaction,
+    account::Account, program_pack::Pack as TokenPack, pubkey::Pubkey, signature::Signature,
+    transaction::Transaction,
 };
 use std::convert::Into;
 

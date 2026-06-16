@@ -148,8 +148,8 @@ pub struct OpenPosition<'info> {
     // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
 }
 
-pub fn open_position_v1<'a, 'b, 'c: 'info, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, OpenPosition<'info>>,
+pub fn open_position_v1<'info>(
+    ctx: Context<'info, OpenPosition<'info>>,
     liquidity: u128,
     amount_0_max: u64,
     amount_1_max: u64,
@@ -197,7 +197,7 @@ pub fn open_position_v1<'a, 'b, 'c: 'info, 'info>(
     )
 }
 
-pub fn open_position<'a, 'b, 'c: 'info, 'info>(
+pub fn open_position<'b, 'info>(
     payer: &'b Signer<'info>,
     position_nft_owner: &'b UncheckedAccount<'info>,
     position_nft_mint: &'b AccountInfo<'info>,
@@ -220,7 +220,7 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
     vault_0_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
     vault_1_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
 
-    remaining_accounts: &'c [AccountInfo<'info>],
+    remaining_accounts: &'info [AccountInfo<'info>],
     personal_position_bump: u8,
     liquidity: u128,
     amount_0_max: u64,
@@ -379,7 +379,7 @@ pub struct LiquidityChangeResult {
 }
 
 /// Add liquidity to an initialized pool
-pub fn add_liquidity<'b, 'c: 'info, 'info>(
+pub fn add_liquidity<'b, 'info>(
     payer: &'b Signer<'info>,
     token_account_0: &'b AccountInfo<'info>,
     token_account_1: &'b AccountInfo<'info>,
@@ -391,7 +391,7 @@ pub fn add_liquidity<'b, 'c: 'info, 'info>(
     token_program: &'b Program<'info, Token>,
     vault_0_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
     vault_1_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
-    tick_array_bitmap_extension: Option<&'c AccountInfo<'info>>,
+    tick_array_bitmap_extension: Option<&'info AccountInfo<'info>>,
     pool_state: &mut RefMut<PoolState>,
     liquidity: &mut u128,
     amount_0_max: u64,
@@ -748,7 +748,7 @@ fn mint_nft_and_remove_mint_authority<'info>(
     // Mint the NFT
     token_2022::mint_to(
         CpiContext::new_with_signer(
-            token_program_info.to_account_info(),
+            token_program_info.key(),
             token_2022::MintTo {
                 mint: position_nft_mint_info.clone(),
                 to: position_nft_account.to_account_info(),
@@ -762,7 +762,7 @@ fn mint_nft_and_remove_mint_authority<'info>(
     // Disable minting
     token_2022::set_authority(
         CpiContext::new_with_signer(
-            token_program_info.to_account_info(),
+            token_program_info.key(),
             token_2022::SetAuthority {
                 current_authority: pool_state_loader.to_account_info(),
                 account_or_mint: position_nft_mint_info,
@@ -800,7 +800,7 @@ fn initialize_metadata_account<'info>(
 ) -> Result<()> {
     create_metadata_accounts_v3(
         CpiContext::new_with_signer(
-            metadata_program.to_account_info(),
+            metadata_program.key(),
             CreateMetadataAccountsV3 {
                 metadata: metadata_account.to_account_info(),
                 mint: position_nft_mint.to_account_info(),
