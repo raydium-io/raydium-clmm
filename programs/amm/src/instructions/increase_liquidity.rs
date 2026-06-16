@@ -80,8 +80,8 @@ pub struct IncreaseLiquidity<'info> {
     // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
 }
 
-pub fn increase_liquidity_v1<'a, 'b, 'c: 'info, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, IncreaseLiquidity<'info>>,
+pub fn increase_liquidity_v1<'info>(
+    ctx: Context<'info, IncreaseLiquidity<'info>>,
     liquidity: u128,
     amount_0_max: u64,
     amount_1_max: u64,
@@ -109,7 +109,7 @@ pub fn increase_liquidity_v1<'a, 'b, 'c: 'info, 'info>(
     )
 }
 
-pub fn increase_liquidity<'a, 'b, 'c: 'info, 'info>(
+pub fn increase_liquidity<'b, 'info>(
     nft_owner: &'b Signer<'info>,
     pool_state_loader: &'b AccountLoader<'info, PoolState>,
     personal_position: &'b mut Box<Account<'info, PersonalPositionState>>,
@@ -124,7 +124,7 @@ pub fn increase_liquidity<'a, 'b, 'c: 'info, 'info>(
     vault_0_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
     vault_1_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
 
-    remaining_accounts: &'c [AccountInfo<'info>],
+    remaining_accounts: &'info [AccountInfo<'info>],
     liquidity: u128,
     amount_0_max: u64,
     amount_1_max: u64,

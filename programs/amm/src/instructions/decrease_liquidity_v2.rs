@@ -1,7 +1,6 @@
 use super::decrease_liquidity::decrease_liquidity;
 use crate::states::*;
 use anchor_lang::prelude::*;
-use anchor_spl::memo::spl_memo;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::Mint;
 use anchor_spl::token_interface::{Token2022, TokenAccount};
@@ -72,7 +71,7 @@ pub struct DecreaseLiquidityV2<'info> {
     /// memo program
     /// CHECK:
     #[account(
-        address = spl_memo::id()
+        address = anchor_spl::memo::ID
     )]
     pub memo_program: UncheckedAccount<'info>,
 
@@ -98,8 +97,8 @@ pub struct DecreaseLiquidityV2<'info> {
     // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
 }
 
-pub fn decrease_liquidity_v2<'a, 'b, 'c: 'info, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, DecreaseLiquidityV2<'info>>,
+pub fn decrease_liquidity_v2<'info>(
+    ctx: Context<'info, DecreaseLiquidityV2<'info>>,
     liquidity: u128,
     amount_0_min: u64,
     amount_1_min: u64,

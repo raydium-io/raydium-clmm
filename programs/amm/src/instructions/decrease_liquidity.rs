@@ -83,8 +83,8 @@ pub struct DecreaseLiquidity<'info> {
     // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
 }
 
-pub fn decrease_liquidity_v1<'a, 'b, 'c: 'info, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, DecreaseLiquidity<'info>>,
+pub fn decrease_liquidity_v1<'info>(
+    ctx: Context<'info, DecreaseLiquidity<'info>>,
     liquidity: u128,
     amount_0_min: u64,
     amount_1_min: u64,
@@ -110,7 +110,7 @@ pub fn decrease_liquidity_v1<'a, 'b, 'c: 'info, 'info>(
     )
 }
 
-pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
+pub fn decrease_liquidity<'b, 'info>(
     pool_state_loader: &'b AccountLoader<'info, PoolState>,
     personal_position: &'b mut Box<Account<'info, PersonalPositionState>>,
     token_vault_0: &'b AccountInfo<'info>,
@@ -124,7 +124,7 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
     _memo_program: Option<UncheckedAccount<'info>>,
     vault_0_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
     vault_1_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
-    remaining_accounts: &'c [AccountInfo<'info>],
+    remaining_accounts: &'info [AccountInfo<'info>],
     liquidity: u128,
     amount_0_min: u64,
     amount_1_min: u64,
@@ -279,12 +279,12 @@ pub fn decrease_liquidity<'a, 'b, 'c: 'info, 'info>(
     Ok(())
 }
 
-pub fn decrease_liquidity_and_update_position<'a, 'b, 'c: 'info, 'info>(
+pub fn decrease_liquidity_and_update_position<'info>(
     pool_state_loader: &AccountLoader<'info, PoolState>,
     personal_position: &mut Box<Account<'info, PersonalPositionState>>,
     tick_array_lower: &AccountLoader<'info, TickArrayState>,
     tick_array_upper: &AccountLoader<'info, TickArrayState>,
-    tick_array_bitmap_extension: Option<&'c AccountInfo<'info>>,
+    tick_array_bitmap_extension: Option<&'info AccountInfo<'info>>,
     liquidity: u128,
 ) -> Result<(u64, u64, u64, u64)> {
     let mut pool_state = pool_state_loader.load_mut()?;
@@ -336,11 +336,11 @@ pub fn decrease_liquidity_and_update_position<'a, 'b, 'c: 'info, 'info>(
     ))
 }
 
-pub fn burn_liquidity<'c: 'info, 'info>(
+pub fn burn_liquidity<'info>(
     pool_state: &mut RefMut<PoolState>,
     tick_array_lower_loader: &AccountLoader<'info, TickArrayState>,
     tick_array_upper_loader: &AccountLoader<'info, TickArrayState>,
-    tickarray_bitmap_extension: Option<&'c AccountInfo<'info>>,
+    tickarray_bitmap_extension: Option<&'info AccountInfo<'info>>,
     tick_lower_index: i32,
     tick_upper_index: i32,
     liquidity: u128,
@@ -409,7 +409,7 @@ pub fn burn_liquidity<'c: 'info, 'info>(
     Ok(result)
 }
 
-pub fn collect_rewards<'a, 'b, 'c, 'info>(
+pub fn collect_rewards<'b, 'info>(
     pool_state_loader: &AccountLoader<'info, PoolState>,
     remaining_accounts: &[&'info AccountInfo<'info>],
     token_program: &'b Program<'info, Token>,

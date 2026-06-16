@@ -18,7 +18,7 @@ pub fn create_or_allocate_account<'a>(
             from: payer,
             to: target_account.clone(),
         };
-        let cpi_context = CpiContext::new(system_program.clone(), cpi_accounts);
+        let cpi_context = CpiContext::new(system_program.key(), cpi_accounts);
         system_program::create_account(
             cpi_context.with_signer(&[signer_seeds]),
             lamports,
@@ -35,13 +35,13 @@ pub fn create_or_allocate_account<'a>(
                 from: payer.to_account_info(),
                 to: target_account.clone(),
             };
-            let cpi_context = CpiContext::new(system_program.clone(), cpi_accounts);
+            let cpi_context = CpiContext::new(system_program.key(), cpi_accounts);
             system_program::transfer(cpi_context, required_lamports)?;
         }
         let cpi_accounts = system_program::Allocate {
             account_to_allocate: target_account.clone(),
         };
-        let cpi_context = CpiContext::new(system_program.clone(), cpi_accounts);
+        let cpi_context = CpiContext::new(system_program.key(), cpi_accounts);
         system_program::allocate(
             cpi_context.with_signer(&[signer_seeds]),
             u64::try_from(space).map_err(|_| ErrorCode::CalculateOverflow)?,
@@ -50,7 +50,7 @@ pub fn create_or_allocate_account<'a>(
         let cpi_accounts = system_program::Assign {
             account_to_assign: target_account.clone(),
         };
-        let cpi_context = CpiContext::new(system_program.clone(), cpi_accounts);
+        let cpi_context = CpiContext::new(system_program.key(), cpi_accounts);
         system_program::assign(cpi_context.with_signer(&[signer_seeds]), program_id)?;
     }
     Ok(())

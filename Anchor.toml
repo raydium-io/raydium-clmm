@@ -1,18 +1,16 @@
-[tool-chain]
-solana-version = "2.3.0"
-anchor_version = "0.32.1"
+[toolchain]
+anchor_version = "1.0.2"
+solana_version = "3.1.10"
 
 [workspace]
 members = ["programs/amm"]
 
 [features]
-seeds = false
+resolution = true
+skip-lint = false
 
 [programs.localnet]
 raydium_clmm = "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
-
-[registry]
-url = "https://github.com/raydium-io/raydium-amm-v3"
 
 [provider]
 cluster = "localnet"

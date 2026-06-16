@@ -66,8 +66,8 @@ pub struct IncreaseLimitOrder<'info> {
     // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
 }
 
-pub fn increase_limit_order<'a, 'b, 'c: 'info, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, IncreaseLimitOrder<'info>>,
+pub fn increase_limit_order<'info>(
+    ctx: Context<'info, IncreaseLimitOrder<'info>>,
     amount: u64,
 ) -> Result<()> {
     require!(amount > 0, ErrorCode::ZeroAmountSpecified);
@@ -140,7 +140,7 @@ pub fn increase_limit_order<'a, 'b, 'c: 'info, 'info>(
 
     token_2022::transfer_checked(
         CpiContext::new(
-            ctx.accounts.input_token_program.to_account_info(),
+            ctx.accounts.input_token_program.key(),
             token_2022::TransferChecked {
                 from: ctx.accounts.input_token_account.to_account_info(),
                 to: ctx.accounts.input_vault.to_account_info(),

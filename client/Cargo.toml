@@ -4,24 +4,32 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-mpl-token-metadata = { version = "5.1.0" }
-anchor-client = "0.32.1"
-anchor-lang = "0.32.1"
+mpl-token-metadata = { version = "=5.1.2-alpha.2" }
+anchor-client = "1.0.2"
+anchor-lang = "1.0.2"
 raydium-clmm = { path = "../programs/amm", features = [
     "no-entrypoint",
     "client",
 ] }
-solana-sdk = "2.3.0"
-solana-client = "2.3.0"
-solana-account-decoder = "2.3.0"
-solana-transaction-status = "2.3.0"
-spl-token = { version = "7.0.0", features = ["no-entrypoint"] }
-spl-token-client = "0.14.0"
-spl-memo = "6.0.0"
-spl-associated-token-account = { version = "6.0.0", features = [
+solana-sdk = "3"
+solana-client = "3"
+solana-account-decoder = "3"
+solana-transaction-status = "3"
+spl-token = { version = "9.0", features = ["no-entrypoint"] }
+spl-token-client = "0.19"
+spl-memo = "7.0"
+spl-associated-token-account = { version = "8.0", features = [
     "no-entrypoint",
 ] }
-spl-token-2022 = { version = "7.0.0", features = ["no-entrypoint"] }
+spl-token-2022 = { version = "11.0", features = ["no-entrypoint"] }
+# Solana 3.0 split these out of solana-sdk into standalone crates.
+solana-system-interface = { version = "3.2", features = ["bincode"] }
+solana-commitment-config = "3"
+solana-compute-budget-interface = "3"
+# five8 1.0.0 pulls five8_core 0.1.2, whose `impl Error for DecodeError` is
+# gated behind an off-by-default `std` feature; solana-signature/solana-keypair
+# need that impl. Force the feature on via unification.
+five8_core = { version = "0.1.2", features = ["std"] }
 clap = { version = "4.1.8", features = ["derive"] }
 anyhow = "1.0.32"
 rand = "0.9.0"
