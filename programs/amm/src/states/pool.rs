@@ -358,8 +358,7 @@ impl PoolState {
                         U128::from(reward_info.emissions_per_second_x64),
                         U128::from(fixed_point_64::Q64),
                     )
-                    .unwrap_or(U128::zero())
-                    .as_u64();
+                    .unwrap_or(U128::zero());
 
                 let mut reward_growth_delta = U256::from(time_delta)
                     .mul_div_floor(
@@ -367,12 +366,10 @@ impl PoolState {
                         U256::from(self.liquidity),
                     )
                     .unwrap_or(U256::zero());
-
-                if let Some(new_total) = reward_info.reward_total_emitted.checked_add(reward_delta)
-                {
-                    reward_info.reward_total_emitted = new_total;
+                let remain = u64::MAX.saturating_sub(reward_info.reward_total_emitted);
+                if reward_delta <= U128::from(remain) {
+                    reward_info.reward_total_emitted += reward_delta.as_u64();
                 } else {
-                    let remain = u64::MAX.saturating_sub(reward_info.reward_total_emitted);
                     reward_info.reward_total_emitted = u64::MAX;
 
                     reward_growth_delta = U256::from(remain)
@@ -1053,7 +1050,11 @@ pub mod pool_test {
                 let pre_loaded = pool_state
                     .next_initialized_tick_array_start_index(&None, 0, zero_for_one)
                     .expect("pre-loaded variant must not error at the default-bitmap boundary");
-                assert_eq!(pre_loaded, None, "pre-loaded variant, zero_for_one={}", zero_for_one);
+                assert_eq!(
+                    pre_loaded, None,
+                    "pre-loaded variant, zero_for_one={}",
+                    zero_for_one
+                );
 
                 let lazy = pool_state
                     .next_tick_array_index_with_extension_info(None, 0, zero_for_one)

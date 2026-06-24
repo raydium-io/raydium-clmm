@@ -157,6 +157,8 @@ pub fn initialize_reward(
         ctx.accounts.funder_token_account.amount,
         reward_amount_with_transfer_fee
     );
+    // Single top-up must be < u64::MAX / 3
+    require_gt!(u64::MAX / 3, reward_amount);
 
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;
     pool_state.initialize_reward(

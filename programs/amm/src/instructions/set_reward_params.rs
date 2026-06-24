@@ -98,7 +98,8 @@ pub fn set_reward_params<'a, 'b, 'c: 'info, 'info>(
         )?
     };
 
-    // check reward total emissioned overflow, if overflow, return error
+    // Single top-up must be < u64::MAX / 3
+    require_gt!(u64::MAX / 3, reward_amount);
     reward_info
         .reward_total_emitted
         .checked_add(reward_amount)
@@ -197,7 +198,7 @@ fn normal_update(
         let emission_diff_x64 =
             emissions_per_second_x64.saturating_sub(reward_info.emissions_per_second_x64);
         reward_amount = U256::from(left_reward_time)
-            .mul_div_floor(
+            .mul_div_ceil(
                 U256::from(emission_diff_x64),
                 U256::from(fixed_point_64::Q64),
             )
@@ -207,7 +208,7 @@ fn normal_update(
 
         if extend_period > 0 {
             let reward_amount_diff = U256::from(extend_period)
-                .mul_div_floor(
+                .mul_div_ceil(
                     U256::from(reward_info.emissions_per_second_x64),
                     U256::from(fixed_point_64::Q64),
                 )
@@ -265,7 +266,7 @@ fn admin_update(
         let emission_diff_x64 =
             emissions_per_second_x64.saturating_sub(reward_info.emissions_per_second_x64);
         reward_amount = U256::from(left_reward_time)
-            .mul_div_floor(
+            .mul_div_ceil(
                 U256::from(emission_diff_x64),
                 U256::from(fixed_point_64::Q64),
             )
@@ -274,7 +275,7 @@ fn admin_update(
         reward_info.emissions_per_second_x64 = emissions_per_second_x64;
 
         let reward_amount_diff = U256::from(extend_period)
-            .mul_div_floor(
+            .mul_div_ceil(
                 U256::from(reward_info.emissions_per_second_x64),
                 U256::from(fixed_point_64::Q64),
             )
