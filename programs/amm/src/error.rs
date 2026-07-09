@@ -119,4 +119,6 @@ pub enum ErrorCode {
     MissingMintAccount,
     #[msg("Token-2022 program is required but not provided")]
     MissingTokenProgram2022,
+    #[msg("TickArrayBitmapExtension account does not belong to this pool")]
+    InvalidTickArrayBitmapExtensionAccount,
 }

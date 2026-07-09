@@ -863,13 +863,15 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
         let tick_array_states = &mut VecDeque::new();
         tick_array_states.push_back(ctx.tick_array_state.load_mut()?);
 
-        let tick_array_bitmap_extension_key = TickArrayBitmapExtension::key(pool_state.key());
         for account_info in remaining_accounts.into_iter() {
-            if account_info.key().eq(&tick_array_bitmap_extension_key) {
+            if account_info.data_len() == TickArrayState::LEN {
+                tick_array_states.push_back(AccountLoad::load_data_mut(account_info)?);
+            } else if account_info.data_len() == TickArrayBitmapExtension::LEN {
+                TickArrayBitmapExtension::validate_belongs_to_pool(account_info, pool_state.key())?;
                 tickarray_bitmap_extension = Some(account_info);
-                continue;
+            } else {
+                break;
             }
-            tick_array_states.push_back(AccountLoad::load_data_mut(account_info)?);
         }
 
         swap_result = swap_internal(
