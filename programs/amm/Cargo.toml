@@ -21,6 +21,15 @@ devnet = []
 paramset = []
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 
+# Feature cfgs referenced by upstream macros (anchor #[program]/#[derive(Accounts)],
+# solana entrypoint, uint's construct_uint!) but not declared as our own features.
+# Declaring them here silences rustc check-cfg false positives without touching code.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(feature, values("anchor-debug", "custom-heap", "custom-panic", "enable-power"))',
+    'cfg(target_os, values("solana"))',
+] }
+
 [dependencies]
 anchor-lang = { version = "=1.0.2", features = ["init-if-needed"] }
 anchor-spl = { version = "=1.0.2", features = ["metadata", "memo"] }
@@ -33,13 +42,3 @@ solana-security-txt = "1.1.1"
 quickcheck = "0.9"
 proptest = "1.0"
 rand = "0.8.5"
-
-[profile.release]
-lto = "fat"
-codegen-units = 1
-panic = "abort"
-overflow-checks = true
-[profile.release.build-override]
-opt-level = 3
-incremental = false
-codegen-units = 1
