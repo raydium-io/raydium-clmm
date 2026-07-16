@@ -5,7 +5,8 @@ import { assert } from "chai";
 import { TestSetup } from "./utils/setup";
 import { InstructionHelper } from "./utils/instructions";
 import { getValidTickForLimitOrder, cleanupAllLimitOrders } from "./utils/util";
-import { TickUtils } from "@raydium-io/raydium-sdk-v2";
+import { getTickArrayAddressByTick } from "./utils/util";
+import { TickArrayUtil } from "@raydium-io/raydium-sdk-v2";
 
 describe("increase_limit_order_test", () => {
   const provider = anchor.AnchorProvider.env();
@@ -180,7 +181,7 @@ describe("increase_limit_order_test", () => {
       const limitOrderDataBefore = await program.account.limitOrderState.fetch(
         openResult.limitOrder
       );
-      const limitOrderTickArray = TickUtils.getTickArrayAddressByTick(
+      const limitOrderTickArray = getTickArrayAddressByTick(
         program.programId,
         poolState,
         validTick,
@@ -189,7 +190,7 @@ describe("increase_limit_order_test", () => {
       const tickArrayDataBefore = await program.account.tickArrayState.fetch(
         limitOrderTickArray
       );
-      const tickIndexInArray = TickUtils.getTickOffsetInArray(
+      const tickIndexInArray = TickArrayUtil.getTickOffsetInArray(
         validTick,
         tickSpacing
       );
@@ -214,7 +215,7 @@ describe("increase_limit_order_test", () => {
         : poolStateData.tokenMint0;
 
       // Calculate tick array start index for current tick (swap will start from current)
-      const currentTickArray = TickUtils.getTickArrayAddressByTick(
+      const currentTickArray = getTickArrayAddressByTick(
         program.programId,
         poolState,
         tickCurrent,

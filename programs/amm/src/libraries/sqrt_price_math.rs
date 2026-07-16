@@ -1,6 +1,7 @@
 use super::full_math::MulDiv;
+use super::tick_math;
 use super::unsafe_math::UnsafeMathTrait;
-use super::{fixed_point_64, U256};
+use super::{fixed_point_64, U128, U256};
 use crate::error::ErrorCode;
 use anchor_lang::prelude::*;
 
@@ -97,14 +98,14 @@ pub fn get_next_sqrt_price_from_amount_1_rounding_down(
     }
 
     if add {
-        let quotient = (U256::from(amount) << fixed_point_64::RESOLUTION) / liquidity;
+        let quotient = (U128::from(amount) << fixed_point_64::RESOLUTION) / U128::from(liquidity);
         sqrt_price_x64
             .checked_add(quotient.as_u128())
             .ok_or(ErrorCode::CalculateOverflow.into())
     } else {
-        let quotient = U256::div_rounding_up(
-            U256::from(u128::from(amount) << fixed_point_64::RESOLUTION),
-            U256::from(liquidity),
+        let quotient = U128::div_rounding_up(
+            U128::from(amount) << fixed_point_64::RESOLUTION,
+            U128::from(liquidity),
         );
         sqrt_price_x64
             .checked_sub(quotient.as_u128())
@@ -113,14 +114,19 @@ pub fn get_next_sqrt_price_from_amount_1_rounding_down(
 }
 
 /// Gets the next sqrt price given an input amount of token_0 or token_1
-/// Throws if price or liquidity are 0, or if the next price is out of bounds
+/// Throws if price is outside the valid CLMM range, liquidity is 0, or the
+/// next price is out of bounds.
 pub fn get_next_sqrt_price_from_input(
     sqrt_price_x64: u128,
     liquidity: u128,
     amount_in: u64,
     zero_for_one: bool,
 ) -> Result<u128> {
-    require_gt!(sqrt_price_x64, 0, ErrorCode::ZeroSqrtPrice);
+    require!(
+        sqrt_price_x64 >= tick_math::MIN_SQRT_PRICE_X64
+            && sqrt_price_x64 < tick_math::MAX_SQRT_PRICE_X64,
+        ErrorCode::SqrtPriceX64
+    );
     require_gt!(liquidity, 0, ErrorCode::ZeroLiquidity);
 
     // round to make sure that we don't pass the target price
@@ -133,7 +139,8 @@ pub fn get_next_sqrt_price_from_input(
 
 /// Gets the next sqrt price given an output amount of token0 or token1
 ///
-/// Throws if price or liquidity are 0 or the next price is out of bounds
+/// Throws if price is outside the valid CLMM range, liquidity is 0, or the
+/// next price is out of bounds.
 ///
 pub fn get_next_sqrt_price_from_output(
     sqrt_price_x64: u128,
@@ -141,7 +148,11 @@ pub fn get_next_sqrt_price_from_output(
     amount_out: u64,
     zero_for_one: bool,
 ) -> Result<u128> {
-    require_gt!(sqrt_price_x64, 0, ErrorCode::ZeroSqrtPrice);
+    require!(
+        sqrt_price_x64 >= tick_math::MIN_SQRT_PRICE_X64
+            && sqrt_price_x64 < tick_math::MAX_SQRT_PRICE_X64,
+        ErrorCode::SqrtPriceX64
+    );
     require_gt!(liquidity, 0, ErrorCode::ZeroLiquidity);
 
     if zero_for_one {

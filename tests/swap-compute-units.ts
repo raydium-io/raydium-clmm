@@ -8,7 +8,8 @@ import {
   measureComputeUnits,
   getTickArrayRemainingAccounts,
 } from "./utils/util";
-import { SqrtPriceMath, TickUtils } from "@raydium-io/raydium-sdk-v2";
+import { getTickArrayAddressByTick } from "./utils/util";
+import { TickUtil, TickArrayUtil } from "@raydium-io/raydium-sdk-v2";
 import { assert } from "chai";
 
 // This script can only be executed by the admin. Make sure to set the admin key in lib.rs when running locally.
@@ -59,13 +60,13 @@ describe("compute_units_test", () => {
       const tickArrayMap = new Map<string, { address: PublicKey; startIndex: number }>();
 
       const addTickArray = (tick: number) => {
-        const address = TickUtils.getTickArrayAddressByTick(
+        const address = getTickArrayAddressByTick(
           programId,
           poolState,
           tick,
           tickSpacing
         );
-        const startIndex = TickUtils.getTickArrayStartIndexByTick(tick, tickSpacing);
+        const startIndex = TickArrayUtil.getTickArrayStartIndex(tick, tickSpacing);
         const key = address.toString();
         if (!tickArrayMap.has(key)) {
           tickArrayMap.set(key, { address, startIndex });
@@ -172,7 +173,7 @@ describe("compute_units_test", () => {
     //   // - If zeroForOne = false (token1 -> token0), price increases, use tick 100
     //   const limitTick = zeroForOne ? -100 : 100;
     //   const sqrtPriceLimitX64 = new anchor.BN(
-    //     SqrtPriceMath.getSqrtPriceX64FromTick(limitTick).toString()
+    //     TickUtil.getSqrtPriceAtTick(limitTick).toString()
     //   );
 
     //   // Get tick arrays for swap path (current tick, tick -100, and tick 100)
@@ -300,7 +301,7 @@ describe("compute_units_test", () => {
       const zeroForOne = true; // token0 -> token1, price decreases
       const limitTick = zeroForOne ? -100 : 100;
       const sqrtPriceLimitX64 = new anchor.BN(
-        SqrtPriceMath.getSqrtPriceX64FromTick(limitTick).toString()
+        TickUtil.getSqrtPriceAtTick(limitTick).toString()
       );
 
       const remainingNoLO = getTickArraysForSwap(

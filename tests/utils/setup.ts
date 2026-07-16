@@ -8,7 +8,7 @@ import {
   createAccount,
   mintTo,
 } from "@solana/spl-token";
-import { SqrtPriceMath } from "@raydium-io/raydium-sdk-v2";
+import { TickUtil } from "@raydium-io/raydium-sdk-v2";
 import { PDAUtils } from "./pda";
 
 /**
@@ -36,18 +36,12 @@ export interface PoolStateData {
   feeGrowthGlobal1X64: anchor.BN;
   protocolFeesToken0: anchor.BN;
   protocolFeesToken1: anchor.BN;
-  swapInAmountToken0: anchor.BN;
-  swapOutAmountToken1: anchor.BN;
-  swapInAmountToken1: anchor.BN;
-  swapOutAmountToken0: anchor.BN;
+  padding5: anchor.BN[];
   status: number;
   padding: number[];
   rewardInfos: any[];
   tickArrayBitmap: anchor.BN[];
-  totalFeesToken0: anchor.BN;
-  totalFeesClaimedToken0: anchor.BN;
-  totalFeesToken1: anchor.BN;
-  totalFeesClaimedToken1: anchor.BN;
+  padding6: anchor.BN[];
   fundFeesToken0: anchor.BN;
   fundFeesToken1: anchor.BN;
   openTime: anchor.BN;
@@ -207,7 +201,7 @@ export class TestSetup {
     // Create AMM config and pool for testing
     await this.createAmmConfig(ammConfigIndex);
 
-    const sqrtPriceX64 = SqrtPriceMath.getSqrtPriceX64FromTick(tick);
+    const sqrtPriceX64 = TickUtil.getSqrtPriceAtTick(tick);
 
     const [poolAddress] = await this.pda.getPoolStatePDA(
       this.ammConfig,
@@ -289,7 +283,7 @@ export class TestSetup {
     }
 
     const tick = params.tick ?? 0;
-    const sqrtPriceX64 = SqrtPriceMath.getSqrtPriceX64FromTick(tick);
+    const sqrtPriceX64 = TickUtil.getSqrtPriceAtTick(tick);
     const ammConfig = params.ammConfig ?? this.ammConfig;
 
     // Ensure token0 < token1

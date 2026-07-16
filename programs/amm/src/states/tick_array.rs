@@ -405,14 +405,32 @@ impl TickState {
         self.liquidity_gross > 0
     }
 
-    fn limit_order_output_u128(amount_in: u64, tick: i32, zero_for_one: bool) -> Result<U128> {
+    /// Get the output amount of a limit order
+    /// amount_in: the amount of the input token
+    /// zero_for_one: the direction of the input token
+    /// output amount is rounded down
+    pub fn get_limit_order_output(amount_in: u64, tick: i32, zero_for_one: bool) -> Result<u64> {
+        let token_0_price_x64 = tick_math::get_price_at_tick(tick, !zero_for_one)?;
+        let output_amount =
+            Self::get_limit_order_output_with_price(amount_in, token_0_price_x64, zero_for_one)?;
+        if output_amount > U128::from(u64::MAX) {
+            return err!(ErrorCode::CalculateOverflow);
+        }
+        Ok(output_amount.as_u64())
+    }
+
+    /// [`get_limit_order_output`] with a caller-provided `token_0_price_x64`.
+    /// `token_0_price_x64` must equal `get_price_at_tick(tick, !zero_for_one)`.
+    fn get_limit_order_output_with_price(
+        amount_in: u64,
+        token_0_price_x64: U128,
+        zero_for_one: bool,
+    ) -> Result<U128> {
         let output_amount = if zero_for_one {
-            let token_0_price_x64 = tick_math::get_price_at_tick(tick, false)?;
             // Convert token0 amount to token1 amount using token0 price
             // token1_amount = token0_amount * token_0_price_x64 / 2^64
             U128::from(amount_in).mul_div_floor(token_0_price_x64, U128::from(fixed_point_64::Q64))
         } else {
-            let token_0_price_x64 = tick_math::get_price_at_tick(tick, true)?;
             // Convert token1 amount to token0 amount using token1 price (1/token_0_price_x64)
             // token0_amount = token1_amount * 2^64 / token_0_price_x64
             U128::from(amount_in).mul_div_floor(U128::from(fixed_point_64::Q64), token_0_price_x64)
@@ -421,32 +439,30 @@ impl TickState {
         Ok(output_amount)
     }
 
-    /// Get the output amount of a limit order
-    /// amount_in: the amount of the input token
-    /// zero_for_one: the direction of the input token
-    /// output amount is rounded down
-    pub fn get_limit_order_output(amount_in: u64, tick: i32, zero_for_one: bool) -> Result<u64> {
-        let output_amount = Self::limit_order_output_u128(amount_in, tick, zero_for_one)?;
-        if output_amount > U128::from(u64::MAX) {
-            return err!(ErrorCode::CalculateOverflow);
-        }
-        Ok(output_amount.as_u64())
-    }
-
     /// Given the output amount from a limit order, calculate the required input token amount
     /// the direction of the limit order is always opposite to the direction of the swap
     /// amount_out: the amount of the output token(limit order token)
     /// zero_for_one: the direction of the limit order
     /// input amount is rounded up
+    #[cfg(test)]
     pub fn get_limit_order_input(amount_out: u64, tick: i32, zero_for_one: bool) -> Result<u64> {
+        let token_0_price_x64 = tick_math::get_price_at_tick(tick, zero_for_one)?;
+        Self::get_limit_order_input_with_price(amount_out, token_0_price_x64, zero_for_one)
+    }
+
+    /// [`get_limit_order_input`] with a caller-provided `token_0_price_x64`.
+    /// `token_0_price_x64` must equal `get_price_at_tick(tick, zero_for_one)`.
+    pub fn get_limit_order_input_with_price(
+        amount_out: u64,
+        token_0_price_x64: U128,
+        zero_for_one: bool,
+    ) -> Result<u64> {
         let amount_in = if zero_for_one {
-            let token_0_price_x64 = tick_math::get_price_at_tick(tick, true)?;
             // token1_consumed = token0_executed * token_0_price_x64 / 2^64
             U128::from(amount_out)
                 .mul_div_ceil(token_0_price_x64, U128::from(fixed_point_64::Q64))
                 .ok_or(ErrorCode::CalculateOverflow)?
         } else {
-            let token_0_price_x64 = tick_math::get_price_at_tick(tick, false)?;
             // token0_consumed = token1_executed * 2^64 / token_0_price_x64
             U128::from(amount_out)
                 .mul_div_ceil(U128::from(fixed_point_64::Q64), token_0_price_x64)
@@ -469,6 +485,7 @@ impl TickState {
         Ok(total_unfilled_amount)
     }
 
+    #[cfg(test)]
     pub fn match_limit_order(
         &mut self,
         swap_amount: u64,
@@ -477,12 +494,35 @@ impl TickState {
         fee_rate: u32,
         is_fee_on_input: bool,
     ) -> Result<LimitOrderMatchResult> {
+        let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(self.tick)?;
+        self.match_limit_order_with_sqrt_price(
+            swap_amount,
+            swap_direction_zero_for_one,
+            is_base_input,
+            fee_rate,
+            is_fee_on_input,
+            sqrt_price_x64,
+        )
+    }
+
+    pub fn match_limit_order_with_sqrt_price(
+        &mut self,
+        swap_amount: u64,
+        swap_direction_zero_for_one: bool,
+        is_base_input: bool,
+        fee_rate: u32,
+        is_fee_on_input: bool,
+        sqrt_price_x64: u128,
+    ) -> Result<LimitOrderMatchResult> {
         let mut result = LimitOrderMatchResult::default();
 
         let total_unfilled_amount = self.limit_order_unfilled_amount()?;
         if swap_amount == 0 || total_unfilled_amount == 0 {
             return Ok(result);
         }
+
+        let token_0_price_x64 =
+            tick_math::get_price_from_sqrt_price(sqrt_price_x64, !swap_direction_zero_for_one)?;
 
         if is_base_input {
             // Assume the input amount can be fully consumed, calculate the amount of limit order tokens matched
@@ -494,18 +534,18 @@ impl TickState {
             } else {
                 result.amount_in = swap_amount;
             }
-            let matched_output = TickState::limit_order_output_u128(
+            let matched_output = TickState::get_limit_order_output_with_price(
                 result.amount_in,
-                self.tick,
+                token_0_price_x64,
                 swap_direction_zero_for_one,
             )?;
             // If the amount of limit order tokens matched is greater than the total unfilled amount,
             // it means the input cannot be fully consumed, so recalculate the input and output amounts
             if matched_output > U128::from(total_unfilled_amount) {
                 result.amount_out = total_unfilled_amount;
-                result.amount_in = TickState::get_limit_order_input(
+                result.amount_in = TickState::get_limit_order_input_with_price(
                     total_unfilled_amount,
-                    self.tick,
+                    token_0_price_x64,
                     !swap_direction_zero_for_one,
                 )?;
                 if is_fee_on_input {
@@ -536,9 +576,9 @@ impl TickState {
                     .ok_or(ErrorCode::CalculateOverflow)?
                     .min(total_unfilled_amount)
             };
-            result.amount_in = TickState::get_limit_order_input(
+            result.amount_in = TickState::get_limit_order_input_with_price(
                 result.amount_out,
-                self.tick,
+                token_0_price_x64,
                 !swap_direction_zero_for_one,
             )?;
             if is_fee_on_input {
@@ -1861,5 +1901,4 @@ pub mod tick_array_test {
             }
         }
     }
-
 }

@@ -1,9 +1,8 @@
 use super::big_num::U128;
 use super::big_num::U256;
 use super::fixed_point_64;
-use super::full_math::MulDiv;
+use super::full_math::{mul_pow2_div_ceil, mul_pow2_div_floor, MulDiv};
 use super::tick_math;
-use super::unsafe_math::UnsafeMathTrait;
 use crate::error::ErrorCode;
 use anchor_lang::prelude::*;
 
@@ -182,20 +181,19 @@ pub fn get_delta_amount_0_unsigned(
 
     let numerator_1 = U256::from(liquidity) << fixed_point_64::RESOLUTION;
     let numerator_2 = U256::from(sqrt_ratio_b_x64 - sqrt_ratio_a_x64);
+    // Single `sqrt_a * sqrt_b` denominator: one U256 division instead of two.
+    // Identity `floor(floor(X/b)/c) == floor(X/(b*c))` (and ceil counterpart)
+    // makes this exact-equivalent to the prior two-step form.
+    let denominator = U256::from(sqrt_ratio_a_x64)
+        .checked_mul(U256::from(sqrt_ratio_b_x64))
+        .ok_or(ErrorCode::CalculateOverflow)?;
 
     let result = if round_up {
-        U256::div_rounding_up(
-            numerator_1
-                .mul_div_ceil(numerator_2, U256::from(sqrt_ratio_b_x64))
-                .ok_or(ErrorCode::CalculateOverflow)?,
-            U256::from(sqrt_ratio_a_x64),
-        )
+        numerator_1.mul_div_ceil(numerator_2, denominator)
     } else {
-        numerator_1
-            .mul_div_floor(numerator_2, U256::from(sqrt_ratio_b_x64))
-            .ok_or(ErrorCode::CalculateOverflow)?
-            / U256::from(sqrt_ratio_a_x64)
-    };
+        numerator_1.mul_div_floor(numerator_2, denominator)
+    }
+    .ok_or(ErrorCode::CalculateOverflow)?;
     if result > U256::from(u64::MAX) {
         return Err(ErrorCode::MaxTokenOverflow.into());
     }
@@ -231,6 +229,62 @@ pub fn get_delta_amount_1_unsigned(
         return Err(ErrorCode::MaxTokenOverflow.into());
     }
     return Ok(result.as_u64());
+}
+
+/// Combined `(amount_in, amount_out)` for one swap step. Equivalent to a paired
+/// `get_delta_amount_{0,1}_unsigned` call (input ceil, output floor) but shares
+/// the `L * Δ√P` and `√P_a * √P_b` computations and replaces `* / Q64` with a
+/// bit shift.
+///
+/// * `zero_for_one = true`:  `amount_in = ceil(amount_0)`, `amount_out = floor(amount_1)`
+/// * `zero_for_one = false`: `amount_in = ceil(amount_1)`, `amount_out = floor(amount_0)`
+pub fn get_delta_amounts_for_swap(
+    mut sqrt_ratio_a_x64: u128,
+    mut sqrt_ratio_b_x64: u128,
+    liquidity: u128,
+    zero_for_one: bool,
+) -> Result<(u64, u64)> {
+    if sqrt_ratio_a_x64 > sqrt_ratio_b_x64 {
+        std::mem::swap(&mut sqrt_ratio_a_x64, &mut sqrt_ratio_b_x64);
+    }
+    require_gt!(sqrt_ratio_a_x64, 0, ErrorCode::ZeroSqrtPrice);
+
+    // Shared intermediates (exact, before rounding):
+    //   amount_1_x64        = L · (sqrt_b - sqrt_a)  (= amount_1 · Q64)
+    //   sqrt_price_product  = sqrt_a · sqrt_b
+    // Then (same as get_delta_amount_{0,1}_unsigned, using shift/mul_pow2 helpers):
+    //   amount_0 = amount_1_x64 · Q64 / sqrt_price_product   (ceil for input, floor for output)
+    //   amount_1 = amount_1_x64 / Q64                         (ceil for input, floor for output)
+    let sqrt_price_diff = sqrt_ratio_b_x64 - sqrt_ratio_a_x64;
+    let amount_1_x64 = U256::from(liquidity)
+        .checked_mul(U256::from(sqrt_price_diff))
+        .ok_or(ErrorCode::CalculateOverflow)?;
+    let sqrt_price_product = U256::from(sqrt_ratio_a_x64)
+        .checked_mul(U256::from(sqrt_ratio_b_x64))
+        .ok_or(ErrorCode::CalculateOverflow)?;
+
+    let (amount_in_u256, amount_out_u256) = if zero_for_one {
+        let amount_in = mul_pow2_div_ceil(amount_1_x64, 64, sqrt_price_product)
+            .ok_or(ErrorCode::CalculateOverflow)?;
+        let amount_out = amount_1_x64 >> 64;
+        (amount_in, amount_out)
+    } else {
+        let amount_in = amount_1_x64
+            .checked_add(U256::from(u64::MAX))
+            .ok_or(ErrorCode::CalculateOverflow)?
+            >> 64;
+        let amount_out = mul_pow2_div_floor(amount_1_x64, 64, sqrt_price_product)
+            .ok_or(ErrorCode::CalculateOverflow)?;
+        (amount_in, amount_out)
+    };
+
+    if amount_in_u256 > U256::from(u64::MAX) {
+        return Err(ErrorCode::MaxTokenOverflow.into());
+    }
+    if amount_out_u256 > U256::from(u64::MAX) {
+        return Err(ErrorCode::MaxTokenOverflow.into());
+    }
+    Ok((amount_in_u256.as_u64(), amount_out_u256.as_u64()))
 }
 
 /// Helper function to get signed delta amount_0 for given liquidity and price range
@@ -323,4 +377,55 @@ pub fn get_delta_amounts_signed(
         )?;
     }
     Ok((amount_0, amount_1))
+}
+
+#[cfg(test)]
+mod delta_amounts_for_swap_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        /// `get_delta_amounts_for_swap` must match the paired
+        /// `get_delta_amount_{0,1}_unsigned` calls bit-for-bit.
+        #[test]
+        fn combined_matches_individual_unsigned(
+            sqrt_a in tick_math::MIN_SQRT_PRICE_X64..tick_math::MAX_SQRT_PRICE_X64,
+            sqrt_b in tick_math::MIN_SQRT_PRICE_X64..tick_math::MAX_SQRT_PRICE_X64,
+            // Full u128: production liquidity is u128, and the merged-denominator /
+            // shared-product optimisation must stay bit-equivalent and fail-identically
+            // up to 2^128-1, not just the 2^80 real-world band.
+            liquidity in prop_oneof![1u128..(1u128 << 80), 1u128..=u128::MAX],
+            zero_for_one in proptest::bool::ANY,
+        ) {
+            prop_assume!(sqrt_a != sqrt_b);
+
+            let (expected_in_res, expected_out_res) = if zero_for_one {
+                (
+                    get_delta_amount_0_unsigned(sqrt_a, sqrt_b, liquidity, true),
+                    get_delta_amount_1_unsigned(sqrt_a, sqrt_b, liquidity, false),
+                )
+            } else {
+                (
+                    get_delta_amount_1_unsigned(sqrt_a, sqrt_b, liquidity, true),
+                    get_delta_amount_0_unsigned(sqrt_a, sqrt_b, liquidity, false),
+                )
+            };
+
+            let combined = get_delta_amounts_for_swap(sqrt_a, sqrt_b, liquidity, zero_for_one);
+
+            match (expected_in_res, expected_out_res, combined) {
+                (Ok(expected_in), Ok(expected_out), Ok((got_in, got_out))) => {
+                    assert_eq!(got_in, expected_in, "amount_in mismatch (zfo={})", zero_for_one);
+                    assert_eq!(got_out, expected_out, "amount_out mismatch (zfo={})", zero_for_one);
+                }
+                (Err(_), _, Err(_)) | (_, Err(_), Err(_)) => {}
+                (Ok(_), Ok(_), Err(e)) => {
+                    panic!("combined errored where both individual succeeded: {:?}", e);
+                }
+                (Err(e1), _, Ok(_)) | (_, Err(e1), Ok(_)) => {
+                    panic!("combined succeeded where individual errored: {:?}", e1);
+                }
+            }
+        }
+    }
 }

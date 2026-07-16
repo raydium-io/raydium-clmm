@@ -1,5 +1,5 @@
 use crate::error::ErrorCode;
-use crate::libraries::{fixed_point_64, full_math::MulDiv, U256};
+use crate::libraries::{big_num::U128, fixed_point_64, full_math::MulDiv};
 use crate::states::pool::{reward_period_limit, PoolState, REWARD_NUM};
 use crate::util::transfer_from_user_to_pool_vault;
 use crate::{states::*, util};
@@ -161,10 +161,10 @@ fn normal_update(
         {
             return Err(ErrorCode::InvalidRewardPeriod.into());
         }
-        reward_amount = U256::from(time_delta)
+        reward_amount = U128::from(time_delta)
             .mul_div_ceil(
-                U256::from(emissions_per_second_x64),
-                U256::from(fixed_point_64::Q64),
+                U128::from(emissions_per_second_x64),
+                U128::from(fixed_point_64::Q64),
             )
             .ok_or(ErrorCode::CalculateOverflow)?
             .as_u64();
@@ -197,20 +197,20 @@ fn normal_update(
         }
         let emission_diff_x64 =
             emissions_per_second_x64.saturating_sub(reward_info.emissions_per_second_x64);
-        reward_amount = U256::from(left_reward_time)
+        reward_amount = U128::from(left_reward_time)
             .mul_div_ceil(
-                U256::from(emission_diff_x64),
-                U256::from(fixed_point_64::Q64),
+                U128::from(emission_diff_x64),
+                U128::from(fixed_point_64::Q64),
             )
             .ok_or(ErrorCode::CalculateOverflow)?
             .as_u64();
         reward_info.emissions_per_second_x64 = emissions_per_second_x64;
 
         if extend_period > 0 {
-            let reward_amount_diff = U256::from(extend_period)
+            let reward_amount_diff = U128::from(extend_period)
                 .mul_div_ceil(
-                    U256::from(reward_info.emissions_per_second_x64),
-                    U256::from(fixed_point_64::Q64),
+                    U128::from(reward_info.emissions_per_second_x64),
+                    U128::from(fixed_point_64::Q64),
                 )
                 .ok_or(ErrorCode::CalculateOverflow)?
                 .as_u64();
@@ -242,10 +242,10 @@ fn admin_update(
         if time_delta == 0 {
             return Err(ErrorCode::InvalidRewardPeriod.into());
         }
-        reward_amount = U256::from(time_delta)
+        reward_amount = U128::from(time_delta)
             .mul_div_ceil(
-                U256::from(emissions_per_second_x64),
-                U256::from(fixed_point_64::Q64),
+                U128::from(emissions_per_second_x64),
+                U128::from(fixed_point_64::Q64),
             )
             .ok_or(ErrorCode::CalculateOverflow)?
             .as_u64();
@@ -265,19 +265,19 @@ fn admin_update(
         // emissions_per_second_x64 can be updated by admin at any time
         let emission_diff_x64 =
             emissions_per_second_x64.saturating_sub(reward_info.emissions_per_second_x64);
-        reward_amount = U256::from(left_reward_time)
+        reward_amount = U128::from(left_reward_time)
             .mul_div_ceil(
-                U256::from(emission_diff_x64),
-                U256::from(fixed_point_64::Q64),
+                U128::from(emission_diff_x64),
+                U128::from(fixed_point_64::Q64),
             )
             .ok_or(ErrorCode::CalculateOverflow)?
             .as_u64();
         reward_info.emissions_per_second_x64 = emissions_per_second_x64;
 
-        let reward_amount_diff = U256::from(extend_period)
+        let reward_amount_diff = U128::from(extend_period)
             .mul_div_ceil(
-                U256::from(reward_info.emissions_per_second_x64),
-                U256::from(fixed_point_64::Q64),
+                U128::from(reward_info.emissions_per_second_x64),
+                U128::from(fixed_point_64::Q64),
             )
             .ok_or(ErrorCode::CalculateOverflow)?
             .as_u64();

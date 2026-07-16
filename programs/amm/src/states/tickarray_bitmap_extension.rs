@@ -52,6 +52,19 @@ impl TickArrayBitmapExtension {
         .0
     }
 
+    pub fn validate_belongs_to_pool<'info>(
+        account_info: &'info AccountInfo<'info>,
+        pool_id: Pubkey,
+    ) -> Result<()> {
+        let loader = AccountLoader::<'info, TickArrayBitmapExtension>::try_from(account_info)?;
+        require_keys_eq!(
+            loader.load()?.pool_id,
+            pool_id,
+            ErrorCode::InvalidTickArrayBitmapExtensionAccount
+        );
+        Ok(())
+    }
+
     fn get_bitmap_offset(tick_index: i32, tick_spacing: u16) -> Result<usize> {
         require!(
             TickArrayState::check_is_valid_start_index(tick_index, tick_spacing),

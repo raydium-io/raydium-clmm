@@ -1,6 +1,9 @@
 use crate::{
     error::ErrorCode,
-    libraries::{big_num::U128, fixed_point_64, MulDiv},
+    libraries::{
+        big_num::{U128, U256},
+        fixed_point_64, Downcast256,
+    },
 };
 
 use anchor_lang::prelude::*;
@@ -190,23 +193,21 @@ pub fn get_tick_at_sqrt_price(sqrt_price_x64: u128) -> Result<i32> {
 
 /// Returns the price at the specified tick as a U128 fixed-point value.
 pub fn get_price_at_tick(tick: i32, round_up: bool) -> Result<U128> {
-    let token_0_sqrt_price = get_sqrt_price_at_tick(tick)?;
-    let token_0_price = if round_up {
-        U128::from(token_0_sqrt_price)
-            .mul_div_ceil(
-                U128::from(token_0_sqrt_price),
-                U128::from(fixed_point_64::Q64),
-            )
-            .ok_or(ErrorCode::CalculateOverflow)?
-    } else {
-        U128::from(token_0_sqrt_price)
-            .mul_div_floor(
-                U128::from(token_0_sqrt_price),
-                U128::from(fixed_point_64::Q64),
-            )
-            .ok_or(ErrorCode::CalculateOverflow)?
-    };
-    Ok(token_0_price)
+    get_price_from_sqrt_price(get_sqrt_price_at_tick(tick)?, round_up)
+}
+
+/// Converts a sqrt price (Q64.64) to its price (Q64.64): price_x64 = sqrt_price^2 / Q64.
+pub fn get_price_from_sqrt_price(sqrt_price_x64: u128, round_up: bool) -> Result<U128> {
+    let sqrt_price = U256::from(sqrt_price_x64);
+    let mut prod = sqrt_price * sqrt_price;
+    if round_up {
+        prod += U256::from(fixed_point_64::Q64 - 1);
+    }
+    let price = prod >> fixed_point_64::RESOLUTION;
+    if price > U256::from(u128::MAX) {
+        return err!(ErrorCode::CalculateOverflow);
+    }
+    Ok(price.as_u128())
 }
 
 #[cfg(test)]
@@ -308,17 +309,6 @@ mod tick_math_test {
             }
 
             #[test]
-            fn tick_and_sqrt_price_symmetry_test (
-                tick in MIN_TICK..MAX_TICK
-            ) {
-
-                let sqrt_price_x64 = get_sqrt_price_at_tick(tick).unwrap();
-                let resolved_tick = get_tick_at_sqrt_price(sqrt_price_x64).unwrap();
-                assert!(resolved_tick == tick);
-            }
-
-
-            #[test]
             fn get_sqrt_price_at_tick_is_sequence_test (
                 tick in MIN_TICK+1..MAX_TICK
             ) {
@@ -337,6 +327,15 @@ mod tick_math_test {
                 let last_tick = get_tick_at_sqrt_price(sqrt_price - 10).unwrap();
                 assert!(last_tick <= tick);
             }
+        }
+    }
+
+    #[test]
+    fn tick_sqrt_price_roundtrip_exhaustive() {
+        for tick in MIN_TICK..MAX_TICK {
+            let price = get_sqrt_price_at_tick(tick).unwrap();
+            let resolved = get_tick_at_sqrt_price(price).unwrap();
+            assert_eq!(resolved, tick, "round-trip broke at tick {tick}");
         }
     }
 }

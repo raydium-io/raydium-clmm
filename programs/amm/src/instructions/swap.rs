@@ -231,41 +231,38 @@ impl SwapState {
         protocol_fee_rate: u32,
         fund_fee_rate: u32,
     ) -> Result<()> {
-        let mut remaining_fee = fee_amont;
-        // Process protocol fee
-        if protocol_fee_rate > 0 {
-            let protocol_fee_delta = U128::from(fee_amont)
-                .checked_mul(protocol_fee_rate.into())
-                .and_then(|v| v.checked_div(FEE_RATE_DENOMINATOR_VALUE.into()))
-                .ok_or(ErrorCode::CalculateOverflow)?
-                .as_u64();
+        let denom = FEE_RATE_DENOMINATOR_VALUE as u128;
+        let fee_u128 = fee_amont as u128;
+
+        let protocol_fee_delta = if protocol_fee_rate > 0 {
+            (fee_u128 * protocol_fee_rate as u128 / denom) as u64
+        } else {
+            0
+        };
+        let fund_fee_delta = if fund_fee_rate > 0 {
+            (fee_u128 * fund_fee_rate as u128 / denom) as u64
+        } else {
+            0
+        };
+
+        if protocol_fee_delta > 0 {
             self.protocol_fee = self
                 .protocol_fee
                 .checked_add(protocol_fee_delta)
                 .ok_or(ErrorCode::CalculateOverflow)?;
-            remaining_fee = remaining_fee
-                .checked_sub(protocol_fee_delta)
-                .ok_or(ErrorCode::CalculateOverflow)?;
         }
-
-        // Process fund fee
-        if fund_fee_rate > 0 {
-            let fund_fee_delta = U128::from(fee_amont)
-                .checked_mul(fund_fee_rate.into())
-                .and_then(|v| v.checked_div(FEE_RATE_DENOMINATOR_VALUE.into()))
-                .ok_or(ErrorCode::CalculateOverflow)?
-                .as_u64();
-
+        if fund_fee_delta > 0 {
             self.fund_fee = self
                 .fund_fee
                 .checked_add(fund_fee_delta)
                 .ok_or(ErrorCode::CalculateOverflow)?;
-            remaining_fee = remaining_fee
-                .checked_sub(fund_fee_delta)
-                .ok_or(ErrorCode::CalculateOverflow)?;
         }
 
-        // Update global fee tracker
+        let remaining_fee = fee_amont
+            .checked_sub(protocol_fee_delta)
+            .and_then(|v| v.checked_sub(fund_fee_delta))
+            .ok_or(ErrorCode::CalculateOverflow)?;
+
         if self.liquidity > 0 {
             let fee_growth_global_x64_delta = U128::from(remaining_fee)
                 .mul_div_floor(U128::from(fixed_point_64::Q64), U128::from(self.liquidity))
@@ -404,13 +401,13 @@ impl SwapState {
         &self,
         target_price: u128,
         zero_for_one: bool,
-    ) -> Result<(bool, u128)> {
+    ) -> Result<(bool, u128, Option<i32>)> {
         if let Some(dynamic_fee_info) = &self.dynamic_fee_info {
             if self.liquidity == 0
                 || dynamic_fee_info.volatility_accumulator
                     == dynamic_fee_info.max_volatility_accumulator
             {
-                return Ok((true, target_price));
+                return Ok((true, target_price, None));
             }
 
             let tick_spacing_i32 = i32::from(self.tick_spacing);
@@ -428,17 +425,24 @@ impl SwapState {
                 self.tick_spacing_index,
                 bounded_tick
             );
-            let bounded_sqrt_price = tick_math::get_sqrt_price_at_tick(
-                bounded_tick.clamp(tick_math::MIN_TICK, tick_math::MAX_TICK),
-            )?;
+            let bounded_tick_clamped = bounded_tick.clamp(tick_math::MIN_TICK, tick_math::MAX_TICK);
+            let bounded_sqrt_price = tick_math::get_sqrt_price_at_tick(bounded_tick_clamped)?;
 
             if zero_for_one {
-                Ok((false, target_price.max(bounded_sqrt_price)))
+                if target_price > bounded_sqrt_price {
+                    Ok((false, target_price, None))
+                } else {
+                    Ok((false, bounded_sqrt_price, Some(bounded_tick_clamped)))
+                }
             } else {
-                Ok((false, target_price.min(bounded_sqrt_price)))
+                if target_price < bounded_sqrt_price {
+                    Ok((false, target_price, None))
+                } else {
+                    Ok((false, bounded_sqrt_price, Some(bounded_tick_clamped)))
+                }
             }
         } else {
-            Ok((true, target_price))
+            Ok((true, target_price, None))
         }
     }
 
@@ -555,7 +559,6 @@ pub fn swap_internal<'b, 'c: 'info, 'info>(
         zero_for_one,
         block_timestamp as u64,
     )?;
-
     // Main swap loop: continue swapping until we've consumed all input/output or reached the price limit
     // Each iteration processes one step from current price to the next initialized tick
     while state.amount_specified_remaining != 0 && state.sqrt_price_x64 != sqrt_price_limit_x64 {
@@ -624,7 +627,7 @@ pub fn swap_internal<'b, 'c: 'info, 'info>(
         loop {
             state.update_volatility_accumulator()?;
             let total_fee_rate = state.get_total_fee_rate()?;
-            let (is_skipped_tick_spacing, bounded_price) =
+            let (is_skipped_tick_spacing, bounded_price, bounded_tick_opt) =
                 state.get_spacing_bounded_price(target_price, zero_for_one)?;
 
             let is_price_change = state.sqrt_price_x64 != bounded_price;
@@ -666,12 +669,14 @@ pub fn swap_internal<'b, 'c: 'info, 'info>(
                 // (last-traversed-group semantics — a design choice). Edge case: with
                 // liquidity == 0 a step can skip several spacing groups, so the fill may undercharge
                 // dynamic fee; accepted as low-impact (no fund-safety effect).
-                let limit_order_result = next_initialized_tick.match_limit_order(
+                // `state.sqrt_price_next_x64 == get_sqrt_price_at_tick(next_initialized_tick.tick)`; reuse it.
+                let limit_order_result = next_initialized_tick.match_limit_order_with_sqrt_price(
                     state.amount_specified_remaining,
                     zero_for_one,
                     is_base_input,
                     total_fee_rate,
                     is_fee_on_input,
+                    state.sqrt_price_next_x64,
                 )?;
                 if limit_order_result.amount_in != 0
                     || limit_order_result.amount_out != 0
@@ -753,8 +758,14 @@ pub fn swap_internal<'b, 'c: 'info, 'info>(
                 // if only a small amount of quantity is traded, the input may be consumed by fees, resulting in no price change. If state.sqrt_price_x64, i.e., the latest price in the pool, is used to recalculate the tick, some errors may occur.
                 // for example, if zero_for_one, and the price falls exactly on an initialized tick t after the first trade, then at this point, pool.sqrtPriceX64 = get_sqrt_price_at_tick(t), while pool.tick = t-1. if the input quantity of the
                 // second trade is very small and the pool price does not change after the transaction, if the tick is recalculated, pool.tick will be equal to t, which is incorrect.
-                state.tick =
-                    tick_math::get_tick_at_sqrt_price(swap_computed_result.sqrt_price_next_x64)?;
+                // Reuse `bounded_tick` when the swap landed on the spacing boundary;
+                // skips a `get_tick_at_sqrt_price` call on the hot path.
+                state.tick = match bounded_tick_opt {
+                    Some(t) if swap_computed_result.sqrt_price_next_x64 == bounded_price => t,
+                    _ => {
+                        tick_math::get_tick_at_sqrt_price(swap_computed_result.sqrt_price_next_x64)?
+                    }
+                };
             }
             state.sqrt_price_x64 = swap_computed_result.sqrt_price_next_x64;
             state.update_dynamic_fee_index(zero_for_one, is_skipped_tick_spacing)?;
@@ -852,13 +863,15 @@ pub fn exact_internal<'b, 'c: 'info, 'info>(
         let tick_array_states = &mut VecDeque::new();
         tick_array_states.push_back(ctx.tick_array_state.load_mut()?);
 
-        let tick_array_bitmap_extension_key = TickArrayBitmapExtension::key(pool_state.key());
         for account_info in remaining_accounts.into_iter() {
-            if account_info.key().eq(&tick_array_bitmap_extension_key) {
+            if account_info.data_len() == TickArrayState::LEN {
+                tick_array_states.push_back(AccountLoad::load_data_mut(account_info)?);
+            } else if account_info.data_len() == TickArrayBitmapExtension::LEN {
+                TickArrayBitmapExtension::validate_belongs_to_pool(account_info, pool_state.key())?;
                 tickarray_bitmap_extension = Some(account_info);
-                continue;
+            } else {
+                break;
             }
-            tick_array_states.push_back(AccountLoad::load_data_mut(account_info)?);
         }
 
         swap_result = swap_internal(
@@ -5052,6 +5065,58 @@ mod swap_test {
                     );
                 }
             }
+        }
+
+        /// Exact equality with a dynamic-fee tick-spacing boundary should return
+        /// `bounded_tick_opt`, so the hot path can skip `get_tick_at_sqrt_price`
+        /// without changing the selected price.
+        #[test]
+        fn test_spacing_bounded_price_exact_boundary_returns_bounded_tick() {
+            let tick_spacing = 60;
+            let liquidity = 1_000_000_000_000u128;
+            let timestamp = 1000u64;
+
+            let build_state = |tick_current: i32, zero_for_one: bool| {
+                let sqrt_price_x64 = tick_math::get_sqrt_price_at_tick(tick_current).unwrap();
+                let pool_state = build_pool_with_dynamic_fee(
+                    tick_current,
+                    tick_spacing,
+                    sqrt_price_x64,
+                    liquidity,
+                    60,
+                    3600,
+                    5000,
+                    1000,
+                    100_000,
+                    timestamp,
+                );
+                let state = {
+                    let pool = pool_state.borrow();
+                    SwapState::new(&pool, 1_000_000u64, 1000, zero_for_one, timestamp).unwrap()
+                };
+                state
+            };
+
+            let one_for_zero = build_state(0, false);
+            let bounded_tick_up = 60;
+            let bounded_price_up = tick_math::get_sqrt_price_at_tick(bounded_tick_up).unwrap();
+            assert_eq!(
+                one_for_zero
+                    .get_spacing_bounded_price(bounded_price_up, false)
+                    .unwrap(),
+                (false, bounded_price_up, Some(bounded_tick_up))
+            );
+
+            let mut zero_for_one = build_state(120, true);
+            zero_for_one.tick_spacing_index = tick_spacing_index_from_tick(60, tick_spacing);
+            let bounded_tick_down = 60;
+            let bounded_price_down = tick_math::get_sqrt_price_at_tick(bounded_tick_down).unwrap();
+            assert_eq!(
+                zero_for_one
+                    .get_spacing_bounded_price(bounded_price_down, true)
+                    .unwrap(),
+                (false, bounded_price_down, Some(bounded_tick_down))
+            );
         }
 
         /// Cross many tick-groups in a single swap, with *no initialized ticks in between*.
