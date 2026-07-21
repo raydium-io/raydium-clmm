@@ -21,14 +21,7 @@ describe("security: admin privileged instruction PoC for #191", () => {
   before(async () => {
     await setup.initialize();
     await setup.createTokens();
-    await setup.createAmmConfig({
-      admin: user,
-      index: 0,
-      tickSpacing: 1,
-      tradeFeeRate: 100,
-      protocolFeeRate: 20,
-      fundFeeRate: 20,
-    });
+    await setup.createAmmConfig(0);
     poolState = await setup.createPool(0);
   });
 
