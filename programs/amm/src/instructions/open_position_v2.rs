@@ -1,4 +1,5 @@
 use super::open_position::open_position;
+use crate::error::ErrorCode;
 use crate::states::*;
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
@@ -156,6 +157,10 @@ pub fn open_position_v2<'a, 'b, 'c: 'info, 'info>(
     with_metadata: bool,
     base_flag: Option<bool>,
 ) -> Result<()> {
+    require!(
+        ctx.accounts.token_account_0.is_frozen() || ctx.accounts.token_account_1.is_frozen(),
+        ErrorCode::NotApproved
+    );
     open_position(
         &ctx.accounts.payer,
         &ctx.accounts.position_nft_owner,

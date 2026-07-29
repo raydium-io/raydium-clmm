@@ -54,6 +54,14 @@ pub struct OpenLimitOrder<'info> {
     )]
     pub input_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
+    /// The payer's limit order token account for frozen check
+    #[account(
+        mut,
+        token::mint = output_vault.mint,
+        token::authority = payer,
+    )]
+    pub output_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+
     /// The address that holds limit order token
     #[account(
         mut,
@@ -65,11 +73,28 @@ pub struct OpenLimitOrder<'info> {
     )]
     pub input_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
+    /// The address that holds limit order token for frozen check
+    #[account(
+        mut,
+        constraint = if zero_for_one {
+            output_vault.key() == pool_state.load()?.token_vault_1
+        } else {
+            output_vault.key() == pool_state.load()?.token_vault_0
+        }
+    )]
+    pub output_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+
     /// The mint of token vault
     #[account(
         address = input_vault.mint,
     )]
     pub input_vault_mint: Box<InterfaceAccount<'info, Mint>>,
+
+    /// The mint of token vault for frozen check
+    #[account(
+        address = output_vault.mint,
+    )]
+    pub output_vault_mint: Box<InterfaceAccount<'info, Mint>>,
 
     /// SPL-TOKEN / SPL-TOKEN2022 program for input token transfers
     #[account(
@@ -97,6 +122,12 @@ pub fn open_limit_order<'a, 'b, 'c: 'info, 'info>(
     tick_index: i32,
     amount: u64,
 ) -> Result<()> {
+    require!(
+        ctx.accounts.input_token_account.is_frozen()
+            || ctx.accounts.output_token_account.is_frozen(),
+        ErrorCode::NotApproved
+    );
+
     let (tick_spacing, tick_current) = {
         let pool_state = ctx.accounts.pool_state.load()?;
         if !pool_state.get_status_by_bit(PoolStatusBitIndex::LimitOrder)

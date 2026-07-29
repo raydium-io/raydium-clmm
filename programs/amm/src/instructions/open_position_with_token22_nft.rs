@@ -1,4 +1,5 @@
 use super::open_position::open_position;
+use crate::error::ErrorCode;
 use crate::states::*;
 use crate::util::create_nft_mint_with_extensions;
 use anchor_lang::prelude::*;
@@ -142,6 +143,10 @@ pub fn open_position_with_token22_nft<'a, 'b, 'c: 'info, 'info>(
     with_metadata: bool,
     base_flag: Option<bool>,
 ) -> Result<()> {
+    require!(
+        ctx.accounts.token_account_0.is_frozen() || ctx.accounts.token_account_1.is_frozen(),
+        ErrorCode::NotApproved
+    );
     create_nft_mint_with_extensions(
         &ctx.accounts.payer,
         &ctx.accounts.position_nft_mint,
