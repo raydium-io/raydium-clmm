@@ -36,7 +36,6 @@ pub struct SwapSingleV2<'info> {
     #[account(
         mut,
         token::mint = output_vault.mint,
-        token::authority = payer,
     )]
     pub output_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
 
