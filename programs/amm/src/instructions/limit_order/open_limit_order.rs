@@ -123,8 +123,8 @@ pub fn open_limit_order<'a, 'b, 'c: 'info, 'info>(
     amount: u64,
 ) -> Result<()> {
     require!(
-        ctx.accounts.input_token_account.is_frozen()
-            || ctx.accounts.output_token_account.is_frozen(),
+        !ctx.accounts.input_token_account.is_frozen()
+            && !ctx.accounts.output_token_account.is_frozen(),
         ErrorCode::NotApproved
     );
 

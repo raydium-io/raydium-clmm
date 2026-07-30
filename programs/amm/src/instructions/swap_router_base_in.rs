@@ -14,7 +14,11 @@ pub struct SwapRouterBaseIn<'info> {
     pub payer: Signer<'info>,
 
     /// The token account that pays input tokens for the swap
-    #[account(mut)]
+    #[account(
+        mut,
+        token::mint = input_token_mint,
+        token::authority = payer,
+    )]
     pub input_token_account: InterfaceAccount<'info, TokenAccount>,
 
     /// The mint of input token

@@ -26,11 +26,19 @@ pub struct SwapSingle<'info> {
     pub pool_state: AccountLoader<'info, PoolState>,
 
     /// The user token account for input token
-    #[account(mut)]
+    #[account(
+        mut,
+        token::mint = input_vault.mint,
+        token::authority = payer,
+    )]
     pub input_token_account: Box<Account<'info, TokenAccount>>,
 
     /// The user token account for output token
-    #[account(mut)]
+    #[account(
+        mut,
+        token::mint = output_vault.mint,
+        token::authority = payer,
+    )]
     pub output_token_account: Box<Account<'info, TokenAccount>>,
 
     /// The vault token account for input token

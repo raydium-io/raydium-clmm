@@ -358,6 +358,20 @@ export class InstructionHelper {
       ? TOKEN_2022_PROGRAM_ID
       : TOKEN_PROGRAM_ID;
 
+    const outputVaultMint = params.zeroForOne
+      ? poolStateData.tokenMint1
+      : poolStateData.tokenMint0;
+
+    const [outputVault] = await this.pda.getTokenVaultPDA(
+      params.poolState,
+      outputVaultMint,
+    );
+
+    const outputTokenAccount = getAssociatedTokenAddressSync(
+      outputVaultMint,
+      params.owner.publicKey,
+    );
+
     const [tickArrayBitmap] = await this.pda.getTickArrayBitmapPDA(
       params.poolState,
     );
@@ -371,8 +385,11 @@ export class InstructionHelper {
         limitOrderNonce: limitOrderNonce,
         limitOrder: limitOrder,
         inputTokenAccount: inputTokenAccount,
+        outputTokenAccount: outputTokenAccount,
         inputVault: inputVault,
+        outputVault: outputVault,
         inputVaultMint: inputVaultMint,
+        outputVaultMint: outputVaultMint,
         inputTokenProgram: inputTokenProgram,
         systemProgram: SystemProgram.programId,
       } as any)

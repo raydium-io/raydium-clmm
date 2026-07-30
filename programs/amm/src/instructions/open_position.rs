@@ -161,7 +161,7 @@ pub fn open_position_v1<'a, 'b, 'c: 'info, 'info>(
     base_flag: Option<bool>,
 ) -> Result<()> {
     require!(
-        ctx.accounts.token_account_0.is_frozen() || ctx.accounts.token_account_1.is_frozen(),
+        !ctx.accounts.token_account_0.is_frozen() && !ctx.accounts.token_account_1.is_frozen(),
         ErrorCode::NotApproved
     );
     open_position(

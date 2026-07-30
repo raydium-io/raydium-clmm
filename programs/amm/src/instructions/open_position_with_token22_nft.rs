@@ -144,7 +144,7 @@ pub fn open_position_with_token22_nft<'a, 'b, 'c: 'info, 'info>(
     base_flag: Option<bool>,
 ) -> Result<()> {
     require!(
-        ctx.accounts.token_account_0.is_frozen() || ctx.accounts.token_account_1.is_frozen(),
+        !ctx.accounts.token_account_0.is_frozen() && !ctx.accounts.token_account_1.is_frozen(),
         ErrorCode::NotApproved
     );
     create_nft_mint_with_extensions(

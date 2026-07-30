@@ -5,7 +5,6 @@ use anchor_lang::system_program::{transfer, Transfer};
 use anchor_lang::{
     prelude::*,
     solana_program,
-    solana_program::program_option::COption,
     system_program::{create_account, CreateAccount},
 };
 use anchor_spl::memo::spl_memo;
@@ -13,11 +12,9 @@ use anchor_spl::token::{self, Token};
 use anchor_spl::token_2022::spl_token_2022::{
     self,
     extension::{
-        default_account_state::DefaultAccountState, metadata_pointer,
-        transfer_fee::TransferFeeConfig, BaseStateWithExtensions, ExtensionType,
+        metadata_pointer, transfer_fee::TransferFeeConfig, BaseStateWithExtensions, ExtensionType,
         StateWithExtensions,
     },
-    state::AccountState,
 };
 use anchor_spl::token_2022::{
     self, get_account_data_size, GetAccountDataSize, InitializeAccount3, InitializeImmutableOwner,
@@ -25,14 +22,6 @@ use anchor_spl::token_2022::{
 };
 use anchor_spl::token_2022_extensions::spl_token_metadata_interface;
 use anchor_spl::token_interface::{initialize_mint2, InitializeMint2, Mint, TokenInterface};
-
-pub mod superstate_allowlist {
-    use super::{pubkey, Pubkey};
-    #[cfg(feature = "devnet")]
-    pub const ID: Pubkey = pubkey!("3TRuL3MFvzHaUfQAb6EsSAbQhWdhmYrKxEiViVkdQfXu");
-    #[cfg(not(feature = "devnet"))]
-    pub const ID: Pubkey = pubkey!("2Yq4T3mPNfjtEyTxSbRjRKqLf1pwbTasuCQrWe6QpM7x");
-}
 
 pub fn invoke_memo_instruction<'info>(
     memo_msg: &[u8],
@@ -279,12 +268,6 @@ pub fn is_supported_mint(
     if mint_associated_is_initialized {
         return Ok(true);
     }
-
-    if is_superstate_token(&mint_account) {
-        // Supports ScaledUiConfig, which does not work with StateWithExtensions::<spl_token_2022::state::Mint>::unpack
-        // To avoid having to resort to other tricks (or upgrading library dependencies), this is simpler.
-        return Ok(true);
-    }
     let mint_data = mint_info.try_borrow_data()?;
     let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
     let extensions = mint.get_extension_types()?;
@@ -459,7 +442,6 @@ pub fn create_token_vault_account<'info>(
     token_2022_program: &Interface<'info, TokenInterface>,
     signer_seeds: &[&[u8]],
 ) -> Result<()> {
-    let immutable_owner_required = is_superstate_token(token_mint);
     // support both spl_token_program & token_program_2022
     let space = get_account_data_size(
         CpiContext::new(
@@ -468,11 +450,7 @@ pub fn create_token_vault_account<'info>(
                 mint: token_mint.to_account_info(),
             },
         ),
-        if immutable_owner_required {
-            &[anchor_spl::token_2022::spl_token_2022::extension::ExtensionType::ImmutableOwner]
-        } else {
-            &[]
-        },
+        &[anchor_spl::token_2022::spl_token_2022::extension::ExtensionType::ImmutableOwner],
     )?;
 
     // create account with or without lamports
@@ -486,14 +464,12 @@ pub fn create_token_vault_account<'info>(
     )?;
 
     // Call initializeImmutableOwner
-    if immutable_owner_required {
-        token_2022::initialize_immutable_owner(CpiContext::new(
-            token_2022_program.to_account_info(),
-            InitializeImmutableOwner {
-                account: token_account.to_account_info(),
-            },
-        ))?;
-    }
+    token_2022::initialize_immutable_owner(CpiContext::new(
+        token_2022_program.to_account_info(),
+        InitializeImmutableOwner {
+            account: token_account.to_account_info(),
+        },
+    ))?;
 
     // Call initializeAccount3
     token_2022::initialize_account3(CpiContext::new(
@@ -506,34 +482,4 @@ pub fn create_token_vault_account<'info>(
     ))?;
 
     Ok(())
-}
-
-pub fn is_superstate_token(mint_account: &InterfaceAccount<Mint>) -> bool {
-    if let COption::Some(freeze_authority) = mint_account.freeze_authority {
-        let mint_account_info = mint_account.to_account_info();
-        let mint_data = mint_account_info.try_borrow_data().unwrap();
-        let mint_state =
-            StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data).unwrap();
-        let default_account_state_freeze =
-            if let Ok(default_account_state) = mint_state.get_extension::<DefaultAccountState>() {
-                default_account_state.state == (AccountState::Frozen as u8)
-            } else {
-                false
-            };
-
-        let maybe_permanent_delegate = if let Some(permanent_delegate) =
-            spl_token_2022::extension::permanent_delegate::get_permanent_delegate(&mint_state)
-        {
-            permanent_delegate == superstate_allowlist::ID
-        } else {
-            false
-        };
-
-        superstate_allowlist::ID == freeze_authority
-            && *mint_account_info.owner == spl_token_2022::ID
-            && default_account_state_freeze
-            && maybe_permanent_delegate
-    } else {
-        false
-    }
 }
