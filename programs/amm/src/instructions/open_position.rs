@@ -35,6 +35,7 @@ pub struct OpenPosition<'info> {
         init,
         mint::decimals = 0,
         mint::authority = pool_state.key(),
+        mint::freeze_authority = personal_position.key(),
         payer = payer,
     )]
     pub position_nft_mint: Box<Account<'info, Mint>>,
@@ -237,6 +238,9 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
     base_flag: Option<bool>,
     use_metadata_extension: bool,
 ) -> Result<()> {
+    let position_nft_frozen =
+        position_nft_must_freeze(vault_0_mint.as_deref(), vault_1_mint.as_deref());
+
     let mut liquidity = liquidity;
     {
         let pool_state = &mut pool_state_loader.load_mut()?;
@@ -366,6 +370,7 @@ pub fn open_position<'a, 'b, 'c: 'info, 'info>(
         rent,
         with_metadata,
         use_metadata_extension,
+        position_nft_frozen,
     )
 }
 
@@ -705,6 +710,7 @@ fn mint_nft_and_remove_mint_authority<'info>(
     rent: &Sysvar<'info, Rent>,
     with_metadata: bool,
     use_metadata_extension: bool,
+    position_nft_frozen: bool,
 ) -> Result<()> {
     let pool_state_info = pool_state_loader.to_account_info();
     let position_nft_mint_info = position_nft_mint.to_account_info();
@@ -762,6 +768,18 @@ fn mint_nft_and_remove_mint_authority<'info>(
         ),
         1,
     )?;
+
+    // Restricted-asset pool: freeze the position NFT account right after minting,
+    // making it untransferable with an immutable owner.
+    if position_nft_frozen {
+        freeze_token_account(
+            &personal_position.to_account_info(),
+            &position_nft_account.to_account_info(),
+            &position_nft_mint_info,
+            &token_program_info,
+            &[&personal_position.seeds()],
+        )?;
+    }
 
     // Disable minting
     token_2022::set_authority(

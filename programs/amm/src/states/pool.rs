@@ -166,7 +166,7 @@ impl PoolState {
         + 8 * 16
         + 8 * 8
         + DynamicFeeInfo::LEN // 80
-        + 8 * 14 
+        + 8 * 14
         + 8 * 32;
 
     pub fn seeds(&self) -> [&[u8]; 6] {

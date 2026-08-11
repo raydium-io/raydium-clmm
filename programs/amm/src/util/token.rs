@@ -4,7 +4,7 @@ use crate::states::*;
 use anchor_lang::system_program::{transfer, Transfer};
 use anchor_lang::{
     prelude::*,
-    solana_program,
+    solana_program::{self, program_option::COption},
     system_program::{create_account, CreateAccount},
 };
 use anchor_spl::memo::spl_memo;
@@ -22,6 +22,16 @@ use anchor_spl::token_2022::{
 };
 use anchor_spl::token_2022_extensions::spl_token_metadata_interface;
 use anchor_spl::token_interface::{initialize_mint2, InitializeMint2, Mint, TokenInterface};
+
+pub mod frozen_position_nft_authorities {
+    use super::{pubkey, Pubkey};
+    /// Position NFTs minted in a pool whose token mint has one of these freeze
+    /// authorities must be frozen at mint time.
+    #[cfg(feature = "devnet")]
+    pub const IDS: [Pubkey; 1] = [pubkey!("3TRuL3MFvzHaUfQAb6EsSAbQhWdhmYrKxEiViVkdQfXu")];
+    #[cfg(not(feature = "devnet"))]
+    pub const IDS: [Pubkey; 1] = [pubkey!("2Yq4T3mPNfjtEyTxSbRjRKqLf1pwbTasuCQrWe6QpM7x")];
+}
 
 pub fn invoke_memo_instruction<'info>(
     memo_msg: &[u8],
@@ -170,6 +180,42 @@ pub fn burn<'a, 'b, 'c, 'info>(
     )
 }
 
+pub fn freeze_token_account<'info>(
+    freeze_authority: &AccountInfo<'info>,
+    token_account: &AccountInfo<'info>,
+    mint: &AccountInfo<'info>,
+    token_program: &AccountInfo<'info>,
+    signers_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    token_2022::freeze_account(CpiContext::new_with_signer(
+        token_program.to_account_info(),
+        token_2022::FreezeAccount {
+            account: token_account.to_account_info(),
+            mint: mint.to_account_info(),
+            authority: freeze_authority.to_account_info(),
+        },
+        signers_seeds,
+    ))
+}
+
+pub fn thaw_token_account<'info>(
+    freeze_authority: &AccountInfo<'info>,
+    token_account: &AccountInfo<'info>,
+    mint: &AccountInfo<'info>,
+    token_program: &AccountInfo<'info>,
+    signers_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    token_2022::thaw_account(CpiContext::new_with_signer(
+        token_program.to_account_info(),
+        token_2022::ThawAccount {
+            account: token_account.to_account_info(),
+            mint: mint.to_account_info(),
+            authority: freeze_authority.to_account_info(),
+        },
+        signers_seeds,
+    ))
+}
+
 /// Calculate the fee for output amount
 pub fn get_transfer_inverse_fee(
     mint_account: Box<InterfaceAccount<Mint>>,
@@ -289,6 +335,7 @@ pub fn create_nft_mint_with_extensions<'info>(
     nft_mint: &AccountInfo<'info>,
     mint_authority: &AccountInfo<'info>,
     mint_close_authority: &AccountInfo<'info>,
+    freeze_authority: &AccountInfo<'info>,
     system_program: &Program<'info, System>,
     token_2022_program: &Program<'info, Token2022>,
     with_matedata: bool,
@@ -369,7 +416,7 @@ pub fn create_nft_mint_with_extensions<'info>(
         ),
         0,
         &mint_authority.key(),
-        None,
+        Some(&freeze_authority.key()),
     )
 }
 
@@ -482,4 +529,26 @@ pub fn create_token_vault_account<'info>(
     ))?;
 
     Ok(())
+}
+
+/// A position NFT must be frozen when either of the pool's vault mints carries
+/// a freeze authority from the hardcoded issuer list.
+///
+/// `None` means the caller had no mint account to inspect, which only happens on
+/// the `open_position` v1 path. That path deserializes its vaults as classic
+/// `anchor_spl::token::TokenAccount`, so Anchor's owner check makes it unable to
+/// serve any pool holding a Token-2022 mint — and every restricted issuer asset
+/// is Token-2022. v1 therefore never reaches a pool that needs freezing.
+pub fn position_nft_must_freeze(
+    vault_0_mint: Option<&InterfaceAccount<Mint>>,
+    vault_1_mint: Option<&InterfaceAccount<Mint>>,
+) -> bool {
+    let ids = &frozen_position_nft_authorities::IDS;
+    let is_restricted_mint = |mint: Option<&InterfaceAccount<Mint>>| {
+        match mint.map(|mint| mint.freeze_authority) {
+            Some(COption::Some(authority)) => ids.contains(&authority),
+            _ => false,
+        }
+    };
+    is_restricted_mint(vault_0_mint) || is_restricted_mint(vault_1_mint)
 }

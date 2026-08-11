@@ -1,6 +1,6 @@
 use crate::error::ErrorCode;
 use crate::states::*;
-use crate::util::{burn, close_spl_account};
+use crate::util::{burn, close_spl_account, thaw_token_account};
 use anchor_lang::prelude::*;
 use anchor_spl::token_2022::spl_token_2022;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
@@ -74,6 +74,18 @@ pub fn close_position<'a, 'b, 'c, 'info>(
     let token_program = ctx.accounts.token_program.to_account_info();
     let position_nft_mint = ctx.accounts.position_nft_mint.to_account_info();
     let personal_nft_account = ctx.accounts.position_nft_account.to_account_info();
+
+    // A frozen position NFT cannot be burned, so thaw it first using personal_position, which is the mint's freeze authority.
+    if ctx.accounts.position_nft_account.is_frozen() {
+        thaw_token_account(
+            &ctx.accounts.personal_position.to_account_info(),
+            &personal_nft_account,
+            &position_nft_mint,
+            &token_program,
+            &[&ctx.accounts.personal_position.seeds()],
+        )?;
+    }
+
     burn(
         &ctx.accounts.nft_owner,
         &position_nft_mint,

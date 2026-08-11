@@ -55,6 +55,63 @@ export interface PoolStateData {
 }
 
 /**
+ * Creates a fresh, correctly ordered token0 < token1 mint pair.
+ *
+ * `freezeAuthority` is applied to BOTH mints, which mirrors a KYC-gated issuer
+ * and lets a caller collide with an issuer allowlist through either mint.
+ * Pass `mintAmount: 0` to skip funding the payer's associated accounts.
+ */
+export async function createMintPair(
+  connection: anchor.web3.Connection,
+  payer: Keypair,
+  options: {
+    freezeAuthority?: PublicKey | null;
+    decimals?: number;
+    mintAmount?: number;
+  } = {},
+): Promise<[PublicKey, PublicKey]> {
+  const {
+    freezeAuthority = null,
+    decimals = 9,
+    mintAmount = 1_000_000_000_000_000,
+  } = options;
+
+  let token0 = await createMint(
+    connection,
+    payer,
+    payer.publicKey,
+    freezeAuthority,
+    decimals,
+  );
+  let token1 = await createMint(
+    connection,
+    payer,
+    payer.publicKey,
+    freezeAuthority,
+    decimals,
+  );
+
+  // Ensure token0 < token1
+  if (token0.toBuffer().compare(token1.toBuffer()) > 0) {
+    [token0, token1] = [token1, token0];
+  }
+
+  if (mintAmount > 0) {
+    for (const mint of [token0, token1]) {
+      const account = await createAccount(
+        connection,
+        payer,
+        mint,
+        payer.publicKey,
+      );
+      await mintTo(connection, payer, mint, account, payer, mintAmount);
+    }
+  }
+
+  return [token0, token1];
+}
+
+/**
  * Test setup utilities
  */
 export class TestSetup {
@@ -96,28 +153,12 @@ export class TestSetup {
   }
 
   async createTokens() {
-    this.token0 = await createMint(
+    // Funding is mintTokens()'s job, so only the mints are created here.
+    [this.token0, this.token1] = await createMintPair(
       this.provider.connection,
       this.admin,
-      this.admin.publicKey,
-      null,
-      9
+      { mintAmount: 0 }
     );
-
-    this.token1 = await createMint(
-      this.provider.connection,
-      this.admin,
-      this.admin.publicKey,
-      null,
-      9
-    );
-
-    // Ensure token0 < token1
-    if (this.token0.toBuffer().compare(this.token1.toBuffer()) > 0) {
-      const temp = this.token0;
-      this.token0 = this.token1;
-      this.token1 = temp;
-    }
 
     // console.log(
     //   "Tokens created:",

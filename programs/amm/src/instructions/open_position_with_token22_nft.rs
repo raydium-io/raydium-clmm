@@ -152,6 +152,7 @@ pub fn open_position_with_token22_nft<'a, 'b, 'c: 'info, 'info>(
         &ctx.accounts.position_nft_mint,
         &ctx.accounts.pool_state.to_account_info(),
         &ctx.accounts.personal_position.to_account_info(),
+        &ctx.accounts.personal_position.to_account_info(),
         &ctx.accounts.system_program,
         &ctx.accounts.token_program_2022,
         with_metadata,
