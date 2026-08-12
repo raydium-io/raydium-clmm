@@ -511,7 +511,7 @@ pub mod raydium_clmm {
     ///
     /// * `ctx` - The context of accounts
     ///
-    pub fn close_position<'a, 'b, 'c, 'info>(
+    pub fn close_position<'a, 'b, 'c: 'info, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, ClosePosition<'info>>,
     ) -> Result<()> {
         instructions::close_position(ctx)

@@ -21,7 +21,7 @@ pub struct OpenPositionV2<'info> {
         init,
         mint::decimals = 0,
         mint::authority = pool_state.key(),
-        mint::freeze_authority = personal_position.key(),
+        mint::freeze_authority = pool_state.key(),
         payer = payer,
     )]
     pub position_nft_mint: Box<Account<'info, token::Mint>>,

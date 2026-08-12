@@ -135,7 +135,7 @@ describe("position nft freeze", () => {
       );
     });
 
-    it("a newly minted position NFT has personal_position as its freeze authority", async () => {
+    it("a newly minted position NFT has the pool as its freeze authority", async () => {
       const [token0, token1] = await createTokenPair(null);
       const poolState = await createPool(token0, token1);
       const pos = await openPositionV1(poolState, token0, token1);
@@ -147,10 +147,7 @@ describe("position nft freeze", () => {
         TOKEN_PROGRAM_ID
       );
       assert.isNotNull(mintInfo.freezeAuthority);
-      assert.equal(
-        mintInfo.freezeAuthority!.toBase58(),
-        pos.personalPosition.toBase58()
-      );
+      assert.equal(mintInfo.freezeAuthority!.toBase58(), poolState.toBase58());
     });
 
     it("empty list: a position closes cleanly, removing both the NFT account and personal_position", async () => {

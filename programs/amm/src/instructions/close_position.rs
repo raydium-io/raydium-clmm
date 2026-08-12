@@ -42,9 +42,16 @@ pub struct ClosePosition<'info> {
 
     /// Token/Token2022 program to close token/mint account
     pub token_program: Interface<'info, TokenInterface>,
+    // remaining account
+    // Required only when `position_nft_account` is frozen: the pool is the NFT
+    // mint's freeze authority and must sign the thaw that precedes the burn.
+    // #[account(
+    //     address = personal_position.pool_id
+    // )]
+    // pub pool_state: AccountLoader<'info, PoolState>,
 }
 
-pub fn close_position<'a, 'b, 'c, 'info>(
+pub fn close_position<'a, 'b, 'c: 'info, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, ClosePosition<'info>>,
 ) -> Result<()> {
     if ctx.accounts.personal_position.liquidity != 0
@@ -75,14 +82,25 @@ pub fn close_position<'a, 'b, 'c, 'info>(
     let position_nft_mint = ctx.accounts.position_nft_mint.to_account_info();
     let personal_nft_account = ctx.accounts.position_nft_account.to_account_info();
 
-    // A frozen position NFT cannot be burned, so thaw it first using personal_position, which is the mint's freeze authority.
+    // A frozen position NFT cannot be burned, so thaw it first.
     if ctx.accounts.position_nft_account.is_frozen() {
+        let pool_state_info = ctx
+            .remaining_accounts
+            .first()
+            .ok_or(ErrorCode::AccountLack)?;
+        require_keys_eq!(
+            pool_state_info.key(),
+            ctx.accounts.personal_position.pool_id,
+            ErrorCode::NotApproved
+        );
+        let pool_state_loader = AccountLoader::<PoolState>::try_from(pool_state_info)?;
+        let pool_state = pool_state_loader.load()?;
         thaw_token_account(
-            &ctx.accounts.personal_position.to_account_info(),
+            pool_state_info,
             &personal_nft_account,
             &position_nft_mint,
             &token_program,
-            &[&ctx.accounts.personal_position.seeds()],
+            &[&pool_state.seeds()],
         )?;
     }
 

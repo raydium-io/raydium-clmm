@@ -81,7 +81,7 @@ export class InstructionHelper {
   async airdrop(publicKey: PublicKey, amount: number) {
     const airdropSig = await this.provider.connection.requestAirdrop(
       publicKey,
-      amount * anchor.web3.LAMPORTS_PER_SOL,
+      amount * anchor.web3.LAMPORTS_PER_SOL
     );
     await this.provider.connection.confirmTransaction(airdropSig);
     return airdropSig;
@@ -106,7 +106,7 @@ export class InstructionHelper {
         params.tickSpacing,
         params.tradeFeeRate,
         params.protocolFeeRate,
-        params.fundFeeRate,
+        params.fundFeeRate
       )
       .accounts({
         admin: params.admin.publicKey,
@@ -124,30 +124,30 @@ export class InstructionHelper {
   private async derivePositionAddresses(
     params: OpenPositionParams,
     positionNftMint: PublicKey,
-    nftTokenProgram: PublicKey,
+    nftTokenProgram: PublicKey
   ) {
     const poolStateData = await this.program.account.poolState.fetch(
-      params.poolState,
+      params.poolState
     );
     const positionNftAccount = getAssociatedTokenAddressSync(
       positionNftMint,
       params.positionNftOwner,
       false,
-      nftTokenProgram,
+      nftTokenProgram
     );
 
     const [personalPosition] = await this.pda.getPersonalPositionStatePDA(
-      positionNftMint,
+      positionNftMint
     );
 
     // Compute tick array start indexes from tickLowerIndex/tickUpperIndex
     const lowerStart = TickArrayUtil.getTickArrayStartIndex(
       params.tickLowerIndex,
-      poolStateData.tickSpacing,
+      poolStateData.tickSpacing
     );
     const upperStart = TickArrayUtil.getTickArrayStartIndex(
       params.tickUpperIndex,
-      poolStateData.tickSpacing,
+      poolStateData.tickSpacing
     );
 
     // Derive tick arrays
@@ -155,20 +155,20 @@ export class InstructionHelper {
       this.program.programId,
       params.poolState,
       lowerStart,
-      poolStateData.tickSpacing,
+      poolStateData.tickSpacing
     );
 
     const tickArrayUpper = getTickArrayAddressByTick(
       this.program.programId,
       params.poolState,
       upperStart,
-      poolStateData.tickSpacing,
+      poolStateData.tickSpacing
     );
     // Derive protocol position
     const [protocolPosition] = await this.pda.getProtocolPositionStatePDA(
       params.poolState,
       params.tickLowerIndex,
-      params.tickUpperIndex,
+      params.tickUpperIndex
     );
 
     const metadataAccount = await PublicKey.findProgramAddress(
@@ -177,26 +177,26 @@ export class InstructionHelper {
         METADATA_PROGRAM_ID.toBuffer(),
         positionNftMint.toBuffer(),
       ],
-      METADATA_PROGRAM_ID,
+      METADATA_PROGRAM_ID
     ).then(([key]) => key);
 
     const tokenAccount0 = getAssociatedTokenAddressSync(
       params.tokenVault0Mint,
-      params.payer.publicKey,
+      params.payer.publicKey
     );
     const tokenAccount1 = getAssociatedTokenAddressSync(
       params.tokenVault1Mint,
-      params.payer.publicKey,
+      params.payer.publicKey
     );
 
     // Derive token vaults using PDA (pool_vault seed)
     const [tokenVault0] = await this.pda.getTokenVaultPDA(
       params.poolState,
-      params.tokenVault0Mint,
+      params.tokenVault0Mint
     );
     const [tokenVault1] = await this.pda.getTokenVaultPDA(
       params.poolState,
-      params.tokenVault1Mint,
+      params.tokenVault1Mint
     );
 
     return {
@@ -221,7 +221,7 @@ export class InstructionHelper {
     addrs: Awaited<ReturnType<InstructionHelper["derivePositionAddresses"]>>,
     positionNftMint: PublicKey,
     nftTokenProgram: PublicKey,
-    signature: string,
+    signature: string
   ): OpenedPosition {
     return {
       signature,
@@ -249,7 +249,7 @@ export class InstructionHelper {
     const addrs = await this.derivePositionAddresses(
       params,
       positionNftMint.publicKey,
-      TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_ID
     );
 
     const signature = await this.program.methods
@@ -260,7 +260,7 @@ export class InstructionHelper {
         addrs.upperStart,
         params.liquidity,
         params.amount0Max,
-        params.amount1Max,
+        params.amount1Max
       )
       .accounts({
         payer: params.payer.publicKey,
@@ -298,7 +298,7 @@ export class InstructionHelper {
       addrs,
       positionNftMint.publicKey,
       TOKEN_PROGRAM_ID,
-      signature,
+      signature
     );
   }
 
@@ -310,13 +310,13 @@ export class InstructionHelper {
     params: OpenPositionParams & {
       withMetadata?: boolean; // Optional, defaults to true
       baseFlag?: boolean | null; // Optional, defaults to null
-    },
+    }
   ): Promise<OpenedPosition> {
     const positionNftMint = Keypair.generate();
     const addrs = await this.derivePositionAddresses(
       params,
       positionNftMint.publicKey,
-      TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_ID
     );
 
     const signature = await this.program.methods
@@ -329,7 +329,7 @@ export class InstructionHelper {
         params.amount0Max,
         params.amount1Max,
         params.withMetadata ?? true,
-        params.baseFlag ?? null,
+        params.baseFlag ?? null
       )
       .accounts({
         payer: params.payer.publicKey,
@@ -366,7 +366,7 @@ export class InstructionHelper {
       addrs,
       positionNftMint.publicKey,
       TOKEN_PROGRAM_ID,
-      signature,
+      signature
     );
   }
 
@@ -378,13 +378,13 @@ export class InstructionHelper {
     params: OpenPositionParams & {
       withMetadata?: boolean; // Optional, defaults to false
       baseFlag?: boolean | null; // Optional, defaults to null
-    },
+    }
   ): Promise<OpenedPosition> {
     const positionNftMint = Keypair.generate();
     const addrs = await this.derivePositionAddresses(
       params,
       positionNftMint.publicKey,
-      TOKEN_2022_PROGRAM_ID,
+      TOKEN_2022_PROGRAM_ID
     );
 
     const signature = await this.program.methods
@@ -397,7 +397,7 @@ export class InstructionHelper {
         params.amount0Max,
         params.amount1Max,
         params.withMetadata ?? false,
-        params.baseFlag ?? null,
+        params.baseFlag ?? null
       )
       .accounts({
         payer: params.payer.publicKey,
@@ -432,7 +432,7 @@ export class InstructionHelper {
       addrs,
       positionNftMint.publicKey,
       TOKEN_2022_PROGRAM_ID,
-      signature,
+      signature
     );
   }
 
@@ -443,31 +443,28 @@ export class InstructionHelper {
    * and for a frozen NFT account this exercises close_position's
    * thaw -> burn -> close sequence.
    */
-  async closePosition(params: {
-    owner: Keypair;
-    position: OpenedPosition;
-  }) {
+  async closePosition(params: { owner: Keypair; position: OpenedPosition }) {
     const { owner, position } = params;
     const personalPositionData =
       await this.program.account.personalPositionState.fetch(
-        position.personalPosition,
+        position.personalPosition
       );
 
     if (!personalPositionData.liquidity.isZero()) {
       const recipientTokenAccount0 = getAssociatedTokenAddressSync(
         position.token0,
-        owner.publicKey,
+        owner.publicKey
       );
       const recipientTokenAccount1 = getAssociatedTokenAddressSync(
         position.token1,
-        owner.publicKey,
+        owner.publicKey
       );
 
       await this.program.methods
         .decreaseLiquidityV2(
           personalPositionData.liquidity,
           new anchor.BN(0),
-          new anchor.BN(0),
+          new anchor.BN(0)
         )
         .accounts({
           nftOwner: owner.publicKey,
@@ -501,6 +498,12 @@ export class InstructionHelper {
         systemProgram: SystemProgram.programId,
         tokenProgram: position.nftTokenProgram,
       } as any)
+      // The pool is the NFT mint's freeze authority. close_position only reads it
+      // when the NFT account is frozen, so it rides in remaining_accounts rather
+      // than the declared account list, leaving the IDL untouched.
+      .remainingAccounts([
+        { pubkey: position.poolState, isWritable: false, isSigner: false },
+      ])
       .signers([owner])
       .rpc();
   }
@@ -521,15 +524,15 @@ export class InstructionHelper {
     const [poolState] = await this.pda.getPoolStatePDA(
       params.ammConfig,
       params.tokenMint0,
-      params.tokenMint1,
+      params.tokenMint1
     );
     const [tokenVault0] = await this.pda.getTokenVaultPDA(
       poolState,
-      params.tokenMint0,
+      params.tokenMint0
     );
     const [tokenVault1] = await this.pda.getTokenVaultPDA(
       poolState,
-      params.tokenMint1,
+      params.tokenMint1
     );
     const [observationState] = await this.pda.getObservationStatePDA(poolState);
     const [tickArrayBitmap] = await this.pda.getTickArrayBitmapPDA(poolState);
@@ -577,31 +580,31 @@ export class InstructionHelper {
     },
     options?: {
       skipPreflight?: boolean;
-    },
+    }
   ) {
     // Derive observation state for observer account
     const [observationState] = await this.pda.getObservationStatePDA(
-      params.poolState,
+      params.poolState
     );
 
     // Derive input vault
     const [inputVault] = await this.pda.getTokenVaultPDA(
       params.poolState,
-      params.inputVaultMint,
+      params.inputVaultMint
     );
 
     // Derive output vault
     const [outputVault] = await this.pda.getTokenVaultPDA(
       params.poolState,
-      params.outputVaultMint,
+      params.outputVaultMint
     );
     const inputTokenAccount = getAssociatedTokenAddressSync(
       params.inputVaultMint,
-      params.owner.publicKey,
+      params.owner.publicKey
     );
     const outputTokenAccount = getAssociatedTokenAddressSync(
       params.outputVaultMint,
-      params.owner.publicKey,
+      params.owner.publicKey
     );
 
     return await this.program.methods
@@ -609,7 +612,7 @@ export class InstructionHelper {
         params.amount,
         params.otherAmountThreshold,
         params.sqrtPriceLimitX64,
-        params.isBaseInput,
+        params.isBaseInput
       )
       .accounts({
         payer: params.owner.publicKey,
@@ -647,14 +650,14 @@ export class InstructionHelper {
     // Derive limit_order_nonce PDA
     const [limitOrderNonce] = await this.pda.getLimitOrderNoncePDA(
       params.owner.publicKey,
-      nonceIndex,
+      nonceIndex
     );
 
     // Fetch current order_nonce from the nonce account (0 if not yet created)
     let orderNonce = new anchor.BN(0);
     try {
       const nonceData = await this.program.account.limitOrderNonce.fetch(
-        limitOrderNonce,
+        limitOrderNonce
       );
       orderNonce = nonceData.orderNonce as anchor.BN;
     } catch (_e) {
@@ -665,12 +668,12 @@ export class InstructionHelper {
     const [limitOrder] = await this.pda.getLimitOrderStatePDA(
       params.owner.publicKey,
       limitOrderNonce,
-      orderNonce,
+      orderNonce
     );
 
     // Load pool state to get tick spacing and token mints
     const poolStateData = await this.program.account.poolState.fetch(
-      params.poolState,
+      params.poolState
     );
 
     // Calculate tick array start index using tick spacing
@@ -679,7 +682,7 @@ export class InstructionHelper {
       this.program.programId,
       params.poolState,
       params.tickIndex,
-      tickSpacing,
+      tickSpacing
     );
     const inputVaultMint = params.zeroForOne
       ? poolStateData.tokenMint0
@@ -688,20 +691,21 @@ export class InstructionHelper {
     // Derive input vault using PDA utils
     const [inputVault] = await this.pda.getTokenVaultPDA(
       params.poolState,
-      inputVaultMint,
+      inputVaultMint
     );
 
     // Derive owner's input token account (ATA)
     const inputTokenAccount = getAssociatedTokenAddressSync(
       inputVaultMint,
-      params.owner.publicKey,
+      params.owner.publicKey
     );
 
     // Determine input token program from mint owner
-    const inputVaultMintInfo =
-      await this.provider.connection.getAccountInfo(inputVaultMint);
+    const inputVaultMintInfo = await this.provider.connection.getAccountInfo(
+      inputVaultMint
+    );
     const inputTokenProgram = inputVaultMintInfo?.owner.equals(
-      TOKEN_2022_PROGRAM_ID,
+      TOKEN_2022_PROGRAM_ID
     )
       ? TOKEN_2022_PROGRAM_ID
       : TOKEN_PROGRAM_ID;
@@ -712,20 +716,25 @@ export class InstructionHelper {
 
     const [outputVault] = await this.pda.getTokenVaultPDA(
       params.poolState,
-      outputVaultMint,
+      outputVaultMint
     );
 
     const outputTokenAccount = getAssociatedTokenAddressSync(
       outputVaultMint,
-      params.owner.publicKey,
+      params.owner.publicKey
     );
 
     const [tickArrayBitmap] = await this.pda.getTickArrayBitmapPDA(
-      params.poolState,
+      params.poolState
     );
 
     const tx = await this.program.methods
-      .openLimitOrder(nonceIndex, params.zeroForOne, params.tickIndex, params.amount)
+      .openLimitOrder(
+        nonceIndex,
+        params.zeroForOne,
+        params.tickIndex,
+        params.amount
+      )
       .accounts({
         payer: params.owner.publicKey,
         poolState: params.poolState,
@@ -764,21 +773,21 @@ export class InstructionHelper {
   }) {
     // Load limit order and pool state to get required info
     const limitOrderData = await this.program.account.limitOrderState.fetch(
-      params.limitOrder,
+      params.limitOrder
     );
     const poolStateData = await this.program.account.poolState.fetch(
-      params.poolState,
+      params.poolState
     );
 
     // Calculate tick array start index from limit order's tick index
     const tickSpacing = poolStateData.tickSpacing;
     const tickArrayStartIndex = TickArrayUtil.getTickArrayStartIndex(
       limitOrderData.tickIndex,
-      tickSpacing,
+      tickSpacing
     );
     const [tickArray] = await this.pda.getTickArrayStatePDA(
       params.poolState,
-      tickArrayStartIndex,
+      tickArrayStartIndex
     );
 
     const inputVaultMint = limitOrderData.zeroForOne
@@ -788,13 +797,13 @@ export class InstructionHelper {
     // Derive input vault
     const [inputVault] = await this.pda.getTokenVaultPDA(
       params.poolState,
-      inputVaultMint,
+      inputVaultMint
     );
 
     // Derive owner's input token account (ATA)
     const inputTokenAccount = getAssociatedTokenAddressSync(
       inputVaultMint,
-      params.owner.publicKey,
+      params.owner.publicKey
     );
 
     // Determine which token program to use based on mint owner
@@ -802,8 +811,9 @@ export class InstructionHelper {
     // For simplicity, we check if it's TOKEN_2022 by checking the mint
     // In practice, we might need to fetch the mint account to determine the program
     // For now, we'll use TOKEN_PROGRAM_ID as default, but this should be determined dynamically
-    const mintInfo =
-      await this.program.provider.connection.getAccountInfo(inputVaultMint);
+    const mintInfo = await this.program.provider.connection.getAccountInfo(
+      inputVaultMint
+    );
     const inputTokenProgram = mintInfo?.owner.equals(TOKEN_2022_PROGRAM_ID)
       ? TOKEN_2022_PROGRAM_ID
       : TOKEN_PROGRAM_ID;
@@ -836,21 +846,21 @@ export class InstructionHelper {
   }) {
     // Load limit order and pool state to get required info
     const limitOrderData = await this.program.account.limitOrderState.fetch(
-      params.limitOrder,
+      params.limitOrder
     );
     const poolStateData = await this.program.account.poolState.fetch(
-      params.poolState,
+      params.poolState
     );
 
     // Calculate tick array start index from limit order's tick index
     const tickSpacing = poolStateData.tickSpacing;
     const tickArrayStartIndex = TickArrayUtil.getTickArrayStartIndex(
       limitOrderData.tickIndex,
-      tickSpacing,
+      tickSpacing
     );
     const [tickArray] = await this.pda.getTickArrayStatePDA(
       params.poolState,
-      tickArrayStartIndex,
+      tickArrayStartIndex
     );
 
     const inputVaultMint = limitOrderData.zeroForOne
@@ -863,21 +873,21 @@ export class InstructionHelper {
     // Derive input and output vaults using PDA utils
     const [inputVault] = await this.pda.getTokenVaultPDA(
       params.poolState,
-      inputVaultMint,
+      inputVaultMint
     );
     const [outputVault] = await this.pda.getTokenVaultPDA(
       params.poolState,
-      outputVaultMint,
+      outputVaultMint
     );
 
     // Derive owner's input and output token accounts (ATA)
     const inputTokenAccount = getAssociatedTokenAddressSync(
       inputVaultMint,
-      params.owner.publicKey,
+      params.owner.publicKey
     );
     const outputTokenAccount = getAssociatedTokenAddressSync(
       outputVaultMint,
-      params.owner.publicKey,
+      params.owner.publicKey
     );
 
     const ticksInArray = 60 * tickSpacing;
@@ -892,7 +902,7 @@ export class InstructionHelper {
     const remainingAccounts: AccountMeta[] = [];
     if (isOverflowDefaultBitmap) {
       const [tickArrayBitmap] = await this.pda.getTickArrayBitmapPDA(
-        params.poolState,
+        params.poolState
       );
       remainingAccounts.push({
         pubkey: tickArrayBitmap,
@@ -936,21 +946,21 @@ export class InstructionHelper {
   }) {
     // Load limit order and pool state to get required info
     const limitOrderData = await this.program.account.limitOrderState.fetch(
-      params.limitOrder,
+      params.limitOrder
     );
     const poolStateData = await this.program.account.poolState.fetch(
-      params.poolState,
+      params.poolState
     );
 
     // Calculate tick array start index from limit order's tick index
     const tickSpacing = poolStateData.tickSpacing;
     const tickArrayStartIndex = TickArrayUtil.getTickArrayStartIndex(
       limitOrderData.tickIndex,
-      tickSpacing,
+      tickSpacing
     );
     const [tickArray] = await this.pda.getTickArrayStatePDA(
       params.poolState,
-      tickArrayStartIndex,
+      tickArrayStartIndex
     );
 
     const outputVaultMint = limitOrderData.zeroForOne
@@ -960,20 +970,21 @@ export class InstructionHelper {
     // Derive output vault using PDA utils
     const [outputVault] = await this.pda.getTokenVaultPDA(
       params.poolState,
-      outputVaultMint,
+      outputVaultMint
     );
 
     // Derive owner's output token account (ATA)
     const outputTokenAccount = getAssociatedTokenAddressSync(
       outputVaultMint,
-      limitOrderData.owner,
+      limitOrderData.owner
     );
 
     // Determine output token program from mint owner
-    const outputVaultMintInfo =
-      await this.provider.connection.getAccountInfo(outputVaultMint);
+    const outputVaultMintInfo = await this.provider.connection.getAccountInfo(
+      outputVaultMint
+    );
     const outputTokenProgram = outputVaultMintInfo?.owner.equals(
-      TOKEN_2022_PROGRAM_ID,
+      TOKEN_2022_PROGRAM_ID
     )
       ? TOKEN_2022_PROGRAM_ID
       : TOKEN_PROGRAM_ID;
@@ -1001,7 +1012,7 @@ export class InstructionHelper {
   async closeLimitOrder(params: { owner: Keypair; limitOrder: PublicKey }) {
     // Load limit order to get owner for rent receiver
     const limitOrderData = await this.program.account.limitOrderState.fetch(
-      params.limitOrder,
+      params.limitOrder
     );
 
     // Rent receiver is the limit order owner
@@ -1031,7 +1042,7 @@ export class InstructionHelper {
     maxVolatilityAccumulator: number;
   }) {
     const [dynamicFeeConfig] = await this.pda.getDynamicFeeConfigPDA(
-      params.index,
+      params.index
     );
 
     return await this.program.methods
@@ -1041,7 +1052,7 @@ export class InstructionHelper {
         params.decayPeriod,
         params.reductionFactor,
         params.dynamicFeeControl,
-        params.maxVolatilityAccumulator,
+        params.maxVolatilityAccumulator
       )
       .accounts({
         owner: params.payer.publicKey,
@@ -1068,17 +1079,17 @@ export class InstructionHelper {
   }) {
     const [tokenVault0] = await this.pda.getTokenVaultPDA(
       params.poolState,
-      params.tokenMint0,
+      params.tokenMint0
     );
     const [tokenVault1] = await this.pda.getTokenVaultPDA(
       params.poolState,
-      params.tokenMint1,
+      params.tokenMint1
     );
     const [observationState] = await this.pda.getObservationStatePDA(
-      params.poolState,
+      params.poolState
     );
     const [tickArrayBitmap] = await this.pda.getTickArrayBitmapPDA(
-      params.poolState,
+      params.poolState
     );
 
     // Default to fromInput if not specified

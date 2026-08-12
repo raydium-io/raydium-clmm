@@ -35,7 +35,7 @@ pub struct OpenPosition<'info> {
         init,
         mint::decimals = 0,
         mint::authority = pool_state.key(),
-        mint::freeze_authority = personal_position.key(),
+        mint::freeze_authority = pool_state.key(),
         payer = payer,
     )]
     pub position_nft_mint: Box<Account<'info, Mint>>,
@@ -773,11 +773,11 @@ fn mint_nft_and_remove_mint_authority<'info>(
     // making it untransferable with an immutable owner.
     if position_nft_frozen {
         freeze_token_account(
-            &personal_position.to_account_info(),
+            &pool_state_info,
             &position_nft_account.to_account_info(),
             &position_nft_mint_info,
             &token_program_info,
-            &[&personal_position.seeds()],
+            &[&seeds],
         )?;
     }
 
