@@ -27,9 +27,14 @@ declare_id!("DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH");
 declare_id!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 
 pub mod admin {
-    use super::{pubkey, Pubkey};
+    use super::Pubkey;
+    #[cfg(not(feature = "localnet"))]
+    use super::pubkey;
     #[cfg(feature = "localnet")]
-    pub const ID: Pubkey = pubkey!("FgKXkqnBaPWQS4mG5F7BhvfjCpVTacNSrBqW18QotM3k");
+    pub const ID: Pubkey = Pubkey::from_str_const(env!(
+        "CLMM_LOCALNET_ADMIN",
+        "the `localnet` feature needs CLMM_LOCALNET_ADMIN=<admin pubkey> at build time (run `yarn test:local-admin`)"
+    ));
     #[cfg(feature = "devnet")]
     pub const ID: Pubkey = pubkey!("DRayqG9RXYi8WHgWEmRQGrUWRWbhjYWYkCRJDd6JBBak");
     #[cfg(all(not(feature = "devnet"), not(feature = "localnet")))]

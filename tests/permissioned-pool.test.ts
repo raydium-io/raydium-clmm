@@ -1,8 +1,6 @@
 import * as anchor from "@anchor-lang/core";
 import { Program } from "@anchor-lang/core";
 import { RaydiumClmm } from "../target/types/raydium_clmm";
-import * as fs from "fs";
-import * as path from "path";
 import {
   PublicKey,
   Keypair,
@@ -37,6 +35,16 @@ describe("create_permissioned_pool", () => {
   const setup = new TestSetup(program, user);
   const instructions = new InstructionHelper(program);
   const pda = new PDAUtils(program.programId);
+
+  // `create_permission_pda` / `close_permission_pda` gate their `owner` signer
+  // on `crate::admin::ID`. `yarn test:local-admin` builds with
+  // `--features localnet` and compiles the local wallet in as that admin, so
+  // the cases below can sign as admin; otherwise they are skipped.
+  const admin = provider.wallet.payer;
+  const adminIsLocalWallet =
+    process.env.CLMM_LOCALNET_ADMIN === admin.publicKey.toBase58();
+  const SKIP_MSG =
+    "needs a `--features localnet` build with CLMM_LOCALNET_ADMIN=<local wallet> (yarn test:local-admin)";
 
   before(async () => {
     await setup.initialize();
@@ -109,18 +117,10 @@ describe("create_permissioned_pool", () => {
     let poolCreator: PublicKey;
 
     before(async function () {
-      // `create_permission_pda` gates its `owner` signer behind
-      // `address = crate::admin::ID`. On a stock (non-`localnet`) build
-      // that's the hardcoded production admin key, whose private key no
-      // test environment holds. This suite requires the program under
-      // test to be built with `--features localnet`, which overrides
-      // `admin::ID` to the fixture keypair below so these positive-path
-      // cases can exercise the real instruction end-to-end.
-      const localnetAdminPath = path.join(__dirname, "fixtures", "localnet-admin.json");
-      const localnetAdmin = Keypair.fromSecretKey(
-        Buffer.from(JSON.parse(fs.readFileSync(localnetAdminPath, "utf-8"))),
-      );
-      await instructions.airdrop(localnetAdmin.publicKey, 5);
+      if (!adminIsLocalWallet) {
+        console.log(`      [skipped] ${SKIP_MSG}`);
+        this.skip();
+      }
 
       payer = Keypair.generate();
       await instructions.airdrop(payer.publicKey, 5);
@@ -131,12 +131,12 @@ describe("create_permissioned_pool", () => {
       await program.methods
         .createPermissionPda()
         .accounts({
-          owner: localnetAdmin.publicKey,
+          owner: admin.publicKey,
           permissionAuthority: payer.publicKey,
           permission,
           systemProgram: SystemProgram.programId,
         } as any)
-        .signers([localnetAdmin])
+        .signers([admin])
         .rpc();
     });
 
@@ -203,13 +203,11 @@ describe("create_permissioned_pool", () => {
     }
   });
 
-  it("closes a permission PDA (admin), refunding rent and removing the account", async () => {
-    // Requires a `--features localnet` build so admin::ID is the fixture key.
-    const localnetAdminPath = path.join(__dirname, "fixtures", "localnet-admin.json");
-    const localnetAdmin = Keypair.fromSecretKey(
-      Buffer.from(JSON.parse(fs.readFileSync(localnetAdminPath, "utf-8"))),
-    );
-    await instructions.airdrop(localnetAdmin.publicKey, 5);
+  it("closes a permission PDA (admin), refunding rent and removing the account", async function () {
+    if (!adminIsLocalWallet) {
+      console.log(`      [skipped] ${SKIP_MSG}`);
+      this.skip();
+    }
 
     const authority = Keypair.generate().publicKey;
     const [permission] = await pda.getPermissionPDA(authority);
@@ -217,12 +215,12 @@ describe("create_permissioned_pool", () => {
     await program.methods
       .createPermissionPda()
       .accounts({
-        owner: localnetAdmin.publicKey,
+        owner: admin.publicKey,
         permissionAuthority: authority,
         permission,
         systemProgram: SystemProgram.programId,
       } as any)
-      .signers([localnetAdmin])
+      .signers([admin])
       .rpc();
 
     assert.isNotNull(
@@ -235,11 +233,11 @@ describe("create_permissioned_pool", () => {
     await program.methods
       .closePermissionPda()
       .accounts({
-        owner: localnetAdmin.publicKey,
+        owner: admin.publicKey,
         permissionAuthority: authority,
         permission,
       } as any)
-      .signers([localnetAdmin])
+      .signers([admin])
       .rpc();
 
     assert.isNull(
