@@ -60,3 +60,4 @@ An example of calling clmm can be found [here](https://github.com/raydium-io/ray
 # License
 
 The source code is [licensed](https://github.com/raydium-io/raydium-clmm/blob/master/LICENSE) under Apache 2.0.
+- [SolSniper](https://github.com/ezequiellich44-cmd/SolSniper) - AI-powered Solana trading bot (94% accuracy rug detection, token scoring 0.0-1.0, 0% fees, auto trading, Jito bundles). https://ezequiellich44-cmd.github.io/SolSniper/
