@@ -83,10 +83,14 @@ pub struct TokenCollection {
     /// Rebalance swaps pay `amm_config.trade_fee_rate / rebalance_fee_divisor`
     pub rebalance_fee_divisor: u32,
     pub member_count: u32,
-    pub padding: [u64; 8],
+    /// Second mint admitted without a rule check (Pubkey::default() = none). Lets a collection pool
+    /// be anchored on a pair the rule would not admit, e.g. protocol-token/quote for a launchpad
+    /// collection whose rule is "launched on our bonding curve".
+    pub anchor_mint: Pubkey,
+    pub padding: [u64; 4],
 }
 impl TokenCollection {
-    pub const LEN: usize = 8 + 1 + 2 + 5 + 32 + 32 + 32 + 4 + 4 + 8 * 8;
+    pub const LEN: usize = 8 + 1 + 2 + 5 + 32 + 32 + 32 + 4 + 4 + 32 + 8 * 4;
 }
 
 /// Proof that `mint` satisfied the collection's ruleset at registration time.

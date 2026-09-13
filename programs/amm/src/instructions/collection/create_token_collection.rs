@@ -40,6 +40,7 @@ pub fn create_token_collection(
     collection.authority = ctx.accounts.authority.key();
     collection.ruleset = ctx.accounts.ruleset.key();
     collection.quote_mint = ctx.accounts.quote_mint.key();
+    collection.anchor_mint = ctx.remaining_accounts.first().map(|a| a.key()).unwrap_or_default();
     collection.rebalance_fee_divisor = rebalance_fee_divisor;
     Ok(())
 }

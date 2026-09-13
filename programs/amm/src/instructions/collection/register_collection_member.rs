@@ -33,15 +33,16 @@ pub struct RegisterCollectionMember<'info> {
 pub fn register_collection_member<'a, 'b, 'c: 'info, 'info>(
     ctx: Context<'a, 'b, 'c, 'info, RegisterCollectionMember<'info>>,
 ) -> Result<()> {
-    if ctx.accounts.mint.key() != ctx.accounts.collection.quote_mint {
+    let mint_key = ctx.accounts.mint.key();
+    let exempt = mint_key == ctx.accounts.collection.quote_mint || mint_key == ctx.accounts.collection.anchor_mint;
+    if !exempt {
         super::check_rules(&ctx.accounts.ruleset, &ctx.accounts.mint, ctx.remaining_accounts)?;
     }
     let member = &mut ctx.accounts.member;
     member.bump = ctx.bumps.member;
     member.collection = ctx.accounts.collection.key();
     member.mint = ctx.accounts.mint.key();
-    member.rate = if ctx.accounts.mint.key() != ctx.accounts.collection.quote_mint
-        && RuleKind::from_u8(ctx.accounts.ruleset.kind) == Some(RuleKind::Lst)
+    member.rate = if !exempt && RuleKind::from_u8(ctx.accounts.ruleset.kind) == Some(RuleKind::Lst)
     {
         super::stake_pool_rate(&ctx.accounts.ruleset, &ctx.accounts.mint.key(), &ctx.remaining_accounts[0])?
     } else {
