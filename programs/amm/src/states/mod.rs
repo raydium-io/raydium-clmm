@@ -30,3 +30,6 @@ pub use tickarray_bitmap_extension::*;
 
 pub mod collection;
 pub use collection::*;
+
+pub mod pool_members;
+pub use pool_members::*;

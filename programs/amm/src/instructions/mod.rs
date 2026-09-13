@@ -63,3 +63,6 @@ pub use collection::*;
 
 pub mod rebalance_swap_v2;
 pub use rebalance_swap_v2::*;
+
+pub mod collection_pool;
+pub use collection_pool::*;
