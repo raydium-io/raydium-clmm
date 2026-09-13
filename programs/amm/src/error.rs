@@ -121,4 +121,13 @@ pub enum ErrorCode {
     MissingTokenProgram2022,
     #[msg("TickArrayBitmapExtension account does not belong to this pool")]
     InvalidTickArrayBitmapExtensionAccount,
+
+    #[msg("Unknown rule kind")]
+    InvalidRuleKind,
+    #[msg("Mint does not satisfy the collection ruleset")]
+    RuleCheckFailed,
+    #[msg("Collection member does not belong to this collection or mint")]
+    InvalidCollectionMember,
+    #[msg("Rebalance swap must move the price strictly closer to the collection target")]
+    NotRebalancing,
 }

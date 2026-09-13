@@ -650,6 +650,80 @@ pub mod raydium_clmm {
         )
     }
 
+    /// Token collections
+    ///
+    /// A ruleset is an admin-defined admission rule (e.g. "standard non-mayhem pump.fun launch").
+    /// Anyone may create a collection that points at a ruleset, and anyone may register a mint
+    /// into a collection by supplying the accounts that prove the rule holds. Pools whose two mints
+    /// are members of one collection gain the discounted `rebalance_swap_v2` path.
+
+    /// Create an admission ruleset. Admin only.
+    pub fn create_ruleset(
+        ctx: Context<CreateRuleset>,
+        index: u16,
+        kind: u8,
+        flags: u8,
+        program_id: Pubkey,
+    ) -> Result<()> {
+        instructions::create_ruleset(ctx, index, kind, flags, program_id)
+    }
+
+    /// Update an admission ruleset. Admin only.
+    pub fn update_ruleset(ctx: Context<UpdateRuleset>, kind: u8, flags: u8, program_id: Pubkey) -> Result<()> {
+        instructions::update_ruleset(ctx, kind, flags, program_id)
+    }
+
+    /// Create a token collection bound to a ruleset. Permissionless.
+    pub fn create_token_collection(
+        ctx: Context<CreateTokenCollection>,
+        index: u16,
+        rebalance_fee_divisor: u32,
+    ) -> Result<()> {
+        instructions::create_token_collection(ctx, index, rebalance_fee_divisor)
+    }
+
+    /// Update a token collection. Collection authority only. param 0: divisor, 1: new authority.
+    pub fn update_token_collection(ctx: Context<UpdateTokenCollection>, param: u8, value: u64) -> Result<()> {
+        instructions::update_token_collection(ctx, param, value)
+    }
+
+    /// Register a mint into a collection after checking the ruleset against the proof accounts
+    /// supplied as remaining accounts. Permissionless.
+    pub fn register_collection_member<'a, 'b, 'c: 'info, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, RegisterCollectionMember<'info>>,
+    ) -> Result<()> {
+        instructions::register_collection_member(ctx)
+    }
+
+    /// Set a member's value in the collection numeraire (1e9 == 1.0). Collection authority only.
+    pub fn set_collection_member_rate(ctx: Context<SetCollectionMemberRate>, rate: u64) -> Result<()> {
+        instructions::set_collection_member_rate(ctx, rate)
+    }
+
+    /// `swap_v2` at `trade_fee_rate / collection.rebalance_fee_divisor` for a pool whose mints are both
+    /// members of one token collection. Only accepted if it moves `sqrt_price_x64` strictly
+    /// closer to the target implied by the members' rates (see `states::collection`).
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - swap_v2 accounts followed by `collection`, `input_member`, `output_member`
+    /// * `amount`, `other_amount_threshold`, `sqrt_price_limit_x64`, `is_base_input` - as `swap_v2`
+    pub fn rebalance_swap_v2<'a, 'b, 'c: 'info, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, RebalanceSwapSingleV2<'info>>,
+        amount: u64,
+        other_amount_threshold: u64,
+        sqrt_price_limit_x64: u128,
+        is_base_input: bool,
+    ) -> Result<()> {
+        instructions::rebalance_swap_v2(
+            ctx,
+            amount,
+            other_amount_threshold,
+            sqrt_price_limit_x64,
+            is_base_input,
+        )
+    }
+
     /// Swap token for as much as possible of another token across the path provided, base input
     ///
     /// # Arguments

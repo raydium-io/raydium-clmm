@@ -87,6 +87,26 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
 ) -> Result<u64> {
+    let trade_fee_rate = ctx.amm_config.trade_fee_rate;
+    exact_internal_v2_with_fee(
+        ctx,
+        remaining_accounts,
+        amount_specified,
+        sqrt_price_limit_x64,
+        is_base_input,
+        trade_fee_rate,
+    )
+}
+
+/// `exact_internal_v2` with an explicit LP fee rate (the config rate, or a collection-discounted one).
+pub fn exact_internal_v2_with_fee<'c: 'info, 'info>(
+    ctx: &mut SwapSingleV2<'info>,
+    remaining_accounts: &'c [AccountInfo<'info>],
+    amount_specified: u64,
+    sqrt_price_limit_x64: u128,
+    is_base_input: bool,
+    trade_fee_rate: u32,
+) -> Result<u64> {
     // invoke_memo_instruction(SWAP_MEMO_MSG, ctx.memo_program.to_account_info())?;
 
     let block_timestamp = solana_program::clock::Clock::get()?.unix_timestamp as u64;
@@ -140,8 +160,12 @@ pub fn exact_internal_v2<'c: 'info, 'info>(
             }
         }
 
+        let amm_config = AmmConfig {
+            trade_fee_rate,
+            ..(**ctx.amm_config).clone()
+        };
         swap_result = swap_internal(
-            &ctx.amm_config,
+            &amm_config,
             pool_state,
             tick_array_states,
             &mut ctx.observation_state.load_mut()?,
