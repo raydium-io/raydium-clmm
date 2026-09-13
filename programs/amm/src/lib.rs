@@ -700,6 +700,11 @@ pub mod raydium_clmm {
         instructions::set_collection_member_rate(ctx, rate)
     }
 
+    /// Re-read an LST member's rate from its stake pool (`Lst` rulesets). Permissionless.
+    pub fn sync_member_rate(ctx: Context<SyncMemberRate>) -> Result<()> {
+        instructions::sync_member_rate(ctx)
+    }
+
     /// `swap_v2` at `trade_fee_rate / collection.rebalance_fee_divisor` for a pool whose mints are both
     /// members of one token collection. Only accepted if it moves `sqrt_price_x64` strictly
     /// closer to the target implied by the members' rates (see `states::collection`).

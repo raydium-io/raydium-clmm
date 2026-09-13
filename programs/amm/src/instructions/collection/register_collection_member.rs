@@ -40,7 +40,13 @@ pub fn register_collection_member<'a, 'b, 'c: 'info, 'info>(
     member.bump = ctx.bumps.member;
     member.collection = ctx.accounts.collection.key();
     member.mint = ctx.accounts.mint.key();
-    member.rate = DEFAULT_MEMBER_RATE;
+    member.rate = if ctx.accounts.mint.key() != ctx.accounts.collection.quote_mint
+        && RuleKind::from_u8(ctx.accounts.ruleset.kind) == Some(RuleKind::Lst)
+    {
+        super::stake_pool_rate(&ctx.accounts.ruleset, &ctx.accounts.mint.key(), &ctx.remaining_accounts[0])?
+    } else {
+        DEFAULT_MEMBER_RATE
+    };
     member.registered_by = ctx.accounts.payer.key();
     ctx.accounts.collection.member_count = ctx.accounts.collection.member_count.saturating_add(1);
     emit!(CollectionMemberRegistered {

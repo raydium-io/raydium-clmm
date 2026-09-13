@@ -27,6 +27,9 @@ pub enum RuleKind {
     PumpFunLaunch = 1,
     /// Mint has no mint authority and no freeze authority.
     ImmutableMint = 2,
+    /// Mint is the pool mint of an SPL stake pool (or a layout-compatible fork) owned by `program_id`.
+    /// The member rate is the pool's exchange rate and can be re-read with `sync_member_rate`.
+    Lst = 3,
 }
 impl RuleKind {
     pub fn from_u8(v: u8) -> Option<Self> {
@@ -34,6 +37,7 @@ impl RuleKind {
             0 => Some(Self::Any),
             1 => Some(Self::PumpFunLaunch),
             2 => Some(Self::ImmutableMint),
+            3 => Some(Self::Lst),
             _ => None,
         }
     }

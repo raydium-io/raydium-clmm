@@ -18,3 +18,6 @@ pub use set_collection_member_rate::*;
 
 pub mod rules;
 pub use rules::*;
+
+pub mod sync_member_rate;
+pub use sync_member_rate::*;
