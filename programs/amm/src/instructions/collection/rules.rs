@@ -32,7 +32,39 @@ pub fn check_rules<'info>(
             let stake_pool = proof.first().ok_or(ErrorCode::RuleCheckFailed)?;
             stake_pool_rate(ruleset, &mint.key(), stake_pool).map(|_| ())
         }
+        RuleKind::LaunchpadDbc => check_launchpad_dbc(ruleset, &mint.key(), proof),
     }
+}
+/// Meteora DBC program id.
+pub const DBC_PROGRAM_ID: Pubkey = pubkey!("dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN");
+/// sha256("account:VirtualPool")[..8] and sha256("account:PoolConfig")[..8]
+const DBC_VIRTUAL_POOL_DISCRIMINATOR: [u8; 8] = [213, 224, 5, 209, 98, 69, 119, 92];
+const DBC_POOL_CONFIG_DISCRIMINATOR: [u8; 8] = [26, 108, 14, 123, 116, 230, 129, 43];
+/// VirtualPool: disc | PoolState { volatility_tracker 64 | config @72 | creator | base_mint @136 | ... }
+const DBC_VP_CONFIG_OFFSET: usize = 72;
+const DBC_VP_BASE_MINT_OFFSET: usize = 136;
+/// PoolConfig: disc | quote_mint @8 | fee_claimer @40 | leftover_receiver @72 | ...
+const DBC_CFG_FEE_CLAIMER_OFFSET: usize = 40;
+
+/// 1. `virtual_pool` is a DBC `VirtualPool` whose `base_mint` is the mint
+/// 2. `pool_config` is the DBC `PoolConfig` the pool points at
+/// 3. that config's `fee_claimer` is our partner PDA (`ruleset.program_id`)
+fn check_launchpad_dbc(ruleset: &Ruleset, mint: &Pubkey, proof: &[AccountInfo]) -> Result<()> {
+    require!(proof.len() >= 2, ErrorCode::RuleCheckFailed);
+    let (vp, cfg) = (&proof[0], &proof[1]);
+    require_keys_eq!(*vp.owner, DBC_PROGRAM_ID, ErrorCode::RuleCheckFailed);
+    require_keys_eq!(*cfg.owner, DBC_PROGRAM_ID, ErrorCode::RuleCheckFailed);
+    let vpd = vp.try_borrow_data()?;
+    let cfgd = cfg.try_borrow_data()?;
+    require!(vpd.len() > DBC_VP_BASE_MINT_OFFSET + 32 && vpd[..8] == DBC_VIRTUAL_POOL_DISCRIMINATOR, ErrorCode::RuleCheckFailed);
+    require!(cfgd.len() > DBC_CFG_FEE_CLAIMER_OFFSET + 32 && cfgd[..8] == DBC_POOL_CONFIG_DISCRIMINATOR, ErrorCode::RuleCheckFailed);
+    let base_mint = Pubkey::new_from_array(vpd[DBC_VP_BASE_MINT_OFFSET..DBC_VP_BASE_MINT_OFFSET + 32].try_into().unwrap());
+    let config = Pubkey::new_from_array(vpd[DBC_VP_CONFIG_OFFSET..DBC_VP_CONFIG_OFFSET + 32].try_into().unwrap());
+    let fee_claimer = Pubkey::new_from_array(cfgd[DBC_CFG_FEE_CLAIMER_OFFSET..DBC_CFG_FEE_CLAIMER_OFFSET + 32].try_into().unwrap());
+    require_keys_eq!(base_mint, *mint, ErrorCode::RuleCheckFailed);
+    require_keys_eq!(config, cfg.key(), ErrorCode::RuleCheckFailed);
+    require_keys_eq!(fee_claimer, ruleset.program_id, ErrorCode::RuleCheckFailed);
+    Ok(())
 }
 
 /// SPL stake pool `StakePool` layout: account_type u8 | manager 32 | staker 32 | deposit_authority 32 |
@@ -93,7 +125,7 @@ pub fn validate_ruleset_params(kind: u8, flags: u8, program_id: &Pubkey) -> Resu
             require_keys_neq!(*program_id, Pubkey::default(), ErrorCode::InvalidUpdateConfigFlag);
             require!(flags & !(FLAG_ALLOW_MAYHEM | FLAG_REQUIRE_COMPLETE) == 0, ErrorCode::InvalidUpdateConfigFlag);
         }
-        RuleKind::Lst => {
+        RuleKind::Lst | RuleKind::LaunchpadDbc => {
             require_keys_neq!(*program_id, Pubkey::default(), ErrorCode::InvalidUpdateConfigFlag);
             require_eq!(flags, 0, ErrorCode::InvalidUpdateConfigFlag);
         }

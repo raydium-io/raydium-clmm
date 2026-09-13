@@ -499,3 +499,64 @@ fn lst_rule_and_rate_sync() {
     e.ok(&[e.register(c, rs, fresh, &[empty])], &[]);
     assert_eq!(u64::from_le_bytes(e.data(&e.member(&c, &fresh))[80..88].try_into().unwrap()), RATE_ONE);
 }
+
+// ---------------------------------------------------------------- LaunchpadDbc rule: Meteora DBC virtual pool + config proof
+
+const DBC_PROGRAM: &str = "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN";
+/// VirtualPool: disc | PoolState { volatility 64 | config @72 | creator @104 | base_mint @136 | ... } (424 bytes)
+fn fake_virtual_pool(e: &mut Env, config: &Address, base_mint: &Address, owner: Address, bad_disc: bool) -> Address {
+    let k = Address::new_unique();
+    let mut d = vec![0u8; 424];
+    d[..8].copy_from_slice(&[213, 224, 5, 209, 98, 69, 119, 92]);
+    if bad_disc { d[0] ^= 0xff; }
+    d[72..104].copy_from_slice(config.as_ref());
+    d[136..168].copy_from_slice(base_mint.as_ref());
+    e.svm.set_account(k, Account { lamports: 10_000_000, data: d, owner, executable: false, rent_epoch: 0 }).unwrap();
+    k
+}
+/// PoolConfig: disc | quote_mint @8 | fee_claimer @40 | leftover_receiver @72 | ... (1048 bytes)
+fn fake_pool_config(e: &mut Env, fee_claimer: &Address, owner: Address) -> Address {
+    let k = Address::new_unique();
+    let mut d = vec![0u8; 1048];
+    d[..8].copy_from_slice(&[26, 108, 14, 123, 116, 230, 129, 43]);
+    d[8..40].copy_from_slice(a(WSOL).as_ref());
+    d[40..72].copy_from_slice(fee_claimer.as_ref());
+    d[72..104].copy_from_slice(fee_claimer.as_ref());
+    e.svm.set_account(k, Account { lamports: 10_000_000, data: d, owner, executable: false, rent_epoch: 0 }).unwrap();
+    k
+}
+
+#[test]
+fn launchpad_dbc_rule() {
+    let mut e = Env::new();
+    let partner = Address::new_unique(); // our launchpad partner PDA, the ruleset's program_id field
+    let dbc = a(DBC_PROGRAM);
+    let rs = e.seed_ruleset(7, 4, 0, partner);
+    e.ok(&[e.create_collection(7, 7, a(WSOL), 100)], &[]);
+    let c = e.collection(7);
+    let meme = e.fake_mint(false);
+    let our_cfg = fake_pool_config(&mut e, &partner, dbc);
+    let vp = fake_virtual_pool(&mut e, &our_cfg, &meme, dbc, false);
+    // negatives: missing proof, only one account, wrong owner on either, bad discriminator, config mismatch,
+    // wrong mint, someone else's config (different fee claimer)
+    e.fails_with(&[e.register(c, rs, meme, &[])], &[], "RuleCheckFailed");
+    e.fails_with(&[e.register(c, rs, meme, &[vp])], &[], "RuleCheckFailed");
+    let vp_sys = fake_virtual_pool(&mut e, &our_cfg, &meme, a(SYSTEM), false);
+    e.fails_with(&[e.register(c, rs, meme, &[vp_sys, our_cfg])], &[], "RuleCheckFailed");
+    let cfg_sys = fake_pool_config(&mut e, &partner, a(SYSTEM));
+    let vp2 = fake_virtual_pool(&mut e, &cfg_sys, &meme, dbc, false);
+    e.fails_with(&[e.register(c, rs, meme, &[vp2, cfg_sys])], &[], "RuleCheckFailed");
+    let vp_bad = fake_virtual_pool(&mut e, &our_cfg, &meme, dbc, true);
+    e.fails_with(&[e.register(c, rs, meme, &[vp_bad, our_cfg])], &[], "RuleCheckFailed");
+    let other_cfg = fake_pool_config(&mut e, &partner, dbc);
+    e.fails_with(&[e.register(c, rs, meme, &[vp, other_cfg])], &[], "RuleCheckFailed"); // pool points at our_cfg, not other_cfg
+    let other_mint = e.fake_mint(false);
+    e.fails_with(&[e.register(c, rs, other_mint, &[vp, our_cfg])], &[], "RuleCheckFailed");
+    let foreign_cfg = fake_pool_config(&mut e, &Address::new_unique(), dbc);
+    let vp_foreign = fake_virtual_pool(&mut e, &foreign_cfg, &meme, dbc, false);
+    e.fails_with(&[e.register(c, rs, meme, &[vp_foreign, foreign_cfg])], &[], "RuleCheckFailed");
+    // the real thing
+    e.ok(&[e.register(c, rs, a(WSOL), &[]), e.register(c, rs, meme, &[vp, our_cfg])], &[]);
+    let d = e.data(&e.member(&c, &meme));
+    assert_eq!((pk(&d, 16), pk(&d, 48), u64::from_le_bytes(d[80..88].try_into().unwrap())), (c, meme, RATE_ONE));
+}
