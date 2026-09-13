@@ -54,11 +54,13 @@ pub fn rebalance_swap_v2<'a, 'b, 'c: 'info, 'info>(
     let divisor = ctx.accounts.collection.rebalance_fee_divisor;
     let (input_rate, output_rate) = (ctx.accounts.input_member.rate, ctx.accounts.output_member.rate);
     let swap = &mut ctx.accounts.swap;
+    // Never below 1 ppm, mirroring CP-Swap.
     let fee_rate = swap
         .amm_config
         .trade_fee_rate
         .checked_div(divisor)
-        .ok_or(ErrorCode::InvalidUpdateConfigFlag)?;
+        .ok_or(ErrorCode::InvalidUpdateConfigFlag)?
+        .max(1);
 
     let (zero_for_one, sqrt_before, target) = {
         let pool = swap.pool_state.load()?;
