@@ -57,3 +57,12 @@ pub use create_customizable_pool::*;
 
 pub mod create_permissioned_pool;
 pub use create_permissioned_pool::*;
+
+pub mod collection;
+pub use collection::*;
+
+pub mod rebalance_swap_v2;
+pub use rebalance_swap_v2::*;
+
+pub mod collection_pool;
+pub use collection_pool::*;

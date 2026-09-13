@@ -650,6 +650,119 @@ pub mod raydium_clmm {
         )
     }
 
+    /// Token collections
+    ///
+    /// A ruleset is an admin-defined admission rule (e.g. "standard non-mayhem pump.fun launch").
+    /// Anyone may create a collection that points at a ruleset, and anyone may register a mint
+    /// into a collection by supplying the accounts that prove the rule holds. Pools whose two mints
+    /// are members of one collection gain the discounted `rebalance_swap_v2` path.
+
+    /// Create an admission ruleset. Admin only.
+    pub fn create_ruleset(
+        ctx: Context<CreateRuleset>,
+        index: u16,
+        kind: u8,
+        flags: u8,
+        program_id: Pubkey,
+    ) -> Result<()> {
+        instructions::create_ruleset(ctx, index, kind, flags, program_id)
+    }
+
+    /// Update an admission ruleset. Admin only.
+    pub fn update_ruleset(ctx: Context<UpdateRuleset>, kind: u8, flags: u8, program_id: Pubkey) -> Result<()> {
+        instructions::update_ruleset(ctx, kind, flags, program_id)
+    }
+
+    /// Create a token collection bound to a ruleset. Permissionless.
+    pub fn create_token_collection(
+        ctx: Context<CreateTokenCollection>,
+        index: u16,
+        rebalance_fee_divisor: u32,
+    ) -> Result<()> {
+        instructions::create_token_collection(ctx, index, rebalance_fee_divisor)
+    }
+
+    /// Update a token collection. Collection authority only. param 0: divisor, 1: new authority.
+    pub fn update_token_collection(ctx: Context<UpdateTokenCollection>, param: u8, value: u64) -> Result<()> {
+        instructions::update_token_collection(ctx, param, value)
+    }
+
+    /// Register a mint into a collection after checking the ruleset against the proof accounts
+    /// supplied as remaining accounts. Permissionless.
+    pub fn register_collection_member<'a, 'b, 'c: 'info, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, RegisterCollectionMember<'info>>,
+    ) -> Result<()> {
+        instructions::register_collection_member(ctx)
+    }
+
+    /// Set a member's value in the collection numeraire (1e9 == 1.0). Collection authority only.
+    pub fn set_collection_member_rate(ctx: Context<SetCollectionMemberRate>, rate: u64) -> Result<()> {
+        instructions::set_collection_member_rate(ctx, rate)
+    }
+
+    /// Re-read an LST member's rate from its stake pool (`Lst` rulesets). Permissionless.
+    pub fn sync_member_rate(ctx: Context<SyncMemberRate>) -> Result<()> {
+        instructions::sync_member_rate(ctx)
+    }
+
+    /// `swap_v2` at `trade_fee_rate / collection.rebalance_fee_divisor` for a pool whose mints are both
+    /// members of one token collection. Only accepted if it moves `sqrt_price_x64` strictly
+    /// closer to the target implied by the members' rates (see `states::collection`).
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - swap_v2 accounts followed by `collection`, `input_member`, `output_member`
+    /// * `amount`, `other_amount_threshold`, `sqrt_price_limit_x64`, `is_base_input` - as `swap_v2`
+    pub fn rebalance_swap_v2<'a, 'b, 'c: 'info, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, RebalanceSwapSingleV2<'info>>,
+        amount: u64,
+        other_amount_threshold: u64,
+        sqrt_price_limit_x64: u128,
+        is_base_input: bool,
+    ) -> Result<()> {
+        instructions::rebalance_swap_v2(
+            ctx,
+            amount,
+            other_amount_threshold,
+            sqrt_price_limit_x64,
+            is_base_input,
+        )
+    }
+
+    /// Collection pools
+    ///
+    /// A pair that contains a collection's quote mint can bind to that collection. Other members of
+    /// the collection get their own vaults under the pool, and any two members (the pair's base token
+    /// included) swap directly against each other inside the pool: `intra_swap`, priced by a
+    /// StableSwap over the members' rate-normalised reserves. The pair's tick curve is unchanged.
+
+    /// Bind a pair to a collection. Pool owner or admin. `amp` is the StableSwap amplification.
+    pub fn init_pool_members(ctx: Context<InitPoolMembers>, amp: u64) -> Result<()> {
+        instructions::init_pool_members(ctx, amp)
+    }
+
+    /// Add a collection member to the pool (creates its vault). Permissionless.
+    pub fn add_pool_member(ctx: Context<AddPoolMember>) -> Result<()> {
+        instructions::add_pool_member(ctx)
+    }
+
+    /// Swap member `from_index` for member `to_index` inside the pool.
+    /// Remaining accounts: for every member k, `[member vault k, CollectionMember k]`.
+    pub fn intra_swap<'a, 'b, 'c: 'info, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, IntraSwap<'info>>,
+        from_index: u8,
+        to_index: u8,
+        amount_in: u64,
+        minimum_amount_out: u64,
+    ) -> Result<()> {
+        instructions::intra_swap(ctx, from_index, to_index, amount_in, minimum_amount_out)
+    }
+
+    /// Collect protocol (kind 0) or fund (kind 1) fees from a non-base member vault.
+    pub fn collect_member_fees(ctx: Context<CollectMemberFees>, member_index: u8, kind: u8) -> Result<()> {
+        instructions::collect_member_fees(ctx, member_index, kind)
+    }
+
     /// Swap token for as much as possible of another token across the path provided, base input
     ///
     /// # Arguments
