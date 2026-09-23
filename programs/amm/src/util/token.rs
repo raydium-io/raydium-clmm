@@ -216,6 +216,136 @@ pub fn thaw_token_account<'info>(
     ))
 }
 
+pub fn withdraw_excess_lamports<'a>(
+    token_program: AccountInfo<'a>,
+    source: AccountInfo<'a>,
+    destination: AccountInfo<'a>,
+    authority: AccountInfo<'a>,
+    signers_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    let ix = instruction::Instruction {
+        program_id: *token_program.key,
+        accounts: vec![
+            AccountMeta::new(*source.key, false),
+            AccountMeta::new(*destination.key, false),
+            AccountMeta::new_readonly(*authority.key, true),
+        ],
+        data: vec![38], // TokenInstruction::WithdrawExcessLamports = 38
+    };
+    anchor_lang::solana_program::program::invoke_signed(
+        &ix,
+        &[source, destination, authority, token_program],
+        signers_seeds,
+    )
+    .map_err(Into::into)
+}
+
+pub fn unwrap_lamports<'a>(
+    token_program: AccountInfo<'a>,
+    source: AccountInfo<'a>,
+    destination: AccountInfo<'a>,
+    authority: AccountInfo<'a>,
+    signers_seeds: &[&[&[u8]]],
+    amount: Option<u64>,
+) -> Result<()> {
+    // TokenInstruction::UnwrapLamports = 45, followed by a COption<u64>
+    let mut data = vec![45];
+    match amount {
+        Some(amount) => {
+            data.push(1); // COption::Some
+            data.extend_from_slice(&amount.to_le_bytes());
+        }
+        None => data.push(0), // COption::None
+    }
+    let ix = instruction::Instruction {
+        program_id: *token_program.key,
+        accounts: vec![
+            AccountMeta::new(*source.key, false),
+            AccountMeta::new(*destination.key, false),
+            AccountMeta::new_readonly(*authority.key, true),
+        ],
+        data,
+    };
+    anchor_lang::solana_program::program::invoke_signed(
+        &ix,
+        &[source, destination, authority, token_program],
+        signers_seeds,
+    )
+    .map_err(Into::into)
+}
+
+/// Read (is_native, amount) from a token account, parsing extensions so it
+/// works for both legacy accounts and Token-2022 accounts that carry extensions.
+fn token_account_native_and_amount(account: &AccountInfo) -> Result<(bool, u64)> {
+    let data = account.try_borrow_data()?;
+    if let Ok(state) = StateWithExtensions::<spl_token_2022::state::Account>::unpack(&data) {
+        return Ok((state.base.is_native.is_some(), state.base.amount));
+    } else {
+        // process token mint account
+        return Ok((false, 0));
+    }
+}
+
+/// Collect the excess lamports sitting on a token account owned by `authority`.
+///
+/// A native (WSOL) account cannot use `WithdrawExcessLamports` (the token
+/// program rejects native accounts). Instead `SyncNative` folds the donated
+/// excess lamports into the wrapped `amount`, the delta is measured, and
+/// `UnwrapLamports` pulls exactly that delta back out — leaving the wrapped
+/// balance unchanged, which is asserted afterwards.
+pub fn withdraw_excess_lamports_from_token<'a>(
+    token_program: AccountInfo<'a>,
+    source: AccountInfo<'a>,
+    destination: AccountInfo<'a>,
+    authority: AccountInfo<'a>,
+    signers_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    let (is_native, amount_before_sync) = token_account_native_and_amount(&source)?;
+
+    if !is_native {
+        return withdraw_excess_lamports(
+            token_program,
+            source,
+            destination,
+            authority,
+            signers_seeds,
+        );
+    }
+
+    // SyncNative (ix 17) folds the donated excess lamports into the wrapped amount.
+    let sync_ix = spl_token_2022::instruction::sync_native(token_program.key, source.key)?;
+    anchor_lang::solana_program::program::invoke(
+        &sync_ix,
+        &[source.clone(), token_program.clone()],
+    )?;
+
+    let (_, amount_after_sync) = token_account_native_and_amount(&source)?;
+    let excess_lamports = amount_after_sync
+        .checked_sub(amount_before_sync)
+        .ok_or(ErrorCode::LamportsCalculateError)?;
+    if excess_lamports == 0 {
+        return Ok(());
+    }
+
+    unwrap_lamports(
+        token_program,
+        source.clone(),
+        destination,
+        authority,
+        signers_seeds,
+        Some(excess_lamports),
+    )?;
+
+    // The wrapped balance must be exactly what it was before sync + unwrap.
+    let (_, amount_after_unwrap) = token_account_native_and_amount(&source)?;
+    require_eq!(
+        amount_before_sync,
+        amount_after_unwrap,
+        ErrorCode::LamportsCalculateError
+    );
+    Ok(())
+}
+
 /// Calculate the fee for output amount
 pub fn get_transfer_inverse_fee(
     mint_account: Box<InterfaceAccount<Mint>>,
@@ -544,11 +674,10 @@ pub fn position_nft_must_freeze(
     vault_1_mint: Option<&InterfaceAccount<Mint>>,
 ) -> bool {
     let ids = &frozen_position_nft_authorities::IDS;
-    let is_restricted_mint = |mint: Option<&InterfaceAccount<Mint>>| {
-        match mint.map(|mint| mint.freeze_authority) {
+    let is_restricted_mint =
+        |mint: Option<&InterfaceAccount<Mint>>| match mint.map(|mint| mint.freeze_authority) {
             Some(COption::Some(authority)) => ids.contains(&authority),
             _ => false,
-        }
-    };
+        };
     is_restricted_mint(vault_0_mint) || is_restricted_mint(vault_1_mint)
 }

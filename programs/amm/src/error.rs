@@ -121,4 +121,6 @@ pub enum ErrorCode {
     MissingTokenProgram2022,
     #[msg("TickArrayBitmapExtension account does not belong to this pool")]
     InvalidTickArrayBitmapExtensionAccount,
+    #[msg("Lamports calculate error")]
+    LamportsCalculateError,
 }

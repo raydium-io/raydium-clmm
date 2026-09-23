@@ -27,9 +27,9 @@ declare_id!("DRayAUgENGQBKVaX8owNhgzkEDyoHTGVEGHVJT1E9pfH");
 declare_id!("CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK");
 
 pub mod admin {
-    use super::Pubkey;
     #[cfg(not(feature = "localnet"))]
     use super::pubkey;
+    use super::Pubkey;
     #[cfg(feature = "localnet")]
     pub const ID: Pubkey = Pubkey::from_str_const(env!(
         "CLMM_LOCALNET_ADMIN",
@@ -47,6 +47,30 @@ pub mod limit_order_admin {
     pub const ID: Pubkey = pubkey!("DRaypkxM96mjYYnqMmuYjsSL3stHxLf1CvYuTcqxUaav");
     #[cfg(not(feature = "devnet"))]
     pub const ID: Pubkey = pubkey!("Ray8HHtixhL9zvnokMyELCVGp622PDPJj96zcVC9RWp");
+}
+
+pub mod collect_lamports {
+    use super::{pubkey, Pubkey};
+    #[cfg(feature = "devnet")]
+    pub const ID: Pubkey = pubkey!("DRay9ncC4JVKemPgT4FBaAV2wyTK21CUa7reZKgKdE9B");
+    #[cfg(not(feature = "devnet"))]
+    pub const ID: Pubkey = pubkey!("Ray9LdYRLXsHzL8pr3Ceahfiz8MsS2pZagzHo1ckdfJ");
+}
+
+pub mod fund_fee_owner {
+    use super::{pubkey, Pubkey};
+    #[cfg(feature = "devnet")]
+    pub const ID: Pubkey = pubkey!("DRayDktajVnqaNPyuYATWmZXyiJkdXpmUPdBYEapgaLY");
+    #[cfg(not(feature = "devnet"))]
+    pub const ID: Pubkey = pubkey!("FundHfY8oo8J9KYGyfXFFuQCHe7Z1VBNmsj84eMcdYs4");
+}
+
+pub mod protocol_fee_owner {
+    use super::{pubkey, Pubkey};
+    #[cfg(feature = "devnet")]
+    pub const ID: Pubkey = pubkey!("DRayDktajVnqaNPyuYATWmZXyiJkdXpmUPdBYEapgaLY");
+    #[cfg(not(feature = "devnet"))]
+    pub const ID: Pubkey = pubkey!("projjosVCPQH49d5em7VYS7fJZzaqKixqKtus7yk416");
 }
 
 #[program]
@@ -753,5 +777,12 @@ pub mod raydium_clmm {
     ///
     pub fn close_limit_order<'info>(ctx: Context<'info, CloseLimitOrder<'info>>) -> Result<()> {
         instructions::close_limit_order(ctx)
+    }
+
+    /// Collect excess lamports, including accounts for SPL tokens owned by authority and Program PDA accounts.
+    pub fn collect_excess_lamports<'info>(
+        ctx: Context<'info, CollectExcessLamports<'info>>,
+    ) -> Result<()> {
+        instructions::collect_excess_lamports(ctx)
     }
 }
