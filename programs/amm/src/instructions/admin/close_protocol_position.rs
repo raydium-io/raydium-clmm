@@ -17,8 +17,8 @@ pub struct CloseProtocolPosition<'info> {
     pub protocol_position: Box<Account<'info, ProtocolPositionState>>,
 }
 
-pub fn close_protocol_position<'a, 'b, 'c, 'info>(
-    _ctx: Context<'a, 'b, 'c, 'info, CloseProtocolPosition<'info>>,
+pub fn close_protocol_position<'info>(
+    _ctx: Context<'info, CloseProtocolPosition<'info>>,
 ) -> Result<()> {
     Ok(())
 }

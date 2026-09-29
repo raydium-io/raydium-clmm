@@ -129,8 +129,8 @@ pub struct CreateCustomizableParams {
     pub enable_dynamic_fee: bool,
 }
 
-pub fn create_customizable_pool<'a, 'b, 'c: 'info, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, CreateCustomizablePool<'info>>,
+pub fn create_customizable_pool<'info>(
+    ctx: Context<'info, CreateCustomizablePool<'info>>,
     customizable_params: CreateCustomizableParams,
 ) -> Result<()> {
     let mint0_associated_is_initialized = util::support_mint_associated_is_initialized(

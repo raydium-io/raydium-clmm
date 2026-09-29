@@ -91,8 +91,8 @@ pub struct IncreaseLiquidityV2<'info> {
     // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
 }
 
-pub fn increase_liquidity_v2<'a, 'b, 'c: 'info, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, IncreaseLiquidityV2<'info>>,
+pub fn increase_liquidity_v2<'info>(
+    ctx: Context<'info, IncreaseLiquidityV2<'info>>,
     liquidity: u128,
     amount_0_max: u64,
     amount_1_max: u64,

@@ -15,9 +15,9 @@ use solana_client::{
     rpc_filter::{Memcmp, RpcFilterType},
     rpc_request::TokenAccountsFilter,
 };
+use solana_commitment_config::CommitmentConfig;
+use solana_compute_budget_interface::ComputeBudgetInstruction;
 use solana_sdk::{
-    commitment_config::CommitmentConfig,
-    compute_budget::ComputeBudgetInstruction,
     message::Message,
     program_pack::Pack,
     pubkey::Pubkey,

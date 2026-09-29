@@ -6,7 +6,6 @@ KeyPairs
 *.json
 !package.json
 !tsconfig.json
-!tests/fixtures/localnet-admin.json
 client/target
 **/*.rs.bk
 node_modules

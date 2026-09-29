@@ -89,8 +89,8 @@ pub struct DecreaseLimitOrder<'info> {
     // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
 }
 
-pub fn decrease_limit_order<'a, 'b, 'c: 'info, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, DecreaseLimitOrder<'info>>,
+pub fn decrease_limit_order<'info>(
+    ctx: Context<'info, DecreaseLimitOrder<'info>>,
     amount: u64,
     amount_min: u64,
 ) -> Result<()> {

@@ -17,8 +17,8 @@
  *   make test_live_swap
  *   # or: yarn ts-mocha -p ./tsconfig.json -t 1000000 tests/swap-live-pool.ts
  */
-import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
+import * as anchor from "@anchor-lang/core";
+import { Program } from "@anchor-lang/core";
 import {
   Connection,
   Keypair,

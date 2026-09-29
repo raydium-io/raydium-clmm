@@ -13,8 +13,8 @@ pub struct TransferRewardOwner<'info> {
     pub pool_state: AccountLoader<'info, PoolState>,
 }
 
-pub fn transfer_reward_owner<'a, 'b, 'c, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, TransferRewardOwner<'info>>,
+pub fn transfer_reward_owner<'info>(
+    ctx: Context<'info, TransferRewardOwner<'info>>,
     new_owner: Pubkey,
 ) -> Result<()> {
     let mut pool_state = ctx.accounts.pool_state.load_mut()?;

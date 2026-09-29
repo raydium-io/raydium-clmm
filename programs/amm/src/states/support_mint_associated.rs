@@ -16,7 +16,7 @@ pub struct SupportMintAssociated {
 impl SupportMintAssociated {
     pub const LEN: usize = 8 + 1 + 32 + 64;
 
-    pub fn initialize<'info>(&mut self, bump: u8, mint: Pubkey) -> Result<()> {
+    pub fn initialize(&mut self, bump: u8, mint: Pubkey) -> Result<()> {
         self.bump = bump;
         self.mint = mint;
         Ok(())

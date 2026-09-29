@@ -139,8 +139,8 @@ pub struct CreatePermissionedPool<'info> {
     // pub dynamic_fee_config: Box<Account<'info, DynamicFeeConfig>>,
 }
 
-pub fn create_permissioned_pool<'a, 'b, 'c: 'info, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, CreatePermissionedPool<'info>>,
+pub fn create_permissioned_pool(
+    ctx: Context<CreatePermissionedPool>,
     customizable_params: CreateCustomizableParams,
     seed_index: u16,
 ) -> Result<()> {

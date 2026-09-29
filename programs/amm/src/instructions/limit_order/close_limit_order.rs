@@ -15,9 +15,7 @@ pub struct CloseLimitOrder<'info> {
     pub limit_order: Account<'info, LimitOrderState>,
 }
 
-pub fn close_limit_order<'a, 'b, 'c: 'info, 'info>(
-    ctx: Context<'a, 'b, 'c, 'info, CloseLimitOrder<'info>>,
-) -> Result<()> {
+pub fn close_limit_order<'info>(ctx: Context<'info, CloseLimitOrder<'info>>) -> Result<()> {
     // Close accounts when fully unfilled amount becomes zero
     if ctx.accounts.limit_order.get_unfilled_amount()? != 0 {
         return err!(ErrorCode::InvalidLimitOrderAmount);

@@ -1,11 +1,12 @@
 {
     "scripts": {
+        "test:local-admin": "CLMM_LOCALNET_ADMIN=$(solana-keygen pubkey ${ANCHOR_WALLET:-$HOME/.config/solana/id.json}) sh -c 'anchor build --ignore-keys -- --features localnet && anchor test --skip-build'",
         "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
         "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
     },
     "dependencies": {
-        "@coral-xyz/anchor": "0.32.1",
-        "@raydium-io/raydium-sdk-v2": "0.2.55-alpha",
+        "@anchor-lang/core": "1.0.2",
+        "@raydium-io/raydium-sdk-v2": "0.2.32-alpha",
         "@solana/spl-token": "^0.4.14"
     },
     "devDependencies": {
@@ -16,6 +17,6 @@
         "mocha": "^9.0.3",
         "prettier": "^2.6.2",
         "ts-mocha": "^10.0.0",
-        "typescript": "^4.3.5"
+        "typescript": "^5.6.3"
     }
 }

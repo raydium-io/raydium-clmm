@@ -78,7 +78,7 @@ pub fn settle_limit_order(ctx: Context<SettleLimitOrder>) -> Result<()> {
     // For monitoring purposes, perform the transfer even if amount_out is 0
     token_2022::transfer_checked(
         CpiContext::new_with_signer(
-            ctx.accounts.output_token_program.to_account_info(),
+            ctx.accounts.output_token_program.key(),
             token_2022::TransferChecked {
                 from: ctx.accounts.output_vault.to_account_info(),
                 to: ctx.accounts.output_token_account.to_account_info(),

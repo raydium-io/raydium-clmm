@@ -44,7 +44,7 @@ pub fn create_amm_config(
     );
     require_gte!(MAX_TICK_SPACING, tick_spacing);
     let amm_config = ctx.accounts.amm_config.deref_mut();
-    amm_config.owner = ctx.accounts.owner.key();
+    amm_config.owner = crate::protocol_fee_owner::ID;
     amm_config.bump = ctx.bumps.amm_config;
     amm_config.index = index;
     amm_config.trade_fee_rate = trade_fee_rate;
@@ -52,7 +52,7 @@ pub fn create_amm_config(
     amm_config.tick_spacing = tick_spacing;
     amm_config.fund_fee_rate = fund_fee_rate;
     amm_config.padding_u32 = 0;
-    amm_config.fund_owner = ctx.accounts.owner.key();
+    amm_config.fund_owner = crate::fund_fee_owner::ID;
 
     emit!(ConfigChangeEvent {
         index: amm_config.index,
