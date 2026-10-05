@@ -123,4 +123,20 @@ pub enum ErrorCode {
     InvalidTickArrayBitmapExtensionAccount,
     #[msg("Lamports calculate error")]
     LamportsCalculateError,
+
+    // ---- Token-2022 transfer hook ----
+    #[msg("Mint carries a transfer hook whose program is not supported")]
+    HookProgramNotSupported,
+    #[msg("Hook declares more extra accounts than MAX_HOOK_EXTRA_ACCOUNTS")]
+    HookExtraAccountsTooMany,
+    #[msg("Hook extra account address depends on the transfer amount, which an AMM cannot resolve off-chain")]
+    HookExtraAccountUsesInstructionData,
+    #[msg("This instruction does not support mints with a transfer hook, use the v3 instruction")]
+    UnsupportedTransferHookMint,
+    #[msg("RemainingAccountsInfo does not describe the accounts that were passed")]
+    RemainingAccountsInfoMismatch,
+    #[msg("Transfer hook accounts required but the caller passed none")]
+    NoExtraAccountsForTransferHook,
+    #[msg("Hook extra account address depends on token account data the transfer changes")]
+    HookExtraAccountUsesTransferredData,
 }

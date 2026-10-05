@@ -7,7 +7,7 @@ import { TestSetup } from "./utils/setup";
 import { InstructionHelper } from "./utils/instructions";
 import { PDAUtils } from "./utils/pda";
 import { getTickArrayAddressByTick } from "./utils/util";
-import { TickUtil } from "@raydium-io/raydium-sdk-v2";
+import { getSqrtPriceX64FromTick } from "./utils/tick-math";
 import { getTickArrayBitmapBit, getTickStateByTick, cleanupAllLimitOrders } from "./utils/util";
 import { getAccount, getAssociatedTokenAddressSync } from "@solana/spl-token";
 
@@ -91,7 +91,7 @@ describe("swap_test", () => {
         outputVaultMint: outputVaultMint,
         amount: new anchor.BN(1000302),
         otherAmountThreshold: new anchor.BN(0),
-        sqrtPriceLimitX64: TickUtil.getSqrtPriceAtTick(10),
+        sqrtPriceLimitX64: getSqrtPriceX64FromTick(10),
         isBaseInput: true,
         remainingAccounts: [
           {
@@ -133,7 +133,7 @@ describe("swap_test", () => {
         poolStateLocal
       );
       const expectedSqrtAtLimitBeforePartial =
-        TickUtil.getSqrtPriceAtTick(limitTick);
+        getSqrtPriceX64FromTick(limitTick);
 
       assert.equal(
         poolBeforePartial.tickCurrent,
@@ -198,7 +198,7 @@ describe("swap_test", () => {
         poolStateLocal
       );
       const expectedSqrtAtLimitAfterPartial =
-        TickUtil.getSqrtPriceAtTick(limitTick);
+        getSqrtPriceX64FromTick(limitTick);
 
       assert.equal(
         poolAfterPartial.tickCurrent,
@@ -262,7 +262,7 @@ describe("swap_test", () => {
         poolStateLocal
       );
       const expectedSqrtAtLimitAfterFull =
-        TickUtil.getSqrtPriceAtTick(limitTick);
+        getSqrtPriceX64FromTick(limitTick);
 
       assert.equal(
         poolAfterFull.tickCurrent,
@@ -363,7 +363,7 @@ describe("swap_test", () => {
         outputVaultMint: outputVaultMint,
         amount: new anchor.BN(5501652),
         otherAmountThreshold: new anchor.BN(0),
-        sqrtPriceLimitX64: TickUtil.getSqrtPriceAtTick(limitTick),
+        sqrtPriceLimitX64: getSqrtPriceX64FromTick(limitTick),
         isBaseInput: true,
         remainingAccounts: [
           {
@@ -415,7 +415,7 @@ describe("swap_test", () => {
         poolStateLocal
       );
       const expectedSqrtAtLimitBeforePartial =
-        TickUtil.getSqrtPriceAtTick(limitTick);
+        getSqrtPriceX64FromTick(limitTick);
 
       assert.equal(
         poolBeforePartial.tickCurrent,
@@ -483,7 +483,7 @@ describe("swap_test", () => {
         poolStateLocal
       );
       const expectedSqrtAtLimitAfterPartial =
-        TickUtil.getSqrtPriceAtTick(limitTick);
+        getSqrtPriceX64FromTick(limitTick);
 
       assert.equal(
         poolAfterPartial.tickCurrent,
@@ -547,7 +547,7 @@ describe("swap_test", () => {
         poolStateLocal
       );
       const expectedSqrtAtLimitAfterFull =
-        TickUtil.getSqrtPriceAtTick(limitTick);
+        getSqrtPriceX64FromTick(limitTick);
 
       assert.equal(
         poolAfterFull.tickCurrent,

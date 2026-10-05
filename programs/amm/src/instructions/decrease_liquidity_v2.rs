@@ -1,5 +1,6 @@
 use super::decrease_liquidity::decrease_liquidity;
 use crate::states::*;
+use crate::util;
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::Mint;
@@ -86,15 +87,12 @@ pub struct DecreaseLiquidityV2<'info> {
         address = token_vault_1.mint
     )]
     pub vault_1_mint: Box<InterfaceAccount<'info, Mint>>,
-    // remaining account
-    // #[account(
-    //     seeds = [
-    //         POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
-    //         pool_state.key().as_ref(),
-    //     ],
-    //     bump
-    // )]
-    // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
+    // remaining accounts:
+    //   decrease_liquidity_v2: [tick array bitmap extension] (found by key), then one
+    //     (reward vault, recipient token account, reward mint) triple per initialized reward
+    //   decrease_liquidity_v3: segments declared by `RemainingAccountsInfo`:
+    //     TickArrayBitmapExtension (optional), TransferHookToken0, TransferHookToken1;
+    //     rewards are not paid here, see `collect_reward`
 }
 
 pub fn decrease_liquidity_v2<'info>(
@@ -103,6 +101,15 @@ pub fn decrease_liquidity_v2<'info>(
     amount_0_min: u64,
     amount_1_min: u64,
 ) -> Result<()> {
+    // Legacy entry point: the account layout has nowhere to put a hook's accounts.
+    // The v3 instruction is the supported path for hook mints.
+    util::hook::reject_hook_mint(&ctx.accounts.vault_0_mint.to_account_info())?;
+    util::hook::reject_hook_mint(&ctx.accounts.vault_1_mint.to_account_info())?;
+    let (bitmap_extension, reward_accounts) =
+        super::decrease_liquidity::split_bitmap_and_reward_accounts(
+            ctx.remaining_accounts,
+            ctx.accounts.pool_state.key(),
+        );
     decrease_liquidity(
         &ctx.accounts.pool_state,
         &mut ctx.accounts.personal_position,
@@ -117,7 +124,10 @@ pub fn decrease_liquidity_v2<'info>(
         Some(ctx.accounts.memo_program.clone()),
         Some(ctx.accounts.vault_0_mint.clone()),
         Some(ctx.accounts.vault_1_mint.clone()),
-        &ctx.remaining_accounts,
+        bitmap_extension,
+        Some(reward_accounts.as_slice()),
+        &[],
+        &[],
         liquidity,
         amount_0_min,
         amount_1_min,

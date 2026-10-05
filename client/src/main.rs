@@ -35,6 +35,7 @@ use bincode::serialize;
 use instructions::amm_instructions::*;
 use instructions::events_instructions_parse::*;
 use instructions::rpc::*;
+use instructions::token_extensions::ExtensionInitializationParams;
 use instructions::token_instructions::*;
 use instructions::utils::*;
 use spl_associated_token_account::get_associated_token_address;
@@ -43,7 +44,6 @@ use spl_token_2022::{
     state::Mint,
     state::{Account, AccountState},
 };
-use spl_token_client::token::ExtensionInitializationParams;
 use {
     raydium_clmm::libraries::{self, fixed_point_64, liquidity_math, tick_math},
     raydium_clmm::states::{

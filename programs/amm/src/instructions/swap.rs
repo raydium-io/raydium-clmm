@@ -956,6 +956,7 @@ pub fn exact_internal<'b, 'info>(
             None,
             &ctx.token_program,
             None,
+            &[],
             swap_result.amount_0,
         )?;
         // x -> y，transfer y token from pool vault to user.
@@ -966,6 +967,7 @@ pub fn exact_internal<'b, 'info>(
             None,
             &ctx.token_program,
             None,
+            &[],
             swap_result.amount_1,
         )?;
     } else {
@@ -976,6 +978,7 @@ pub fn exact_internal<'b, 'info>(
             None,
             &ctx.token_program,
             None,
+            &[],
             swap_result.amount_1,
         )?;
         transfer_from_pool_vault_to_user(
@@ -985,6 +988,7 @@ pub fn exact_internal<'b, 'info>(
             None,
             &ctx.token_program,
             None,
+            &[],
             swap_result.amount_0,
         )?;
     }

@@ -1,4 +1,5 @@
 use super::super::{read_keypair_file, ClientConfig};
+use super::token_extensions::ExtensionInitializationParams;
 use anchor_client::{Client, Cluster};
 use anyhow::Result;
 use solana_client::rpc_client::RpcClient;
@@ -14,7 +15,6 @@ use spl_token_2022::{
     extension::{BaseStateWithExtensions, ExtensionType, StateWithExtensionsMut},
     state::{Account, Mint},
 };
-use spl_token_client::token::ExtensionInitializationParams;
 use std::{rc::Rc, str::FromStr};
 
 pub fn create_and_init_mint_instr(

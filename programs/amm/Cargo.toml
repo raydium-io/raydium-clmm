@@ -38,6 +38,11 @@ uint = { git = "https://github.com/raydium-io/parity-common", package = "uint" }
 bytemuck = { version = "1.19.0", features = ["derive", "min_const_generics"] }
 arrayref = { version = "0.3.6" }
 solana-security-txt = "1.1.1"
+# Transfer hook support: ExtraAccountMetaList parsing + add_extra_accounts_for_execute_cpi.
+# Pinned: must match the TLV layout the on-chain token-2022 uses (spl-pod 0.7 / tlv 0.11).
+spl-transfer-hook-interface = "=2.1.0"
+spl-tlv-account-resolution = "=0.11.1"
+spl-type-length-value = "=0.9.1"
 
 [dev-dependencies]
 quickcheck = "0.9"

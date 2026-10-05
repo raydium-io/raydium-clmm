@@ -187,7 +187,9 @@ pub fn open_position_v1<'info>(
         None,
         None,
         None,
-        &ctx.remaining_accounts,
+        ctx.remaining_accounts.first(),
+        &[],
+        &[],
         ctx.bumps.personal_position,
         liquidity,
         amount_0_max,
@@ -225,7 +227,9 @@ pub fn open_position<'b, 'info>(
     vault_0_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
     vault_1_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
 
-    remaining_accounts: &'info [AccountInfo<'info>],
+    tickarray_bitmap_extension: Option<&'info AccountInfo<'info>>,
+    hook_0: &[AccountInfo<'info>],
+    hook_1: &[AccountInfo<'info>],
     personal_position_bump: u8,
     liquidity: u128,
     amount_0_max: u64,
@@ -242,7 +246,7 @@ pub fn open_position<'b, 'info>(
         position_nft_must_freeze(vault_0_mint.as_deref(), vault_1_mint.as_deref());
 
     let mut liquidity = liquidity;
-    {
+    let (deposit_0, deposit_1) = {
         let pool_state = &mut pool_state_loader.load_mut()?;
         if !pool_state.get_status_by_bit(PoolStatusBitIndex::OpenPositionOrIncreaseLiquidity) {
             return err!(ErrorCode::NotApproved);
@@ -300,26 +304,15 @@ pub fn open_position<'b, 'info>(
             reward_growths_inside,
             ..
         } = add_liquidity(
-            payer,
-            token_account_0,
-            token_account_1,
-            token_vault_0,
-            token_vault_1,
             &tick_array_lower_loader,
             &tick_array_upper_loader,
-            token_program_2022,
-            token_program,
-            vault_0_mint,
-            vault_1_mint,
-            if use_tickarray_bitmap_extension {
-                require_keys_eq!(
-                    remaining_accounts[0].key(),
-                    TickArrayBitmapExtension::key(pool_state_loader.key())
-                );
-                Some(&remaining_accounts[0])
-            } else {
-                None
-            },
+            vault_0_mint.clone(),
+            vault_1_mint.clone(),
+            resolve_bitmap_extension(
+                use_tickarray_bitmap_extension,
+                tickarray_bitmap_extension,
+                pool_state_loader.key(),
+            )?,
             pool_state,
             &mut liquidity,
             amount_0_max,
@@ -354,7 +347,27 @@ pub fn open_position<'b, 'info>(
             deposit_amount_0_transfer_fee: amount_0_transfer_fee,
             deposit_amount_1_transfer_fee: amount_1_transfer_fee
         });
-    }
+        (
+            amount_0 + amount_0_transfer_fee,
+            amount_1 + amount_1_transfer_fee,
+        )
+    };
+
+    transfer_liquidity_deposit(
+        payer,
+        token_account_0,
+        token_account_1,
+        token_vault_0,
+        token_vault_1,
+        token_program,
+        token_program_2022,
+        vault_0_mint,
+        vault_1_mint,
+        hook_0,
+        hook_1,
+        deposit_0,
+        deposit_1,
+    )?;
 
     mint_nft_and_remove_mint_authority(
         payer,
@@ -374,6 +387,28 @@ pub fn open_position<'b, 'info>(
     )
 }
 
+/// Validate the caller-supplied `TickArrayBitmapExtension`, or `None` when the pool's tick
+/// range does not overflow the default bitmap.
+///
+/// Passing an extension the pool does not need is harmless and ignored, which is what the
+/// pre-v3 instructions did with `remaining_accounts[0]`.
+pub fn resolve_bitmap_extension<'info>(
+    required: bool,
+    candidate: Option<&'info AccountInfo<'info>>,
+    pool_id: Pubkey,
+) -> Result<Option<&'info AccountInfo<'info>>> {
+    if !required {
+        return Ok(None);
+    }
+    let account = candidate.ok_or(ErrorCode::MissingTickArrayBitmapExtensionAccount)?;
+    require_keys_eq!(
+        account.key(),
+        TickArrayBitmapExtension::key(pool_id),
+        ErrorCode::InvalidTickArrayBitmapExtensionAccount
+    );
+    Ok(Some(account))
+}
+
 #[derive(Default)]
 pub struct LiquidityChangeResult {
     pub amount_0: u64,
@@ -388,16 +423,12 @@ pub struct LiquidityChangeResult {
 }
 
 /// Add liquidity to an initialized pool
+///
+/// Computes the deposit and updates pool, ticks and position state; the caller moves the
+/// tokens with [`transfer_liquidity_deposit`] once it has released `pool_state`.
 pub fn add_liquidity<'b, 'info>(
-    payer: &'b Signer<'info>,
-    token_account_0: &'b AccountInfo<'info>,
-    token_account_1: &'b AccountInfo<'info>,
-    token_vault_0: &'b AccountInfo<'info>,
-    token_vault_1: &'b AccountInfo<'info>,
     tick_array_lower_loader: &'b AccountLoad<'info, TickArrayState>,
     tick_array_upper_loader: &'b AccountLoad<'info, TickArrayState>,
-    token_program_2022: Option<&Program<'info, Token2022>>,
-    token_program: &'b Program<'info, Token>,
     vault_0_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
     vault_1_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
     tick_array_bitmap_extension: Option<&'info AccountInfo<'info>>,
@@ -568,26 +599,6 @@ pub fn add_liquidity<'b, 'info>(
         amount_1 + amount_1_transfer_fee,
         ErrorCode::PriceSlippageCheck
     );
-    let token_2022_program_opt: Option<AccountInfo> =
-        token_program_2022.clone().map(|p| p.to_account_info());
-    transfer_from_user_to_pool_vault(
-        payer,
-        token_account_0,
-        token_vault_0,
-        vault_0_mint,
-        &token_program,
-        token_2022_program_opt.clone(),
-        amount_0 + amount_0_transfer_fee,
-    )?;
-    transfer_from_user_to_pool_vault(
-        payer,
-        token_account_1,
-        token_vault_1,
-        vault_1_mint,
-        &token_program,
-        token_2022_program_opt.clone(),
-        amount_1 + amount_1_transfer_fee,
-    )?;
     emit!(LiquidityChangeEvent {
         pool_state: pool_state.key(),
         tick: pool_state.tick_current,
@@ -597,6 +608,49 @@ pub fn add_liquidity<'b, 'info>(
         liquidity_after: pool_state.liquidity,
     });
     Ok(result)
+}
+
+/// Pull the deposit computed by [`add_liquidity`] into the vaults.
+///
+/// Must run with no `pool_state` borrow alive: a hook whose extras resolve to the pool PDA
+/// (e.g. the vault's owner) would otherwise fail the CPI's borrow check.
+pub fn transfer_liquidity_deposit<'b, 'info>(
+    payer: &'b Signer<'info>,
+    token_account_0: &'b AccountInfo<'info>,
+    token_account_1: &'b AccountInfo<'info>,
+    token_vault_0: &'b AccountInfo<'info>,
+    token_vault_1: &'b AccountInfo<'info>,
+    token_program: &'b Program<'info, Token>,
+    token_program_2022: Option<&Program<'info, Token2022>>,
+    vault_0_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
+    vault_1_mint: Option<Box<InterfaceAccount<'info, token_interface::Mint>>>,
+    hook_0: &[AccountInfo<'info>],
+    hook_1: &[AccountInfo<'info>],
+    amount_0: u64,
+    amount_1: u64,
+) -> Result<()> {
+    let token_2022_program_opt: Option<AccountInfo> =
+        token_program_2022.map(|p| p.to_account_info());
+    transfer_from_user_to_pool_vault(
+        payer,
+        token_account_0,
+        token_vault_0,
+        vault_0_mint,
+        token_program,
+        token_2022_program_opt.clone(),
+        hook_0,
+        amount_0,
+    )?;
+    transfer_from_user_to_pool_vault(
+        payer,
+        token_account_1,
+        token_vault_1,
+        vault_1_mint,
+        token_program,
+        token_2022_program_opt,
+        hook_1,
+        amount_1,
+    )
 }
 
 pub fn modify_position(

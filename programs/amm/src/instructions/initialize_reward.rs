@@ -53,15 +53,11 @@ pub struct InitializeReward<'info> {
     pub reward_token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
-    // remaining account
-    // #[account(
-    //     seeds = [
-    //     SUPPORT_MINT_SEED.as_bytes(),
-    //     reward_token_mint.key().as_ref(),
-    // ],
-    //     bump
-    // )]
-    // pub support_mint_account: Account<'info, SupportMint>,
+    // remaining accounts:
+    //   initialize_reward: [SupportMintAssociated PDA of the reward mint] (found by key)
+    //   initialize_reward_v2: segments declared by `RemainingAccountsInfo`:
+    //     MintAdmission (SupportMintAssociated PDA and, for a hook mint, its
+    //     ExtraAccountMetaList PDA), TransferHookReward0 (the funding transfer)
 }
 
 #[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Debug, PartialEq)]
@@ -96,12 +92,26 @@ impl InitializeRewardParam {
     }
 }
 
-pub fn initialize_reward(
-    ctx: Context<InitializeReward>,
+pub fn initialize_reward<'info>(
+    ctx: Context<'info, InitializeReward<'info>>,
+    param: InitializeRewardParam,
+) -> Result<()> {
+    util::hook::reject_hook_mint(&ctx.accounts.reward_token_mint.to_account_info())?;
+    let admission_accounts = ctx.remaining_accounts;
+    initialize_reward_internal(ctx, admission_accounts, &[], param)
+}
+
+/// `admission_accounts` are looked up by key: the reward mint's `SupportMintAssociated`
+/// PDA and, for a hook mint, its `ExtraAccountMetaList` PDA. `hook_reward` is the funder
+/// transfer's hook leg.
+pub fn initialize_reward_internal<'info>(
+    ctx: Context<'info, InitializeReward<'info>>,
+    admission_accounts: &[AccountInfo<'info>],
+    hook_reward: &[AccountInfo<'info>],
     param: InitializeRewardParam,
 ) -> Result<()> {
     let mint_associated_is_initialized = util::support_mint_associated_is_initialized(
-        &ctx.remaining_accounts,
+        admission_accounts,
         &ctx.accounts.reward_token_mint,
     )?;
     if !util::is_supported_mint(
@@ -110,6 +120,13 @@ pub fn initialize_reward(
     )? {
         return err!(ErrorCode::NotSupportMint);
     }
+    // A whitelisted hook mint still has to be *usable*: an extras list over the cap, or one
+    // whose addresses depend on the transfer amount, makes `collect_reward` impossible to
+    // build. Check before the vault is created and before any tokens move.
+    util::hook::validate_hook_mint(
+        &ctx.accounts.reward_token_mint.to_account_info(),
+        admission_accounts,
+    )?;
 
     // init reward token vault
     create_token_vault_account(
@@ -171,6 +188,8 @@ pub fn initialize_reward(
         &ctx.accounts.reward_funder.key(),
         &operation_state,
     )?;
+    // A hook whose extras resolve to the pool PDA would fail the CPI's borrow check.
+    drop(pool_state);
 
     transfer_from_user_to_pool_vault(
         &ctx.accounts.reward_funder,
@@ -179,6 +198,7 @@ pub fn initialize_reward(
         Some(ctx.accounts.reward_token_mint.clone()),
         &ctx.accounts.reward_token_program.to_account_info(),
         Some(ctx.accounts.reward_token_program.to_account_info()),
+        hook_reward,
         reward_amount_with_transfer_fee,
     )?;
 

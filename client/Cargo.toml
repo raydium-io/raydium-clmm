@@ -16,12 +16,16 @@ solana-client = "3"
 solana-account-decoder = "3"
 solana-transaction-status = "3"
 spl-token = { version = "9.0", features = ["no-entrypoint"] }
-spl-token-client = "0.19"
 spl-memo = "7.0"
 spl-associated-token-account = { version = "8.0", features = [
     "no-entrypoint",
 ] }
 spl-token-2022 = { version = "11.0", features = ["no-entrypoint"] }
+# `spl-token-2022` 11 is a shim over the interface crate, and the confidential-transfer pod types
+# live one level below that again. Both must track what spl-token-2022 11 itself resolves to, or
+# the pod types become two distinct types.
+spl-token-2022-interface = "3"
+solana-zk-sdk-pod = "0.1.2"
 # Solana 3.0 split these out of solana-sdk into standalone crates.
 solana-system-interface = { version = "3.2", features = ["bincode"] }
 solana-commitment-config = "3"

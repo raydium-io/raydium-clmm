@@ -32,6 +32,12 @@ pub struct SwapRouterBaseIn<'info> {
 
     /// Memo program
     pub memo_program: Program<'info, Memo>,
+    // remaining accounts, per hop: amm_config, pool_state, output_token_account, input_vault,
+    // output_vault, output_token_mint, observation_state, then
+    //   swap_router_base_in:    [tick array bitmap extension] + tick arrays; a hop ends at
+    //     the next account sized like `AmmConfig`
+    //   swap_router_base_in_v2: the segments its `RemainingAccountsInfo` declares, as in
+    //     swap_v3; one tape per hop
 }
 
 pub fn swap_router_base_in<'info>(
@@ -39,6 +45,9 @@ pub fn swap_router_base_in<'info>(
     amount_in: u64,
     amount_out_minimum: u64,
 ) -> Result<()> {
+    // Legacy entry point: hop boundaries are found by account size, leaving nowhere to put
+    // hook accounts. `swap_router_base_in_v2` is the supported path for hook mints.
+    crate::util::hook::reject_hook_mint(&ctx.accounts.input_token_mint.to_account_info())?;
     let mut amount_in_internal = amount_in;
     let mut input_token_account = Box::new(ctx.accounts.input_token_account.clone());
     let mut input_token_mint = Box::new(ctx.accounts.input_token_mint.clone());
@@ -68,6 +77,7 @@ pub fn swap_router_base_in<'info>(
         let output_token_mint = Box::new(InterfaceAccount::<Mint>::try_from(
             remaining_accounts.next().ok_or(ErrorCode::AccountLack)?,
         )?);
+        crate::util::hook::reject_hook_mint(&output_token_mint.to_account_info())?;
         let observation_state = AccountLoader::<ObservationState>::try_from(
             remaining_accounts.next().ok_or(ErrorCode::AccountLack)?,
         )?;

@@ -78,19 +78,29 @@ pub struct DecreaseLimitOrder<'info> {
 
     /// SPL program 2022 for token transfers
     pub token_program_2022: Program<'info, Token2022>,
-    // remaining account, for tick array bitmap extension (optional)
-    // #[account(
-    //     seeds = [
-    //         POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
-    //         pool_state.key().as_ref(),
-    //     ],
-    //     bump
-    // )]
-    // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
+    // remaining accounts:
+    //   decrease_limit_order: [tick array bitmap extension], when the tick needs it
+    //   decrease_limit_order_v2: segments declared by `RemainingAccountsInfo`:
+    //     TickArrayBitmapExtension (optional), TransferHookInput (refund),
+    //     TransferHookOutput (settled amount)
 }
 
 pub fn decrease_limit_order<'info>(
     ctx: Context<'info, DecreaseLimitOrder<'info>>,
+    amount: u64,
+    amount_min: u64,
+) -> Result<()> {
+    crate::util::hook::reject_hook_mint(&ctx.accounts.input_vault_mint.to_account_info())?;
+    crate::util::hook::reject_hook_mint(&ctx.accounts.output_vault_mint.to_account_info())?;
+    let bitmap_extension = ctx.remaining_accounts.first();
+    decrease_limit_order_internal(ctx, bitmap_extension, &[], &[], amount, amount_min)
+}
+
+pub fn decrease_limit_order_internal<'info>(
+    ctx: Context<'info, DecreaseLimitOrder<'info>>,
+    bitmap_extension: Option<&'info AccountInfo<'info>>,
+    hook_input: &[AccountInfo<'info>],
+    hook_output: &[AccountInfo<'info>],
     amount: u64,
     amount_min: u64,
 ) -> Result<()> {
@@ -133,16 +143,17 @@ pub fn decrease_limit_order<'info>(
             let use_tickarray_bitmap_extension =
                 pool_state.is_overflow_default_tickarray_bitmap(vec![tick_array_start_index]);
 
-            let tickarray_bitmap_extension = if use_tickarray_bitmap_extension {
-                require!(ctx.remaining_accounts.len() > 0, ErrorCode::AccountLack);
-                Some(&ctx.remaining_accounts[0])
-            } else {
-                None
-            };
+            let tickarray_bitmap_extension = crate::instructions::resolve_bitmap_extension(
+                use_tickarray_bitmap_extension,
+                bitmap_extension,
+                ctx.accounts.pool_state.key(),
+            )?;
 
             pool_state.flip_tick_array_bit(tickarray_bitmap_extension, tick_array_start_index)?;
         }
     }
+    // A hook whose extras name this tick array would fail the CPI's borrow check.
+    drop(tick_array);
 
     if settled_output_amount > 0 {
         transfer_from_pool_vault_to_user(
@@ -152,6 +163,7 @@ pub fn decrease_limit_order<'info>(
             Some(ctx.accounts.output_vault_mint.clone()),
             &ctx.accounts.token_program,
             Some(ctx.accounts.token_program_2022.to_account_info()),
+            hook_output,
             settled_output_amount,
         )?;
     }
@@ -174,6 +186,7 @@ pub fn decrease_limit_order<'info>(
             Some(ctx.accounts.input_vault_mint.clone()),
             &ctx.accounts.token_program,
             Some(ctx.accounts.token_program_2022.to_account_info()),
+            hook_input,
             real_decrease_amount,
         )?;
     }

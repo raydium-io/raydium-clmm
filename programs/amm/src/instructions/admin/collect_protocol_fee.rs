@@ -60,10 +60,13 @@ pub struct CollectProtocolFee<'info> {
 
     /// The SPL program 2022 to perform token transfers
     pub token_program_2022: Program<'info, Token2022>,
+    // remaining accounts: transfer hook accounts for either mint (hook program,
+    // ExtraAccountMetaList PDA, extras), unordered and shared by both legs; empty if neither
+    // mint has a hook.
 }
 
-pub fn collect_protocol_fee(
-    ctx: Context<CollectProtocolFee>,
+pub fn collect_protocol_fee<'info>(
+    ctx: Context<'info, CollectProtocolFee<'info>>,
     amount_0_requested: u64,
     amount_1_requested: u64,
 ) -> Result<()> {
@@ -91,6 +94,7 @@ pub fn collect_protocol_fee(
         Some(ctx.accounts.vault_0_mint.clone()),
         &ctx.accounts.token_program,
         Some(ctx.accounts.token_program_2022.to_account_info()),
+        ctx.remaining_accounts,
         amount_0,
     )?;
 
@@ -101,6 +105,7 @@ pub fn collect_protocol_fee(
         Some(ctx.accounts.vault_1_mint.clone()),
         &ctx.accounts.token_program,
         Some(ctx.accounts.token_program_2022.to_account_info()),
+        ctx.remaining_accounts,
         amount_1,
     )?;
 
