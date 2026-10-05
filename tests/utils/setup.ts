@@ -8,7 +8,7 @@ import {
   createAccount,
   mintTo,
 } from "@solana/spl-token";
-import { TickUtil } from "@raydium-io/raydium-sdk-v2";
+import { getSqrtPriceX64FromTick } from "./tick-math";
 import { PDAUtils } from "./pda";
 
 /**
@@ -242,7 +242,7 @@ export class TestSetup {
     // Create AMM config and pool for testing
     await this.createAmmConfig(ammConfigIndex);
 
-    const sqrtPriceX64 = TickUtil.getSqrtPriceAtTick(tick);
+    const sqrtPriceX64 = getSqrtPriceX64FromTick(tick);
 
     const [poolAddress] = await this.pda.getPoolStatePDA(
       this.ammConfig,
@@ -324,7 +324,7 @@ export class TestSetup {
     }
 
     const tick = params.tick ?? 0;
-    const sqrtPriceX64 = TickUtil.getSqrtPriceAtTick(tick);
+    const sqrtPriceX64 = getSqrtPriceX64FromTick(tick);
     const ammConfig = params.ammConfig ?? this.ammConfig;
 
     // Ensure token0 < token1

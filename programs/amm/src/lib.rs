@@ -9,6 +9,7 @@ use core as core_;
 use error::ErrorCode;
 use instructions::*;
 use states::*;
+use util::RemainingAccountsInfo;
 
 #[cfg(not(feature = "no-entrypoint"))]
 solana_security_txt::security_txt! {
@@ -321,8 +322,8 @@ pub mod raydium_clmm {
     /// * `end_time` - reward end timestamp
     /// * `emissions_per_second_x64` - Token reward per second are earned per unit of liquidity.
     ///
-    pub fn initialize_reward(
-        ctx: Context<InitializeReward>,
+    pub fn initialize_reward<'info>(
+        ctx: Context<'info, InitializeReward<'info>>,
         param: InitializeRewardParam,
     ) -> Result<()> {
         instructions::initialize_reward(ctx, param)
@@ -335,8 +336,8 @@ pub mod raydium_clmm {
     /// * `ctx` - The context of accounts
     /// * `reward_index` - the index to reward info
     ///
-    pub fn collect_remaining_rewards(
-        ctx: Context<CollectRemainingRewards>,
+    pub fn collect_remaining_rewards<'info>(
+        ctx: Context<'info, CollectRemainingRewards<'info>>,
         reward_index: u8,
     ) -> Result<()> {
         instructions::collect_remaining_rewards(ctx, reward_index)
@@ -387,8 +388,8 @@ pub mod raydium_clmm {
     /// * `amount_0_requested` - The maximum amount of token_0 to send, can be 0 to collect fees in only token_1
     /// * `amount_1_requested` - The maximum amount of token_1 to send, can be 0 to collect fees in only token_0
     ///
-    pub fn collect_protocol_fee(
-        ctx: Context<CollectProtocolFee>,
+    pub fn collect_protocol_fee<'info>(
+        ctx: Context<'info, CollectProtocolFee<'info>>,
         amount_0_requested: u64,
         amount_1_requested: u64,
     ) -> Result<()> {
@@ -403,8 +404,8 @@ pub mod raydium_clmm {
     /// * `amount_0_requested` - The maximum amount of token_0 to send, can be 0 to collect fees in only token_1
     /// * `amount_1_requested` - The maximum amount of token_1 to send, can be 0 to collect fees in only token_0
     ///
-    pub fn collect_fund_fee(
-        ctx: Context<CollectFundFee>,
+    pub fn collect_fund_fee<'info>(
+        ctx: Context<'info, CollectFundFee<'info>>,
         amount_0_requested: u64,
         amount_1_requested: u64,
     ) -> Result<()> {
@@ -777,6 +778,266 @@ pub mod raydium_clmm {
     ///
     pub fn close_limit_order<'info>(ctx: Context<'info, CloseLimitOrder<'info>>) -> Result<()> {
         instructions::close_limit_order(ctx)
+    }
+
+    // v3: the Token-2022 transfer-hook aware instruction set. Same accounts as v2, plus a
+    // `RemainingAccountsInfo` tape declaring what each stretch of `remaining_accounts` is -
+    // which is what makes room for a hook's accounts. v2 is unchanged and rejects hook mints.
+
+    /// `swap_v2` with an explicit account tape. See `swap_v2`.
+    ///
+    /// Remaining accounts, declared by `remaining_accounts_info`: TickArray,
+    /// TickArrayBitmapExtension (optional), TransferHookInput, TransferHookOutput. Each hook
+    /// segment is the mint's hook program, ExtraAccountMetaList PDA and extras, in any order.
+    pub fn swap_v3<'info>(
+        ctx: Context<'info, SwapSingleV2<'info>>,
+        amount: u64,
+        other_amount_threshold: u64,
+        sqrt_price_limit_x64: u128,
+        is_base_input: bool,
+        remaining_accounts_info: RemainingAccountsInfo,
+    ) -> Result<()> {
+        instructions::swap_v3(
+            ctx,
+            amount,
+            other_amount_threshold,
+            sqrt_price_limit_x64,
+            is_base_input,
+            remaining_accounts_info,
+        )
+    }
+
+    /// `swap_router_base_in` with one account tape per hop, consumed in order.
+    ///
+    /// Remaining accounts, per hop: amm_config, pool_state, output_token_account, input_vault,
+    /// output_vault, output_token_mint, observation_state, then the segments that hop's tape
+    /// declares, as in `swap_v3`.
+    pub fn swap_router_base_in_v2<'info>(
+        ctx: Context<'info, SwapRouterBaseIn<'info>>,
+        amount_in: u64,
+        amount_out_minimum: u64,
+        remaining_accounts_info: Vec<RemainingAccountsInfo>,
+    ) -> Result<()> {
+        instructions::swap_router_base_in_v2(
+            ctx,
+            amount_in,
+            amount_out_minimum,
+            remaining_accounts_info,
+        )
+    }
+
+    /// `open_position_with_token22_nft` with an explicit account tape. There is no v3 for the
+    /// Metaplex-metadata variant: positions on hook pools use the Token-2022 NFT.
+    ///
+    /// Remaining accounts, declared by `remaining_accounts_info`: TickArrayBitmapExtension
+    /// (optional), TransferHookToken0, TransferHookToken1. Each hook segment is the mint's hook
+    /// program, ExtraAccountMetaList PDA and extras, in any order.
+    pub fn open_position_v3<'info>(
+        ctx: Context<'info, OpenPositionWithToken22Nft<'info>>,
+        tick_lower_index: i32,
+        tick_upper_index: i32,
+        tick_array_lower_start_index: i32,
+        tick_array_upper_start_index: i32,
+        liquidity: u128,
+        amount_0_max: u64,
+        amount_1_max: u64,
+        with_metadata: bool,
+        base_flag: Option<bool>,
+        remaining_accounts_info: RemainingAccountsInfo,
+    ) -> Result<()> {
+        instructions::open_position_v3(
+            ctx,
+            liquidity,
+            amount_0_max,
+            amount_1_max,
+            tick_lower_index,
+            tick_upper_index,
+            tick_array_lower_start_index,
+            tick_array_upper_start_index,
+            with_metadata,
+            base_flag,
+            remaining_accounts_info,
+        )
+    }
+
+    /// `increase_liquidity_v2` with an explicit account tape.
+    ///
+    /// Remaining accounts, declared by `remaining_accounts_info`: TickArrayBitmapExtension
+    /// (optional), TransferHookToken0, TransferHookToken1. Each hook segment is the mint's hook
+    /// program, ExtraAccountMetaList PDA and extras, in any order.
+    pub fn increase_liquidity_v3<'info>(
+        ctx: Context<'info, IncreaseLiquidityV2<'info>>,
+        liquidity: u128,
+        amount_0_max: u64,
+        amount_1_max: u64,
+        base_flag: Option<bool>,
+        remaining_accounts_info: RemainingAccountsInfo,
+    ) -> Result<()> {
+        if liquidity == 0 {
+            require!(base_flag.is_some(), ErrorCode::MissingBaseFlag);
+        }
+        instructions::increase_liquidity_v3(
+            ctx,
+            liquidity,
+            amount_0_max,
+            amount_1_max,
+            base_flag,
+            remaining_accounts_info,
+        )
+    }
+
+    /// `decrease_liquidity_v2` with an explicit account tape, **without** collecting rewards.
+    /// They still accrue; take them with `collect_reward`, one index at a time, or write off an
+    /// uncollectable one with `forfeit_reward`. Paying out three hook-carrying
+    /// reward legs alongside both token legs does not fit in a transaction.
+    ///
+    /// Remaining accounts, declared by `remaining_accounts_info`: TickArrayBitmapExtension
+    /// (optional), TransferHookToken0, TransferHookToken1. Each hook segment is the mint's hook
+    /// program, ExtraAccountMetaList PDA and extras, in any order.
+    pub fn decrease_liquidity_v3<'info>(
+        ctx: Context<'info, DecreaseLiquidityV2<'info>>,
+        liquidity: u128,
+        amount_0_min: u64,
+        amount_1_min: u64,
+        remaining_accounts_info: RemainingAccountsInfo,
+    ) -> Result<()> {
+        instructions::decrease_liquidity_v3(
+            ctx,
+            liquidity,
+            amount_0_min,
+            amount_1_min,
+            remaining_accounts_info,
+        )
+    }
+
+    /// `open_limit_order` with an explicit account tape.
+    ///
+    /// Remaining accounts, declared by `remaining_accounts_info`: TickArrayBitmapExtension
+    /// (optional), TransferHookInput. Each hook segment is the mint's hook program,
+    /// ExtraAccountMetaList PDA and extras, in any order.
+    pub fn open_limit_order_v2<'info>(
+        ctx: Context<'info, OpenLimitOrder<'info>>,
+        nonce_index: u8,
+        zero_for_one: bool,
+        tick_index: i32,
+        amount: u64,
+        remaining_accounts_info: RemainingAccountsInfo,
+    ) -> Result<()> {
+        instructions::open_limit_order_v2(
+            ctx,
+            nonce_index,
+            zero_for_one,
+            tick_index,
+            amount,
+            remaining_accounts_info,
+        )
+    }
+
+    /// `increase_limit_order` with an explicit account tape.
+    ///
+    /// Remaining accounts, declared by `remaining_accounts_info`: TickArrayBitmapExtension
+    /// (optional), TransferHookInput. Each hook segment is the mint's hook program,
+    /// ExtraAccountMetaList PDA and extras, in any order.
+    pub fn increase_limit_order_v2<'info>(
+        ctx: Context<'info, IncreaseLimitOrder<'info>>,
+        amount: u64,
+        remaining_accounts_info: RemainingAccountsInfo,
+    ) -> Result<()> {
+        instructions::increase_limit_order_v2(ctx, amount, remaining_accounts_info)
+    }
+
+    /// `decrease_limit_order` with an explicit account tape.
+    ///
+    /// Remaining accounts, declared by `remaining_accounts_info`: TickArrayBitmapExtension
+    /// (optional), TransferHookInput (refund), TransferHookOutput (settled amount). Each hook
+    /// segment is the mint's hook program, ExtraAccountMetaList PDA and extras, in any order.
+    pub fn decrease_limit_order_v2<'info>(
+        ctx: Context<'info, DecreaseLimitOrder<'info>>,
+        amount: u64,
+        amount_min: u64,
+        remaining_accounts_info: RemainingAccountsInfo,
+    ) -> Result<()> {
+        instructions::decrease_limit_order_v2(ctx, amount, amount_min, remaining_accounts_info)
+    }
+
+    /// `settle_limit_order` with an explicit account tape.
+    ///
+    /// Remaining accounts, declared by `remaining_accounts_info`: TransferHookOutput. Each hook
+    /// segment is the mint's hook program, ExtraAccountMetaList PDA and extras, in any order.
+    pub fn settle_limit_order_v2<'info>(
+        ctx: Context<'info, SettleLimitOrder<'info>>,
+        remaining_accounts_info: RemainingAccountsInfo,
+    ) -> Result<()> {
+        instructions::settle_limit_order_v2(ctx, remaining_accounts_info)
+    }
+
+    /// `initialize_reward` with an explicit account tape, admitting hook reward mints.
+    ///
+    /// Remaining accounts, declared by `remaining_accounts_info`: MintAdmission (the reward mint's
+    /// SupportMintAssociated PDA and, for a hook mint, its ExtraAccountMetaList PDA),
+    /// TransferHookReward0 (the funding transfer, whichever slot it lands in). Each hook segment is
+    /// the mint's hook program, ExtraAccountMetaList PDA and extras, in any order.
+    pub fn initialize_reward_v2<'info>(
+        ctx: Context<'info, InitializeReward<'info>>,
+        param: InitializeRewardParam,
+        remaining_accounts_info: RemainingAccountsInfo,
+    ) -> Result<()> {
+        instructions::initialize_reward_v2(ctx, param, remaining_accounts_info)
+    }
+
+    /// `set_reward_params` with an explicit account tape.
+    ///
+    /// Remaining accounts, declared by `remaining_accounts_info`: RewardGroup (reward vault,
+    /// authority token account, reward mint; only when the update tops the vault up),
+    /// TransferHookReward<reward_index>. Each hook segment is the mint's hook program,
+    /// ExtraAccountMetaList PDA and extras, in any order.
+    pub fn set_reward_params_v2<'info>(
+        ctx: Context<'info, SetRewardParams<'info>>,
+        reward_index: u8,
+        emissions_per_second_x64: u128,
+        open_time: u64,
+        end_time: u64,
+        remaining_accounts_info: RemainingAccountsInfo,
+    ) -> Result<()> {
+        instructions::set_reward_params_v2(
+            ctx,
+            reward_index,
+            emissions_per_second_x64,
+            open_time,
+            end_time,
+            remaining_accounts_info,
+        )
+    }
+
+    /// `collect_remaining_rewards` with an explicit account tape.
+    ///
+    /// Remaining accounts, declared by `remaining_accounts_info`: TransferHookReward<reward_index>.
+    /// Each hook segment is the mint's hook program, ExtraAccountMetaList PDA and extras, in any
+    /// order.
+    pub fn collect_remaining_rewards_v2<'info>(
+        ctx: Context<'info, CollectRemainingRewards<'info>>,
+        reward_index: u8,
+        remaining_accounts_info: RemainingAccountsInfo,
+    ) -> Result<()> {
+        instructions::collect_remaining_rewards_v2(ctx, reward_index, remaining_accounts_info)
+    }
+
+    /// Collect one reward slot for a position. Split out of `decrease_liquidity_v3`.
+    ///
+    /// Remaining accounts, declared by `remaining_accounts_info`: TransferHookReward<reward_index>.
+    /// Each hook segment is the mint's hook program, ExtraAccountMetaList PDA and extras, in any
+    /// order.
+    pub fn collect_reward<'info>(
+        ctx: Context<'info, CollectReward<'info>>,
+        reward_index: u8,
+        remaining_accounts_info: RemainingAccountsInfo,
+    ) -> Result<()> {
+        instructions::collect_reward(ctx, reward_index, remaining_accounts_info)
+    }
+
+    /// Write off a reward that can never be paid out, so `close_position` stops refusing.
+    pub fn forfeit_reward(ctx: Context<ForfeitReward>, reward_index: u8) -> Result<()> {
+        instructions::forfeit_reward(ctx, reward_index)
     }
 
     /// Collect excess lamports, including accounts for SPL tokens owned by authority and Program PDA accounts.

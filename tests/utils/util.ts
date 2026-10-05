@@ -2,12 +2,9 @@ import * as anchor from "@anchor-lang/core";
 import { Program } from "@anchor-lang/core";
 import { RaydiumClmm } from "../../target/types/raydium_clmm";
 import { PDAUtils } from "./pda";
-import {
-  Raydium,
-  PoolUtils,
-  TickArrayUtil,
-  getPdaTickArrayAddress,
-} from "@raydium-io/raydium-sdk-v2";
+// The SDK is imported lazily, inside `buildSwapRemainingAccounts` - see the note there.
+// Everything the suite used to take from it is now in ./tick-math, pinned against the program.
+import { getTickArrayStartIndex } from "./tick-math";
 import { AccountMeta, Connection, Keypair, PublicKey } from "@solana/web3.js";
 
 
@@ -17,8 +14,13 @@ export function getTickArrayAddressByTick(
   tickIndex: number,
   tickSpacing: number
 ): PublicKey {
-  const startIndex = TickArrayUtil.getTickArrayStartIndex(tickIndex, tickSpacing);
-  return getPdaTickArrayAddress(programId, poolId, startIndex).publicKey;
+  const startIndex = getTickArrayStartIndex(tickIndex, tickSpacing);
+  const startTickBuffer = Buffer.alloc(4);
+  startTickBuffer.writeInt32BE(startIndex, 0);
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("tick_array"), poolId.toBuffer(), startTickBuffer],
+    programId
+  )[0];
 }
 
 // Helper: given a tick, compute its tick array and return whether the bitmap bit is 0 or 1
@@ -97,7 +99,7 @@ export async function getTickStateByTick(
   tickIndex: number,
   tickSpacing: number
 ) {
-  const tickArrayStartIndex = TickArrayUtil.getTickArrayStartIndex(
+  const tickArrayStartIndex = getTickArrayStartIndex(
     tickIndex,
     tickSpacing
   );
@@ -296,6 +298,7 @@ async function loadPoolCompute(connection: Connection, poolId: PublicKey) {
   let cached = poolInfoCache.get(key);
   if (!cached) {
     cached = (async () => {
+      const { Raydium } = await import("@raydium-io/raydium-sdk-v2");
       const raydium = await Raydium.load({
         connection,
         owner: Keypair.generate(), // read-only; never signs
@@ -322,6 +325,12 @@ export async function buildSwapRemainingAccounts(
   isBaseInput = true,
   sqrtPriceLimitX64?: anchor.BN
 ): Promise<AccountMeta[]> {
+  // Simulating a clmm swap to learn which tick arrays it crosses means reimplementing
+  // swap_math plus bitmap traversal; that is the one thing here genuinely worth taking from
+  // the SDK. It is imported lazily and only `tests/swap-live-pool.ts` calls this - a manual
+  // script against a forked mainnet pool, not part of `tests/*.test.ts` - so the suite never
+  // loads the SDK and cannot break when the SDK renames things.
+  const { PoolUtils } = await import("@raydium-io/raydium-sdk-v2");
   const { computePoolInfo, tickCache } = await loadPoolCompute(connection, poolId);
   const exBitmap = computePoolInfo.exBitmapInfo;
   const blockTimestamp = Math.floor(Date.now() / 1000);

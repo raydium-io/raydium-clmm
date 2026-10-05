@@ -36,10 +36,41 @@ pub struct SetRewardParams<'info> {
     pub token_program: Program<'info, Token>,
     /// Token program 2022
     pub token_program_2022: Program<'info, Token2022>,
+    // remaining accounts:
+    //   set_reward_params: (reward vault, authority token account, reward mint), only when
+    //     the update tops the vault up
+    //   set_reward_params_v2: segments declared by `RemainingAccountsInfo`: RewardGroup
+    //     (the same triple), TransferHookReward<reward_index>
 }
 
 pub fn set_reward_params<'info>(
     ctx: Context<'info, SetRewardParams<'info>>,
+    reward_index: u8,
+    emissions_per_second_x64: u128,
+    open_time: u64,
+    end_time: u64,
+) -> Result<()> {
+    let reward_group = ctx.remaining_accounts;
+    set_reward_params_internal(
+        ctx,
+        reward_group,
+        &[],
+        false,
+        reward_index,
+        emissions_per_second_x64,
+        open_time,
+        end_time,
+    )
+}
+
+/// `reward_group` is the {vault, authority token account, mint} triple, positionally, and
+/// is only read when the update implies a top-up. `allow_hook_mint` is false on the v1
+/// entry point, which has nowhere to put the hook's accounts.
+pub fn set_reward_params_internal<'info>(
+    ctx: Context<'info, SetRewardParams<'info>>,
+    reward_group: &'info [AccountInfo<'info>],
+    hook_reward: &[AccountInfo<'info>],
+    allow_hook_mint: bool,
     reward_index: u8,
     emissions_per_second_x64: u128,
     open_time: u64,
@@ -106,9 +137,11 @@ pub fn set_reward_params<'info>(
         .ok_or(ErrorCode::MaxTokenOverflow)?;
 
     pool_state.reward_infos[reward_index as usize] = reward_info;
+    // A hook whose extras resolve to the pool PDA would fail the CPI's borrow check.
+    drop(pool_state);
 
     if reward_amount > 0 {
-        let mut remaining_accounts = ctx.remaining_accounts.iter();
+        let mut remaining_accounts = reward_group.iter();
 
         let reward_token_vault = InterfaceAccount::<TokenAccount>::try_from(
             remaining_accounts.next().ok_or(ErrorCode::AccountLack)?,
@@ -122,6 +155,10 @@ pub fn set_reward_params<'info>(
 
         require_keys_eq!(reward_token_vault.mint, authority_token_account.mint);
         require_keys_eq!(reward_token_vault.key(), reward_info.token_vault);
+        require_keys_eq!(reward_vault_mint.key(), reward_token_vault.mint);
+        if !allow_hook_mint {
+            util::hook::reject_hook_mint(&reward_vault_mint.to_account_info())?;
+        }
 
         let transfer_fee: u64 =
             util::get_transfer_inverse_fee(Box::new(reward_vault_mint.clone()), reward_amount)?;
@@ -136,6 +173,7 @@ pub fn set_reward_params<'info>(
             Some(Box::new(reward_vault_mint)),
             &ctx.accounts.token_program,
             Some(ctx.accounts.token_program_2022.to_account_info()),
+            hook_reward,
             reward_amount_with_transfer_fee,
         )?;
     }

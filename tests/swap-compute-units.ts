@@ -9,7 +9,7 @@ import {
   getTickArrayRemainingAccounts,
 } from "./utils/util";
 import { getTickArrayAddressByTick } from "./utils/util";
-import { TickUtil, TickArrayUtil } from "@raydium-io/raydium-sdk-v2";
+import { getSqrtPriceX64FromTick, getTickArrayStartIndex } from "./utils/tick-math";
 import { assert } from "chai";
 
 // This script can only be executed by the admin. Make sure to set the admin key in lib.rs when running locally.
@@ -66,7 +66,7 @@ describe("compute_units_test", () => {
           tick,
           tickSpacing
         );
-        const startIndex = TickArrayUtil.getTickArrayStartIndex(tick, tickSpacing);
+        const startIndex = getTickArrayStartIndex(tick, tickSpacing);
         const key = address.toString();
         if (!tickArrayMap.has(key)) {
           tickArrayMap.set(key, { address, startIndex });
@@ -173,7 +173,7 @@ describe("compute_units_test", () => {
     //   // - If zeroForOne = false (token1 -> token0), price increases, use tick 100
     //   const limitTick = zeroForOne ? -100 : 100;
     //   const sqrtPriceLimitX64 = new anchor.BN(
-    //     TickUtil.getSqrtPriceAtTick(limitTick).toString()
+    //     getSqrtPriceX64FromTick(limitTick).toString()
     //   );
 
     //   // Get tick arrays for swap path (current tick, tick -100, and tick 100)
@@ -301,7 +301,7 @@ describe("compute_units_test", () => {
       const zeroForOne = true; // token0 -> token1, price decreases
       const limitTick = zeroForOne ? -100 : 100;
       const sqrtPriceLimitX64 = new anchor.BN(
-        TickUtil.getSqrtPriceAtTick(limitTick).toString()
+        getSqrtPriceX64FromTick(limitTick).toString()
       );
 
       const remainingNoLO = getTickArraysForSwap(

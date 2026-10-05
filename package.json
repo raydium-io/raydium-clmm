@@ -1,6 +1,7 @@
 {
     "scripts": {
-        "test:local-admin": "CLMM_LOCALNET_ADMIN=$(solana-keygen pubkey ${ANCHOR_WALLET:-$HOME/.config/solana/id.json}) sh -c 'anchor build --ignore-keys -- --features localnet && anchor test --skip-build'",
+        "stub:build": "cargo build-sbf --manifest-path tests/programs/transfer-hook-stub/Cargo.toml --sbf-out-dir target/deploy",
+        "test:local-admin": "yarn run stub:build && CLMM_LOCALNET_ADMIN=$(solana-keygen pubkey ${ANCHOR_WALLET:-$HOME/.config/solana/id.json}) sh -c 'anchor build --ignore-keys -- --features localnet && anchor test --skip-build'",
         "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
         "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
     },

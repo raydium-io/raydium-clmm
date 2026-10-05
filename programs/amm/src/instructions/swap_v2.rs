@@ -71,18 +71,55 @@ pub struct SwapSingleV2<'info> {
         address = output_vault.mint
     )]
     pub output_vault_mint: Box<InterfaceAccount<'info, Mint>>,
-    // remaining accounts
-    // tickarray_bitmap_extension: must add account if need
-    // tick_array_account_1
-    // tick_array_account_2
-    // tick_array_account_...
+    // remaining accounts:
+    //   swap_v2: [tick array bitmap extension] then tick arrays, told apart by account size
+    //   swap_v3: segments declared by `RemainingAccountsInfo`: TickArray,
+    //     TickArrayBitmapExtension (optional), TransferHookInput, TransferHookOutput
 }
 
 /// Performs a single exact input/output swap
 /// if is_base_input = true, return value is the max_amount_out, otherwise is min_amount_in
+///
+/// Classifies `remaining_accounts` by account size, the pre-v3 convention. `swap_v3` calls
+/// [`exact_internal_v3`] instead, where the caller declares the segments explicitly.
 pub fn exact_internal_v2<'info>(
     ctx: &mut SwapSingleV2<'info>,
     remaining_accounts: &'info [AccountInfo<'info>],
+    amount_specified: u64,
+    sqrt_price_limit_x64: u128,
+    is_base_input: bool,
+) -> Result<u64> {
+    let mut tick_arrays: Vec<&'info AccountInfo<'info>> = Vec::new();
+    let mut bitmap_extension: Option<&'info AccountInfo<'info>> = None;
+    for account_info in remaining_accounts.into_iter() {
+        if account_info.data_len() == TickArrayState::LEN {
+            tick_arrays.push(account_info);
+        } else if account_info.data_len() == TickArrayBitmapExtension::LEN {
+            bitmap_extension = Some(account_info);
+        } else {
+            break;
+        }
+    }
+    exact_internal_v3(
+        ctx,
+        tick_arrays.as_slice(),
+        bitmap_extension,
+        &[],
+        &[],
+        amount_specified,
+        sqrt_price_limit_x64,
+        is_base_input,
+    )
+}
+
+/// The swap core. `tick_arrays` / `bitmap_extension` are already separated, and the two
+/// transfers get the caller's hook accounts for the input and output legs respectively.
+pub fn exact_internal_v3<'info>(
+    ctx: &mut SwapSingleV2<'info>,
+    tick_arrays: &[&'info AccountInfo<'info>],
+    bitmap_extension: Option<&'info AccountInfo<'info>>,
+    hook_input: &[AccountInfo<'info>],
+    hook_output: &[AccountInfo<'info>],
     amount_specified: u64,
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
@@ -129,15 +166,12 @@ pub fn exact_internal_v2<'info>(
         let mut tickarray_bitmap_extension = None;
         let tick_array_states = &mut VecDeque::new();
 
-        for account_info in remaining_accounts.into_iter() {
-            if account_info.data_len() == TickArrayState::LEN {
-                tick_array_states.push_back(AccountLoad::load_data_mut(account_info)?);
-            } else if account_info.data_len() == TickArrayBitmapExtension::LEN {
-                TickArrayBitmapExtension::validate_belongs_to_pool(account_info, pool_state.key())?;
-                tickarray_bitmap_extension = Some(account_info);
-            } else {
-                break;
-            }
+        for account_info in tick_arrays.iter() {
+            tick_array_states.push_back(AccountLoad::load_data_mut(account_info)?);
+        }
+        if let Some(account_info) = bitmap_extension {
+            TickArrayBitmapExtension::validate_belongs_to_pool(account_info, pool_state.key())?;
+            tickarray_bitmap_extension = Some(account_info);
         }
 
         swap_result = swap_internal(
@@ -193,6 +227,14 @@ pub fn exact_internal_v2<'info>(
                 ctx.input_vault_mint.clone(),
             )
         };
+    // The client only knows input/output; which of those is token_0 is decided here, so
+    // the hook legs have to be reordered alongside the vaults or token_0's transfer would
+    // be handed token_1's accounts.
+    let (hook_0, hook_1) = if zero_for_one {
+        (hook_input, hook_output)
+    } else {
+        (hook_output, hook_input)
+    };
 
     let amount_0_without_fee;
     let amount_1_without_fee;
@@ -276,6 +318,7 @@ pub fn exact_internal_v2<'info>(
             Some(vault_0_mint),
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
+            hook_0,
             transfer_amount_0,
         )?;
         // x -> y，transfer y token from pool vault to user.
@@ -286,6 +329,7 @@ pub fn exact_internal_v2<'info>(
             Some(vault_1_mint),
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
+            hook_1,
             transfer_amount_1,
         )?;
     } else {
@@ -296,6 +340,7 @@ pub fn exact_internal_v2<'info>(
             Some(vault_1_mint),
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
+            hook_1,
             transfer_amount_1,
         )?;
         transfer_from_pool_vault_to_user(
@@ -305,6 +350,7 @@ pub fn exact_internal_v2<'info>(
             Some(vault_0_mint),
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
+            hook_0,
             transfer_amount_0,
         )?;
     }
@@ -353,6 +399,10 @@ pub fn swap_v2<'info>(
     sqrt_price_limit_x64: u128,
     is_base_input: bool,
 ) -> Result<()> {
+    // Legacy entry point: the account layout has nowhere to put a hook's accounts.
+    // The v3 instruction is the supported path for hook mints.
+    util::hook::reject_hook_mint(&ctx.accounts.input_vault_mint.to_account_info())?;
+    util::hook::reject_hook_mint(&ctx.accounts.output_vault_mint.to_account_info())?;
     let amount_result = exact_internal_v2(
         ctx.accounts,
         ctx.remaining_accounts,

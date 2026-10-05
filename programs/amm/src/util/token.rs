@@ -12,8 +12,8 @@ use anchor_spl::token::{self, Token};
 use anchor_spl::token_2022::spl_token_2022::{
     self,
     extension::{
-        metadata_pointer, transfer_fee::TransferFeeConfig, BaseStateWithExtensions, ExtensionType,
-        StateWithExtensions,
+        metadata_pointer, transfer_fee::TransferFeeConfig, transfer_hook, BaseStateWithExtensions,
+        ExtensionType, StateWithExtensions,
     },
 };
 use anchor_spl::token_2022::{
@@ -22,6 +22,9 @@ use anchor_spl::token_2022::{
 };
 use anchor_spl::token_2022_extensions::spl_token_metadata_interface;
 use anchor_spl::token_interface::{initialize_mint2, InitializeMint2, Mint, TokenInterface};
+use spl_transfer_hook_interface::{
+    get_extra_account_metas_address, onchain::add_extra_accounts_for_execute_cpi,
+};
 
 pub mod frozen_position_nft_authorities {
     use super::{pubkey, Pubkey};
@@ -42,6 +45,88 @@ pub fn invoke_memo_instruction<'info>(
     solana_program::program::invoke(&ix, &accounts[..])
 }
 
+/// `TransferChecked`, forwarding whatever transfer-hook accounts the caller supplied.
+///
+/// `hook_accounts` is an unordered bag - the hook program, the list PDA, the extras - whose
+/// order and flags are re-derived on chain, so spares are ignored and a missing one fails
+/// loudly (a missing list PDA with `NoExtraAccountsForTransferHook`). Assembled by hand because `anchor_spl`'s `transfer_checked` hardcodes its four
+/// accounts and drops `CpiContext::remaining_accounts`.
+pub fn transfer_checked_with_hook<'info>(
+    token_program: &AccountInfo<'info>,
+    from: &AccountInfo<'info>,
+    mint: &AccountInfo<'info>,
+    to: &AccountInfo<'info>,
+    authority: &AccountInfo<'info>,
+    hook_accounts: &[AccountInfo<'info>],
+    amount: u64,
+    mint_decimals: u8,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    let hook_program_id = if hook_accounts.is_empty() {
+        None
+    } else {
+        super::hook::hook_program_id(mint)?
+    };
+    let Some(hook_program_id) = hook_program_id else {
+        // No hook: the plain anchor-spl CPI is cheaper and behaves exactly as before.
+        return token_2022::transfer_checked(
+            CpiContext::new_with_signer(
+                token_program.key(),
+                token_2022::TransferChecked {
+                    from: from.to_account_info(),
+                    to: to.to_account_info(),
+                    authority: authority.to_account_info(),
+                    mint: mint.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            amount,
+            mint_decimals,
+        );
+    };
+
+    // Without the mint's `ExtraAccountMetaList` the interface helpers silently drop every extra
+    // account, and token-2022 then calls the hook with the four transfer accounts only. Refuse
+    // here rather than rely on each hook program to notice, or a hook that forgets the check
+    // could be bypassed by simply leaving the list out.
+    let metas_address = get_extra_account_metas_address(mint.key, &hook_program_id);
+    require!(
+        hook_accounts.iter().any(|a| *a.key == metas_address),
+        ErrorCode::NoExtraAccountsForTransferHook
+    );
+
+    let mut ix = spl_token_2022::instruction::transfer_checked(
+        token_program.key,
+        from.key,
+        mint.key,
+        to.key,
+        authority.key,
+        &[],
+        amount,
+        mint_decimals,
+    )?;
+    let mut infos = vec![
+        from.to_account_info(),
+        mint.to_account_info(),
+        to.to_account_info(),
+        authority.to_account_info(),
+    ];
+
+    add_extra_accounts_for_execute_cpi(
+        &mut ix,
+        &mut infos,
+        &hook_program_id,
+        from.to_account_info(),
+        mint.to_account_info(),
+        to.to_account_info(),
+        authority.to_account_info(),
+        amount,
+        hook_accounts,
+    )?;
+
+    solana_program::program::invoke_signed(&ix, &infos, signer_seeds).map_err(Into::into)
+}
+
 pub fn transfer_from_user_to_pool_vault<'info>(
     signer: &Signer<'info>,
     from: &AccountInfo<'info>,
@@ -49,6 +134,7 @@ pub fn transfer_from_user_to_pool_vault<'info>(
     mint: Option<Box<InterfaceAccount<'info, Mint>>>,
     token_program: &AccountInfo<'info>,
     token_program_2022: Option<AccountInfo<'info>>,
+    hook_accounts: &[AccountInfo<'info>],
     amount: u64,
 ) -> Result<()> {
     if amount == 0 {
@@ -61,31 +147,38 @@ pub fn transfer_from_user_to_pool_vault<'info>(
             if from_token_info.owner == token_program_2022.key {
                 token_program_info = token_program_2022.to_account_info()
             }
-            token_2022::transfer_checked(
+            transfer_checked_with_hook(
+                &token_program_info,
+                &from_token_info,
+                &mint.to_account_info(),
+                &to_vault.to_account_info(),
+                &signer.to_account_info(),
+                hook_accounts,
+                amount,
+                mint.decimals,
+                &[],
+            )
+        }
+        // Legacy path: `Program<Token>` accounts, so the mint cannot be Token-2022 and
+        // cannot carry a hook. Reaching here with hook accounts means the caller picked a
+        // v1 instruction for a v3 mint.
+        _ => {
+            require!(
+                hook_accounts.is_empty(),
+                ErrorCode::UnsupportedTransferHookMint
+            );
+            token::transfer(
                 CpiContext::new(
                     token_program_info.key(),
-                    token_2022::TransferChecked {
+                    token::Transfer {
                         from: from_token_info,
                         to: to_vault.to_account_info(),
                         authority: signer.to_account_info(),
-                        mint: mint.to_account_info(),
                     },
                 ),
                 amount,
-                mint.decimals,
             )
         }
-        _ => token::transfer(
-            CpiContext::new(
-                token_program_info.key(),
-                token::Transfer {
-                    from: from_token_info,
-                    to: to_vault.to_account_info(),
-                    authority: signer.to_account_info(),
-                },
-            ),
-            amount,
-        ),
     }
 }
 
@@ -96,6 +189,7 @@ pub fn transfer_from_pool_vault_to_user<'info>(
     mint: Option<Box<InterfaceAccount<'info, Mint>>>,
     token_program: &AccountInfo<'info>,
     token_program_2022: Option<AccountInfo<'info>>,
+    hook_accounts: &[AccountInfo<'info>],
     amount: u64,
 ) -> Result<()> {
     if amount == 0 {
@@ -108,33 +202,37 @@ pub fn transfer_from_pool_vault_to_user<'info>(
             if from_vault_info.owner == token_program_2022.key {
                 token_program_info = token_program_2022.to_account_info()
             }
-            token_2022::transfer_checked(
+            transfer_checked_with_hook(
+                &token_program_info,
+                &from_vault_info,
+                &mint.to_account_info(),
+                &to.to_account_info(),
+                &pool_state_loader.to_account_info(),
+                hook_accounts,
+                amount,
+                mint.decimals,
+                &[&pool_state_loader.load()?.seeds()],
+            )
+        }
+        // See `transfer_from_user_to_pool_vault`: the legacy path can never carry a hook.
+        _ => {
+            require!(
+                hook_accounts.is_empty(),
+                ErrorCode::UnsupportedTransferHookMint
+            );
+            token::transfer(
                 CpiContext::new_with_signer(
                     token_program_info.key(),
-                    token_2022::TransferChecked {
+                    token::Transfer {
                         from: from_vault_info,
                         to: to.to_account_info(),
                         authority: pool_state_loader.to_account_info(),
-                        mint: mint.to_account_info(),
                     },
                     &[&pool_state_loader.load()?.seeds()],
                 ),
                 amount,
-                mint.decimals,
             )
         }
-        _ => token::transfer(
-            CpiContext::new_with_signer(
-                token_program_info.key(),
-                token::Transfer {
-                    from: from_vault_info,
-                    to: to.to_account_info(),
-                    authority: pool_state_loader.to_account_info(),
-                },
-                &[&pool_state_loader.load()?.seeds()],
-            ),
-            amount,
-        ),
     }
 }
 
@@ -448,6 +546,15 @@ pub fn is_supported_mint(
     let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
     let extensions = mint.get_extension_types()?;
     for e in extensions {
+        // Only a permanently inert hook extension is ordinary; anything that has or can
+        // later get a hook program must come in via the whitelist early-return above.
+        if e == ExtensionType::TransferHook {
+            let ext = mint.get_extension::<transfer_hook::TransferHook>()?;
+            if super::hook::transfer_hook_is_inert(ext) {
+                continue;
+            }
+            return Ok(false);
+        }
         if e != ExtensionType::TransferFeeConfig
             && e != ExtensionType::MetadataPointer
             && e != ExtensionType::TokenMetadata

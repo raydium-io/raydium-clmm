@@ -1,6 +1,5 @@
 use crate::states::*;
 use anchor_lang::prelude::*;
-use anchor_spl::token_2022;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
 #[derive(Accounts)]
@@ -52,9 +51,23 @@ pub struct SettleLimitOrder<'info> {
         address = *output_vault_mint.to_account_info().owner
     )]
     pub output_token_program: Interface<'info, TokenInterface>,
+    // remaining accounts:
+    //   settle_limit_order: none
+    //   settle_limit_order_v2: segments declared by `RemainingAccountsInfo`: TransferHookOutput
 }
 
-pub fn settle_limit_order(ctx: Context<SettleLimitOrder>) -> Result<()> {
+pub fn settle_limit_order<'info>(ctx: Context<'info, SettleLimitOrder<'info>>) -> Result<()> {
+    // v1 has no way to carry the hook accounts, and it does move pool tokens
+    // (`output_vault` -> `output_token_account`), so a hook output mint would otherwise fail
+    // deep inside token-2022 with nothing pointing back here. Use `settle_limit_order_v2`.
+    crate::util::hook::reject_hook_mint(&ctx.accounts.output_vault_mint.to_account_info())?;
+    settle_limit_order_internal(ctx, &[])
+}
+
+pub fn settle_limit_order_internal<'info>(
+    ctx: Context<'info, SettleLimitOrder<'info>>,
+    hook_output: &[AccountInfo<'info>],
+) -> Result<()> {
     let tick_spacing = ctx.accounts.pool_state.load()?.tick_spacing;
 
     let tick_index = ctx.accounts.limit_order.tick_index;
@@ -76,19 +89,16 @@ pub fn settle_limit_order(ctx: Context<SettleLimitOrder>) -> Result<()> {
         settled_amount_out: amount_out,
     });
     // For monitoring purposes, perform the transfer even if amount_out is 0
-    token_2022::transfer_checked(
-        CpiContext::new_with_signer(
-            ctx.accounts.output_token_program.key(),
-            token_2022::TransferChecked {
-                from: ctx.accounts.output_vault.to_account_info(),
-                to: ctx.accounts.output_token_account.to_account_info(),
-                authority: ctx.accounts.pool_state.to_account_info(),
-                mint: ctx.accounts.output_vault_mint.to_account_info(),
-            },
-            &[&ctx.accounts.pool_state.load()?.seeds()],
-        ),
+    crate::util::transfer_checked_with_hook(
+        &ctx.accounts.output_token_program.to_account_info(),
+        &ctx.accounts.output_vault.to_account_info(),
+        &ctx.accounts.output_vault_mint.to_account_info(),
+        &ctx.accounts.output_token_account.to_account_info(),
+        &ctx.accounts.pool_state.to_account_info(),
+        hook_output,
         amount_out,
         ctx.accounts.output_vault_mint.decimals,
+        &[&ctx.accounts.pool_state.load()?.seeds()],
     )?;
 
     Ok(())

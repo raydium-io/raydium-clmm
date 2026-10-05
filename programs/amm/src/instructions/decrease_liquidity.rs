@@ -89,6 +89,8 @@ pub fn decrease_liquidity_v1<'info>(
     amount_0_min: u64,
     amount_1_min: u64,
 ) -> Result<()> {
+    let (bitmap_extension, reward_accounts) =
+        split_bitmap_and_reward_accounts(ctx.remaining_accounts, ctx.accounts.pool_state.key());
     decrease_liquidity(
         &ctx.accounts.pool_state,
         &mut ctx.accounts.personal_position,
@@ -103,11 +105,36 @@ pub fn decrease_liquidity_v1<'info>(
         None,
         None,
         None,
-        &ctx.remaining_accounts,
+        bitmap_extension,
+        Some(reward_accounts.as_slice()),
+        &[],
+        &[],
         liquidity,
         amount_0_min,
         amount_1_min,
     )
+}
+
+/// The pre-v3 `remaining_accounts` convention: the tick-array bitmap extension is found by
+/// key, everything else is a reward group account.
+pub fn split_bitmap_and_reward_accounts<'info>(
+    remaining_accounts: &'info [AccountInfo<'info>],
+    pool_id: Pubkey,
+) -> (
+    Option<&'info AccountInfo<'info>>,
+    Vec<&'info AccountInfo<'info>>,
+) {
+    let bitmap_key = TickArrayBitmapExtension::key(pool_id);
+    let mut bitmap_extension = None;
+    let mut rewards = Vec::new();
+    for account_info in remaining_accounts.iter() {
+        if account_info.key() == bitmap_key {
+            bitmap_extension = Some(account_info);
+            continue;
+        }
+        rewards.push(account_info);
+    }
+    (bitmap_extension, rewards)
 }
 
 pub fn decrease_liquidity<'b, 'info>(
@@ -124,7 +151,13 @@ pub fn decrease_liquidity<'b, 'info>(
     _memo_program: Option<UncheckedAccount<'info>>,
     vault_0_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
     vault_1_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
-    remaining_accounts: &'info [AccountInfo<'info>],
+    tickarray_bitmap_extension: Option<&'info AccountInfo<'info>>,
+    // Reward triples to pay out, or `None` to skip payout. v3 passes `None`: rewards still
+    // accrue, but paying out is `collect_reward`'s job - three hook-carrying reward legs plus
+    // both token legs do not fit under the 64 account-lock limit.
+    reward_accounts: Option<&[&'info AccountInfo<'info>]>,
+    hook_0: &[AccountInfo<'info>],
+    hook_1: &[AccountInfo<'info>],
     liquidity: u128,
     amount_0_min: u64,
     amount_1_min: u64,
@@ -137,9 +170,6 @@ pub fn decrease_liquidity<'b, 'info>(
     let liquidity_before;
     let pool_sqrt_price_x64;
     let pool_tick_current;
-    let mut tickarray_bitmap_extension = None;
-
-    let remaining_collect_accounts = &mut Vec::new();
     {
         let pool_state = pool_state_loader.load()?;
         if !pool_state.get_status_by_bit(PoolStatusBitIndex::DecreaseLiquidity)
@@ -157,16 +187,6 @@ pub fn decrease_liquidity<'b, 'info>(
             tick_array_upper_loader.load()?.start_tick_index,
         ]);
 
-        for account_info in remaining_accounts.into_iter() {
-            if account_info
-                .key()
-                .eq(&TickArrayBitmapExtension::key(pool_state.key()))
-            {
-                tickarray_bitmap_extension = Some(account_info);
-                continue;
-            }
-            remaining_collect_accounts.push(account_info);
-        }
         if use_tickarray_bitmap_extension {
             require!(
                 tickarray_bitmap_extension.is_some(),
@@ -239,6 +259,7 @@ pub fn decrease_liquidity<'b, 'info>(
         vault_0_mint.clone(),
         token_program,
         token_2022_program_opt.clone(),
+        hook_0,
         transfer_amount_0,
     )?;
 
@@ -249,21 +270,21 @@ pub fn decrease_liquidity<'b, 'info>(
         vault_1_mint.clone(),
         token_program,
         token_2022_program_opt.clone(),
+        hook_1,
         transfer_amount_1,
     )?;
 
-    let reward_amounts = collect_rewards(
-        pool_state_loader,
-        remaining_collect_accounts.as_slice(),
-        token_program,
-        token_2022_program_opt.clone(),
-        personal_position,
-        if token_2022_program_opt.is_none() {
-            false
-        } else {
-            true
-        },
-    )?;
+    let reward_amounts = match reward_accounts {
+        Some(accounts) => collect_rewards(
+            pool_state_loader,
+            accounts,
+            token_program,
+            token_2022_program_opt.clone(),
+            personal_position,
+            token_2022_program_opt.is_some(),
+        )?,
+        None => [0u64; REWARD_NUM],
+    };
     emit!(DecreaseLiquidityEvent {
         position_nft_mint: personal_position.nft_mint,
         liquidity,
@@ -455,6 +476,10 @@ pub fn collect_rewards<'b, 'info>(
             reward_token_vault.key(),
             pool_state_loader.load_mut()?.reward_infos[i].token_vault
         );
+        // The hook skip below trusts this mint, so it must be the vault's.
+        if let Some(mint) = reward_vault_mint.as_ref() {
+            require_keys_eq!(mint.key(), reward_token_vault.mint);
+        }
 
         let reward_amount_owed = personal_position_state.reward_infos[i].reward_amount_owed;
         if reward_amount_owed == 0 {
@@ -470,6 +495,14 @@ pub fn collect_rewards<'b, 'info>(
             reward_amount_owed
         };
 
+        // Legacy layout has no room for hook accounts: leave a hook reward owed, to be taken
+        // with `collect_reward`, rather than failing the principal withdrawal.
+        if let Some(mint) = reward_vault_mint.as_ref() {
+            if crate::util::hook::hook_program_id(&mint.to_account_info())?.is_some() {
+                continue;
+            }
+        }
+
         if transfer_amount > 0 {
             msg!(
                 "collect reward index: {}, transfer_amount: {}, reward_amount_owed:{} ",
@@ -477,13 +510,6 @@ pub fn collect_rewards<'b, 'info>(
                 transfer_amount,
                 reward_amount_owed
             );
-            personal_position_state.reward_infos[i].reward_amount_owed = reward_amount_owed
-                .checked_sub(transfer_amount)
-                .ok_or(ErrorCode::CalculateOverflow)?;
-            pool_state_loader
-                .load_mut()?
-                .add_reward_claimed(i, transfer_amount)?;
-
             transfer_from_pool_vault_to_user(
                 &pool_state_loader,
                 &reward_token_vault.to_account_info(),
@@ -491,8 +517,16 @@ pub fn collect_rewards<'b, 'info>(
                 reward_vault_mint.clone(),
                 &token_program,
                 token_program_2022.clone(),
+                &[],
                 transfer_amount,
             )?;
+
+            personal_position_state.reward_infos[i].reward_amount_owed = reward_amount_owed
+                .checked_sub(transfer_amount)
+                .ok_or(ErrorCode::CalculateOverflow)?;
+            pool_state_loader
+                .load_mut()?
+                .add_reward_claimed(i, transfer_amount)?;
         }
         reward_amounts[i] = transfer_amount
     }

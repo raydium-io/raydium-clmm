@@ -6,7 +6,7 @@ import { TestSetup } from "./utils/setup";
 import { InstructionHelper } from "./utils/instructions";
 import { getValidTickForLimitOrder, cleanupAllLimitOrders } from "./utils/util";
 import { getTickArrayAddressByTick } from "./utils/util";
-import { TickArrayUtil } from "@raydium-io/raydium-sdk-v2";
+import { getTickOffsetInArray } from "./utils/tick-math";
 
 describe("increase_limit_order_test", () => {
   const provider = anchor.AnchorProvider.env();
@@ -190,7 +190,7 @@ describe("increase_limit_order_test", () => {
       const tickArrayDataBefore = await program.account.tickArrayState.fetch(
         limitOrderTickArray
       );
-      const tickIndexInArray = TickArrayUtil.getTickOffsetInArray(
+      const tickIndexInArray = getTickOffsetInArray(
         validTick,
         tickSpacing
       );

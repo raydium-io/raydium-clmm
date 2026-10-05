@@ -44,7 +44,8 @@ import {
   setTokenAccount,
   waitForRpc,
 } from "./utils/util";
-import { MEMO_PROGRAM_ID, TickUtil } from "@raydium-io/raydium-sdk-v2";
+import { MEMO_PROGRAM_ID } from "./utils/tick-math";
+import { getSqrtPriceX64FromTick } from "./utils/tick-math";
 
 // ---- Configurable parameters -------------------------------------------------
 const RPC_URL = process.env.SURFPOOL_RPC || "http://127.0.0.1:8899";
@@ -177,7 +178,7 @@ describe("swap on live mainnet pool (surfpool fork)", () => {
       .swapV2(
         amount,
         new anchor.BN(0), // otherAmountThreshold (min out)
-        TickUtil.getSqrtPriceAtTick(-443635), // cap at far edge of provided tick arrays (partial fill if amount is huge)
+        getSqrtPriceX64FromTick(-443635), // cap at far edge of provided tick arrays (partial fill if amount is huge)
         true // isBaseInput
       )
       .accounts({

@@ -36,10 +36,23 @@ pub struct CollectRemainingRewards<'info> {
 
     /// memo program
     pub memo_program: Program<'info, Memo>,
+    // remaining accounts:
+    //   collect_remaining_rewards: none
+    //   collect_remaining_rewards_v2: segments declared by `RemainingAccountsInfo`:
+    //     TransferHookReward<reward_index>
 }
 
-pub fn collect_remaining_rewards(
-    ctx: Context<CollectRemainingRewards>,
+pub fn collect_remaining_rewards<'info>(
+    ctx: Context<'info, CollectRemainingRewards<'info>>,
+    reward_index: u8,
+) -> Result<()> {
+    crate::util::hook::reject_hook_mint(&ctx.accounts.reward_vault_mint.to_account_info())?;
+    collect_remaining_rewards_internal(ctx, &[], reward_index)
+}
+
+pub fn collect_remaining_rewards_internal<'info>(
+    ctx: Context<'info, CollectRemainingRewards<'info>>,
+    hook_reward: &[AccountInfo<'info>],
     reward_index: u8,
 ) -> Result<()> {
     // invoke_memo_instruction(
@@ -60,6 +73,7 @@ pub fn collect_remaining_rewards(
         Some(ctx.accounts.reward_vault_mint.clone()),
         &ctx.accounts.token_program,
         Some(ctx.accounts.token_program_2022.to_account_info()),
+        hook_reward,
         amount_remaining,
     )?;
 

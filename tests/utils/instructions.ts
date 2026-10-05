@@ -15,12 +15,9 @@ import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
-import {
-  MEMO_PROGRAM_ID,
-  METADATA_PROGRAM_ID,
-} from "@raydium-io/raydium-sdk-v2";
+import { MEMO_PROGRAM_ID, METADATA_PROGRAM_ID } from "./tick-math";
 import { getTickArrayAddressByTick } from "./util";
-import { TickArrayUtil, TickUtil } from "@raydium-io/raydium-sdk-v2";
+import { getSqrtPriceX64FromTick, getTickArrayStartIndex, getTickOffsetInArray } from "./tick-math";
 import { PDAUtils } from "./pda";
 
 /**
@@ -141,11 +138,11 @@ export class InstructionHelper {
     );
 
     // Compute tick array start indexes from tickLowerIndex/tickUpperIndex
-    const lowerStart = TickArrayUtil.getTickArrayStartIndex(
+    const lowerStart = getTickArrayStartIndex(
       params.tickLowerIndex,
       poolStateData.tickSpacing
     );
-    const upperStart = TickArrayUtil.getTickArrayStartIndex(
+    const upperStart = getTickArrayStartIndex(
       params.tickUpperIndex,
       poolStateData.tickSpacing
     );
@@ -180,13 +177,18 @@ export class InstructionHelper {
       METADATA_PROGRAM_ID
     ).then(([key]) => key);
 
+    // Token-2022 mints derive their associated token account under a different program.
     const tokenAccount0 = getAssociatedTokenAddressSync(
       params.tokenVault0Mint,
-      params.payer.publicKey
+      params.payer.publicKey,
+      false,
+      (params as any).token0Program ?? TOKEN_PROGRAM_ID
     );
     const tokenAccount1 = getAssociatedTokenAddressSync(
       params.tokenVault1Mint,
-      params.payer.publicKey
+      params.payer.publicKey,
+      false,
+      (params as any).token1Program ?? TOKEN_PROGRAM_ID
     );
 
     // Derive token vaults using PDA (pool_vault seed)
@@ -540,7 +542,7 @@ export class InstructionHelper {
       params.openTime ?? new anchor.BN(Math.floor(Date.now() / 1000) - 100);
 
     await this.program.methods
-      .createPool(TickUtil.getSqrtPriceAtTick(params.tick ?? 0), openTime)
+      .createPool(getSqrtPriceX64FromTick(params.tick ?? 0), openTime)
       .accounts({
         poolCreator: params.poolCreator.publicKey,
         ammConfig: params.ammConfig,
@@ -577,6 +579,10 @@ export class InstructionHelper {
       sqrtPriceLimitX64: anchor.BN;
       isBaseInput: boolean;
       remainingAccounts: AccountMeta[];
+      // Token-2022 mints derive their associated token account under a different program, so
+      // the caller has to say which one each side lives on.
+      inputTokenProgram?: PublicKey;
+      outputTokenProgram?: PublicKey;
     },
     options?: {
       skipPreflight?: boolean;
@@ -600,11 +606,15 @@ export class InstructionHelper {
     );
     const inputTokenAccount = getAssociatedTokenAddressSync(
       params.inputVaultMint,
-      params.owner.publicKey
+      params.owner.publicKey,
+      false,
+      params.inputTokenProgram ?? TOKEN_PROGRAM_ID
     );
     const outputTokenAccount = getAssociatedTokenAddressSync(
       params.outputVaultMint,
-      params.owner.publicKey
+      params.owner.publicKey,
+      false,
+      params.outputTokenProgram ?? TOKEN_PROGRAM_ID
     );
 
     return await this.program.methods
@@ -634,9 +644,289 @@ export class InstructionHelper {
       .rpc(options);
   }
 
+  /// `open_position_v3`: the same accounts as the token-2022 NFT variant, plus a tape saying
+  /// what each stretch of `remaining_accounts` is.
+  async openPositionV3(
+    params: OpenPositionParams & {
+      withMetadata?: boolean;
+      baseFlag?: boolean | null;
+      token0Program?: PublicKey;
+      token1Program?: PublicKey;
+      remainingAccountsInfo: { slices: { accountsType: number; length: number }[] };
+      remainingAccounts: AccountMeta[];
+    }
+  ): Promise<OpenedPosition> {
+    const positionNftMint = Keypair.generate();
+    const addrs = await this.derivePositionAddresses(
+      params,
+      positionNftMint.publicKey,
+      TOKEN_2022_PROGRAM_ID
+    );
+
+    const signature = await this.program.methods
+      .openPositionV3(
+        params.tickLowerIndex,
+        params.tickUpperIndex,
+        addrs.lowerStart,
+        addrs.upperStart,
+        params.liquidity,
+        params.amount0Max,
+        params.amount1Max,
+        params.withMetadata ?? false,
+        params.baseFlag ?? null,
+        params.remainingAccountsInfo
+      )
+      .accounts({
+        payer: params.payer.publicKey,
+        positionNftOwner: params.positionNftOwner,
+        positionNftMint: positionNftMint.publicKey,
+        positionNftAccount: addrs.positionNftAccount,
+        poolState: params.poolState,
+        protocolPosition: addrs.protocolPosition,
+        tickArrayLower: addrs.tickArrayLower,
+        tickArrayUpper: addrs.tickArrayUpper,
+        personalPosition: addrs.personalPosition,
+        tokenAccount0: addrs.tokenAccount0,
+        tokenAccount1: addrs.tokenAccount1,
+        tokenVault0: addrs.tokenVault0,
+        tokenVault1: addrs.tokenVault1,
+        rent: SYSVAR_RENT_PUBKEY,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        tokenProgram2022: TOKEN_2022_PROGRAM_ID,
+        vault0Mint: params.tokenVault0Mint,
+        vault1Mint: params.tokenVault1Mint,
+      } as any)
+      .remainingAccounts(params.remainingAccounts)
+      .preInstructions([
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 1400000 }),
+      ])
+      .signers([params.payer, positionNftMint])
+      .rpc();
+
+    return this.toOpenedPosition(
+      params,
+      addrs,
+      positionNftMint.publicKey,
+      TOKEN_2022_PROGRAM_ID,
+      signature
+    );
+  }
+
+  /// `swap_v3`: `swap_v2`'s accounts plus the tape.
+  async swapV3(params: {
+    owner: Keypair;
+    ammConfig: PublicKey;
+    poolState: PublicKey;
+    inputVaultMint: PublicKey;
+    outputVaultMint: PublicKey;
+    amount: anchor.BN;
+    otherAmountThreshold: anchor.BN;
+    sqrtPriceLimitX64: anchor.BN;
+    isBaseInput: boolean;
+    inputTokenProgram?: PublicKey;
+    outputTokenProgram?: PublicKey;
+    remainingAccountsInfo: { slices: { accountsType: number; length: number }[] };
+    remainingAccounts: AccountMeta[];
+  }) {
+    const [observationState] = await this.pda.getObservationStatePDA(
+      params.poolState
+    );
+    const [inputVault] = await this.pda.getTokenVaultPDA(
+      params.poolState,
+      params.inputVaultMint
+    );
+    const [outputVault] = await this.pda.getTokenVaultPDA(
+      params.poolState,
+      params.outputVaultMint
+    );
+    return await this.program.methods
+      .swapV3(
+        params.amount,
+        params.otherAmountThreshold,
+        params.sqrtPriceLimitX64,
+        params.isBaseInput,
+        params.remainingAccountsInfo
+      )
+      .accounts({
+        payer: params.owner.publicKey,
+        ammConfig: params.ammConfig,
+        poolState: params.poolState,
+        inputTokenAccount: getAssociatedTokenAddressSync(
+          params.inputVaultMint,
+          params.owner.publicKey,
+          false,
+          params.inputTokenProgram ?? TOKEN_PROGRAM_ID
+        ),
+        outputTokenAccount: getAssociatedTokenAddressSync(
+          params.outputVaultMint,
+          params.owner.publicKey,
+          false,
+          params.outputTokenProgram ?? TOKEN_PROGRAM_ID
+        ),
+        inputVault,
+        outputVault,
+        observationState,
+        inputVaultMint: params.inputVaultMint,
+        outputVaultMint: params.outputVaultMint,
+      })
+      .remainingAccounts(params.remainingAccounts)
+      .preInstructions([
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 1400000 }),
+      ])
+      .signers([params.owner])
+      .rpc();
+  }
+
+  /// `increase_liquidity_v3` / `decrease_liquidity_v3`: the v2 accounts plus the tape.
+  /// `decrease_liquidity_v3` deliberately does not pay out rewards - those move to
+  /// `collect_reward`, one index at a time, because three hook-carrying reward legs plus both
+  /// token legs do not fit under the 64 account-lock limit.
+  private liquidityV3Accounts(params: {
+    owner: Keypair;
+    position: OpenedPosition;
+    mint0: PublicKey;
+    mint1: PublicKey;
+    token0Program: PublicKey;
+    token1Program: PublicKey;
+  }) {
+    return {
+      nftOwner: params.owner.publicKey,
+      nftAccount: params.position.positionNftAccount,
+      poolState: params.position.poolState,
+      protocolPosition: params.position.protocolPosition,
+      personalPosition: params.position.personalPosition,
+      tickArrayLower: params.position.tickArrayLower,
+      tickArrayUpper: params.position.tickArrayUpper,
+      tokenVault0: params.position.tokenVault0,
+      tokenVault1: params.position.tokenVault1,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      tokenProgram2022: TOKEN_2022_PROGRAM_ID,
+      vault0Mint: params.mint0,
+      vault1Mint: params.mint1,
+      account0: getAssociatedTokenAddressSync(
+        params.mint0,
+        params.owner.publicKey,
+        false,
+        params.token0Program
+      ),
+      account1: getAssociatedTokenAddressSync(
+        params.mint1,
+        params.owner.publicKey,
+        false,
+        params.token1Program
+      ),
+    };
+  }
+
+  async increaseLiquidityV3(params: {
+    owner: Keypair;
+    position: OpenedPosition;
+    mint0: PublicKey;
+    mint1: PublicKey;
+    token0Program: PublicKey;
+    token1Program: PublicKey;
+    liquidity: anchor.BN;
+    amount0Max: anchor.BN;
+    amount1Max: anchor.BN;
+    baseFlag?: boolean | null;
+    remainingAccountsInfo: { slices: { accountsType: number; length: number }[] };
+    remainingAccounts: AccountMeta[];
+  }) {
+    const a = this.liquidityV3Accounts(params);
+    return await this.program.methods
+      .increaseLiquidityV3(
+        params.liquidity,
+        params.amount0Max,
+        params.amount1Max,
+        params.baseFlag ?? null,
+        params.remainingAccountsInfo
+      )
+      .accounts({
+        nftOwner: a.nftOwner,
+        nftAccount: a.nftAccount,
+        poolState: a.poolState,
+        protocolPosition: a.protocolPosition,
+        personalPosition: a.personalPosition,
+        tickArrayLower: a.tickArrayLower,
+        tickArrayUpper: a.tickArrayUpper,
+        tokenAccount0: a.account0,
+        tokenAccount1: a.account1,
+        tokenVault0: a.tokenVault0,
+        tokenVault1: a.tokenVault1,
+        tokenProgram: a.tokenProgram,
+        tokenProgram2022: a.tokenProgram2022,
+        vault0Mint: a.vault0Mint,
+        vault1Mint: a.vault1Mint,
+      } as any)
+      .remainingAccounts(params.remainingAccounts)
+      .preInstructions([
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 1400000 }),
+      ])
+      .signers([params.owner])
+      .rpc();
+  }
+
+  async decreaseLiquidityV3(params: {
+    owner: Keypair;
+    position: OpenedPosition;
+    mint0: PublicKey;
+    mint1: PublicKey;
+    token0Program: PublicKey;
+    token1Program: PublicKey;
+    liquidity: anchor.BN;
+    amount0Min: anchor.BN;
+    amount1Min: anchor.BN;
+    remainingAccountsInfo: { slices: { accountsType: number; length: number }[] };
+    remainingAccounts: AccountMeta[];
+  }) {
+    const a = this.liquidityV3Accounts(params);
+    return await this.program.methods
+      .decreaseLiquidityV3(
+        params.liquidity,
+        params.amount0Min,
+        params.amount1Min,
+        params.remainingAccountsInfo
+      )
+      .accounts({
+        nftOwner: a.nftOwner,
+        nftAccount: a.nftAccount,
+        personalPosition: a.personalPosition,
+        poolState: a.poolState,
+        protocolPosition: a.protocolPosition,
+        tokenVault0: a.tokenVault0,
+        tokenVault1: a.tokenVault1,
+        tickArrayLower: a.tickArrayLower,
+        tickArrayUpper: a.tickArrayUpper,
+        recipientTokenAccount0: a.account0,
+        recipientTokenAccount1: a.account1,
+        tokenProgram: a.tokenProgram,
+        tokenProgram2022: a.tokenProgram2022,
+        memoProgram: MEMO_PROGRAM_ID,
+        vault0Mint: a.vault0Mint,
+        vault1Mint: a.vault1Mint,
+      } as any)
+      .remainingAccounts(params.remainingAccounts)
+      .preInstructions([
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 1400000 }),
+      ])
+      .signers([params.owner])
+      .rpc();
+  }
+
   /**
    * Open Limit Order helper function
    */
+  /// The token program a mint lives under. Token-2022 mints derive their associated token
+  /// account under a different program, so every ATA here has to be derived with it.
+  private async tokenProgramOf(mint: PublicKey): Promise<PublicKey> {
+    const info = await this.provider.connection.getAccountInfo(mint);
+    return info?.owner.equals(TOKEN_2022_PROGRAM_ID)
+      ? TOKEN_2022_PROGRAM_ID
+      : TOKEN_PROGRAM_ID;
+  }
+
   async openLimitOrder(params: {
     owner: Keypair;
     poolState: PublicKey;
@@ -644,7 +934,13 @@ export class InstructionHelper {
     zeroForOne: boolean;
     amount: anchor.BN;
     nonceIndex?: number;
-  }) {
+    /// When set, the `_v2` entry point is used: the same accounts plus a tape describing
+    /// `remaining_accounts`. Hook mints only work this way.
+    v2?: {
+      info: { slices: { accountsType: number; length: number }[] };
+      accounts: AccountMeta[];
+    };
+}) {
     const nonceIndex = params.nonceIndex ?? 0;
 
     // Derive limit_order_nonce PDA
@@ -687,6 +983,7 @@ export class InstructionHelper {
     const inputVaultMint = params.zeroForOne
       ? poolStateData.tokenMint0
       : poolStateData.tokenMint1;
+    const inputTokenProgram = await this.tokenProgramOf(inputVaultMint);
 
     // Derive input vault using PDA utils
     const [inputVault] = await this.pda.getTokenVaultPDA(
@@ -697,22 +994,15 @@ export class InstructionHelper {
     // Derive owner's input token account (ATA)
     const inputTokenAccount = getAssociatedTokenAddressSync(
       inputVaultMint,
-      params.owner.publicKey
+      params.owner.publicKey,
+      false,
+      inputTokenProgram
     );
-
-    // Determine input token program from mint owner
-    const inputVaultMintInfo = await this.provider.connection.getAccountInfo(
-      inputVaultMint
-    );
-    const inputTokenProgram = inputVaultMintInfo?.owner.equals(
-      TOKEN_2022_PROGRAM_ID
-    )
-      ? TOKEN_2022_PROGRAM_ID
-      : TOKEN_PROGRAM_ID;
 
     const outputVaultMint = params.zeroForOne
       ? poolStateData.tokenMint1
       : poolStateData.tokenMint0;
+    const outputTokenProgram = await this.tokenProgramOf(outputVaultMint);
 
     const [outputVault] = await this.pda.getTokenVaultPDA(
       params.poolState,
@@ -721,20 +1011,29 @@ export class InstructionHelper {
 
     const outputTokenAccount = getAssociatedTokenAddressSync(
       outputVaultMint,
-      params.owner.publicKey
+      params.owner.publicKey,
+      false,
+      outputTokenProgram
     );
 
     const [tickArrayBitmap] = await this.pda.getTickArrayBitmapPDA(
       params.poolState
     );
 
-    const tx = await this.program.methods
-      .openLimitOrder(
-        nonceIndex,
-        params.zeroForOne,
-        params.tickIndex,
-        params.amount
-      )
+    const tx = await (params.v2
+      ? this.program.methods.openLimitOrderV2(
+          nonceIndex,
+          params.zeroForOne,
+          params.tickIndex,
+          params.amount,
+          params.v2.info
+        )
+      : this.program.methods.openLimitOrder(
+          nonceIndex,
+          params.zeroForOne,
+          params.tickIndex,
+          params.amount
+        ))
       .accounts({
         payer: params.owner.publicKey,
         poolState: params.poolState,
@@ -752,6 +1051,7 @@ export class InstructionHelper {
       } as any)
       .remainingAccounts([
         { pubkey: tickArrayBitmap, isWritable: true, isSigner: false },
+        ...(params.v2?.accounts ?? []),
       ])
       .signers([params.owner])
       .rpc();
@@ -770,7 +1070,13 @@ export class InstructionHelper {
     poolState: PublicKey;
     limitOrder: PublicKey;
     amount: anchor.BN;
-  }) {
+    /// When set, the `_v2` entry point is used: the same accounts plus a tape describing
+    /// `remaining_accounts`. Hook mints only work this way.
+    v2?: {
+      info: { slices: { accountsType: number; length: number }[] };
+      accounts: AccountMeta[];
+    };
+}) {
     // Load limit order and pool state to get required info
     const limitOrderData = await this.program.account.limitOrderState.fetch(
       params.limitOrder
@@ -781,7 +1087,7 @@ export class InstructionHelper {
 
     // Calculate tick array start index from limit order's tick index
     const tickSpacing = poolStateData.tickSpacing;
-    const tickArrayStartIndex = TickArrayUtil.getTickArrayStartIndex(
+    const tickArrayStartIndex = getTickArrayStartIndex(
       limitOrderData.tickIndex,
       tickSpacing
     );
@@ -793,6 +1099,7 @@ export class InstructionHelper {
     const inputVaultMint = limitOrderData.zeroForOne
       ? poolStateData.tokenMint0
       : poolStateData.tokenMint1;
+    const inputTokenProgram = await this.tokenProgramOf(inputVaultMint);
 
     // Derive input vault
     const [inputVault] = await this.pda.getTokenVaultPDA(
@@ -803,23 +1110,14 @@ export class InstructionHelper {
     // Derive owner's input token account (ATA)
     const inputTokenAccount = getAssociatedTokenAddressSync(
       inputVaultMint,
-      params.owner.publicKey
+      params.owner.publicKey,
+      false,
+      inputTokenProgram
     );
 
-    // Determine which token program to use based on mint owner
-    // This should match the token program that owns the input_vault_mint
-    // For simplicity, we check if it's TOKEN_2022 by checking the mint
-    // In practice, we might need to fetch the mint account to determine the program
-    // For now, we'll use TOKEN_PROGRAM_ID as default, but this should be determined dynamically
-    const mintInfo = await this.program.provider.connection.getAccountInfo(
-      inputVaultMint
-    );
-    const inputTokenProgram = mintInfo?.owner.equals(TOKEN_2022_PROGRAM_ID)
-      ? TOKEN_2022_PROGRAM_ID
-      : TOKEN_PROGRAM_ID;
-
-    return await this.program.methods
-      .increaseLimitOrder(params.amount)
+    return await (params.v2
+      ? this.program.methods.increaseLimitOrderV2(params.amount, params.v2.info)
+      : this.program.methods.increaseLimitOrder(params.amount))
       .accounts({
         owner: params.owner.publicKey,
         poolState: params.poolState,
@@ -830,7 +1128,8 @@ export class InstructionHelper {
         inputVaultMint: inputVaultMint,
         inputTokenProgram: inputTokenProgram,
       } as any)
-      .signers([params.owner])
+            .remainingAccounts(params.v2?.accounts ?? [])
+.signers([params.owner])
       .rpc();
   }
 
@@ -843,7 +1142,13 @@ export class InstructionHelper {
     limitOrder: PublicKey;
     amount: anchor.BN;
     amountMin: anchor.BN;
-  }) {
+    /// When set, the `_v2` entry point is used: the same accounts plus a tape describing
+    /// `remaining_accounts`. Hook mints only work this way.
+    v2?: {
+      info: { slices: { accountsType: number; length: number }[] };
+      accounts: AccountMeta[];
+    };
+}) {
     // Load limit order and pool state to get required info
     const limitOrderData = await this.program.account.limitOrderState.fetch(
       params.limitOrder
@@ -854,7 +1159,7 @@ export class InstructionHelper {
 
     // Calculate tick array start index from limit order's tick index
     const tickSpacing = poolStateData.tickSpacing;
-    const tickArrayStartIndex = TickArrayUtil.getTickArrayStartIndex(
+    const tickArrayStartIndex = getTickArrayStartIndex(
       limitOrderData.tickIndex,
       tickSpacing
     );
@@ -866,9 +1171,11 @@ export class InstructionHelper {
     const inputVaultMint = limitOrderData.zeroForOne
       ? poolStateData.tokenMint0
       : poolStateData.tokenMint1;
+    const inputTokenProgram = await this.tokenProgramOf(inputVaultMint);
     const outputVaultMint = limitOrderData.zeroForOne
       ? poolStateData.tokenMint1
       : poolStateData.tokenMint0;
+    const outputTokenProgram = await this.tokenProgramOf(outputVaultMint);
 
     // Derive input and output vaults using PDA utils
     const [inputVault] = await this.pda.getTokenVaultPDA(
@@ -883,11 +1190,15 @@ export class InstructionHelper {
     // Derive owner's input and output token accounts (ATA)
     const inputTokenAccount = getAssociatedTokenAddressSync(
       inputVaultMint,
-      params.owner.publicKey
+      params.owner.publicKey,
+      false,
+      inputTokenProgram
     );
     const outputTokenAccount = getAssociatedTokenAddressSync(
       outputVaultMint,
-      params.owner.publicKey
+      params.owner.publicKey,
+      false,
+      outputTokenProgram
     );
 
     const ticksInArray = 60 * tickSpacing;
@@ -911,8 +1222,14 @@ export class InstructionHelper {
       });
     }
 
-    let instructionBuilder = this.program.methods
-      .decreaseLimitOrder(params.amount, params.amountMin)
+    let instructionBuilder = (params.v2
+      ? this.program.methods.decreaseLimitOrderV2(
+          params.amount,
+          params.amountMin,
+          params.v2.info
+        )
+      : this.program.methods.decreaseLimitOrder(params.amount, params.amountMin)
+    )
       .accounts({
         owner: params.owner.publicKey,
         poolState: params.poolState,
@@ -928,9 +1245,9 @@ export class InstructionHelper {
         tokenProgram2022: TOKEN_2022_PROGRAM_ID,
       } as any);
 
-    if (remainingAccounts.length > 0) {
-      instructionBuilder =
-        instructionBuilder.remainingAccounts(remainingAccounts);
+    const allRemaining = [...remainingAccounts, ...(params.v2?.accounts ?? [])];
+    if (allRemaining.length > 0) {
+      instructionBuilder = instructionBuilder.remainingAccounts(allRemaining);
     }
 
     return await instructionBuilder.signers([params.owner]).rpc();
@@ -943,7 +1260,13 @@ export class InstructionHelper {
     owner: Keypair;
     poolState: PublicKey;
     limitOrder: PublicKey;
-  }) {
+    /// When set, the `_v2` entry point is used: the same accounts plus a tape describing
+    /// `remaining_accounts`. Hook mints only work this way.
+    v2?: {
+      info: { slices: { accountsType: number; length: number }[] };
+      accounts: AccountMeta[];
+    };
+}) {
     // Load limit order and pool state to get required info
     const limitOrderData = await this.program.account.limitOrderState.fetch(
       params.limitOrder
@@ -954,7 +1277,7 @@ export class InstructionHelper {
 
     // Calculate tick array start index from limit order's tick index
     const tickSpacing = poolStateData.tickSpacing;
-    const tickArrayStartIndex = TickArrayUtil.getTickArrayStartIndex(
+    const tickArrayStartIndex = getTickArrayStartIndex(
       limitOrderData.tickIndex,
       tickSpacing
     );
@@ -966,6 +1289,7 @@ export class InstructionHelper {
     const outputVaultMint = limitOrderData.zeroForOne
       ? poolStateData.tokenMint1
       : poolStateData.tokenMint0;
+    const outputTokenProgram = await this.tokenProgramOf(outputVaultMint);
 
     // Derive output vault using PDA utils
     const [outputVault] = await this.pda.getTokenVaultPDA(
@@ -976,21 +1300,16 @@ export class InstructionHelper {
     // Derive owner's output token account (ATA)
     const outputTokenAccount = getAssociatedTokenAddressSync(
       outputVaultMint,
-      limitOrderData.owner
+      limitOrderData.owner,
+      false,
+      outputTokenProgram
     );
 
     // Determine output token program from mint owner
-    const outputVaultMintInfo = await this.provider.connection.getAccountInfo(
-      outputVaultMint
-    );
-    const outputTokenProgram = outputVaultMintInfo?.owner.equals(
-      TOKEN_2022_PROGRAM_ID
-    )
-      ? TOKEN_2022_PROGRAM_ID
-      : TOKEN_PROGRAM_ID;
 
-    return await this.program.methods
-      .settleLimitOrder()
+    return await (params.v2
+      ? this.program.methods.settleLimitOrderV2(params.v2.info)
+      : this.program.methods.settleLimitOrder())
       .accounts({
         signer: params.owner.publicKey,
         poolState: params.poolState,
@@ -1001,6 +1320,7 @@ export class InstructionHelper {
         outputVaultMint: outputVaultMint,
         outputTokenProgram: outputTokenProgram,
       } as any)
+      .remainingAccounts(params.v2?.accounts ?? [])
       .signers([params.owner])
       .rpc({ skipPreflight: true });
   }

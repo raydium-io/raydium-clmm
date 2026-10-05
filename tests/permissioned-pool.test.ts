@@ -20,11 +20,11 @@ import { InstructionHelper } from "./utils/instructions";
 import { PDAUtils } from "./utils/pda";
 import { getTickArrayAddressByTick } from "./utils/util";
 import {
-  TickUtil,
-  TickArrayUtil,
   MEMO_PROGRAM_ID,
   METADATA_PROGRAM_ID,
-} from "@raydium-io/raydium-sdk-v2";
+  getSqrtPriceX64FromTick,
+  getTickArrayStartIndex,
+} from "./utils/tick-math";
 
 describe("create_permissioned_pool", () => {
   const provider = anchor.AnchorProvider.env();
@@ -83,7 +83,7 @@ describe("create_permissioned_pool", () => {
     await program.methods
       .createPermissionedPool(
         {
-          sqrtPriceX64: TickUtil.getSqrtPriceAtTick(0),
+          sqrtPriceX64: getSqrtPriceX64FromTick(0),
           collectFeeOn: { fromInput: {} } as any,
           enableDynamicFee: false,
         },
@@ -261,8 +261,8 @@ describe("create_permissioned_pool", () => {
     const tickUpperIndex = 60;
     const tickSpacing = poolStateData.tickSpacing;
 
-    const lowerStart = TickArrayUtil.getTickArrayStartIndex(tickLowerIndex, tickSpacing);
-    const upperStart = TickArrayUtil.getTickArrayStartIndex(tickUpperIndex, tickSpacing);
+    const lowerStart = getTickArrayStartIndex(tickLowerIndex, tickSpacing);
+    const upperStart = getTickArrayStartIndex(tickUpperIndex, tickSpacing);
 
     const tickArrayLower = getTickArrayAddressByTick(
       program.programId,
@@ -356,7 +356,7 @@ describe("create_permissioned_pool", () => {
       outputVaultMint: setup.token1,
       amount: new anchor.BN(1_000_000),
       otherAmountThreshold: new anchor.BN(0),
-      sqrtPriceLimitX64: TickUtil.getSqrtPriceAtTick(-30),
+      sqrtPriceLimitX64: getSqrtPriceX64FromTick(-30),
       isBaseInput: true,
       remainingAccounts: [
         { pubkey: tickArrayUpper, isWritable: true, isSigner: false },

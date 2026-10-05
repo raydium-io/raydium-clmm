@@ -101,7 +101,9 @@ pub fn increase_liquidity_v1<'info>(
         None,
         None,
         None,
-        &ctx.remaining_accounts,
+        ctx.remaining_accounts.first(),
+        &[],
+        &[],
         liquidity,
         amount_0_max,
         amount_1_max,
@@ -124,14 +126,16 @@ pub fn increase_liquidity<'b, 'info>(
     vault_0_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
     vault_1_mint: Option<Box<InterfaceAccount<'info, Mint>>>,
 
-    remaining_accounts: &'info [AccountInfo<'info>],
+    tickarray_bitmap_extension: Option<&'info AccountInfo<'info>>,
+    hook_0: &[AccountInfo<'info>],
+    hook_1: &[AccountInfo<'info>],
     liquidity: u128,
     amount_0_max: u64,
     amount_1_max: u64,
     base_flag: Option<bool>,
 ) -> Result<()> {
     let mut liquidity = liquidity;
-    let pool_state = &mut pool_state_loader.load_mut()?;
+    let mut pool_state = pool_state_loader.load_mut()?;
     if !pool_state.get_status_by_bit(PoolStatusBitIndex::OpenPositionOrIncreaseLiquidity) {
         return err!(ErrorCode::NotApproved);
     }
@@ -151,33 +155,39 @@ pub fn increase_liquidity<'b, 'info>(
         reward_growths_inside: reward_growths_inside_latest,
         ..
     } = add_liquidity(
-        &nft_owner,
-        token_account_0,
-        token_account_1,
-        token_vault_0,
-        token_vault_1,
         &AccountLoad::<TickArrayState>::try_from(&tick_array_lower_loader.to_account_info())?,
         &AccountLoad::<TickArrayState>::try_from(&tick_array_upper_loader.to_account_info())?,
-        token_program_2022,
-        token_program,
-        vault_0_mint,
-        vault_1_mint,
-        if use_tickarray_bitmap_extension {
-            require_keys_eq!(
-                remaining_accounts[0].key(),
-                TickArrayBitmapExtension::key(pool_state_loader.key())
-            );
-            Some(&remaining_accounts[0])
-        } else {
-            None
-        },
-        pool_state,
+        vault_0_mint.clone(),
+        vault_1_mint.clone(),
+        crate::instructions::resolve_bitmap_extension(
+            use_tickarray_bitmap_extension,
+            tickarray_bitmap_extension,
+            pool_state_loader.key(),
+        )?,
+        &mut pool_state,
         &mut liquidity,
         amount_0_max,
         amount_1_max,
         tick_lower,
         tick_upper,
         base_flag,
+    )?;
+    drop(pool_state);
+
+    crate::instructions::transfer_liquidity_deposit(
+        nft_owner,
+        token_account_0,
+        token_account_1,
+        token_vault_0,
+        token_vault_1,
+        token_program,
+        token_program_2022,
+        vault_0_mint,
+        vault_1_mint,
+        hook_0,
+        hook_1,
+        amount_0 + amount_0_transfer_fee,
+        amount_1 + amount_1_transfer_fee,
     )?;
 
     personal_position.increase_liquidity(

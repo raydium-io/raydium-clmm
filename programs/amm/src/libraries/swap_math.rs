@@ -601,13 +601,9 @@ mod swap_math_test {
                     amount_in
                 }
             } else {
-                if is_fee_on_input {
-                    // amount_remaining is gross output
-                    amount_out
-                } else {
-                    // amount_remaining is net output; gross = amount_out + fee
-                    amount_out + fee_amount
-                }
+                // amount_remaining is gross output for fee-on-input and net output for
+                // fee-on-output; amount_out is reported on the same basis either way.
+                amount_out
             };
 
             if sqrt_price_next_x64 != sqrt_price_target_x64 {

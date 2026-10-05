@@ -3,7 +3,6 @@ use crate::states::*;
 use crate::util::get_transfer_fee;
 use crate::{error::ErrorCode, Result};
 use anchor_lang::{prelude::*, solana_program};
-use anchor_spl::token_2022;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 #[derive(Accounts)]
 #[instruction(nonce_index: u8, zero_for_one: bool, tick_index: i32)]
@@ -104,19 +103,37 @@ pub struct OpenLimitOrder<'info> {
 
     /// SPL program for system operations
     pub system_program: Program<'info, System>,
-    // remaining account, for tick array bitmap extension (optional)
-    // #[account(
-    //     seeds = [
-    //         POOL_TICK_ARRAY_BITMAP_SEED.as_bytes(),
-    //         pool_state.key().as_ref(),
-    //     ],
-    //     bump
-    // )]
-    // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
+    // remaining accounts:
+    //   open_limit_order: [tick array bitmap extension], when the tick needs it
+    //   open_limit_order_v2: segments declared by `RemainingAccountsInfo`:
+    //     TickArrayBitmapExtension (optional), TransferHookInput
 }
 
 pub fn open_limit_order<'info>(
     ctx: Context<'info, OpenLimitOrder<'info>>,
+    nonce_index: u8,
+    zero_for_one: bool,
+    tick_index: i32,
+    amount: u64,
+) -> Result<()> {
+    crate::util::hook::reject_hook_mint(&ctx.accounts.input_vault_mint.to_account_info())?;
+    crate::util::hook::reject_hook_mint(&ctx.accounts.output_vault_mint.to_account_info())?;
+    let bitmap_extension = ctx.remaining_accounts.first();
+    open_limit_order_internal(
+        ctx,
+        bitmap_extension,
+        &[],
+        nonce_index,
+        zero_for_one,
+        tick_index,
+        amount,
+    )
+}
+
+pub fn open_limit_order_internal<'info>(
+    ctx: Context<'info, OpenLimitOrder<'info>>,
+    bitmap_extension: Option<&'info AccountInfo<'info>>,
+    hook_input: &[AccountInfo<'info>],
     nonce_index: u8,
     zero_for_one: bool,
     tick_index: i32,
@@ -200,16 +217,18 @@ pub fn open_limit_order<'info>(
             let use_tickarray_bitmap_extension =
                 pool_state.is_overflow_default_tickarray_bitmap(vec![tick_array_start_index]);
 
-            let tickarray_bitmap_extension = if use_tickarray_bitmap_extension {
-                require!(ctx.remaining_accounts.len() > 0, ErrorCode::AccountLack);
-                Some(&ctx.remaining_accounts[0])
-            } else {
-                None
-            };
+            let tickarray_bitmap_extension = crate::instructions::resolve_bitmap_extension(
+                use_tickarray_bitmap_extension,
+                bitmap_extension,
+                ctx.accounts.pool_state.key(),
+            )?;
 
             pool_state.flip_tick_array_bit(tickarray_bitmap_extension, tick_array_start_index)?;
         }
     }
+    // A hook whose extras name this tick array would fail the CPI's borrow check.
+    drop(tick_array);
+
     let limit_order_nonce = &mut ctx.accounts.limit_order_nonce;
     if limit_order_nonce.user_wallet == Pubkey::default() {
         limit_order_nonce.user_wallet = ctx.accounts.payer.key();
@@ -217,18 +236,16 @@ pub fn open_limit_order<'info>(
     }
     limit_order_nonce.increase_order_nonce()?;
 
-    token_2022::transfer_checked(
-        CpiContext::new(
-            ctx.accounts.input_token_program.key(),
-            token_2022::TransferChecked {
-                from: ctx.accounts.input_token_account.to_account_info(),
-                to: ctx.accounts.input_vault.to_account_info(),
-                authority: ctx.accounts.payer.to_account_info(),
-                mint: ctx.accounts.input_vault_mint.to_account_info(),
-            },
-        ),
+    crate::util::transfer_checked_with_hook(
+        &ctx.accounts.input_token_program.to_account_info(),
+        &ctx.accounts.input_token_account.to_account_info(),
+        &ctx.accounts.input_vault_mint.to_account_info(),
+        &ctx.accounts.input_vault.to_account_info(),
+        &ctx.accounts.payer.to_account_info(),
+        hook_input,
         amount,
         ctx.accounts.input_vault_mint.decimals,
+        &[],
     )?;
 
     emit!(OpenLimitOrderEvent {
