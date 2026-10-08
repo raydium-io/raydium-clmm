@@ -379,25 +379,28 @@ impl SwapState {
         zero_for_one: bool,
         is_skipped_tick_spacing: bool,
     ) -> Result<()> {
-        if let Some(dynamic_fee_info) = &self.dynamic_fee_info {
+        if self.dynamic_fee_info.is_some() {
             if is_skipped_tick_spacing {
-                let tick_index = if self.sqrt_price_x64 == self.sqrt_price_next_x64 {
-                    self.tick_next
+                let tick_spacing_i32 = self.tick_spacing as i32;
+                let (tick_index, on_boundary) = if self.sqrt_price_x64 == self.sqrt_price_next_x64 {
+                    (self.tick_next, self.tick_next % tick_spacing_i32 == 0)
                 } else {
-                    self.tick
+                    (
+                        self.tick,
+                        !zero_for_one
+                            && self.tick % tick_spacing_i32 == 0
+                            && self.sqrt_price_x64 == tick_math::get_sqrt_price_at_tick(self.tick)?,
+                    )
                 };
                 let mut tick_spacing_index =
                     tick_spacing_index_from_tick(tick_index, self.tick_spacing);
-                if !zero_for_one && tick_index % (self.tick_spacing as i32) == 0 {
+                if !zero_for_one && on_boundary {
                     tick_spacing_index = tick_spacing_index - 1;
                 }
                 self.tick_spacing_index = tick_spacing_index;
-
-                if dynamic_fee_info.volatility_accumulator
-                    != dynamic_fee_info.max_volatility_accumulator
-                {
-                    self.update_volatility_accumulator()?;
-                }
+                // Refresh even when saturated: a skip back toward the reference
+                // lands below max, and the stale max would seed the next decay.
+                self.update_volatility_accumulator()?;
             }
             self.tick_spacing_index += if zero_for_one { -1 } else { 1 };
         }
@@ -410,14 +413,49 @@ impl SwapState {
         zero_for_one: bool,
     ) -> Result<(bool, u128, Option<i32>)> {
         if let Some(dynamic_fee_info) = &self.dynamic_fee_info {
-            if self.liquidity == 0
-                || dynamic_fee_info.volatility_accumulator
-                    == dynamic_fee_info.max_volatility_accumulator
-            {
+            if self.liquidity == 0 {
                 return Ok((true, target_price, None));
             }
 
             let tick_spacing_i32 = i32::from(self.tick_spacing);
+            if dynamic_fee_info.volatility_accumulator
+                == dynamic_fee_info.max_volatility_accumulator
+            {
+                let reference = dynamic_fee_info.tick_spacing_index_reference;
+                let core_delta = (dynamic_fee_info.max_volatility_accumulator
+                    - dynamic_fee_info.volatility_reference)
+                    .div_ceil(u32::from(VOLATILITY_ACCUMULATOR_SCALE))
+                    as i32;
+                let distance = self.tick_spacing_index - reference;
+                // Beyond `core_delta` groups every group is charged max, so a step may skip
+                // straight to the target only while moving away. Moving back, groups within
+                // `core_delta` cost less, so skip only to that edge and step per group from there.
+                if distance.abs() > core_delta {
+                    let moving_away = (distance > 0) != zero_for_one;
+                    if moving_away {
+                        return Ok((true, target_price, None));
+                    }
+                    let edge_tick = if zero_for_one {
+                        (reference + core_delta + 1) * tick_spacing_i32
+                    } else {
+                        (reference - core_delta) * tick_spacing_i32
+                    };
+                    let edge_tick = edge_tick.clamp(tick_math::MIN_TICK, tick_math::MAX_TICK);
+                    let edge_price = tick_math::get_sqrt_price_at_tick(edge_tick)?;
+                    let stops_at_edge = if zero_for_one {
+                        target_price <= edge_price
+                    } else {
+                        target_price >= edge_price
+                    };
+                    // Hand back the tick only when the step stops at the edge price.
+                    return Ok(if stops_at_edge {
+                        (true, edge_price, Some(edge_tick))
+                    } else {
+                        (true, target_price, None)
+                    });
+                }
+            }
+
             let bounded_tick = if zero_for_one {
                 self.tick_spacing_index.saturating_mul(tick_spacing_i32)
             } else {
@@ -1081,7 +1119,7 @@ mod swap_test {
 
     pub fn get_tick_array_states_mut(
         deque_tick_array_states: &VecDeque<RefCell<TickArrayState>>,
-    ) -> RefCell<VecDeque<RefMut<TickArrayState>>> {
+    ) -> RefCell<VecDeque<RefMut<'_, TickArrayState>>> {
         let mut tick_array_states = VecDeque::new();
 
         for tick_array_state in deque_tick_array_states {
@@ -5780,6 +5818,244 @@ mod swap_test {
                 assert!(
                     fee_growth_global_0_after != fee_growth_global_0_before,
                     "fee_growth_global_0_x64 must change"
+                );
+            }
+        }
+
+        /// Saturate, then retrace inside the saturation distance via the skip path.
+        /// The persisted accumulator must match a never-saturated pool with the same
+        /// end point, otherwise the next decay seeds an inflated reference.
+        #[test]
+        fn test_saturated_retrace_persists_distance_accumulator() {
+            let timestamp: u64 = 100_000;
+            let run = |far_tick: i32| {
+                let (amm_config, pool_state, tick_array_states, observation_state) =
+                    setup_offset_position_with_dynamic_fee(
+                        60,
+                        60,
+                        60,
+                        3540,
+                        1_000_000_000_000_000u128,
+                        timestamp,
+                    );
+                for (limit_tick, zero_for_one) in [(far_tick, false), (300, true)] {
+                    swap_internal(
+                        &amm_config,
+                        &mut pool_state.borrow_mut(),
+                        &mut get_tick_array_states_mut(&tick_array_states).borrow_mut(),
+                        &mut observation_state.borrow_mut(),
+                        None,
+                        1_000_000_000_000_000u64,
+                        tick_math::get_sqrt_price_at_tick(limit_tick).unwrap(),
+                        zero_for_one,
+                        true,
+                        timestamp as u32,
+                    )
+                    .unwrap();
+                }
+                let mut info = pool_state.borrow().get_dynamic_fee_info().unwrap();
+                let vol_acc = info.volatility_accumulator;
+                info.update_reference(5, timestamp + u64::from(info.filter_period))
+                    .unwrap();
+                (vol_acc, info.volatility_reference)
+            };
+
+            // tick 1200 saturates (max at 10 groups from reference group 1); tick 420 does not.
+            let (saturated_acc, saturated_ref) = run(1200);
+            let (clean_acc, clean_ref) = run(420);
+
+            // Back at group 5: |1 - 5| * 10_000.
+            assert_eq!(clean_acc, 40_000);
+            assert_eq!(saturated_acc, clean_acc);
+            assert_eq!(saturated_ref, clean_ref);
+            assert_eq!(saturated_ref, 20_000);
+        }
+
+        type EdgePool = (
+            AmmConfig,
+            RefCell<PoolState>,
+            VecDeque<RefCell<TickArrayState>>,
+            RefCell<ObservationState>,
+        );
+
+        /// Liquidity over [-3540, 3540] plus a dust position initializing tick -480;
+        /// reference group 1, saturated 10 groups away (groups 11 and -9).
+        fn edge_pool() -> EdgePool {
+            let liquidity = 1_000_000_000_000_000u128;
+            let pool = build_swap_param(
+                60,
+                60,
+                tick_math::get_sqrt_price_at_tick(60).unwrap(),
+                liquidity + 1_000,
+                vec![
+                    TickArrayInfo {
+                        start_tick_index: -3600,
+                        ticks: vec![
+                            build_tick(-3540, liquidity, liquidity as i128).take(),
+                            build_tick(-480, 1_000, 1_000).take(),
+                        ],
+                    },
+                    TickArrayInfo {
+                        start_tick_index: 0,
+                        ticks: vec![
+                            build_tick(3540, liquidity, -((liquidity + 1_000) as i128)).take()
+                        ],
+                    },
+                ],
+            );
+            pool.1
+                .borrow_mut()
+                .initialize_dynamic_fee_info(60, 60, 3600, 5000, 1000, 100_000)
+                .unwrap();
+            pool.1.borrow_mut().dynamic_fee_info.last_update_timestamp = 100_000;
+            pool
+        }
+
+        fn edge_swap(pool: &EdgePool, sqrt_price_limit: u128, zero_for_one: bool) -> u64 {
+            let mut arrays: VecDeque<RefMut<TickArrayState>> = if zero_for_one {
+                pool.2.iter().rev().map(|a| a.borrow_mut()).collect()
+            } else {
+                pool.2.iter().map(|a| a.borrow_mut()).collect()
+            };
+            let r = swap_internal(
+                &pool.0,
+                &mut pool.1.borrow_mut(),
+                &mut arrays,
+                &mut pool.3.borrow_mut(),
+                None,
+                1_000_000_000_000_000u64,
+                sqrt_price_limit,
+                zero_for_one,
+                true,
+                100_000,
+            )
+            .unwrap();
+            r.trade_fee_0 + r.trade_fee_1
+        }
+
+        /// A skip step ending one Q64 unit above a group boundary has entered the
+        /// upper group, so it must not be attributed to the lower one.
+        #[test]
+        fn test_skip_ending_just_above_boundary_counts_upper_group() {
+            let pool = edge_pool();
+            edge_swap(
+                &pool,
+                tick_math::get_sqrt_price_at_tick(660).unwrap() + 1,
+                false,
+            );
+            let info = pool.1.borrow().get_dynamic_fee_info().unwrap();
+            let vol_acc = info.volatility_accumulator;
+            assert_eq!(vol_acc, 100_000);
+        }
+
+        /// Resting exactly on the edge of the first saturated group (persisted acc below
+        /// max) must not make the next swap back skip at max fee. Covers both tick_current
+        /// conventions at an edge: `edge` (limit price at 660) and `edge - 1` (crossed
+        /// initialized tick -480, then cleared so no zero-width step at it can help).
+        #[test]
+        fn test_swap_from_saturated_group_edge_does_not_skip() {
+            let rest_at_660 = || {
+                let pool = edge_pool();
+                edge_swap(
+                    &pool,
+                    tick_math::get_sqrt_price_at_tick(660).unwrap(),
+                    false,
+                );
+                pool
+            };
+            let rest_at_minus_480 = || {
+                let pool = edge_pool();
+                edge_swap(
+                    &pool,
+                    tick_math::get_sqrt_price_at_tick(-480).unwrap(),
+                    true,
+                );
+                {
+                    let mut tick_array = pool.2[0].borrow_mut();
+                    let tick = &mut tick_array.ticks[((-480 + 3600) / 60) as usize];
+                    tick.liquidity_gross = 0;
+                    tick.liquidity_net = 0;
+                }
+                pool
+            };
+            let cases: [(&dyn Fn() -> EdgePool, i32, i32, bool); 2] = [
+                (&rest_at_660, 660, 630, true),
+                (&rest_at_minus_480, -481, -450, false),
+            ];
+            for (rest, expected_tick, split_tick, zero_for_one) in cases {
+                let pool = rest();
+                let tick_current = pool.1.borrow().tick_current;
+                let info = pool.1.borrow().get_dynamic_fee_info().unwrap();
+                let vol_acc = info.volatility_accumulator;
+                assert_eq!(tick_current, expected_tick);
+                assert_eq!(vol_acc, 90_000);
+                let one_shot = edge_swap(
+                    &pool,
+                    tick_math::get_sqrt_price_at_tick(300).unwrap(),
+                    zero_for_one,
+                );
+
+                let pool = rest();
+                let split = edge_swap(
+                    &pool,
+                    tick_math::get_sqrt_price_at_tick(split_tick).unwrap(),
+                    zero_for_one,
+                ) + edge_swap(
+                    &pool,
+                    tick_math::get_sqrt_price_at_tick(300).unwrap(),
+                    zero_for_one,
+                );
+
+                assert!(
+                    one_shot.abs_diff(split) <= 4,
+                    "tick={} one_shot={} split={}",
+                    expected_tick,
+                    one_shot,
+                    split
+                );
+            }
+        }
+
+        /// Retracing from saturation must skip only to the saturation edge, so the
+        /// part back inside it is charged per group, same as when split there.
+        #[test]
+        fn test_saturated_retrace_fee_matches_split() {
+            for (far, split_tick, end, zero_for_one) in
+                [(1200, 650, 300, true), (-1200, -530, -180, false)]
+            {
+                let saturate = || {
+                    let pool = edge_pool();
+                    edge_swap(
+                        &pool,
+                        tick_math::get_sqrt_price_at_tick(far).unwrap(),
+                        !zero_for_one,
+                    );
+                    pool
+                };
+                let pool = saturate();
+                let one_shot = edge_swap(
+                    &pool,
+                    tick_math::get_sqrt_price_at_tick(end).unwrap(),
+                    zero_for_one,
+                );
+
+                let pool = saturate();
+                let split = edge_swap(
+                    &pool,
+                    tick_math::get_sqrt_price_at_tick(split_tick).unwrap(),
+                    zero_for_one,
+                ) + edge_swap(
+                    &pool,
+                    tick_math::get_sqrt_price_at_tick(end).unwrap(),
+                    zero_for_one,
+                );
+
+                assert!(
+                    one_shot.abs_diff(split) <= 4,
+                    "far={} one_shot={} split={}",
+                    far,
+                    one_shot,
+                    split
                 );
             }
         }

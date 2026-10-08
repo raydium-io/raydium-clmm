@@ -124,7 +124,7 @@ impl DynamicFeeInfo {
     /// This function implements a time-based decay mechanism for dynamic fee calculation.
     /// The volatility reference is used as a baseline for calculating volatility accumulator,
     /// which influences the dynamic fee rate. The update behavior depends on the time elapsed
-    /// since the last reference update or major swap:
+    /// since the last reference update (swaps in between do not extend the window):
     ///
     /// 1. **High frequency period** (< `filter_period`): No update to prevent excessive fee changes
     /// 2. **Decay period** (>= `filter_period` and < `decay_period`): Update with decayed volatility
