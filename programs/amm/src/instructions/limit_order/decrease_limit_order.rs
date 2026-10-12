@@ -153,6 +153,7 @@ pub fn decrease_limit_order<'info>(
             &ctx.accounts.token_program,
             Some(ctx.accounts.token_program_2022.to_account_info()),
             settled_output_amount,
+            ctx.remaining_accounts,
         )?;
     }
 
@@ -175,6 +176,7 @@ pub fn decrease_limit_order<'info>(
             &ctx.accounts.token_program,
             Some(ctx.accounts.token_program_2022.to_account_info()),
             real_decrease_amount,
+            ctx.remaining_accounts,
         )?;
     }
 

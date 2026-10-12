@@ -129,9 +129,21 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u6
         &ctx.remaining_accounts,
         &ctx.accounts.token_mint_1,
     )?;
-    if !(util::is_supported_mint(&ctx.accounts.token_mint_0, mint0_associated_is_initialized)?
-        && util::is_supported_mint(&ctx.accounts.token_mint_1, mint1_associated_is_initialized)?)
-    {
+    // an active transfer hook is allowed only when its program is enshrined (create_support_hook_program); the PDA
+    // rides in remaining_accounts next to the support-mint ones
+    let mint0_hook_enshrined =
+        util::hook_enshrined_for(&ctx.remaining_accounts, &ctx.accounts.token_mint_0)?;
+    let mint1_hook_enshrined =
+        util::hook_enshrined_for(&ctx.remaining_accounts, &ctx.accounts.token_mint_1)?;
+    if !(util::is_supported_mint(
+        &ctx.accounts.token_mint_0,
+        mint0_associated_is_initialized,
+        mint0_hook_enshrined,
+    )? && util::is_supported_mint(
+        &ctx.accounts.token_mint_1,
+        mint1_associated_is_initialized,
+        mint1_hook_enshrined,
+    )?) {
         return err!(ErrorCode::NotSupportMint);
     }
     let block_timestamp = solana_program::clock::Clock::get()?.unix_timestamp as u64;

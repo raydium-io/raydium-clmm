@@ -62,8 +62,8 @@ pub struct CollectProtocolFee<'info> {
     pub token_program_2022: Program<'info, Token2022>,
 }
 
-pub fn collect_protocol_fee(
-    ctx: Context<CollectProtocolFee>,
+pub fn collect_protocol_fee<'info>(
+    ctx: Context<'info, CollectProtocolFee<'info>>,
     amount_0_requested: u64,
     amount_1_requested: u64,
 ) -> Result<()> {
@@ -92,6 +92,7 @@ pub fn collect_protocol_fee(
         &ctx.accounts.token_program,
         Some(ctx.accounts.token_program_2022.to_account_info()),
         amount_0,
+        ctx.remaining_accounts,
     )?;
 
     transfer_from_pool_vault_to_user(
@@ -102,6 +103,7 @@ pub fn collect_protocol_fee(
         &ctx.accounts.token_program,
         Some(ctx.accounts.token_program_2022.to_account_info()),
         amount_1,
+        ctx.remaining_accounts,
     )?;
 
     emit!(CollectProtocolFeeEvent {
