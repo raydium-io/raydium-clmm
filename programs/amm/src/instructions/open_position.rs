@@ -327,6 +327,7 @@ pub fn open_position<'b, 'info>(
             tick_lower_index,
             tick_upper_index,
             base_flag,
+            remaining_accounts,
         )?;
 
         personal_position.initialize(
@@ -408,6 +409,7 @@ pub fn add_liquidity<'b, 'info>(
     tick_lower_index: i32,
     tick_upper_index: i32,
     base_flag: Option<bool>,
+    hook_accounts: &[AccountInfo<'info>],
 ) -> Result<LiquidityChangeResult> {
     if *liquidity == 0 {
         let base_flag = match base_flag {
@@ -578,6 +580,7 @@ pub fn add_liquidity<'b, 'info>(
         &token_program,
         token_2022_program_opt.clone(),
         amount_0 + amount_0_transfer_fee,
+        hook_accounts,
     )?;
     transfer_from_user_to_pool_vault(
         payer,
@@ -587,6 +590,7 @@ pub fn add_liquidity<'b, 'info>(
         &token_program,
         token_2022_program_opt.clone(),
         amount_1 + amount_1_transfer_fee,
+        hook_accounts,
     )?;
     emit!(LiquidityChangeEvent {
         pool_state: pool_state.key(),

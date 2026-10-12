@@ -277,6 +277,7 @@ pub fn exact_internal_v2<'info>(
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
             transfer_amount_0,
+            remaining_accounts,
         )?;
         // x -> y，transfer y token from pool vault to user.
         transfer_from_pool_vault_to_user(
@@ -287,6 +288,7 @@ pub fn exact_internal_v2<'info>(
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
             transfer_amount_1,
+            remaining_accounts,
         )?;
     } else {
         transfer_from_user_to_pool_vault(
@@ -297,6 +299,7 @@ pub fn exact_internal_v2<'info>(
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
             transfer_amount_1,
+            remaining_accounts,
         )?;
         transfer_from_pool_vault_to_user(
             &ctx.pool_state,
@@ -306,6 +309,7 @@ pub fn exact_internal_v2<'info>(
             &ctx.token_program,
             Some(ctx.token_program_2022.to_account_info()),
             transfer_amount_0,
+            remaining_accounts,
         )?;
     }
     ctx.output_token_account.reload()?;

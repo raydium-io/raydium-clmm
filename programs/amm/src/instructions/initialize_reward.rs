@@ -96,17 +96,20 @@ impl InitializeRewardParam {
     }
 }
 
-pub fn initialize_reward(
-    ctx: Context<InitializeReward>,
+pub fn initialize_reward<'info>(
+    ctx: Context<'info, InitializeReward<'info>>,
     param: InitializeRewardParam,
 ) -> Result<()> {
     let mint_associated_is_initialized = util::support_mint_associated_is_initialized(
         &ctx.remaining_accounts,
         &ctx.accounts.reward_token_mint,
     )?;
+    let hook_enshrined =
+        util::hook_enshrined_for(&ctx.remaining_accounts, &ctx.accounts.reward_token_mint)?;
     if !util::is_supported_mint(
         &ctx.accounts.reward_token_mint,
         mint_associated_is_initialized,
+        hook_enshrined,
     )? {
         return err!(ErrorCode::NotSupportMint);
     }
@@ -180,6 +183,7 @@ pub fn initialize_reward(
         &ctx.accounts.reward_token_program.to_account_info(),
         Some(ctx.accounts.reward_token_program.to_account_info()),
         reward_amount_with_transfer_fee,
+        ctx.remaining_accounts,
     )?;
 
     Ok(())

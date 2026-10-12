@@ -178,6 +178,7 @@ pub fn increase_liquidity<'b, 'info>(
         tick_lower,
         tick_upper,
         base_flag,
+        remaining_accounts,
     )?;
 
     personal_position.increase_liquidity(

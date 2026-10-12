@@ -1,6 +1,7 @@
 use super::{create_or_allocate_account, get_recent_epoch};
 use crate::error::ErrorCode;
 use crate::states::*;
+use anchor_lang::solana_program::program::{invoke, invoke_signed};
 use anchor_lang::system_program::{transfer, Transfer};
 use anchor_lang::{
     prelude::*,
@@ -12,8 +13,8 @@ use anchor_spl::token::{self, Token};
 use anchor_spl::token_2022::spl_token_2022::{
     self,
     extension::{
-        metadata_pointer, transfer_fee::TransferFeeConfig, BaseStateWithExtensions, ExtensionType,
-        StateWithExtensions,
+        metadata_pointer, transfer_fee::TransferFeeConfig, transfer_hook::TransferHook,
+        BaseStateWithExtensions, ExtensionType, StateWithExtensions,
     },
 };
 use anchor_spl::token_2022::{
@@ -42,6 +43,63 @@ pub fn invoke_memo_instruction<'info>(
     solana_program::program::invoke(&ix, &accounts[..])
 }
 
+/// The active transfer-hook program on a Token-2022 mint, if any. Legacy mints and mints whose hook program is unset
+/// (hook extension present but disabled) return `None`.
+pub fn transfer_hook_program(mint: &AccountInfo) -> Result<Option<Pubkey>> {
+    if *mint.owner != token_2022::ID {
+        return Ok(None);
+    }
+    let data = mint.try_borrow_data()?;
+    let state = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&data)?;
+    Ok(match state.get_extension::<TransferHook>() {
+        Ok(ext) => Option::<Pubkey>::from(ext.program_id),
+        Err(_) => None,
+    })
+}
+
+/// `transfer_checked`, forwarding `hook_accounts` when the mint has an active transfer hook. Token-2022 resolves the
+/// hook's ExtraAccountMetaList against the forwarded accounts itself and rejects the transfer if they don't match, so the
+/// caller (and the enshrinement gate in `is_supported_mint`) is what decides which hooks ever get here.
+fn transfer_checked_hooked<'info>(
+    token_program: &AccountInfo<'info>,
+    from: AccountInfo<'info>,
+    mint: AccountInfo<'info>,
+    to: AccountInfo<'info>,
+    authority: AccountInfo<'info>,
+    hook_accounts: &[AccountInfo<'info>],
+    amount: u64,
+    decimals: u8,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    let mut ix = spl_token_2022::instruction::transfer_checked(
+        token_program.key,
+        from.key,
+        mint.key,
+        to.key,
+        authority.key,
+        &[],
+        amount,
+        decimals,
+    )?;
+    let mut infos = vec![from, mint.clone(), to, authority];
+    if transfer_hook_program(&mint)?.is_some() {
+        for acc in hook_accounts {
+            ix.accounts.push(AccountMeta {
+                pubkey: *acc.key,
+                is_signer: acc.is_signer,
+                is_writable: acc.is_writable,
+            });
+            infos.push(acc.clone());
+        }
+    }
+    if signer_seeds.is_empty() {
+        invoke(&ix, &infos)?;
+    } else {
+        invoke_signed(&ix, &infos, signer_seeds)?;
+    }
+    Ok(())
+}
+
 pub fn transfer_from_user_to_pool_vault<'info>(
     signer: &Signer<'info>,
     from: &AccountInfo<'info>,
@@ -50,6 +108,7 @@ pub fn transfer_from_user_to_pool_vault<'info>(
     token_program: &AccountInfo<'info>,
     token_program_2022: Option<AccountInfo<'info>>,
     amount: u64,
+    hook_accounts: &[AccountInfo<'info>],
 ) -> Result<()> {
     if amount == 0 {
         return Ok(());
@@ -61,18 +120,17 @@ pub fn transfer_from_user_to_pool_vault<'info>(
             if from_token_info.owner == token_program_2022.key {
                 token_program_info = token_program_2022.to_account_info()
             }
-            token_2022::transfer_checked(
-                CpiContext::new(
-                    token_program_info.key(),
-                    token_2022::TransferChecked {
-                        from: from_token_info,
-                        to: to_vault.to_account_info(),
-                        authority: signer.to_account_info(),
-                        mint: mint.to_account_info(),
-                    },
-                ),
+            let decimals = mint.decimals;
+            transfer_checked_hooked(
+                &token_program_info,
+                from_token_info,
+                mint.to_account_info(),
+                to_vault.to_account_info(),
+                signer.to_account_info(),
+                hook_accounts,
                 amount,
-                mint.decimals,
+                decimals,
+                &[],
             )
         }
         _ => token::transfer(
@@ -97,6 +155,7 @@ pub fn transfer_from_pool_vault_to_user<'info>(
     token_program: &AccountInfo<'info>,
     token_program_2022: Option<AccountInfo<'info>>,
     amount: u64,
+    hook_accounts: &[AccountInfo<'info>],
 ) -> Result<()> {
     if amount == 0 {
         return Ok(());
@@ -108,19 +167,19 @@ pub fn transfer_from_pool_vault_to_user<'info>(
             if from_vault_info.owner == token_program_2022.key {
                 token_program_info = token_program_2022.to_account_info()
             }
-            token_2022::transfer_checked(
-                CpiContext::new_with_signer(
-                    token_program_info.key(),
-                    token_2022::TransferChecked {
-                        from: from_vault_info,
-                        to: to.to_account_info(),
-                        authority: pool_state_loader.to_account_info(),
-                        mint: mint.to_account_info(),
-                    },
-                    &[&pool_state_loader.load()?.seeds()],
-                ),
+            let decimals = mint.decimals;
+            let pool_state = pool_state_loader.load()?;
+            let seeds = pool_state.seeds();
+            transfer_checked_hooked(
+                &token_program_info,
+                from_vault_info,
+                mint.to_account_info(),
+                to.to_account_info(),
+                pool_state_loader.to_account_info(),
+                hook_accounts,
                 amount,
-                mint.decimals,
+                decimals,
+                &[&seeds],
             )
         }
         _ => token::transfer(
@@ -433,13 +492,85 @@ pub fn support_mint_associated_is_initialized(
     return Ok(mint_associated_is_initialized);
 }
 
+/// Whether `remaining_accounts` carries the enshrined-hook PDA for `program_id` (created by `create_support_hook_program`).
+pub fn support_hook_program_is_initialized(
+    remaining_accounts: &[AccountInfo],
+    program_id: &Pubkey,
+) -> Result<bool> {
+    if remaining_accounts.is_empty() {
+        return Ok(false);
+    }
+    let (expect, _bump) = Pubkey::find_program_address(
+        &[SUPPORT_HOOK_SEED.as_bytes(), program_id.as_ref()],
+        &crate::id(),
+    );
+    for info in remaining_accounts.iter() {
+        if *info.owner != crate::id() || info.key() != expect {
+            continue;
+        }
+        let state = SupportHookProgram::try_deserialize(&mut info.data.borrow().as_ref())?;
+        if state.program_id == *program_id {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// The hook program a mint would need enshrined to pass `is_supported_mint`, if it has one.
+pub fn required_hook_program(mint_account: &InterfaceAccount<Mint>) -> Result<Option<Pubkey>> {
+    transfer_hook_program(&mint_account.to_account_info())
+}
+
+/// Whether `mint` may be used, given the per-mint allowlist and the enshrinement state of its hook (if any).
+pub fn hook_enshrined_for(
+    remaining_accounts: &[AccountInfo],
+    mint_account: &InterfaceAccount<Mint>,
+) -> Result<bool> {
+    Ok(match required_hook_program(mint_account)? {
+        Some(program) => support_hook_program_is_initialized(remaining_accounts, &program)?,
+        None => false,
+    })
+}
+
+/// Pure extension policy, kept separate so it can be unit tested: every extension must be on the allowlist, and a
+/// TransferHook extension passes only when its program is unset (disabled hook) or `hook_program_enshrined`.
+pub fn extensions_supported(
+    extensions: &[ExtensionType],
+    hook_program: Option<Pubkey>,
+    hook_program_enshrined: bool,
+) -> bool {
+    for e in extensions {
+        match e {
+            ExtensionType::TransferFeeConfig
+            | ExtensionType::MetadataPointer
+            | ExtensionType::TokenMetadata
+            | ExtensionType::InterestBearingConfig
+            | ExtensionType::ScaledUiAmount => {}
+            ExtensionType::TransferHook => {
+                if hook_program.is_some() && !hook_program_enshrined {
+                    return false;
+                }
+            }
+            _ => return false,
+        }
+    }
+    true
+}
+
 pub fn is_supported_mint(
     mint_account: &InterfaceAccount<Mint>,
     mint_associated_is_initialized: bool,
+    hook_program_enshrined: bool,
 ) -> Result<bool> {
     let mint_info = mint_account.to_account_info();
     if *mint_info.owner == Token::id() {
         return Ok(true);
+    }
+    // an active transfer hook needs an enshrined program no matter what: the per-mint allowlist vouches for a mint's
+    // other extensions, never for code that runs on every transfer
+    let hook_program = transfer_hook_program(&mint_info)?;
+    if hook_program.is_some() && !hook_program_enshrined {
+        return Ok(false);
     }
     if mint_associated_is_initialized {
         return Ok(true);
@@ -447,17 +578,71 @@ pub fn is_supported_mint(
     let mint_data = mint_info.try_borrow_data()?;
     let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
     let extensions = mint.get_extension_types()?;
-    for e in extensions {
-        if e != ExtensionType::TransferFeeConfig
-            && e != ExtensionType::MetadataPointer
-            && e != ExtensionType::TokenMetadata
-            && e != ExtensionType::InterestBearingConfig
-            && e != ExtensionType::ScaledUiAmount
-        {
-            return Ok(false);
-        }
+    Ok(extensions_supported(
+        &extensions,
+        hook_program,
+        hook_program_enshrined,
+    ))
+}
+
+#[cfg(test)]
+mod hook_policy_tests {
+    use super::*;
+
+    #[test]
+    fn plain_extensions_pass() {
+        assert!(extensions_supported(
+            &[
+                ExtensionType::TransferFeeConfig,
+                ExtensionType::MetadataPointer
+            ],
+            None,
+            false
+        ));
+        assert!(extensions_supported(&[], None, false));
     }
-    Ok(true)
+
+    #[test]
+    fn disabled_hook_passes_without_enshrinement() {
+        assert!(extensions_supported(
+            &[ExtensionType::TransferHook, ExtensionType::TokenMetadata],
+            None,
+            false
+        ));
+    }
+
+    #[test]
+    fn active_hook_needs_enshrinement() {
+        let hook = Some(Pubkey::new_unique());
+        assert!(!extensions_supported(
+            &[ExtensionType::TransferHook],
+            hook,
+            false
+        ));
+        assert!(extensions_supported(
+            &[ExtensionType::TransferHook],
+            hook,
+            true
+        ));
+    }
+
+    #[test]
+    fn enshrinement_does_not_excuse_other_extensions() {
+        let hook = Some(Pubkey::new_unique());
+        assert!(!extensions_supported(
+            &[
+                ExtensionType::TransferHook,
+                ExtensionType::PermanentDelegate
+            ],
+            hook,
+            true
+        ));
+        assert!(!extensions_supported(
+            &[ExtensionType::NonTransferable],
+            None,
+            false
+        ));
+    }
 }
 
 pub fn create_nft_mint_with_extensions<'info>(

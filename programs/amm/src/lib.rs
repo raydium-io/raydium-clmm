@@ -211,6 +211,13 @@ pub mod raydium_clmm {
         instructions::close_support_mint_associated(ctx)
     }
 
+    /// Enshrine a Token-2022 transfer-hook program. The program must be immutable (no upgrade authority, or a
+    /// non-upgradeable loader). Mints whose active hook points at it may create pools and be used as rewards; callers
+    /// pass the hook's extra accounts as remaining accounts on every instruction that moves the mint.
+    pub fn create_support_hook_program(ctx: Context<CreateSupportHookProgram>) -> Result<()> {
+        instructions::create_support_hook_program(ctx)
+    }
+
     /// Creates a pool for the given token pair and the initial price
     ///
     /// # Arguments
@@ -321,8 +328,8 @@ pub mod raydium_clmm {
     /// * `end_time` - reward end timestamp
     /// * `emissions_per_second_x64` - Token reward per second are earned per unit of liquidity.
     ///
-    pub fn initialize_reward(
-        ctx: Context<InitializeReward>,
+    pub fn initialize_reward<'info>(
+        ctx: Context<'info, InitializeReward<'info>>,
         param: InitializeRewardParam,
     ) -> Result<()> {
         instructions::initialize_reward(ctx, param)
@@ -335,8 +342,8 @@ pub mod raydium_clmm {
     /// * `ctx` - The context of accounts
     /// * `reward_index` - the index to reward info
     ///
-    pub fn collect_remaining_rewards(
-        ctx: Context<CollectRemainingRewards>,
+    pub fn collect_remaining_rewards<'info>(
+        ctx: Context<'info, CollectRemainingRewards<'info>>,
         reward_index: u8,
     ) -> Result<()> {
         instructions::collect_remaining_rewards(ctx, reward_index)
@@ -387,8 +394,8 @@ pub mod raydium_clmm {
     /// * `amount_0_requested` - The maximum amount of token_0 to send, can be 0 to collect fees in only token_1
     /// * `amount_1_requested` - The maximum amount of token_1 to send, can be 0 to collect fees in only token_0
     ///
-    pub fn collect_protocol_fee(
-        ctx: Context<CollectProtocolFee>,
+    pub fn collect_protocol_fee<'info>(
+        ctx: Context<'info, CollectProtocolFee<'info>>,
         amount_0_requested: u64,
         amount_1_requested: u64,
     ) -> Result<()> {
@@ -403,8 +410,8 @@ pub mod raydium_clmm {
     /// * `amount_0_requested` - The maximum amount of token_0 to send, can be 0 to collect fees in only token_1
     /// * `amount_1_requested` - The maximum amount of token_1 to send, can be 0 to collect fees in only token_0
     ///
-    pub fn collect_fund_fee(
-        ctx: Context<CollectFundFee>,
+    pub fn collect_fund_fee<'info>(
+        ctx: Context<'info, CollectFundFee<'info>>,
         amount_0_requested: u64,
         amount_1_requested: u64,
     ) -> Result<()> {
