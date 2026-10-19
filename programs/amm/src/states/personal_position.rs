@@ -157,7 +157,7 @@ impl PersonalPositionState {
         Ok(())
     }
 
-    fn update_rewards(
+    pub fn update_rewards(
         &mut self,
         reward_growths_inside: [u128; REWARD_NUM],
         add_delta: bool,
