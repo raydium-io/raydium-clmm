@@ -195,17 +195,6 @@ pub mod raydium_clmm {
         )
     }
 
-    /// Create a permission PDA granting `permission_authority` the right to
-    /// call permissioned instructions. Admin-only.
-    pub fn create_permission_pda(ctx: Context<CreatePermissionPda>) -> Result<()> {
-        instructions::create_permission_pda(ctx)
-    }
-
-    /// Close a permission PDA and refund rent to the admin owner. Admin-only.
-    pub fn close_permission_pda(ctx: Context<ClosePermissionPda>) -> Result<()> {
-        instructions::close_permission_pda(ctx)
-    }
-
     /// Close a support-mint-associated PDA and refund rent. Admin-only.
     pub fn close_support_mint_associated(ctx: Context<CloseSupportMintAssociated>) -> Result<()> {
         instructions::close_support_mint_associated(ctx)
@@ -241,7 +230,7 @@ pub mod raydium_clmm {
     }
 
     /// Creates a pool for the given token pair with a client-supplied u16 seed
-    /// index, allowing multiple pools per pair. Caller must hold a permission PDA.
+    /// index, allowing multiple pools per pair.
     ///
     /// # Arguments
     ///
@@ -249,12 +238,12 @@ pub mod raydium_clmm {
     /// * `customizable_params` - the customizable parameters
     /// * `seed_index` - non-zero u16 folded into the pool PDA seeds
     ///
-    pub fn create_permissioned_pool(
-        ctx: Context<CreatePermissionedPool>,
+    pub fn create_customizable_pool_v2(
+        ctx: Context<CreateCustomizablePoolV2>,
         customizable_params: CreateCustomizableParams,
         seed_index: u16,
     ) -> Result<()> {
-        instructions::create_permissioned_pool(ctx, customizable_params, seed_index)
+        instructions::create_customizable_pool_v2(ctx, customizable_params, seed_index)
     }
 
     /// Update pool status for given value

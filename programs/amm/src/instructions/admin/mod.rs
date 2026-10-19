@@ -34,12 +34,6 @@ pub use create_dynamic_fee_config::*;
 pub mod update_dynamic_fee_config;
 pub use update_dynamic_fee_config::*;
 
-pub mod create_permission_pda;
-pub use create_permission_pda::*;
-
-pub mod close_permission_pda;
-pub use close_permission_pda::*;
-
 pub mod close_support_mint_associated;
 pub use close_support_mint_associated::*;
 

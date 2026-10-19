@@ -231,21 +231,10 @@ export class PDAUtils {
   }
 
   /**
-   * Get Permission PDA
-   * Seeds: ["permission", authority]
-   */
-  async getPermissionPDA(authority: PublicKey): Promise<[PublicKey, number]> {
-    return await PublicKey.findProgramAddress(
-      [Buffer.from("permission"), authority.toBuffer()],
-      this.programId,
-    );
-  }
-
-  /**
-   * Get Permissioned Pool State PDA
+   * Get Customizable Pool V2 State PDA
    * Seeds: ["pool", amm_config, token_mint_0, token_mint_1, seed_index (u16 LE)]
    */
-  async getPermissionedPoolPDA(
+  async getCustomizablePoolV2PDA(
     ammConfig: PublicKey,
     tokenMint0: PublicKey,
     tokenMint1: PublicKey,

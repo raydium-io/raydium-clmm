@@ -113,7 +113,7 @@ pub struct PoolState {
     pub status: u8,
     /// Fee on which token (0 = FromInput, 1 = Token0Only, 2 = Token1Only)
     pub fee_on: u8,
-    /// Client-supplied index seed (u16 LE) for permissioned pools; [0,0] = legacy pool.
+    /// Client-supplied index seed (u16 LE) for create_customizable_pool_v2 pools; [0,0] = legacy pool.
     pub seed_index: [u8; 2],
     /// Leave blank for future use
     pub padding: [u8; 4],
@@ -242,7 +242,7 @@ impl PoolState {
         Ok(())
     }
 
-    /// Store the u16 index seed used in this pool's PDA (permissioned pools only).
+    /// Store the u16 index seed used in this pool's PDA (create_customizable_pool_v2 only).
     pub fn set_seed_index(&mut self, index: u16) {
         self.seed_index = index.to_le_bytes();
     }

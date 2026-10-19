@@ -8,24 +8,13 @@ use anchor_spl::token_interface::{Mint, TokenInterface};
 
 #[derive(Accounts)]
 #[instruction(customizable_params: CreateCustomizableParams, seed_index: u16)]
-pub struct CreatePermissionedPool<'info> {
-    /// Address paying to create the pool. Must hold a permission PDA.
+pub struct CreateCustomizablePoolV2<'info> {
+    /// Address paying to create the pool. Can be anyone
     #[account(mut)]
     pub payer: Signer<'info>,
 
     /// CHECK: creator of pool
     pub pool_creator: UncheckedAccount<'info>,
-
-    /// Permission granting `pool_creator` the right to create permissioned pools.
-    /// Anchor rejects if this PDA does not exist / is not owned by this program.
-    #[account(
-        seeds = [
-            PERMISSION_SEED.as_bytes(),
-            payer.key().as_ref(),
-        ],
-        bump,
-    )]
-    pub permission: Account<'info, Permission>,
 
     /// Which config the pool belongs to.
     pub amm_config: Box<Account<'info, AmmConfig>>,
@@ -139,8 +128,8 @@ pub struct CreatePermissionedPool<'info> {
     // pub dynamic_fee_config: Box<Account<'info, DynamicFeeConfig>>,
 }
 
-pub fn create_permissioned_pool(
-    ctx: Context<CreatePermissionedPool>,
+pub fn create_customizable_pool_v2(
+    ctx: Context<CreateCustomizablePoolV2>,
     customizable_params: CreateCustomizableParams,
     seed_index: u16,
 ) -> Result<()> {
@@ -165,7 +154,7 @@ pub fn create_permissioned_pool(
     let tick = tick_math::get_tick_at_sqrt_price(customizable_params.sqrt_price_x64)?;
     #[cfg(feature = "enable-log")]
     msg!(
-        "create permissioned pool, init_price: {}, init_tick:{}",
+        "create customizable pool v2, init_price: {}, init_tick:{}",
         customizable_params.sqrt_price_x64,
         tick
     );
