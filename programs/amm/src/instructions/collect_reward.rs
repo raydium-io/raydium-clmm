@@ -1,7 +1,6 @@
 use crate::error::ErrorCode;
-use crate::states::pool::REWARD_NUM;
 use crate::states::*;
-use crate::util::transfer_from_pool_vault_to_user;
+use crate::util::{get_recent_epoch, transfer_from_pool_vault_to_user};
 use crate::util::{parse_remaining_accounts, reward_hook_type, RemainingAccountsInfo};
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
@@ -27,9 +26,15 @@ pub struct CollectReward<'info> {
     #[account(mut)]
     pub pool_state: AccountLoader<'info, PoolState>,
 
-    /// The reward vault for `reward_index`. Checked against `pool_state` in the handler
-    /// rather than in a constraint, so an out-of-range index errors instead of panicking on
-    /// the array index.
+    /// Holds the position's lower tick, to settle what accrued since the position last changed.
+    #[account(constraint = tick_array_lower.load()?.pool_id == pool_state.key())]
+    pub tick_array_lower: AccountLoader<'info, TickArrayState>,
+
+    /// Holds the position's upper tick.
+    #[account(constraint = tick_array_upper.load()?.pool_id == pool_state.key())]
+    pub tick_array_upper: AccountLoader<'info, TickArrayState>,
+
+    /// The reward vault for `reward_index`; matched against `pool_state` in the handler.
     #[account(mut)]
     pub reward_token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
@@ -50,23 +55,22 @@ pub struct CollectReward<'info> {
 /// account-lock limit once the mints carry hooks, and one index at a time keeps a reward whose
 /// hook refuses transfers from blocking the others or the principal.
 ///
-/// Accrual happens elsewhere - `reward_amount_owed` is settled when liquidity changes.
+/// Settles the slot up to now first, so the payout includes what accrued since the position
+/// last changed.
 pub fn collect_reward<'info>(
     ctx: Context<'info, CollectReward<'info>>,
     reward_index: u8,
     remaining_accounts_info: RemainingAccountsInfo,
 ) -> Result<()> {
-    let index = reward_index as usize;
-    require!(index < REWARD_NUM, ErrorCode::InvalidRewardIndex);
-
     let parsed = parse_remaining_accounts(
         ctx.remaining_accounts,
         &remaining_accounts_info,
         &[reward_hook_type(reward_index)?],
     )?;
+    let index = reward_index as usize;
 
-    {
-        let pool_state = ctx.accounts.pool_state.load()?;
+    let transfer_amount = {
+        let mut pool_state = ctx.accounts.pool_state.load_mut()?;
         require!(
             pool_state.get_status_by_bit(PoolStatusBitIndex::CollectReward),
             ErrorCode::NotApproved
@@ -75,24 +79,38 @@ pub fn collect_reward<'info>(
             ctx.accounts.reward_token_vault.key(),
             pool_state.reward_infos[index].token_vault
         );
-    }
-    require_keys_eq!(
-        ctx.accounts.reward_token_vault.mint,
-        ctx.accounts.recipient_token_account.mint
-    );
 
-    let reward_amount_owed = ctx.accounts.personal_position.reward_infos[index].reward_amount_owed;
-    if reward_amount_owed == 0 {
-        return Ok(());
-    }
-    ctx.accounts
-        .pool_state
-        .load()?
-        .check_unclaimed_reward(index, reward_amount_owed)?;
+        let reward_infos = pool_state.update_reward_infos(Clock::get()?.unix_timestamp as u64)?;
+        let position = &mut ctx.accounts.personal_position;
+        let tick_lower = *ctx
+            .accounts
+            .tick_array_lower
+            .load()?
+            .get_tick_state(position.tick_lower_index, pool_state.tick_spacing)?;
+        let tick_upper = *ctx
+            .accounts
+            .tick_array_upper
+            .load()?
+            .get_tick_state(position.tick_upper_index, pool_state.tick_spacing)?;
+        position.update_rewards(
+            get_reward_growths_inside(
+                &tick_lower,
+                &tick_upper,
+                pool_state.tick_current,
+                &reward_infos,
+            ),
+            true,
+            get_recent_epoch()?,
+        )?;
 
-    // A vault can hold less than is owed when emissions ran ahead of funding; pay what is
-    // there and leave the rest owed, as the bundled path did.
-    let transfer_amount = reward_amount_owed.min(ctx.accounts.reward_token_vault.amount);
+        let reward_amount_owed = position.reward_infos[index].reward_amount_owed;
+        pool_state.check_unclaimed_reward(index, reward_amount_owed)?;
+
+        let amount = reward_amount_owed.min(ctx.accounts.reward_token_vault.amount);
+        position.reward_infos[index].reward_amount_owed = reward_amount_owed - amount;
+        pool_state.add_reward_claimed(index, amount)?;
+        amount
+    };
     if transfer_amount == 0 {
         return Ok(());
     }
@@ -106,15 +124,5 @@ pub fn collect_reward<'info>(
         Some(ctx.accounts.token_program_2022.to_account_info()),
         parsed.hook_reward[index],
         transfer_amount,
-    )?;
-
-    ctx.accounts.personal_position.reward_infos[index].reward_amount_owed = reward_amount_owed
-        .checked_sub(transfer_amount)
-        .ok_or(ErrorCode::CalculateOverflow)?;
-    ctx.accounts
-        .pool_state
-        .load_mut()?
-        .add_reward_claimed(index, transfer_amount)?;
-
-    Ok(())
+    )
 }

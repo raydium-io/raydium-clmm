@@ -1220,6 +1220,8 @@ describe("transfer hook pool admission", () => {
       nftAccount: f.position.positionNftAccount,
       personalPosition: f.position.personalPosition,
       poolState: f.poolState,
+      tickArrayLower: f.position.tickArrayLower,
+      tickArrayUpper: f.position.tickArrayUpper,
       rewardTokenVault: f.rewardVault,
       recipientTokenAccount: f.funderAta,
       rewardVaultMint: f.rewardMint,
@@ -1246,17 +1248,32 @@ describe("transfer hook pool admission", () => {
     const claimedBefore = (await program.account.poolState.fetch(f.poolState)).rewardInfos[0]
       .rewardClaimed;
     const recipientBefore = await balance(f.funderAta);
-    await program.methods
-      .collectReward(0, rewardTape)
-      .accounts(collectAccounts)
-      .remainingAccounts(f.rewardBag)
-      .signers([owner])
-      .rpc();
-    assert.equal(await balance(f.funderAta) - recipientBefore, BigInt(owed.toString()));
+    const collect = () =>
+      program.methods
+        .collectReward(0, rewardTape)
+        .accounts(collectAccounts)
+        .remainingAccounts(f.rewardBag)
+        .signers([owner])
+        .rpc();
+    await collect();
+    // Settled up to now first: at least what was owed, plus what accrued since.
+    const paid = (await balance(f.funderAta)) - recipientBefore;
+    assert.isTrue(paid >= BigInt(owed.toString()), `paid ${paid} < owed ${owed}`);
     assert.isTrue((await owedReward0(f.position.personalPosition)).isZero());
-    const claimedAfterCollect = (await program.account.poolState.fetch(f.poolState))
+    let claimedAfterCollect = (await program.account.poolState.fetch(f.poolState))
       .rewardInfos[0].rewardClaimed;
-    assert.isTrue(claimedAfterCollect.sub(claimedBefore).eq(owed));
+    assert.equal(BigInt(claimedAfterCollect.sub(claimedBefore).toString()), paid);
+
+    // Nothing settled in between: collect alone pays what accrued since the last collect.
+    await timeTravelTo(connection, (await chainTime(connection)) + 24 * 60 * 60);
+    const beforeDirect = await balance(f.funderAta);
+    await collect();
+    const paidDirect = (await balance(f.funderAta)) - beforeDirect;
+    assert.isTrue(paidDirect > 0n, "collect_reward paid nothing for a day of accrual");
+    const claimedAfterDirect = (await program.account.poolState.fetch(f.poolState))
+      .rewardInfos[0].rewardClaimed;
+    assert.equal(BigInt(claimedAfterDirect.sub(claimedAfterCollect).toString()), paidDirect);
+    claimedAfterCollect = claimedAfterDirect;
 
     // Forfeit: the owed amount is written off as claimed, nothing moves.
     await timeTravelTo(connection, (await chainTime(connection)) + 24 * 60 * 60);
