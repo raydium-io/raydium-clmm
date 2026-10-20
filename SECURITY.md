@@ -22,7 +22,11 @@ Bugs in `raydium-sdk` and other code outside of the smart contract will be asses
 
 ## Report Submission
 
-Please email security@reactorlabs.io with a detailed description of the attack vector. For high- and critical-severity reports, please include a proof of concept. We will reach back out within 24 hours with additional questions or next steps on the bug bounty.
+We recommend submitting all security reports through Immunefi: https://immunefi.com/bug-bounty/raydium/information/. Reports submitted there are tracked through triage, and you will receive status updates and replies on the platform.
+
+If you cannot use Immunefi, you may email security@reactorlabs.io with a detailed description of the attack vector and a proof of concept. The team reviews every emailed report, but a reply is not guaranteed. If you need confirmation of receipt, status updates, or follow-up, please submit through Immunefi instead.
+
+Please do not submit the same finding through more than one channel.
 
 ## Payout Information
 
