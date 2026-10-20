@@ -240,6 +240,7 @@ pub fn decrease_liquidity<'b, 'info>(
         token_program,
         token_2022_program_opt.clone(),
         transfer_amount_0,
+        remaining_accounts,
     )?;
 
     transfer_from_pool_vault_to_user(
@@ -250,6 +251,7 @@ pub fn decrease_liquidity<'b, 'info>(
         token_program,
         token_2022_program_opt.clone(),
         transfer_amount_1,
+        remaining_accounts,
     )?;
 
     let reward_amounts = collect_rewards(
@@ -418,6 +420,9 @@ pub fn collect_rewards<'b, 'info>(
     need_reward_mint: bool,
 ) -> Result<[u64; REWARD_NUM]> {
     let mut reward_amounts: [u64; REWARD_NUM] = [0, 0, 0];
+    // hook accounts for hooked reward mints ride in the same remaining accounts as the reward mints themselves
+    let hook_accounts: Vec<AccountInfo<'info>> =
+        remaining_accounts.iter().map(|a| (*a).clone()).collect();
     if !pool_state_loader
         .load()?
         .get_status_by_bit(PoolStatusBitIndex::CollectReward)
@@ -492,6 +497,7 @@ pub fn collect_rewards<'b, 'info>(
                 &token_program,
                 token_program_2022.clone(),
                 transfer_amount,
+                &hook_accounts,
             )?;
         }
         reward_amounts[i] = transfer_amount

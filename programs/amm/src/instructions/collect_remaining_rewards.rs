@@ -38,8 +38,8 @@ pub struct CollectRemainingRewards<'info> {
     pub memo_program: Program<'info, Memo>,
 }
 
-pub fn collect_remaining_rewards(
-    ctx: Context<CollectRemainingRewards>,
+pub fn collect_remaining_rewards<'info>(
+    ctx: Context<'info, CollectRemainingRewards<'info>>,
     reward_index: u8,
 ) -> Result<()> {
     // invoke_memo_instruction(
@@ -61,6 +61,7 @@ pub fn collect_remaining_rewards(
         &ctx.accounts.token_program,
         Some(ctx.accounts.token_program_2022.to_account_info()),
         amount_remaining,
+        ctx.remaining_accounts,
     )?;
 
     Ok(())

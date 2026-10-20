@@ -123,4 +123,6 @@ pub enum ErrorCode {
     InvalidTickArrayBitmapExtensionAccount,
     #[msg("Lamports calculate error")]
     LamportsCalculateError,
+    #[msg("Hook program is not immutable: it must be a non-upgradeable program or have its upgrade authority removed")]
+    HookProgramNotImmutable,
 }
