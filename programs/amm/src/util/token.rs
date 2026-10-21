@@ -12,8 +12,8 @@ use anchor_spl::token::{self, Token};
 use anchor_spl::token_2022::spl_token_2022::{
     self,
     extension::{
-        metadata_pointer, transfer_fee::TransferFeeConfig, transfer_hook, BaseStateWithExtensions,
-        ExtensionType, StateWithExtensions,
+        metadata_pointer, transfer_fee::TransferFeeConfig, BaseStateWithExtensions, ExtensionType,
+        StateWithExtensions,
     },
 };
 use anchor_spl::token_2022::{
@@ -546,20 +546,12 @@ pub fn is_supported_mint(
     let mint = StateWithExtensions::<spl_token_2022::state::Mint>::unpack(&mint_data)?;
     let extensions = mint.get_extension_types()?;
     for e in extensions {
-        // Only a permanently inert hook extension is ordinary; anything that has or can
-        // later get a hook program must come in via the whitelist early-return above.
-        if e == ExtensionType::TransferHook {
-            let ext = mint.get_extension::<transfer_hook::TransferHook>()?;
-            if super::hook::transfer_hook_is_inert(ext) {
-                continue;
-            }
-            return Ok(false);
-        }
         if e != ExtensionType::TransferFeeConfig
             && e != ExtensionType::MetadataPointer
             && e != ExtensionType::TokenMetadata
             && e != ExtensionType::InterestBearingConfig
             && e != ExtensionType::ScaledUiAmount
+            && e != ExtensionType::TransferHook
         {
             return Ok(false);
         }

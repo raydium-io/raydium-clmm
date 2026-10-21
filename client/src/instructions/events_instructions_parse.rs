@@ -753,23 +753,6 @@ pub fn handle_program_instruction(
             }
             println!("{:#?}", SwapV2::from(ix));
         }
-        instruction::SwapRouterBaseIn::DISCRIMINATOR => {
-            let ix = decode_instruction::<instruction::SwapRouterBaseIn>(&mut ix_data).unwrap();
-            #[derive(Debug)]
-            pub struct SwapRouterBaseIn {
-                pub amount_in: u64,
-                pub amount_out_minimum: u64,
-            }
-            impl From<instruction::SwapRouterBaseIn> for SwapRouterBaseIn {
-                fn from(instr: instruction::SwapRouterBaseIn) -> SwapRouterBaseIn {
-                    SwapRouterBaseIn {
-                        amount_in: instr.amount_in,
-                        amount_out_minimum: instr.amount_out_minimum,
-                    }
-                }
-            }
-            println!("{:#?}", SwapRouterBaseIn::from(ix));
-        }
         _ => {
             println!("unknow instruction: {}", instr_data);
         }

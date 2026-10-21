@@ -56,8 +56,7 @@ pub struct InitializeReward<'info> {
     // remaining accounts:
     //   initialize_reward: [SupportMintAssociated PDA of the reward mint] (found by key)
     //   initialize_reward_v2: segments declared by `RemainingAccountsInfo`:
-    //     MintAdmission (SupportMintAssociated PDA and, for a hook mint, its
-    //     ExtraAccountMetaList PDA), TransferHookReward0 (the funding transfer)
+    //     MintAdmission (SupportMintAssociated PDA), TransferHookReward0 (the funding transfer)
 }
 
 #[derive(Copy, Clone, AnchorSerialize, AnchorDeserialize, Debug, PartialEq)]
@@ -101,9 +100,8 @@ pub fn initialize_reward<'info>(
     initialize_reward_internal(ctx, admission_accounts, &[], param)
 }
 
-/// `admission_accounts` are looked up by key: the reward mint's `SupportMintAssociated`
-/// PDA and, for a hook mint, its `ExtraAccountMetaList` PDA. `hook_reward` is the funder
-/// transfer's hook leg.
+/// `admission_accounts` are looked up by key: the reward mint's `SupportMintAssociated` PDA.
+/// `hook_reward` is the funder transfer's hook leg.
 pub fn initialize_reward_internal<'info>(
     ctx: Context<'info, InitializeReward<'info>>,
     admission_accounts: &[AccountInfo<'info>],
@@ -120,14 +118,6 @@ pub fn initialize_reward_internal<'info>(
     )? {
         return err!(ErrorCode::NotSupportMint);
     }
-    // A whitelisted hook mint still has to be *usable*: an extras list over the cap, or one
-    // whose addresses depend on the transfer amount, makes `collect_reward` impossible to
-    // build. Check before the vault is created and before any tokens move.
-    util::hook::validate_hook_mint(
-        &ctx.accounts.reward_token_mint.to_account_info(),
-        admission_accounts,
-    )?;
-
     // init reward token vault
     create_token_vault_account(
         &ctx.accounts.reward_funder,

@@ -1,6 +1,8 @@
 import * as anchor from "@anchor-lang/core";
-import { Program } from "@anchor-lang/core";
+import { IdlTypes, Program } from "@anchor-lang/core";
 import { RaydiumClmm } from "../../target/types/raydium_clmm";
+
+type AccountsType = IdlTypes<RaydiumClmm>["accountsType"];
 import {
   PublicKey,
   Keypair,
@@ -652,7 +654,7 @@ export class InstructionHelper {
       baseFlag?: boolean | null;
       token0Program?: PublicKey;
       token1Program?: PublicKey;
-      remainingAccountsInfo: { slices: { accountsType: number; length: number }[] };
+      remainingAccountsInfo: { slices: { accountsType: AccountsType; length: number }[] };
       remainingAccounts: AccountMeta[];
     }
   ): Promise<OpenedPosition> {
@@ -727,7 +729,7 @@ export class InstructionHelper {
     isBaseInput: boolean;
     inputTokenProgram?: PublicKey;
     outputTokenProgram?: PublicKey;
-    remainingAccountsInfo: { slices: { accountsType: number; length: number }[] };
+    remainingAccountsInfo: { slices: { accountsType: AccountsType; length: number }[] };
     remainingAccounts: AccountMeta[];
   }) {
     const [observationState] = await this.pda.getObservationStatePDA(
@@ -831,7 +833,7 @@ export class InstructionHelper {
     amount0Max: anchor.BN;
     amount1Max: anchor.BN;
     baseFlag?: boolean | null;
-    remainingAccountsInfo: { slices: { accountsType: number; length: number }[] };
+    remainingAccountsInfo: { slices: { accountsType: AccountsType; length: number }[] };
     remainingAccounts: AccountMeta[];
   }) {
     const a = this.liquidityV3Accounts(params);
@@ -878,7 +880,7 @@ export class InstructionHelper {
     liquidity: anchor.BN;
     amount0Min: anchor.BN;
     amount1Min: anchor.BN;
-    remainingAccountsInfo: { slices: { accountsType: number; length: number }[] };
+    remainingAccountsInfo: { slices: { accountsType: AccountsType; length: number }[] };
     remainingAccounts: AccountMeta[];
   }) {
     const a = this.liquidityV3Accounts(params);
@@ -937,7 +939,7 @@ export class InstructionHelper {
     /// When set, the `_v2` entry point is used: the same accounts plus a tape describing
     /// `remaining_accounts`. Hook mints only work this way.
     v2?: {
-      info: { slices: { accountsType: number; length: number }[] };
+      info: { slices: { accountsType: AccountsType; length: number }[] };
       accounts: AccountMeta[];
     };
 }) {
@@ -1073,7 +1075,7 @@ export class InstructionHelper {
     /// When set, the `_v2` entry point is used: the same accounts plus a tape describing
     /// `remaining_accounts`. Hook mints only work this way.
     v2?: {
-      info: { slices: { accountsType: number; length: number }[] };
+      info: { slices: { accountsType: AccountsType; length: number }[] };
       accounts: AccountMeta[];
     };
 }) {
@@ -1145,7 +1147,7 @@ export class InstructionHelper {
     /// When set, the `_v2` entry point is used: the same accounts plus a tape describing
     /// `remaining_accounts`. Hook mints only work this way.
     v2?: {
-      info: { slices: { accountsType: number; length: number }[] };
+      info: { slices: { accountsType: AccountsType; length: number }[] };
       accounts: AccountMeta[];
     };
 }) {
@@ -1263,7 +1265,7 @@ export class InstructionHelper {
     /// When set, the `_v2` entry point is used: the same accounts plus a tape describing
     /// `remaining_accounts`. Hook mints only work this way.
     v2?: {
-      info: { slices: { accountsType: number; length: number }[] };
+      info: { slices: { accountsType: AccountsType; length: number }[] };
       accounts: AccountMeta[];
     };
 }) {

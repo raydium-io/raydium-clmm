@@ -146,16 +146,6 @@ pub fn create_customizable_pool<'info>(
     {
         return err!(ErrorCode::NotSupportMint);
     }
-    // A hook mint still has to be tradable: reject an extras list over the cap or one whose
-    // addresses depend on the transfer amount, before the pool exists to trap liquidity.
-    util::validate_hook_mint(
-        &ctx.accounts.token_mint_0.to_account_info(),
-        ctx.remaining_accounts,
-    )?;
-    util::validate_hook_mint(
-        &ctx.accounts.token_mint_1.to_account_info(),
-        ctx.remaining_accounts,
-    )?;
     let pool_id = ctx.accounts.pool_state.key();
     let mut pool_state = ctx.accounts.pool_state.load_init()?;
 

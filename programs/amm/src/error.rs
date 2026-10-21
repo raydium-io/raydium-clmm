@@ -125,10 +125,13 @@ pub enum ErrorCode {
     LamportsCalculateError,
 
     // ---- Token-2022 transfer hook ----
+    /// No longer returned; kept so later error codes do not shift.
     #[msg("Mint carries a transfer hook whose program is not supported")]
     HookProgramNotSupported,
-    #[msg("Hook declares more extra accounts than MAX_HOOK_EXTRA_ACCOUNTS")]
+    /// No longer returned; kept so later error codes do not shift.
+    #[msg("Hook declares too many extra accounts")]
     HookExtraAccountsTooMany,
+    /// No longer returned; kept so later error codes do not shift.
     #[msg("Hook extra account address depends on the transfer amount, which an AMM cannot resolve off-chain")]
     HookExtraAccountUsesInstructionData,
     #[msg("This instruction does not support mints with a transfer hook, use the v3 instruction")]
@@ -137,6 +140,7 @@ pub enum ErrorCode {
     RemainingAccountsInfoMismatch,
     #[msg("Transfer hook accounts required but the caller passed none")]
     NoExtraAccountsForTransferHook,
+    /// No longer returned; kept so later error codes do not shift.
     #[msg("Hook extra account address depends on token account data the transfer changes")]
     HookExtraAccountUsesTransferredData,
 }

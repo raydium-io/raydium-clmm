@@ -1,16 +1,13 @@
 import * as anchor from "@anchor-lang/core";
-import { Program } from "@anchor-lang/core";
+import { IdlTypes, Program } from "@anchor-lang/core";
 import { RaydiumClmm } from "../target/types/raydium_clmm";
 import {
-  AddressLookupTableProgram,
   Keypair,
   PublicKey,
   SystemProgram,
   SYSVAR_RENT_PUBKEY,
   Transaction,
   TransactionInstruction,
-  TransactionMessage,
-  VersionedTransaction,
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import {
@@ -48,16 +45,17 @@ import { ComputeBudgetProgram, type AccountMeta } from "@solana/web3.js";
 const STUB_ID = new PublicKey("6s7wXukDLKt39UKgbQVExCpwrAsRraEB8jkV6P95ZcSR");
 // sha256("spl-transfer-hook-interface:initialize-extra-account-metas")[..8]
 const INIT_LIST_DISCRIMINATOR = Buffer.from([43, 34, 13, 49, 167, 88, 235, 235]);
-// `AccountsType` discriminants, see util/remaining_accounts.rs
-const TICK_ARRAY = 0;
-const TRANSFER_HOOK_INPUT = 3;
-const TRANSFER_HOOK_OUTPUT = 4;
-const TICK_ARRAY_BITMAP_EXTENSION = 1;
-const TRANSFER_HOOK_TOKEN_0 = 5;
-const TRANSFER_HOOK_TOKEN_1 = 6;
-const TRANSFER_HOOK_REWARD_0 = 7;
-const REWARD_GROUP = 2;
-const MINT_ADMISSION = 10;
+// `AccountsType` variants, see util/remaining_accounts.rs
+type AccountsType = IdlTypes<RaydiumClmm>["accountsType"];
+const TICK_ARRAY: AccountsType = { tickArray: {} };
+const TRANSFER_HOOK_INPUT: AccountsType = { transferHookInput: {} };
+const TRANSFER_HOOK_OUTPUT: AccountsType = { transferHookOutput: {} };
+const TICK_ARRAY_BITMAP_EXTENSION: AccountsType = { tickArrayBitmapExtension: {} };
+const TRANSFER_HOOK_TOKEN_0: AccountsType = { transferHookToken0: {} };
+const TRANSFER_HOOK_TOKEN_1: AccountsType = { transferHookToken1: {} };
+const TRANSFER_HOOK_REWARD_0: AccountsType = { transferHookReward0: {} };
+const REWARD_GROUP: AccountsType = { rewardGroup: {} };
+const MINT_ADMISSION: AccountsType = { mintAdmission: {} };
 
 describe("transfer hook pool admission", () => {
   const provider = anchor.AnchorProvider.env();
@@ -260,65 +258,15 @@ describe("transfer hook pool admission", () => {
       .rpc();
   }
 
-  it("refuses a hook mint that is not whitelisted", async () => {
+  it("creates a pool for a hook mint without the whitelist", async () => {
     const mint = await createHookMint();
     await createEmptyList(mint);
-    let err: any;
-    try {
-      await createPool(mint, { list: true });
-    } catch (e) {
-      err = e;
-    }
-    assert.isDefined(err, "an unlisted hook mint created a pool");
-    assert.include(JSON.stringify(err), "NotSupportMint", `unexpected: ${err}`);
+    await createPool(mint, { list: true });
   });
 
-  it("refuses a whitelisted hook mint whose ExtraAccountMetaList is missing", async () => {
-    // The list is what makes the mint transferable at all. Letting the pool exist without it
-    // would produce a market nobody can trade.
+  it("creates a pool for a hook mint whose ExtraAccountMetaList does not exist yet", async () => {
     const mint = await createHookMint();
-    const supportMint = await whitelist(mint);
-    let err: any;
-    try {
-      await createPool(mint, { whitelist: supportMint });
-    } catch (e) {
-      err = e;
-    }
-    assert.isDefined(err, "a hook mint with no list created a pool");
-    assert.include(
-      JSON.stringify(err),
-      "NoExtraAccountsForTransferHook",
-      `unexpected error: ${err}`
-    );
-  });
-
-  it("refuses a list whose address depends on token account data the transfer changes", async () => {
-    // token-2022 resolves the list after moving the balances (and setting the `transferring`
-    // flags), while the AMM resolves it before the CPI - so anything past a token account's
-    // `mint` and `owner` reads differently on the two sides and the transfer can never match.
-    const seededBySourceBalance = Buffer.alloc(35);
-    seededBySourceBalance[0] = 1; // PDA derived from the hook program
-    seededBySourceBalance.set([4, 0, 64, 8], 1); // Seed::AccountData { source, offset 64, 8 bytes }
-    const readPastDestinationOwner = Buffer.alloc(35);
-    readPastDestinationOwner[0] = 2; // PubkeyData
-    readPastDestinationOwner.set([2, 2, 64], 1); // AccountData { destination, offset 64 }
-
-    for (const [what, meta] of [
-      ["a PDA seeded by the source balance", seededBySourceBalance],
-      ["an address read past the destination owner", readPastDestinationOwner],
-    ] as const) {
-      const mint = await createHookMint();
-      const supportMint = await whitelist(mint);
-      await createEmptyList(mint, [meta]);
-      let err: any;
-      try {
-        await createPool(mint, { whitelist: supportMint, list: true });
-      } catch (e) {
-        err = e;
-      }
-      assert.isDefined(err, `${what} was accepted`);
-      assert.include(JSON.stringify(err), "HookExtraAccountUsesTransferredData", `${what}: unexpected: ${err}`);
-    }
+    await createPool(mint);
   });
 
   it("creates a pool for a whitelisted hook mint once the list exists", async () => {
@@ -1050,8 +998,8 @@ describe("transfer hook pool admission", () => {
 
   });
 
-  /// A TransferHook extension with no program is only ordinary if nobody can set one later.
-  it("admits an inert hook extension but not a dormant one without the whitelist", async () => {
+  /// A TransferHook extension with no program yet, whether or not one can be set later.
+  it("admits dormant and inert hook extensions without the whitelist", async () => {
     async function createUnsetHookMint(authority: PublicKey): Promise<PublicKey> {
       const mintKeypair = Keypair.generate();
       const space = getMintLen([ExtensionType.TransferHook]);
@@ -1085,14 +1033,7 @@ describe("transfer hook pool admission", () => {
     }
 
     const dormant = await createUnsetHookMint(owner.publicKey);
-    let err: any;
-    try {
-      await createPool(dormant);
-    } catch (e) {
-      err = e;
-    }
-    assert.isDefined(err, "a dormant hook mint got in without the whitelist");
-    assert.include(JSON.stringify(err), "NotSupportMint", `unexpected: ${err}`);
+    await createPool(dormant);
 
     // token-2022 refuses to initialize the extension with neither field set; an inert one is
     // made by dropping the authority afterwards.
@@ -1508,246 +1449,4 @@ describe("transfer hook pool admission", () => {
     assert.isTrue((await balance(hookAta)) > hookBefore, "the LP got nothing back");
   });
 
-  describe("swap_router_base_in_v2", () => {
-    // Pools: plainA/hook and hook/plainB (hook-carrying), plainB/plainC (plain).
-    let hook: PublicKey;
-    let plainA: PublicKey;
-    let plainB: PublicKey;
-    let plainC: PublicKey;
-    let bag: AccountMeta[];
-    const programOf = (m: PublicKey) => (m.equals(hook) ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID);
-    const ataOf = (m: PublicKey) => getAssociatedTokenAddressSync(m, owner.publicKey, false, programOf(m));
-    const sorted = (x: PublicKey, y: PublicKey) => (x.toBuffer().compare(y.toBuffer()) < 0 ? [x, y] : [y, x]);
-
-    async function seedPool(x: PublicKey, y: PublicKey) {
-      const [mint0, mint1] = sorted(x, y);
-      const [poolState] = await pda.getPoolStatePDA(setup.ammConfig, mint0, mint1);
-      const hookSlices = [mint0, mint1].flatMap((m, i) =>
-        m.equals(hook)
-          ? [{ accountsType: i === 0 ? TRANSFER_HOOK_TOKEN_0 : TRANSFER_HOOK_TOKEN_1, length: bag.length }]
-          : []
-      );
-      await instructions.openPositionV3({
-        payer: owner,
-        positionNftOwner: owner.publicKey,
-        poolState,
-        tickLowerIndex: -120,
-        tickUpperIndex: 120,
-        liquidity: new anchor.BN(1_000_000),
-        amount0Max: new anchor.BN(1_000_000_000),
-        amount1Max: new anchor.BN(1_000_000_000),
-        tokenVault0Mint: mint0,
-        tokenVault1Mint: mint1,
-        token0Program: programOf(mint0),
-        token1Program: programOf(mint1),
-        remainingAccountsInfo: { slices: hookSlices },
-        remainingAccounts: hookSlices.length ? bag : [],
-      });
-    }
-
-    /// The accounts and tape one hop needs, against the pool's current state.
-    async function hop(input: PublicKey, output: PublicKey, opts: { outputMint?: PublicKey } = {}) {
-      const [mint0, mint1] = sorted(input, output);
-      const [poolState] = await pda.getPoolStatePDA(setup.ammConfig, mint0, mint1);
-      const pool = await program.account.poolState.fetch(poolState);
-      const zeroForOne = input.equals(mint0);
-      const ticksPerArray = pool.tickSpacing * 60;
-      const start = getTickArrayStartIndex(pool.tickCurrent, pool.tickSpacing);
-      const tickArrays: AccountMeta[] = [];
-      for (const s of [start, zeroForOne ? start - ticksPerArray : start + ticksPerArray]) {
-        const [addr] = await pda.getTickArrayStatePDA(poolState, s);
-        if ((await connection.getAccountInfo(addr)) !== null) {
-          tickArrays.push({ pubkey: addr, isSigner: false, isWritable: true });
-        }
-      }
-      const [inputVault] = await pda.getTokenVaultPDA(poolState, input);
-      const [outputVault] = await pda.getTokenVaultPDA(poolState, output);
-      const [observationState] = await pda.getObservationStatePDA(poolState);
-      const named: AccountMeta[] = [
-        { pubkey: setup.ammConfig, isSigner: false, isWritable: false },
-        { pubkey: poolState, isSigner: false, isWritable: true },
-        { pubkey: ataOf(output), isSigner: false, isWritable: true },
-        { pubkey: inputVault, isSigner: false, isWritable: true },
-        { pubkey: outputVault, isSigner: false, isWritable: true },
-        { pubkey: opts.outputMint ?? output, isSigner: false, isWritable: false },
-        { pubkey: observationState, isSigner: false, isWritable: true },
-      ];
-      const slices = [{ accountsType: TICK_ARRAY, length: tickArrays.length }];
-      const accounts = [...named, ...tickArrays];
-      for (const [m, ty] of [[input, TRANSFER_HOOK_INPUT], [output, TRANSFER_HOOK_OUTPUT]] as const) {
-        if (m.equals(hook)) {
-          slices.push({ accountsType: ty, length: bag.length });
-          accounts.push(...bag);
-        }
-      }
-      return { accounts, tape: { slices } };
-    }
-
-    function route(
-      input: PublicKey,
-      hops: { accounts: AccountMeta[]; tape: any }[],
-      opts: { amountOutMinimum?: anchor.BN; extra?: AccountMeta[]; lookupTable?: boolean } = {}
-    ) {
-      const builder = program.methods
-        .swapRouterBaseInV2(
-          new anchor.BN(1_000),
-          opts.amountOutMinimum ?? new anchor.BN(1),
-          hops.map((h) => h.tape)
-        )
-        .accounts({
-          payer: owner.publicKey,
-          inputTokenAccount: ataOf(input),
-          inputTokenMint: input,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          tokenProgram2022: TOKEN_2022_PROGRAM_ID,
-          memoProgram: MEMO_PROGRAM_ID,
-        } as any)
-        .remainingAccounts([...hops.flatMap((h) => h.accounts), ...(opts.extra ?? [])]);
-      const computeLimit = ComputeBudgetProgram.setComputeUnitLimit({ units: 1400000 });
-      if (opts.lookupTable) {
-        return builder.instruction().then((ix) => sendWithLookupTable([computeLimit, ix]));
-      }
-      return builder.preInstructions([computeLimit]).signers([owner]).rpc();
-    }
-
-    /// A multi-hop route outgrows a legacy transaction, as it would on mainnet.
-    async function sendWithLookupTable(ixs: TransactionInstruction[]) {
-      const addresses = [
-        ...new Map(
-          ixs.flatMap((ix) => [ix.programId, ...ix.keys.map((k) => k.pubkey)]).map((k) => [k.toBase58(), k])
-        ).values(),
-      ].filter((k) => !k.equals(owner.publicKey));
-      const recentSlot = await connection.getSlot("finalized");
-      const [createIx, table] = AddressLookupTableProgram.createLookupTable({
-        authority: owner.publicKey,
-        payer: owner.publicKey,
-        recentSlot,
-      });
-      await sendAndConfirmTransaction(connection, new Transaction().add(createIx), [owner]);
-      for (let i = 0; i < addresses.length; i += 20) {
-        const extendIx = AddressLookupTableProgram.extendLookupTable({
-          lookupTable: table,
-          authority: owner.publicKey,
-          payer: owner.publicKey,
-          addresses: addresses.slice(i, i + 20),
-        });
-        await sendAndConfirmTransaction(connection, new Transaction().add(extendIx), [owner]);
-      }
-      // Entries become usable one slot after they are added.
-      const extendedAt = await connection.getSlot();
-      while ((await connection.getSlot()) <= extendedAt) {
-        await new Promise((r) => setTimeout(r, 100));
-      }
-      const lookupTable = (await connection.getAddressLookupTable(table)).value!;
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      const tx = new VersionedTransaction(
-        new TransactionMessage({
-          payerKey: owner.publicKey,
-          recentBlockhash: blockhash,
-          instructions: ixs,
-        }).compileToV0Message([lookupTable])
-      );
-      tx.sign([owner]);
-      const signature = await connection.sendTransaction(tx);
-      const { value } = await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight });
-      if (value.err) throw new Error(`route failed: ${JSON.stringify(value.err)}`);
-      return signature;
-    }
-
-    async function expectError(p: Promise<unknown>, code: string, what: string) {
-      let err: any;
-      try {
-        await p;
-      } catch (e) {
-        err = e;
-      }
-      assert.isDefined(err, what);
-      assert.include(JSON.stringify(err), code, `unexpected: ${err}`);
-    }
-
-    before(async () => {
-      hook = await createHookMint();
-      const supportMint = await whitelist(hook);
-      await createEmptyList(hook);
-      [plainA, plainB] = await createMintPair(connection, owner);
-      [plainC] = await createMintPair(connection, owner);
-      bag = [
-        { pubkey: STUB_ID, isSigner: false, isWritable: false },
-        { pubkey: listAddress(hook), isSigner: false, isWritable: false },
-      ];
-      await sendAndConfirmTransaction(
-        connection,
-        new Transaction().add(
-          createAssociatedTokenAccountIdempotentInstruction(
-            owner.publicKey, ataOf(hook), owner.publicKey, hook, TOKEN_2022_PROGRAM_ID
-          ),
-          createMintToInstruction(hook, ataOf(hook), owner.publicKey, 1_000_000_000, [], TOKEN_2022_PROGRAM_ID)
-        ),
-        [owner]
-      );
-      await createPool(hook, { whitelist: supportMint, list: true, plain: plainA });
-      await createPool(hook, { whitelist: supportMint, list: true, plain: plainB });
-      const [b, c] = sorted(plainB, plainC);
-      await instructions.createPool({ poolCreator: owner, ammConfig: setup.ammConfig, tokenMint0: b, tokenMint1: c });
-      await seedPool(plainA, hook);
-      await seedPool(hook, plainB);
-      await seedPool(plainB, plainC);
-    });
-
-    it("routes through a hook mint", async () => {
-      const hops = [await hop(plainA, hook), await hop(hook, plainB)];
-      // An account no tape claims means the caller and the program disagree about the hops.
-      await expectError(
-        route(plainA, hops, { extra: [{ pubkey: STUB_ID, isSigner: false, isWritable: false }] }),
-        "RemainingAccountsInfoMismatch",
-        "a trailing account was ignored"
-      );
-
-      const hookBefore = await balance(ataOf(hook));
-      const outBefore = await balance(ataOf(plainB));
-      await route(plainA, hops);
-      assert.isTrue((await balance(ataOf(plainB))) > outBefore, "the route delivered nothing");
-      assert.equal(await balance(ataOf(hook)), hookBefore, "the intermediate hook token stayed with the payer");
-    });
-
-    it("chains three hops", async () => {
-      const hops = [await hop(plainA, hook), await hop(hook, plainB), await hop(plainB, plainC)];
-      const [hookBefore, bBefore, cBefore] = await Promise.all([hook, plainB, plainC].map((m) => balance(ataOf(m))));
-      await route(plainA, hops, { lookupTable: true });
-      assert.isTrue((await balance(ataOf(plainC))) > cBefore, "the route delivered nothing");
-      assert.equal(await balance(ataOf(hook)), hookBefore, "hop 1 output was not fully spent");
-      assert.equal(await balance(ataOf(plainB)), bBefore, "hop 2 output was not fully spent");
-    });
-
-    it("takes a hook mint as the first input", async () => {
-      const hookBefore = await balance(ataOf(hook));
-      const outBefore = await balance(ataOf(plainA));
-      await route(hook, [await hop(hook, plainA)]);
-      assert.equal(hookBefore - (await balance(ataOf(hook))), 1_000n);
-      assert.isTrue((await balance(ataOf(plainA))) > outBefore, "the route delivered nothing");
-    });
-
-    it("refuses a tape longer than the accounts left", async () => {
-      const h = await hop(plainA, hook);
-      h.tape.slices[0].length += 1;
-      await expectError(route(plainA, [h]), "RemainingAccountsInfoMismatch", "an over-long tape was accepted");
-    });
-
-    it("refuses an output mint that is not the output vault's", async () => {
-      const h = await hop(plainA, hook, { outputMint: plainB });
-      await expectError(route(plainA, [h]), "RequireKeysEqViolated", "a mismatched output mint was accepted");
-    });
-
-    it("rolls every hop back when the final output is short", async () => {
-      const hops = [await hop(plainA, hook), await hop(hook, plainB)];
-      const before = await Promise.all([plainA, hook, plainB].map((m) => balance(ataOf(m))));
-      await expectError(
-        route(plainA, hops, { amountOutMinimum: new anchor.BN("18446744073709551615") }),
-        "TooLittleOutputReceived",
-        "the route ignored amount_out_minimum"
-      );
-      const after = await Promise.all([plainA, hook, plainB].map((m) => balance(ataOf(m))));
-      assert.deepEqual(after, before, "a failed route moved tokens");
-    });
-  });
 });

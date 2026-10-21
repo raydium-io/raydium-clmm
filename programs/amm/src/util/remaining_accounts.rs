@@ -8,62 +8,48 @@ use crate::error::ErrorCode;
 use crate::states::pool::REWARD_NUM;
 use anchor_lang::prelude::*;
 
+/// One stretch of `remaining_accounts`: `length` accounts of kind `accounts_type`.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RemainingAccountsSlice {
-    pub accounts_type: u8,
+    pub accounts_type: AccountsType,
+    /// Number of accounts in the stretch.
     pub length: u8,
 }
 
+/// What each stretch of `remaining_accounts` is, consumed front to back. Every account must be
+/// covered, each type may appear once, and an instruction accepts only the types it reads.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct RemainingAccountsInfo {
     pub slices: Vec<RemainingAccountsSlice>,
 }
 
-/// Kinds of segment a v3 instruction can be handed.
+/// Kinds of segment a v3 instruction can be handed. Serialized as the variant index, so
+/// variants may only be appended.
 ///
 /// Hook legs are named after the instruction's own accounts: input/output for swaps and limit
-/// orders, token_0 / token_1 for liquidity.
-#[repr(u8)]
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// orders, token_0 / token_1 for liquidity. A hook segment is the mint's hook program,
+/// ExtraAccountMetaList PDA and extras, in any order.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum AccountsType {
-    TickArray = 0,
-    TickArrayBitmapExtension = 1,
-    RewardGroup = 2,
-    TransferHookInput = 3,
-    TransferHookOutput = 4,
-    TransferHookToken0 = 5,
-    TransferHookToken1 = 6,
-    TransferHookReward0 = 7,
-    TransferHookReward1 = 8,
-    TransferHookReward2 = 9,
-    /// Accounts looked up by key rather than position, for mint admission:
-    /// `SupportMintAssociated` PDAs and `ExtraAccountMetaList` PDAs.
-    MintAdmission = 10,
+    /// Tick arrays, in the order the instruction crosses them.
+    TickArray,
+    /// The pool's tick array bitmap extension; at most one.
+    TickArrayBitmapExtension,
+    /// Reward vault, funder token account, reward mint.
+    RewardGroup,
+    TransferHookInput,
+    TransferHookOutput,
+    TransferHookToken0,
+    TransferHookToken1,
+    TransferHookReward0,
+    TransferHookReward1,
+    TransferHookReward2,
+    /// Looked up by key: `SupportMintAssociated` PDAs.
+    MintAdmission,
 }
 
 /// Number of variants above; also the size of the duplicate-detection bitmap.
 const ACCOUNTS_TYPE_COUNT: usize = 11;
-
-impl TryFrom<u8> for AccountsType {
-    type Error = Error;
-
-    fn try_from(value: u8) -> Result<Self> {
-        Ok(match value {
-            0 => AccountsType::TickArray,
-            1 => AccountsType::TickArrayBitmapExtension,
-            2 => AccountsType::RewardGroup,
-            3 => AccountsType::TransferHookInput,
-            4 => AccountsType::TransferHookOutput,
-            5 => AccountsType::TransferHookToken0,
-            6 => AccountsType::TransferHookToken1,
-            7 => AccountsType::TransferHookReward0,
-            8 => AccountsType::TransferHookReward1,
-            9 => AccountsType::TransferHookReward2,
-            10 => AccountsType::MintAdmission,
-            _ => return err!(ErrorCode::RemainingAccountsInfoMismatch),
-        })
-    }
-}
 
 /// The segments a v3 instruction found on the tape. Anything not declared is empty.
 pub struct ParsedRemainingAccounts<'info> {
@@ -133,16 +119,13 @@ pub fn parse_remaining_accounts<'info>(
     let mut cursor = 0usize;
 
     for slice in info.slices.iter() {
-        let ty = AccountsType::try_from(slice.accounts_type)?;
+        let ty = slice.accounts_type;
         require!(
             allowed.contains(&ty),
             ErrorCode::RemainingAccountsInfoMismatch
         );
-        require!(
-            !seen[slice.accounts_type as usize],
-            ErrorCode::RemainingAccountsInfoMismatch
-        );
-        seen[slice.accounts_type as usize] = true;
+        require!(!seen[ty as usize], ErrorCode::RemainingAccountsInfoMismatch);
+        seen[ty as usize] = true;
 
         let end = cursor
             .checked_add(slice.length as usize)
@@ -182,7 +165,6 @@ pub fn reward_hook_type(reward_index: u8) -> Result<AccountsType> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::util::hook::MAX_HOOK_EXTRA_ACCOUNTS;
 
     const SWAP: &[AccountsType] = &[
         AccountsType::TickArray,
@@ -191,7 +173,7 @@ mod tests {
         AccountsType::TransferHookOutput,
     ];
 
-    fn tape(pairs: &[(u8, u8)]) -> RemainingAccountsInfo {
+    fn tape(pairs: &[(AccountsType, u8)]) -> RemainingAccountsInfo {
         RemainingAccountsInfo {
             slices: pairs
                 .iter()
@@ -210,20 +192,26 @@ mod tests {
 
     #[test]
     fn rejects_unknown_type() {
-        assert!(AccountsType::try_from(11u8).is_err());
-        assert!(AccountsType::try_from(255u8).is_err());
+        // One slice: type, length.
+        assert!(RemainingAccountsInfo::try_from_slice(&[1, 0, 0, 0, 10, 0]).is_ok());
+        assert!(RemainingAccountsInfo::try_from_slice(&[1, 0, 0, 0, 11, 0]).is_err());
+        assert!(RemainingAccountsInfo::try_from_slice(&[1, 0, 0, 0, 255, 0]).is_err());
     }
 
     #[test]
     fn rejects_duplicate_type() {
-        assert!(parse_remaining_accounts(&[], &tape(&[(0, 0), (0, 0)]), SWAP).is_err());
+        assert!(parse_remaining_accounts(
+            &[],
+            &tape(&[(AccountsType::TickArray, 0), (AccountsType::TickArray, 0)]),
+            SWAP
+        )
+        .is_err());
     }
 
-    /// The extra-account cap is enforced at pool creation only, so a hook that later grows
-    /// its list still gets its accounts through.
+    /// A hook leg is not capped: whatever the hook's list needs gets through.
     #[test]
-    fn accepts_hook_leg_longer_than_admission_cap() {
-        let len = MAX_HOOK_EXTRA_ACCOUNTS + 3;
+    fn accepts_long_hook_leg() {
+        let len = 9;
         let keys: Vec<Pubkey> = (0..len).map(|_| Pubkey::new_unique()).collect();
         let owner = Pubkey::new_unique();
         let mut lamports = vec![0u64; len];
@@ -237,7 +225,7 @@ mod tests {
             })
             .collect();
 
-        let hook_input = AccountsType::TransferHookInput as u8;
+        let hook_input = AccountsType::TransferHookInput;
         let parsed =
             parse_remaining_accounts(&accounts, &tape(&[(hook_input, len as u8)]), SWAP).unwrap();
         assert_eq!(parsed.hook_input.len(), len);
@@ -246,13 +234,15 @@ mod tests {
     /// Even an empty segment of a type the instruction never reads is refused.
     #[test]
     fn rejects_type_not_allowed() {
-        let reward_group = AccountsType::RewardGroup as u8;
+        let reward_group = AccountsType::RewardGroup;
         assert!(parse_remaining_accounts(&[], &tape(&[(reward_group, 0)]), SWAP).is_err());
     }
 
     #[test]
     fn rejects_tape_longer_than_accounts() {
-        assert!(parse_remaining_accounts(&[], &tape(&[(0, 1)]), SWAP).is_err());
+        assert!(
+            parse_remaining_accounts(&[], &tape(&[(AccountsType::TickArray, 1)]), SWAP).is_err()
+        );
     }
 
     /// The mirror of the case above, and the one that matters: a tape that under-declares
@@ -284,9 +274,15 @@ mod tests {
         );
         let accounts = [a, b];
 
-        assert!(parse_remaining_accounts(&accounts, &tape(&[(0, 2)]), SWAP).is_ok());
+        assert!(
+            parse_remaining_accounts(&accounts, &tape(&[(AccountsType::TickArray, 2)]), SWAP)
+                .is_ok()
+        );
         // one account left undeclared
-        assert!(parse_remaining_accounts(&accounts, &tape(&[(0, 1)]), SWAP).is_err());
+        assert!(
+            parse_remaining_accounts(&accounts, &tape(&[(AccountsType::TickArray, 1)]), SWAP)
+                .is_err()
+        );
         // nothing declared at all
         assert!(parse_remaining_accounts(&accounts, &tape(&[]), SWAP).is_err());
     }
@@ -317,7 +313,7 @@ mod tests {
             false,
         );
         let accounts = [a, b];
-        let bitmap = AccountsType::TickArrayBitmapExtension as u8;
+        let bitmap = AccountsType::TickArrayBitmapExtension;
 
         assert!(parse_remaining_accounts(&accounts[..1], &tape(&[(bitmap, 1)]), SWAP).is_ok());
         assert!(parse_remaining_accounts(&accounts, &tape(&[(bitmap, 2)]), SWAP).is_err());
