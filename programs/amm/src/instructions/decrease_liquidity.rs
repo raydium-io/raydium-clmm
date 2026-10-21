@@ -81,6 +81,14 @@ pub struct DecreaseLiquidity<'info> {
     //     bump
     // )]
     // pub tick_array_bitmap: AccountLoader<'info, TickArrayBitmapExtension>,
+
+    // then, per initialized reward
+    // #[account(mut, address = pool_state.reward_infos[i].token_vault)]
+    // pub reward_token_vault: Box<InterfaceAccount<'info, TokenAccount>>,
+    // #[account(mut, token::mint = reward_vault_mint)]
+    // pub recipient_token_account: Box<InterfaceAccount<'info, TokenAccount>>,
+    // #[account(address = reward_token_vault.mint)]
+    // pub reward_vault_mint: Box<InterfaceAccount<'info, Mint>>,
 }
 
 pub fn decrease_liquidity_v1<'info>(

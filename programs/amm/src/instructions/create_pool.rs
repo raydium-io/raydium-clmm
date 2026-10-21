@@ -134,16 +134,6 @@ pub fn create_pool(ctx: Context<CreatePool>, sqrt_price_x64: u128, open_time: u6
     {
         return err!(ErrorCode::NotSupportMint);
     }
-    // A hook mint still has to be tradable: reject an extras list over the cap or one whose
-    // addresses depend on the transfer amount, before the pool exists to trap liquidity.
-    util::validate_hook_mint(
-        &ctx.accounts.token_mint_0.to_account_info(),
-        ctx.remaining_accounts,
-    )?;
-    util::validate_hook_mint(
-        &ctx.accounts.token_mint_1.to_account_info(),
-        ctx.remaining_accounts,
-    )?;
     let block_timestamp = solana_program::clock::Clock::get()?.unix_timestamp as u64;
     require_gt!(block_timestamp, open_time);
     let pool_id = ctx.accounts.pool_state.key();

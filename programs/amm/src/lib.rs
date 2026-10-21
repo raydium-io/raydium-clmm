@@ -219,6 +219,10 @@ pub mod raydium_clmm {
     /// * `ctx` - The context of accounts
     /// * `sqrt_price_x64` - the initial sqrt price (amount_token_1 / amount_token_0) of the pool as a Q64.64
     /// Note: The open_time must be smaller than the current block_timestamp on chain.
+    ///
+    /// # Remaining accounts
+    ///
+    /// Found by key: the `SupportMintAssociated` PDA of a mint whose extensions need the whitelist.
     pub fn create_pool(
         ctx: Context<CreatePool>,
         sqrt_price_x64: u128,
@@ -234,6 +238,9 @@ pub mod raydium_clmm {
     /// * `ctx` - The context of accounts
     /// * `customizable_params` - the customizable parameters
     ///
+    /// # Remaining accounts
+    ///
+    /// Found by key: the `SupportMintAssociated` PDA of a mint whose extensions need the whitelist.
     pub fn create_customizable_pool<'info>(
         ctx: Context<'info, CreateCustomizablePool<'info>>,
         customizable_params: CreateCustomizableParams,
@@ -250,6 +257,9 @@ pub mod raydium_clmm {
     /// * `customizable_params` - the customizable parameters
     /// * `seed_index` - non-zero u16 folded into the pool PDA seeds
     ///
+    /// # Remaining accounts
+    ///
+    /// Found by key: the `SupportMintAssociated` PDA of a mint whose extensions need the whitelist.
     pub fn create_permissioned_pool(
         ctx: Context<CreatePermissionedPool>,
         customizable_params: CreateCustomizableParams,
@@ -322,6 +332,10 @@ pub mod raydium_clmm {
     /// * `end_time` - reward end timestamp
     /// * `emissions_per_second_x64` - Token reward per second are earned per unit of liquidity.
     ///
+    /// # Remaining accounts
+    ///
+    /// Found by key: the reward mint's `SupportMintAssociated` PDA, when its extensions need the
+    /// whitelist.
     pub fn initialize_reward<'info>(
         ctx: Context<'info, InitializeReward<'info>>,
         param: InitializeRewardParam,
@@ -364,6 +378,10 @@ pub mod raydium_clmm {
     /// * `open_time` - reward open timestamp, must be set when starting a new cycle
     /// * `end_time` - reward end timestamp
     ///
+    /// # Remaining accounts
+    ///
+    /// In order, only when the update tops the vault up: reward vault, authority token account,
+    /// reward mint.
     pub fn set_reward_params<'info>(
         ctx: Context<'info, SetRewardParams<'info>>,
         reward_index: u8,
@@ -388,6 +406,11 @@ pub mod raydium_clmm {
     /// * `amount_0_requested` - The maximum amount of token_0 to send, can be 0 to collect fees in only token_1
     /// * `amount_1_requested` - The maximum amount of token_1 to send, can be 0 to collect fees in only token_0
     ///
+    /// # Remaining accounts
+    ///
+    /// Found by key, in any order: for each transfer hook mint, its hook program,
+    /// ExtraAccountMetaList PDA and extras. Shared by both transfer legs; empty if neither mint has
+    /// a hook.
     pub fn collect_protocol_fee<'info>(
         ctx: Context<'info, CollectProtocolFee<'info>>,
         amount_0_requested: u64,
@@ -404,6 +427,11 @@ pub mod raydium_clmm {
     /// * `amount_0_requested` - The maximum amount of token_0 to send, can be 0 to collect fees in only token_1
     /// * `amount_1_requested` - The maximum amount of token_1 to send, can be 0 to collect fees in only token_0
     ///
+    /// # Remaining accounts
+    ///
+    /// Found by key, in any order: for each transfer hook mint, its hook program,
+    /// ExtraAccountMetaList PDA and extras. Shared by both transfer legs; empty if neither mint has
+    /// a hook.
     pub fn collect_fund_fee<'info>(
         ctx: Context<'info, CollectFundFee<'info>>,
         amount_0_requested: u64,
@@ -426,6 +454,9 @@ pub mod raydium_clmm {
     /// * `amount_0_max` - The max amount of token_0 to spend, which serves as a slippage check
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
     ///
+    /// # Remaining accounts
+    ///
+    /// First account, optional: the tick array bitmap extension, when the range needs it.
     pub fn open_position<'info>(
         ctx: Context<'info, OpenPosition<'info>>,
         tick_lower_index: i32,
@@ -466,6 +497,9 @@ pub mod raydium_clmm {
     /// * `with_metadata` - The flag indicating whether to create NFT mint metadata
     /// * `base_flag` - if the liquidity specified as zero, true: calculate liquidity base amount_0_max otherwise base amount_1_max
     ///
+    /// # Remaining accounts
+    ///
+    /// First account, optional: the tick array bitmap extension, when the range needs it.
     pub fn open_position_v2<'info>(
         ctx: Context<'info, OpenPositionV2<'info>>,
         tick_lower_index: i32,
@@ -507,6 +541,9 @@ pub mod raydium_clmm {
     /// * `with_metadata` - The flag indicating whether to create NFT mint metadata
     /// * `base_flag` - if the liquidity specified as zero, true: calculate liquidity base amount_0_max otherwise base amount_1_max
     ///
+    /// # Remaining accounts
+    ///
+    /// First account, optional: the tick array bitmap extension, when the range needs it.
     pub fn open_position_with_token22_nft<'info>(
         ctx: Context<'info, OpenPositionWithToken22Nft<'info>>,
         tick_lower_index: i32,
@@ -539,6 +576,10 @@ pub mod raydium_clmm {
     ///
     /// * `ctx` - The context of accounts
     ///
+    /// # Remaining accounts
+    ///
+    /// Only when the position NFT account is frozen: `pool_state`, the NFT mint's freeze authority,
+    /// which signs the thaw before the burn.
     pub fn close_position<'info>(ctx: Context<'info, ClosePosition<'info>>) -> Result<()> {
         instructions::close_position(ctx)
     }
@@ -553,6 +594,9 @@ pub mod raydium_clmm {
     /// * `amount_0_max` - The max amount of token_0 to spend, which serves as a slippage check
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
     ///
+    /// # Remaining accounts
+    ///
+    /// First account, optional: the tick array bitmap extension, when the range needs it.
     pub fn increase_liquidity<'info>(
         ctx: Context<'info, IncreaseLiquidity<'info>>,
         liquidity: u128,
@@ -573,6 +617,9 @@ pub mod raydium_clmm {
     /// * `amount_1_max` - The max amount of token_1 to spend, which serves as a slippage check
     /// * `base_flag` - must be specified if liquidity is zero, true: calculate liquidity base amount_0_max otherwise base amount_1_max
     ///
+    /// # Remaining accounts
+    ///
+    /// First account, optional: the tick array bitmap extension, when the range needs it.
     pub fn increase_liquidity_v2<'info>(
         ctx: Context<'info, IncreaseLiquidityV2<'info>>,
         liquidity: u128,
@@ -596,6 +643,11 @@ pub mod raydium_clmm {
     /// * `amount_0_min` - The minimum amount of token_0 that should be accounted for the burned liquidity
     /// * `amount_1_min` - The minimum amount of token_1 that should be accounted for the burned liquidity
     ///
+    /// # Remaining accounts
+    ///
+    /// * the tick array bitmap extension, optional, found by key
+    /// * then one (reward vault, recipient token account, reward mint) triple per initialized
+    ///   reward, in reward order
     pub fn decrease_liquidity<'info>(
         ctx: Context<'info, DecreaseLiquidity<'info>>,
         liquidity: u128,
@@ -614,6 +666,11 @@ pub mod raydium_clmm {
     /// * `amount_0_min` - The minimum amount of token_0 that should be accounted for the burned liquidity
     /// * `amount_1_min` - The minimum amount of token_1 that should be accounted for the burned liquidity
     ///
+    /// # Remaining accounts
+    ///
+    /// * the tick array bitmap extension, optional, found by key
+    /// * then one (reward vault, recipient token account, reward mint) triple per initialized
+    ///   reward, in reward order
     pub fn decrease_liquidity_v2<'info>(
         ctx: Context<'info, DecreaseLiquidityV2<'info>>,
         liquidity: u128,
@@ -634,6 +691,10 @@ pub mod raydium_clmm {
     /// * `sqrt_price_limit` - The Q64.64 sqrt price √P limit. If zero for one, the price cannot
     /// * `is_base_input` - swap base input or swap base output
     ///
+    /// # Remaining accounts
+    ///
+    /// Further tick arrays in swap direction and, optionally, the tick array bitmap extension, told
+    /// apart by account size.
     pub fn swap<'info>(
         ctx: Context<'info, SwapSingle<'info>>,
         amount: u64,
@@ -660,6 +721,10 @@ pub mod raydium_clmm {
     /// * `sqrt_price_limit` - The Q64.64 sqrt price √P limit. If zero for one, the price cannot
     /// * `is_base_input` - swap base input or swap base output
     ///
+    /// # Remaining accounts
+    ///
+    /// The tick array bitmap extension (optional) and the tick arrays in swap direction, told apart
+    /// by account size.
     pub fn swap_v2<'info>(
         ctx: Context<'info, SwapSingleV2<'info>>,
         amount: u64,
@@ -674,22 +739,6 @@ pub mod raydium_clmm {
             sqrt_price_limit_x64,
             is_base_input,
         )
-    }
-
-    /// Swap token for as much as possible of another token across the path provided, base input
-    ///
-    /// # Arguments
-    ///
-    /// * `ctx` - The context of accounts
-    /// * `amount_in` - Token amount to be swapped in
-    /// * `amount_out_minimum` - Panic if output amount is below minimum amount. For slippage.
-    ///
-    pub fn swap_router_base_in<'info>(
-        ctx: Context<'info, SwapRouterBaseIn<'info>>,
-        amount_in: u64,
-        amount_out_minimum: u64,
-    ) -> Result<()> {
-        instructions::swap_router_base_in(ctx, amount_in, amount_out_minimum)
     }
 
     /// The CLMM protocol decides to discard the protocol position account, which can reduce users' opening costs.
@@ -715,6 +764,9 @@ pub mod raydium_clmm {
     /// * `amount` - The amount of the order
     /// * `with_metadata` - The flag indicating whether to create NFT mint metadata
     ///
+    /// # Remaining accounts
+    ///
+    /// First account, optional: the tick array bitmap extension, when the tick needs it.
     pub fn open_limit_order<'info>(
         ctx: Context<'info, OpenLimitOrder<'info>>,
         nonce_index: u8,
@@ -733,6 +785,9 @@ pub mod raydium_clmm {
     /// * `amount` - The increase amount of the order
     /// * `is_increase` - The direction of the order, true: increase, false: decrease
     ///
+    /// # Remaining accounts
+    ///
+    /// First account, optional: the tick array bitmap extension, when the tick needs it.
     pub fn increase_limit_order<'info>(
         ctx: Context<'info, IncreaseLimitOrder<'info>>,
         amount: u64,
@@ -751,6 +806,9 @@ pub mod raydium_clmm {
     /// * `amount` - The decrease amount of the order,
     /// * `amount_min` - The minimum amount of the order, which serves as a slippage check
     ///
+    /// # Remaining accounts
+    ///
+    /// First account, optional: the tick array bitmap extension, when the tick needs it.
     pub fn decrease_limit_order<'info>(
         ctx: Context<'info, DecreaseLimitOrder<'info>>,
         amount: u64,
@@ -786,9 +844,13 @@ pub mod raydium_clmm {
 
     /// `swap_v2` with an explicit account tape. See `swap_v2`.
     ///
-    /// Remaining accounts, declared by `remaining_accounts_info`: TickArray,
-    /// TickArrayBitmapExtension (optional), TransferHookInput, TransferHookOutput. Each hook
-    /// segment is the mint's hook program, ExtraAccountMetaList PDA and extras, in any order.
+    /// # Remaining accounts
+    ///
+    /// Segments declared by `remaining_accounts_info`, each type at most once:
+    /// * `TickArray` - tick arrays in swap direction; at least one
+    /// * `TickArrayBitmapExtension` - optional, when the price range needs it
+    /// * `TransferHookInput` / `TransferHookOutput` - only for a hook mint: its hook program,
+    ///   ExtraAccountMetaList PDA and extras, in any order
     pub fn swap_v3<'info>(
         ctx: Context<'info, SwapSingleV2<'info>>,
         amount: u64,
@@ -807,31 +869,15 @@ pub mod raydium_clmm {
         )
     }
 
-    /// `swap_router_base_in` with one account tape per hop, consumed in order.
-    ///
-    /// Remaining accounts, per hop: amm_config, pool_state, output_token_account, input_vault,
-    /// output_vault, output_token_mint, observation_state, then the segments that hop's tape
-    /// declares, as in `swap_v3`.
-    pub fn swap_router_base_in_v2<'info>(
-        ctx: Context<'info, SwapRouterBaseIn<'info>>,
-        amount_in: u64,
-        amount_out_minimum: u64,
-        remaining_accounts_info: Vec<RemainingAccountsInfo>,
-    ) -> Result<()> {
-        instructions::swap_router_base_in_v2(
-            ctx,
-            amount_in,
-            amount_out_minimum,
-            remaining_accounts_info,
-        )
-    }
-
     /// `open_position_with_token22_nft` with an explicit account tape. There is no v3 for the
     /// Metaplex-metadata variant: positions on hook pools use the Token-2022 NFT.
     ///
-    /// Remaining accounts, declared by `remaining_accounts_info`: TickArrayBitmapExtension
-    /// (optional), TransferHookToken0, TransferHookToken1. Each hook segment is the mint's hook
-    /// program, ExtraAccountMetaList PDA and extras, in any order.
+    /// # Remaining accounts
+    ///
+    /// Segments declared by `remaining_accounts_info`, each type at most once:
+    /// * `TickArrayBitmapExtension` - optional, when the range needs it
+    /// * `TransferHookToken0` / `TransferHookToken1` - only for a hook mint: its hook program,
+    ///   ExtraAccountMetaList PDA and extras, in any order
     pub fn open_position_v3<'info>(
         ctx: Context<'info, OpenPositionWithToken22Nft<'info>>,
         tick_lower_index: i32,
@@ -862,9 +908,12 @@ pub mod raydium_clmm {
 
     /// `increase_liquidity_v2` with an explicit account tape.
     ///
-    /// Remaining accounts, declared by `remaining_accounts_info`: TickArrayBitmapExtension
-    /// (optional), TransferHookToken0, TransferHookToken1. Each hook segment is the mint's hook
-    /// program, ExtraAccountMetaList PDA and extras, in any order.
+    /// # Remaining accounts
+    ///
+    /// Segments declared by `remaining_accounts_info`, each type at most once:
+    /// * `TickArrayBitmapExtension` - optional, when the range needs it
+    /// * `TransferHookToken0` / `TransferHookToken1` - only for a hook mint: its hook program,
+    ///   ExtraAccountMetaList PDA and extras, in any order
     pub fn increase_liquidity_v3<'info>(
         ctx: Context<'info, IncreaseLiquidityV2<'info>>,
         liquidity: u128,
@@ -891,9 +940,12 @@ pub mod raydium_clmm {
     /// uncollectable one with `forfeit_reward`. Paying out three hook-carrying
     /// reward legs alongside both token legs does not fit in a transaction.
     ///
-    /// Remaining accounts, declared by `remaining_accounts_info`: TickArrayBitmapExtension
-    /// (optional), TransferHookToken0, TransferHookToken1. Each hook segment is the mint's hook
-    /// program, ExtraAccountMetaList PDA and extras, in any order.
+    /// # Remaining accounts
+    ///
+    /// Segments declared by `remaining_accounts_info`, each type at most once:
+    /// * `TickArrayBitmapExtension` - optional, when the range needs it
+    /// * `TransferHookToken0` / `TransferHookToken1` - only for a hook mint: its hook program,
+    ///   ExtraAccountMetaList PDA and extras, in any order
     pub fn decrease_liquidity_v3<'info>(
         ctx: Context<'info, DecreaseLiquidityV2<'info>>,
         liquidity: u128,
@@ -912,9 +964,12 @@ pub mod raydium_clmm {
 
     /// `open_limit_order` with an explicit account tape.
     ///
-    /// Remaining accounts, declared by `remaining_accounts_info`: TickArrayBitmapExtension
-    /// (optional), TransferHookInput. Each hook segment is the mint's hook program,
-    /// ExtraAccountMetaList PDA and extras, in any order.
+    /// # Remaining accounts
+    ///
+    /// Segments declared by `remaining_accounts_info`, each type at most once:
+    /// * `TickArrayBitmapExtension` - optional, when the tick needs it
+    /// * `TransferHookInput` - only for a hook mint: its hook program, ExtraAccountMetaList PDA and
+    ///   extras, in any order
     pub fn open_limit_order_v2<'info>(
         ctx: Context<'info, OpenLimitOrder<'info>>,
         nonce_index: u8,
@@ -935,9 +990,12 @@ pub mod raydium_clmm {
 
     /// `increase_limit_order` with an explicit account tape.
     ///
-    /// Remaining accounts, declared by `remaining_accounts_info`: TickArrayBitmapExtension
-    /// (optional), TransferHookInput. Each hook segment is the mint's hook program,
-    /// ExtraAccountMetaList PDA and extras, in any order.
+    /// # Remaining accounts
+    ///
+    /// Segments declared by `remaining_accounts_info`, each type at most once:
+    /// * `TickArrayBitmapExtension` - optional, when the tick needs it
+    /// * `TransferHookInput` - only for a hook mint: its hook program, ExtraAccountMetaList PDA and
+    ///   extras, in any order
     pub fn increase_limit_order_v2<'info>(
         ctx: Context<'info, IncreaseLimitOrder<'info>>,
         amount: u64,
@@ -948,9 +1006,14 @@ pub mod raydium_clmm {
 
     /// `decrease_limit_order` with an explicit account tape.
     ///
-    /// Remaining accounts, declared by `remaining_accounts_info`: TickArrayBitmapExtension
-    /// (optional), TransferHookInput (refund), TransferHookOutput (settled amount). Each hook
-    /// segment is the mint's hook program, ExtraAccountMetaList PDA and extras, in any order.
+    /// # Remaining accounts
+    ///
+    /// Segments declared by `remaining_accounts_info`, each type at most once:
+    /// * `TickArrayBitmapExtension` - optional, when the tick needs it
+    /// * `TransferHookInput` - the refund; only for a hook mint: its hook program,
+    ///   ExtraAccountMetaList PDA and extras, in any order
+    /// * `TransferHookOutput` - the settled amount; only for a hook mint: its hook program,
+    ///   ExtraAccountMetaList PDA and extras, in any order
     pub fn decrease_limit_order_v2<'info>(
         ctx: Context<'info, DecreaseLimitOrder<'info>>,
         amount: u64,
@@ -962,8 +1025,11 @@ pub mod raydium_clmm {
 
     /// `settle_limit_order` with an explicit account tape.
     ///
-    /// Remaining accounts, declared by `remaining_accounts_info`: TransferHookOutput. Each hook
-    /// segment is the mint's hook program, ExtraAccountMetaList PDA and extras, in any order.
+    /// # Remaining accounts
+    ///
+    /// Segments declared by `remaining_accounts_info`, each type at most once:
+    /// * `TransferHookOutput` - only for a hook mint: its hook program, ExtraAccountMetaList PDA
+    ///   and extras, in any order
     pub fn settle_limit_order_v2<'info>(
         ctx: Context<'info, SettleLimitOrder<'info>>,
         remaining_accounts_info: RemainingAccountsInfo,
@@ -973,10 +1039,13 @@ pub mod raydium_clmm {
 
     /// `initialize_reward` with an explicit account tape, admitting hook reward mints.
     ///
-    /// Remaining accounts, declared by `remaining_accounts_info`: MintAdmission (the reward mint's
-    /// SupportMintAssociated PDA and, for a hook mint, its ExtraAccountMetaList PDA),
-    /// TransferHookReward0 (the funding transfer, whichever slot it lands in). Each hook segment is
-    /// the mint's hook program, ExtraAccountMetaList PDA and extras, in any order.
+    /// # Remaining accounts
+    ///
+    /// Segments declared by `remaining_accounts_info`, each type at most once:
+    /// * `MintAdmission` - found by key: the reward mint's `SupportMintAssociated` PDA, when its
+    ///   extensions need the whitelist
+    /// * `TransferHookReward0` - only for a hook mint, the funding transfer whichever slot it lands
+    ///   in: its hook program, ExtraAccountMetaList PDA and extras, in any order
     pub fn initialize_reward_v2<'info>(
         ctx: Context<'info, InitializeReward<'info>>,
         param: InitializeRewardParam,
@@ -987,10 +1056,13 @@ pub mod raydium_clmm {
 
     /// `set_reward_params` with an explicit account tape.
     ///
-    /// Remaining accounts, declared by `remaining_accounts_info`: RewardGroup (reward vault,
-    /// authority token account, reward mint; only when the update tops the vault up),
-    /// TransferHookReward<reward_index>. Each hook segment is the mint's hook program,
-    /// ExtraAccountMetaList PDA and extras, in any order.
+    /// # Remaining accounts
+    ///
+    /// Segments declared by `remaining_accounts_info`, each type at most once:
+    /// * `RewardGroup` - reward vault, authority token account, reward mint; only when the update
+    ///   tops the vault up
+    /// * `TransferHookReward<reward_index>` - only for a hook mint: its hook program,
+    ///   ExtraAccountMetaList PDA and extras, in any order
     pub fn set_reward_params_v2<'info>(
         ctx: Context<'info, SetRewardParams<'info>>,
         reward_index: u8,
@@ -1011,9 +1083,11 @@ pub mod raydium_clmm {
 
     /// `collect_remaining_rewards` with an explicit account tape.
     ///
-    /// Remaining accounts, declared by `remaining_accounts_info`: TransferHookReward<reward_index>.
-    /// Each hook segment is the mint's hook program, ExtraAccountMetaList PDA and extras, in any
-    /// order.
+    /// # Remaining accounts
+    ///
+    /// Segments declared by `remaining_accounts_info`, each type at most once:
+    /// * `TransferHookReward<reward_index>` - only for a hook mint: its hook program,
+    ///   ExtraAccountMetaList PDA and extras, in any order
     pub fn collect_remaining_rewards_v2<'info>(
         ctx: Context<'info, CollectRemainingRewards<'info>>,
         reward_index: u8,
@@ -1024,9 +1098,11 @@ pub mod raydium_clmm {
 
     /// Collect one reward slot for a position. Split out of `decrease_liquidity_v3`.
     ///
-    /// Remaining accounts, declared by `remaining_accounts_info`: TransferHookReward<reward_index>.
-    /// Each hook segment is the mint's hook program, ExtraAccountMetaList PDA and extras, in any
-    /// order.
+    /// # Remaining accounts
+    ///
+    /// Segments declared by `remaining_accounts_info`, each type at most once:
+    /// * `TransferHookReward<reward_index>` - only for a hook mint: its hook program,
+    ///   ExtraAccountMetaList PDA and extras, in any order
     pub fn collect_reward<'info>(
         ctx: Context<'info, CollectReward<'info>>,
         reward_index: u8,
@@ -1041,6 +1117,10 @@ pub mod raydium_clmm {
     }
 
     /// Collect excess lamports, including accounts for SPL tokens owned by authority and Program PDA accounts.
+    ///
+    /// # Remaining accounts
+    ///
+    /// `[writable]` source lamport accounts: vaults, LP mints or PDA accounts.
     pub fn collect_excess_lamports<'info>(
         ctx: Context<'info, CollectExcessLamports<'info>>,
     ) -> Result<()> {

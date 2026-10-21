@@ -43,12 +43,6 @@ pub use swap_v2::*;
 pub mod swap_v3;
 pub use swap_v3::*;
 
-pub mod swap_router_base_in;
-pub use swap_router_base_in::*;
-
-pub mod swap_router_base_in_v2;
-pub use swap_router_base_in_v2::*;
-
 pub mod update_reward_info;
 pub use update_reward_info::*;
 
