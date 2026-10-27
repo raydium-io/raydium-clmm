@@ -17,7 +17,7 @@ pub struct RemainingAccountsSlice {
 }
 
 /// What each stretch of `remaining_accounts` is, consumed front to back. Every account must be
-/// covered, each type may appear once, and an instruction accepts only the types it reads.
+/// covered and each type may appear once; a type the instruction does not read is ignored.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct RemainingAccountsInfo {
     pub slices: Vec<RemainingAccountsSlice>,
@@ -107,12 +107,9 @@ impl<'info> ParsedRemainingAccounts<'info> {
 ///
 /// The tape must account for every passed account exactly once: a type may not repeat and nothing may trail the last slice
 /// (that is how stale clients silently pass reward accounts an instruction no longer reads).
-/// Only the segment types in `allowed` may appear: one the instruction never reads would
-/// otherwise be silently dropped.
 pub fn parse_remaining_accounts<'info>(
     accounts: &'info [AccountInfo<'info>],
     info: &RemainingAccountsInfo,
-    allowed: &[AccountsType],
 ) -> Result<ParsedRemainingAccounts<'info>> {
     let mut out = ParsedRemainingAccounts::default();
     let mut seen = [false; ACCOUNTS_TYPE_COUNT];
@@ -120,10 +117,6 @@ pub fn parse_remaining_accounts<'info>(
 
     for slice in info.slices.iter() {
         let ty = slice.accounts_type;
-        require!(
-            allowed.contains(&ty),
-            ErrorCode::RemainingAccountsInfoMismatch
-        );
         require!(!seen[ty as usize], ErrorCode::RemainingAccountsInfoMismatch);
         seen[ty as usize] = true;
 
@@ -152,26 +145,9 @@ pub fn parse_remaining_accounts<'info>(
     Ok(out)
 }
 
-/// The hook segment that belongs to a given reward slot.
-pub fn reward_hook_type(reward_index: u8) -> Result<AccountsType> {
-    Ok(match reward_index {
-        0 => AccountsType::TransferHookReward0,
-        1 => AccountsType::TransferHookReward1,
-        2 => AccountsType::TransferHookReward2,
-        _ => return err!(ErrorCode::InvalidRewardIndex),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    const SWAP: &[AccountsType] = &[
-        AccountsType::TickArray,
-        AccountsType::TickArrayBitmapExtension,
-        AccountsType::TransferHookInput,
-        AccountsType::TransferHookOutput,
-    ];
 
     fn tape(pairs: &[(AccountsType, u8)]) -> RemainingAccountsInfo {
         RemainingAccountsInfo {
@@ -187,7 +163,7 @@ mod tests {
 
     #[test]
     fn empty_tape_accepts_only_empty_accounts() {
-        assert!(parse_remaining_accounts(&[], &tape(&[]), SWAP).is_ok());
+        assert!(parse_remaining_accounts(&[], &tape(&[])).is_ok());
     }
 
     #[test]
@@ -202,8 +178,7 @@ mod tests {
     fn rejects_duplicate_type() {
         assert!(parse_remaining_accounts(
             &[],
-            &tape(&[(AccountsType::TickArray, 0), (AccountsType::TickArray, 0)]),
-            SWAP
+            &tape(&[(AccountsType::TickArray, 0), (AccountsType::TickArray, 0)])
         )
         .is_err());
     }
@@ -227,22 +202,13 @@ mod tests {
 
         let hook_input = AccountsType::TransferHookInput;
         let parsed =
-            parse_remaining_accounts(&accounts, &tape(&[(hook_input, len as u8)]), SWAP).unwrap();
+            parse_remaining_accounts(&accounts, &tape(&[(hook_input, len as u8)])).unwrap();
         assert_eq!(parsed.hook_input.len(), len);
-    }
-
-    /// Even an empty segment of a type the instruction never reads is refused.
-    #[test]
-    fn rejects_type_not_allowed() {
-        let reward_group = AccountsType::RewardGroup;
-        assert!(parse_remaining_accounts(&[], &tape(&[(reward_group, 0)]), SWAP).is_err());
     }
 
     #[test]
     fn rejects_tape_longer_than_accounts() {
-        assert!(
-            parse_remaining_accounts(&[], &tape(&[(AccountsType::TickArray, 1)]), SWAP).is_err()
-        );
+        assert!(parse_remaining_accounts(&[], &tape(&[(AccountsType::TickArray, 1)])).is_err());
     }
 
     /// The mirror of the case above, and the one that matters: a tape that under-declares
@@ -275,16 +241,14 @@ mod tests {
         let accounts = [a, b];
 
         assert!(
-            parse_remaining_accounts(&accounts, &tape(&[(AccountsType::TickArray, 2)]), SWAP)
-                .is_ok()
+            parse_remaining_accounts(&accounts, &tape(&[(AccountsType::TickArray, 2)])).is_ok()
         );
         // one account left undeclared
         assert!(
-            parse_remaining_accounts(&accounts, &tape(&[(AccountsType::TickArray, 1)]), SWAP)
-                .is_err()
+            parse_remaining_accounts(&accounts, &tape(&[(AccountsType::TickArray, 1)])).is_err()
         );
         // nothing declared at all
-        assert!(parse_remaining_accounts(&accounts, &tape(&[]), SWAP).is_err());
+        assert!(parse_remaining_accounts(&accounts, &tape(&[])).is_err());
     }
 
     /// `TickArrayBitmapExtension` is a single account, never a list.
@@ -315,7 +279,7 @@ mod tests {
         let accounts = [a, b];
         let bitmap = AccountsType::TickArrayBitmapExtension;
 
-        assert!(parse_remaining_accounts(&accounts[..1], &tape(&[(bitmap, 1)]), SWAP).is_ok());
-        assert!(parse_remaining_accounts(&accounts, &tape(&[(bitmap, 2)]), SWAP).is_err());
+        assert!(parse_remaining_accounts(&accounts[..1], &tape(&[(bitmap, 1)])).is_ok());
+        assert!(parse_remaining_accounts(&accounts, &tape(&[(bitmap, 2)])).is_err());
     }
 }

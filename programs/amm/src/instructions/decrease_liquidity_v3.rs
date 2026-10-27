@@ -1,6 +1,6 @@
 use crate::instructions::decrease_liquidity::decrease_liquidity;
 use crate::instructions::decrease_liquidity_v2::DecreaseLiquidityV2;
-use crate::util::{parse_remaining_accounts, AccountsType, RemainingAccountsInfo};
+use crate::util::{parse_remaining_accounts, RemainingAccountsInfo};
 use anchor_lang::prelude::*;
 
 /// `decrease_liquidity_v3` with a declared account tape, and **without** the reward payout.
@@ -19,15 +19,7 @@ pub fn decrease_liquidity_v3<'info>(
     amount_1_min: u64,
     remaining_accounts_info: RemainingAccountsInfo,
 ) -> Result<()> {
-    let parsed = parse_remaining_accounts(
-        ctx.remaining_accounts,
-        &remaining_accounts_info,
-        &[
-            AccountsType::TickArrayBitmapExtension,
-            AccountsType::TransferHookToken0,
-            AccountsType::TransferHookToken1,
-        ],
-    )?;
+    let parsed = parse_remaining_accounts(ctx.remaining_accounts, &remaining_accounts_info)?;
 
     decrease_liquidity(
         &ctx.accounts.pool_state,

@@ -1,7 +1,7 @@
 use crate::error::ErrorCode;
 use crate::states::*;
 use crate::util::{get_recent_epoch, transfer_from_pool_vault_to_user};
-use crate::util::{parse_remaining_accounts, reward_hook_type, RemainingAccountsInfo};
+use crate::util::{parse_remaining_accounts, RemainingAccountsInfo};
 use anchor_lang::prelude::*;
 use anchor_spl::token::Token;
 use anchor_spl::token_interface::{Mint, Token2022, TokenAccount};
@@ -62,12 +62,9 @@ pub fn collect_reward<'info>(
     reward_index: u8,
     remaining_accounts_info: RemainingAccountsInfo,
 ) -> Result<()> {
-    let parsed = parse_remaining_accounts(
-        ctx.remaining_accounts,
-        &remaining_accounts_info,
-        &[reward_hook_type(reward_index)?],
-    )?;
     let index = reward_index as usize;
+    require!(index < REWARD_NUM, ErrorCode::InvalidRewardIndex);
+    let parsed = parse_remaining_accounts(ctx.remaining_accounts, &remaining_accounts_info)?;
 
     let transfer_amount = {
         let mut pool_state = ctx.accounts.pool_state.load_mut()?;

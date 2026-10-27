@@ -768,7 +768,8 @@ describe("transfer hook pool admission", () => {
     );
     assert.equal(afterOpen.totalAmount.toNumber(), 1_000_000);
 
-    // increase only moves the input leg, so an output segment is refused.
+    // increase only reads the input leg: an output segment is ignored and the input transfer
+    // goes out without its hook accounts.
     let wrongLegErr: any;
     try {
       await instructions.increaseLimitOrder({
@@ -784,8 +785,8 @@ describe("transfer hook pool admission", () => {
     } catch (e) {
       wrongLegErr = e;
     }
-    assert.isDefined(wrongLegErr, "increase_limit_order_v2 accepted an output leg");
-    assert.include(JSON.stringify(wrongLegErr), "RemainingAccountsInfoMismatch", `unexpected: ${wrongLegErr}`);
+    assert.isDefined(wrongLegErr, "a hook transfer went through without its accounts");
+    assert.include(String(wrongLegErr), "An account required by the instruction is missing");
 
     await instructions.increaseLimitOrder({
       owner,

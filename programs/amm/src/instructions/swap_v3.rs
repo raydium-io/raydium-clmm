@@ -1,6 +1,6 @@
 use crate::error::ErrorCode;
 use crate::instructions::swap_v2::{exact_internal_v3, SwapSingleV2};
-use crate::util::{parse_remaining_accounts, AccountsType, RemainingAccountsInfo};
+use crate::util::{parse_remaining_accounts, RemainingAccountsInfo};
 use anchor_lang::prelude::*;
 
 /// `swap_v2` with a declared account tape.
@@ -15,16 +15,7 @@ pub fn swap_v3<'info>(
     is_base_input: bool,
     remaining_accounts_info: RemainingAccountsInfo,
 ) -> Result<()> {
-    let parsed = parse_remaining_accounts(
-        ctx.remaining_accounts,
-        &remaining_accounts_info,
-        &[
-            AccountsType::TickArray,
-            AccountsType::TickArrayBitmapExtension,
-            AccountsType::TransferHookInput,
-            AccountsType::TransferHookOutput,
-        ],
-    )?;
+    let parsed = parse_remaining_accounts(ctx.remaining_accounts, &remaining_accounts_info)?;
 
     let tick_arrays: Vec<&AccountInfo> = parsed.tick_array.iter().collect();
     let amount_result = exact_internal_v3(

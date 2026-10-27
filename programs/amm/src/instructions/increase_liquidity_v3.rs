@@ -1,6 +1,6 @@
 use crate::instructions::increase_liquidity::increase_liquidity;
 use crate::instructions::increase_liquidity_v2::IncreaseLiquidityV2;
-use crate::util::{parse_remaining_accounts, AccountsType, RemainingAccountsInfo};
+use crate::util::{parse_remaining_accounts, RemainingAccountsInfo};
 use anchor_lang::prelude::*;
 
 /// `increase_liquidity_v2` with a declared account tape.
@@ -12,15 +12,7 @@ pub fn increase_liquidity_v3<'info>(
     base_flag: Option<bool>,
     remaining_accounts_info: RemainingAccountsInfo,
 ) -> Result<()> {
-    let parsed = parse_remaining_accounts(
-        ctx.remaining_accounts,
-        &remaining_accounts_info,
-        &[
-            AccountsType::TickArrayBitmapExtension,
-            AccountsType::TransferHookToken0,
-            AccountsType::TransferHookToken1,
-        ],
-    )?;
+    let parsed = parse_remaining_accounts(ctx.remaining_accounts, &remaining_accounts_info)?;
 
     increase_liquidity(
         &ctx.accounts.nft_owner,

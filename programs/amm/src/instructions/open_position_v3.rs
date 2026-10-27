@@ -2,7 +2,7 @@ use crate::error::ErrorCode;
 use crate::instructions::open_position::open_position;
 use crate::instructions::open_position_with_token22_nft::OpenPositionWithToken22Nft;
 use crate::util::create_nft_mint_with_extensions;
-use crate::util::{parse_remaining_accounts, AccountsType, RemainingAccountsInfo};
+use crate::util::{parse_remaining_accounts, RemainingAccountsInfo};
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::{create, Create};
 
@@ -28,15 +28,7 @@ pub fn open_position_v3<'info>(
         !ctx.accounts.token_account_0.is_frozen() && !ctx.accounts.token_account_1.is_frozen(),
         ErrorCode::NotApproved
     );
-    let parsed = parse_remaining_accounts(
-        ctx.remaining_accounts,
-        &remaining_accounts_info,
-        &[
-            AccountsType::TickArrayBitmapExtension,
-            AccountsType::TransferHookToken0,
-            AccountsType::TransferHookToken1,
-        ],
-    )?;
+    let parsed = parse_remaining_accounts(ctx.remaining_accounts, &remaining_accounts_info)?;
 
     create_nft_mint_with_extensions(
         &ctx.accounts.payer,

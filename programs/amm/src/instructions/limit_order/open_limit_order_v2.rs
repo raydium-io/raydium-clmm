@@ -1,7 +1,7 @@
 use crate::instructions::limit_order::open_limit_order::{
     open_limit_order_internal, OpenLimitOrder,
 };
-use crate::util::{parse_remaining_accounts, AccountsType, RemainingAccountsInfo};
+use crate::util::{parse_remaining_accounts, RemainingAccountsInfo};
 use anchor_lang::prelude::*;
 
 /// `open_limit_order` with a declared account tape. Only the input leg transfers.
@@ -13,14 +13,7 @@ pub fn open_limit_order_v2<'info>(
     amount: u64,
     remaining_accounts_info: RemainingAccountsInfo,
 ) -> Result<()> {
-    let parsed = parse_remaining_accounts(
-        ctx.remaining_accounts,
-        &remaining_accounts_info,
-        &[
-            AccountsType::TickArrayBitmapExtension,
-            AccountsType::TransferHookInput,
-        ],
-    )?;
+    let parsed = parse_remaining_accounts(ctx.remaining_accounts, &remaining_accounts_info)?;
     let bitmap_extension = parsed.bitmap_extension();
 
     open_limit_order_internal(

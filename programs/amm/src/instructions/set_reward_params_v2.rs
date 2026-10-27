@@ -1,9 +1,7 @@
 use crate::error::ErrorCode;
 use crate::instructions::set_reward_params::{set_reward_params_internal, SetRewardParams};
 use crate::states::pool::REWARD_NUM;
-use crate::util::{
-    parse_remaining_accounts, reward_hook_type, AccountsType, RemainingAccountsInfo,
-};
+use crate::util::{parse_remaining_accounts, RemainingAccountsInfo};
 use anchor_lang::prelude::*;
 
 /// `set_reward_params` with a declared account tape.
@@ -23,11 +21,7 @@ pub fn set_reward_params_v2<'info>(
         (reward_index as usize) < REWARD_NUM,
         ErrorCode::InvalidRewardIndex
     );
-    let parsed = parse_remaining_accounts(
-        ctx.remaining_accounts,
-        &remaining_accounts_info,
-        &[AccountsType::RewardGroup, reward_hook_type(reward_index)?],
-    )?;
+    let parsed = parse_remaining_accounts(ctx.remaining_accounts, &remaining_accounts_info)?;
 
     let hook_reward = parsed.hook_reward[reward_index as usize];
     set_reward_params_internal(
