@@ -26,7 +26,7 @@ import {
   METADATA_PROGRAM_ID,
 } from "@raydium-io/raydium-sdk-v2";
 
-describe("create_permissioned_pool", () => {
+describe("create_customizable_pool_v2", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
@@ -36,16 +36,6 @@ describe("create_permissioned_pool", () => {
   const instructions = new InstructionHelper(program);
   const pda = new PDAUtils(program.programId);
 
-  // `create_permission_pda` / `close_permission_pda` gate their `owner` signer
-  // on `crate::admin::ID`. `yarn test:local-admin` builds with
-  // `--features localnet` and compiles the local wallet in as that admin, so
-  // the cases below can sign as admin; otherwise they are skipped.
-  const admin = provider.wallet.payer;
-  const adminIsLocalWallet =
-    process.env.CLMM_LOCALNET_ADMIN === admin.publicKey.toBase58();
-  const SKIP_MSG =
-    "needs a `--features localnet` build with CLMM_LOCALNET_ADMIN=<local wallet> (yarn test:local-admin)";
-
   before(async () => {
     await setup.initialize();
     await setup.createTokens();
@@ -54,34 +44,28 @@ describe("create_permissioned_pool", () => {
   });
 
   /**
-   * Calls `create_permissioned_pool` for the given payer/poolCreator/seedIndex
-   * against the shared (ammConfig, token0, token1) pair set up in `before()`,
-   * and returns the derived pool_state PDA.
-   *
-   * `payer` pays rent and must hold the permission PDA (the gate checks
-   * `[PERMISSION_SEED, payer]`); it is the only signer besides the ambient
-   * test wallet paying for the transaction fee. `poolCreator` is an arbitrary
-   * (non-signing) address that becomes the pool's `owner`.
+   * Calls `create_customizable_pool_v2` against the shared (ammConfig, token0,
+   * token1) pair and returns the derived pool_state PDA. `poolCreator` is a
+   * non-signing address that becomes the pool's `owner`.
    */
-  async function callCreatePermissionedPool(params: {
+  async function callCreateCustomizablePoolV2(params: {
     payer: Keypair;
     poolCreator: PublicKey;
     seedIndex: number;
   }): Promise<PublicKey> {
-    const [poolState] = await pda.getPermissionedPoolPDA(
+    const [poolState] = await pda.getCustomizablePoolV2PDA(
       setup.ammConfig,
       setup.token0,
       setup.token1,
       params.seedIndex,
     );
-    const [permission] = await pda.getPermissionPDA(params.payer.publicKey);
     const [tokenVault0] = await pda.getTokenVaultPDA(poolState, setup.token0);
     const [tokenVault1] = await pda.getTokenVaultPDA(poolState, setup.token1);
     const [observationState] = await pda.getObservationStatePDA(poolState);
     const [tickArrayBitmap] = await pda.getTickArrayBitmapPDA(poolState);
 
     await program.methods
-      .createPermissionedPool(
+      .createCustomizablePoolV2(
         {
           sqrtPriceX64: TickUtil.getSqrtPriceAtTick(0),
           collectFeeOn: { fromInput: {} } as any,
@@ -92,7 +76,6 @@ describe("create_permissioned_pool", () => {
       .accounts({
         payer: params.payer.publicKey,
         poolCreator: params.poolCreator,
-        permission,
         ammConfig: setup.ammConfig,
         poolState,
         tokenMint0: setup.token0,
@@ -112,41 +95,23 @@ describe("create_permissioned_pool", () => {
     return poolState;
   }
 
-  describe("with a permission PDA granted by the admin", () => {
+  describe("with any payer", () => {
     let payer: Keypair;
     let poolCreator: PublicKey;
 
-    before(async function () {
-      if (!adminIsLocalWallet) {
-        console.log(`      [skipped] ${SKIP_MSG}`);
-        this.skip();
-      }
-
+    before(async () => {
       payer = Keypair.generate();
       await instructions.airdrop(payer.publicKey, 5);
-      // Arbitrary, non-signing address that becomes the pool's `owner`.
       poolCreator = Keypair.generate().publicKey;
-      const [permission] = await pda.getPermissionPDA(payer.publicKey);
-
-      await program.methods
-        .createPermissionPda()
-        .accounts({
-          owner: admin.publicKey,
-          permissionAuthority: payer.publicKey,
-          permission,
-          systemProgram: SystemProgram.programId,
-        } as any)
-        .signers([admin])
-        .rpc();
     });
 
-    it("authorized payer opens two pools for one pair with different seed_index", async () => {
-      const poolOne = await callCreatePermissionedPool({
+    it("opens two pools for one pair with different seed_index", async () => {
+      const poolOne = await callCreateCustomizablePoolV2({
         payer,
         poolCreator,
         seedIndex: 1,
       });
-      const poolTwo = await callCreatePermissionedPool({
+      const poolTwo = await callCreateCustomizablePoolV2({
         payer,
         poolCreator,
         seedIndex: 2,
@@ -174,7 +139,7 @@ describe("create_permissioned_pool", () => {
 
     it("rejects seedIndex == 0", async () => {
       try {
-        await callCreatePermissionedPool({ payer, poolCreator, seedIndex: 0 });
+        await callCreateCustomizablePoolV2({ payer, poolCreator, seedIndex: 0 });
         assert.fail("Should have thrown RequireGtViolated for seedIndex == 0");
       } catch (e: any) {
         assert.include(
@@ -184,66 +149,6 @@ describe("create_permissioned_pool", () => {
         );
       }
     });
-  });
-
-  it("rejects a payer without a permission PDA", async () => {
-    const stranger = Keypair.generate();
-    await instructions.airdrop(stranger.publicKey, 5);
-    const poolCreator = Keypair.generate().publicKey;
-
-    try {
-      await callCreatePermissionedPool({ payer: stranger, poolCreator, seedIndex: 7 });
-      assert.fail("Should have thrown - stranger holds no permission PDA");
-    } catch (e: any) {
-      assert.match(
-        e.toString(),
-        /AccountNotInitialized/,
-        `expected AccountNotInitialized (payer holds no permission PDA), got: ${e.toString()}`,
-      );
-    }
-  });
-
-  it("closes a permission PDA (admin), refunding rent and removing the account", async function () {
-    if (!adminIsLocalWallet) {
-      console.log(`      [skipped] ${SKIP_MSG}`);
-      this.skip();
-    }
-
-    const authority = Keypair.generate().publicKey;
-    const [permission] = await pda.getPermissionPDA(authority);
-
-    await program.methods
-      .createPermissionPda()
-      .accounts({
-        owner: admin.publicKey,
-        permissionAuthority: authority,
-        permission,
-        systemProgram: SystemProgram.programId,
-      } as any)
-      .signers([admin])
-      .rpc();
-
-    assert.isNotNull(
-      await provider.connection.getAccountInfo(permission),
-      "permission PDA should exist after create_permission_pda",
-    );
-
-    // No `systemProgram` account here: it was intentionally removed from the
-    // close instruction (a plain `close =` needs none). This exercises that.
-    await program.methods
-      .closePermissionPda()
-      .accounts({
-        owner: admin.publicKey,
-        permissionAuthority: authority,
-        permission,
-      } as any)
-      .signers([admin])
-      .rpc();
-
-    assert.isNull(
-      await provider.connection.getAccountInfo(permission),
-      "permission PDA should be closed (account removed) after close_permission_pda",
-    );
   });
 
   it("legacy create_pool pool still swaps and withdraws after the layout change", async () => {
